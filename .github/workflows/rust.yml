@@ -64,7 +64,7 @@ jobs:
           set -euo pipefail
           cargo run -p proxima-engine --bin proxima-engine > /tmp/proxima-engine.log 2>&1 &
           PROXIMA_PID=$!
-          trap 'kill "$PROXIMA_PID" 2>/dev/null || true' EXIT
+          trap 'cat /tmp/proxima-engine.log; kill "$PROXIMA_PID" 2>/dev/null || true' EXIT
 
           for attempt in $(seq 1 50); do
             if (echo > /dev/tcp/127.0.0.1/6432) >/dev/null 2>&1; then
