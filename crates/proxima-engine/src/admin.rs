@@ -17,18 +17,26 @@ impl RuntimeMetrics {
     pub fn start(&self) {
         let _ = self.started_at.set(Instant::now());
     }
+
     pub fn connection_opened(&self, tls: bool) {
-        self.active_connections.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        self.total_connections.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.active_connections
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.total_connections
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if tls {
-            self.tls_sessions.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            self.tls_sessions
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
     }
+
     pub fn connection_closed(&self) {
-        self.active_connections.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+        self.active_connections
+            .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
     }
+
     pub fn rejected(&self) {
-        self.rejected_connections.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.rejected_connections
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
@@ -72,7 +80,10 @@ pub async fn serve(addr: std::net::SocketAddr, state: AdminState) -> std::io::Re
 }
 
 async fn index() -> Html<&'static str> {
-    Html(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../dashboard/index.html")))
+    Html(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../dashboard/index.html"
+    )))
 }
 
 async fn health() -> &'static str {
@@ -94,10 +105,22 @@ async fn status(State(state): State<AdminState>) -> Json<Status> {
         tls_active: state.tls_active,
         upstream_tls: state.upstream_tls,
         upstream: state.upstream_addr.clone(),
-        active_connections: state.metrics.active_connections.load(std::sync::atomic::Ordering::Relaxed),
-        total_connections: state.metrics.total_connections.load(std::sync::atomic::Ordering::Relaxed),
-        rejected_connections: state.metrics.rejected_connections.load(std::sync::atomic::Ordering::Relaxed),
-        tls_sessions: state.metrics.tls_sessions.load(std::sync::atomic::Ordering::Relaxed),
+        active_connections: state
+            .metrics
+            .active_connections
+            .load(std::sync::atomic::Ordering::Relaxed),
+        total_connections: state
+            .metrics
+            .total_connections
+            .load(std::sync::atomic::Ordering::Relaxed),
+        rejected_connections: state
+            .metrics
+            .rejected_connections
+            .load(std::sync::atomic::Ordering::Relaxed),
+        tls_sessions: state
+            .metrics
+            .tls_sessions
+            .load(std::sync::atomic::Ordering::Relaxed),
         uptime_seconds,
         verification: "verification gates are CI-backed",
     })
