@@ -1,16 +1,48 @@
 # Proxima Control Plane
 
-Phase 24 begins with a deliberately narrow control-plane contract. The control plane is not part of the data-plane security path.
+The Proxima Control Plane is the management plane around the hardened Proxima Engine.
 
-The self-hosted Engine remains functional without a cloud account.
+It owns organization identity, tenant catalog, policy versions, fleet registration, deployment intent, verification evidence, audit history and support requests.
 
-The first API surface is:
+It does **not** own the database security boundary.
 
-- GET /api/v1/health
-- GET /api/v1/overview
-- GET /api/v1/verification
-- GET /api/v1/tenants
-- GET /api/v1/connections
-- GET /api/v1/audit
+## Run
 
-Authentication, persistent storage, organization isolation and deployment are required before this becomes a hosted service.
+Start a PostgreSQL instance for the control plane:
+
+```text
+PROXIMA_CONTROL_DATABASE_URL=postgres://proxima_control:proxima-control-dev@127.0.0.1:55432/proxima_control
+PROXIMA_CONTROL_BIND=127.0.0.1:8080
+```
+
+Then:
+
+```bash
+cargo run -p proxima-control-plane
+```
+
+Open `http://127.0.0.1:8080`.
+
+## Product surfaces
+
+- Public platform homepage
+- Sign up
+- Sign in
+- Command Center
+- Tenants
+- Policies
+- Fleet
+- Deployments
+- Verification
+- Audit
+- Security Boundary
+- Infrastructure
+- Settings
+- Developer API
+- Support queue
+
+## Failure principle
+
+If the control plane is unavailable, an already-running Proxima Engine does not receive permission to weaken tenant enforcement.
+
+The control plane manages **intent and operations**. The Engine remains the **enforcement authority**.
