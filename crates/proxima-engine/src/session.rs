@@ -174,7 +174,6 @@ fn prepare_startup(
     protocol_version: i32,
     parameters: Vec<(String, String)>,
     verifier: Option<&TenantTokenVerifier>,
-    tenant_role_prefix: &str,
     upstream_user: Option<&str>,
 ) -> io::Result<(StartupPacket, Option<TenantContext>)> {
     let mut tenant_token = None;
@@ -371,7 +370,6 @@ mod tests {
             crate::protocol::PROTOCOL_3_0,
             vec![("user".into(), "client".into())],
             Some(&verifier),
-            "proxima_tenant_",
             Some("proxima_gateway"),
         )
         .unwrap_err();
