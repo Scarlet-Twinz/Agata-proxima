@@ -18,7 +18,7 @@
     "/api/v1/deployments":{"get":{"responses":{"200":{"description":"Deployment history"}},"post":{"requestBody":{"required":true},"responses":{"200":{"description":"Deployment queued"}}}},
     "/api/v1/verifications":{"get":{"responses":{"200":{"description":"Verification evidence"}},"post":{"requestBody":{"required":true},"responses":{"200":{"description":"Verification evidence recorded"}}}},
     "/api/v1/audit":{"get":{"responses":{"200":{"description":"Organization audit events"}}}},
-    "/api/v1/support":{"get":{"responses":{"200":{"description":"Support request queue"}},"post":{"requestBody":{"required":true},"responses":{"200":{"description":"Support request created"}}}}
+    "/api/v1/support":{"get":{"responses":{"200":{"description":"Support request queue"}},"post":{"requestBody":{"required":true},"responses":{"200":{"description":"Support request created"}}}}}
   },
   "components":{"securitySchemes":{"sessionCookie":{"type":"apiKey","in":"cookie","name":"proxima_session"}}}
 }
