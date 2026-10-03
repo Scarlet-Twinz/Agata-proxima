@@ -32,6 +32,22 @@ pub struct FrontendMessage {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BackendMessage {
+    pub tag: u8,
+    pub payload: Bytes,
+}
+
+pub const AUTHENTICATION_TAG: u8 = b'R';
+pub const ERROR_RESPONSE_TAG: u8 = b'E';
+pub const READY_FOR_QUERY_TAG: u8 = b'Z';
+pub const AUTH_OK: i32 = 0;
+pub const AUTH_CLEARTEXT_PASSWORD: i32 = 3;
+pub const AUTH_MD5_PASSWORD: i32 = 5;
+pub const AUTH_SASL: i32 = 10;
+pub const AUTH_SASL_CONTINUE: i32 = 11;
+pub const AUTH_SASL_FINAL: i32 = 12;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FrameError {
     Incomplete,
     InvalidLength(i32),
@@ -102,6 +118,40 @@ pub fn parse_startup_packet(input: &[u8]) -> Result<Option<(StartupPacket, usize
     };
 
     Ok(Some((packet, length)))
+}
+
+pub fn parse_backend_frame(input: &[u8]) -> Result<Option<(BackendMessage, usize)>, FrameError> {
+    if input.len() < 5 {
+        return Ok(None);
+    }
+
+    let tag = input[0];
+    let length = i32::from_be_bytes(input[1..5].try_into().unwrap());
+
+    if length < 4 {
+        return Err(FrameError::InvalidLength(length));
+    }
+
+    let length = length as usize;
+    if length > MAX_FRAME_LENGTH {
+        return Err(FrameError::FrameTooLarge(length));
+    }
+
+    let total = 1usize
+        .checked_add(length)
+        .ok_or(FrameError::FrameTooLarge(length))?;
+
+    if input.len() < total {
+        return Ok(None);
+    }
+
+    Ok(Some((
+        BackendMessage {
+            tag,
+            payload: Bytes::copy_from_slice(&input[5..total]),
+        },
+        total,
+    )))
 }
 
 pub fn parse_frontend_frame(input: &[u8]) -> Result<Option<(FrontendMessage, usize)>, FrameError> {
@@ -233,6 +283,25 @@ mod tests {
         assert_eq!(
             parse_startup_packet(&packet),
             Err(FrameError::InvalidLength(4))
+        );
+    }
+
+    #[test]
+    fn parses_backend_authentication_message() {
+        let frame = [b'R', 0, 0, 0, 8, 0, 0, 0, 0];
+        let (message, consumed) = parse_backend_frame(&frame).unwrap().unwrap();
+
+        assert_eq!(message.tag, AUTHENTICATION_TAG);
+        assert_eq!(&message.payload[..], &AUTH_OK.to_be_bytes());
+        assert_eq!(consumed, frame.len());
+    }
+
+    #[test]
+    fn rejects_invalid_backend_length() {
+        let frame = [b'Z', 0, 0, 0, 3, 0];
+        assert_eq!(
+            parse_backend_frame(&frame),
+            Err(FrameError::InvalidLength(3))
         );
     }
 
