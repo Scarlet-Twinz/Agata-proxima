@@ -7,9 +7,7 @@ use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio_rustls::{
-    client::TlsStream as ClientTlsStream,
-    server::TlsStream as ServerTlsStream,
-    TlsAcceptor,
+    client::TlsStream as ClientTlsStream, server::TlsStream as ServerTlsStream, TlsAcceptor,
     TlsConnector,
 };
 
