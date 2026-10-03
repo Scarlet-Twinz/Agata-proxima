@@ -42,7 +42,9 @@ Early infrastructure development.
 
 The current engine establishes a verified tenant context, maps it to a PostgreSQL role, brokers the PostgreSQL authentication/startup exchange, and then enters the normal query stream only after PostgreSQL reports a ready session.
 
-The repository includes a real PostgreSQL integration test, independent RLS verification, malformed-frame property tests, connection safety limits, and an adversarial `Proxima Verify` harness. Client-side PostgreSQL TLS is now terminated at Proxima with Rustls when configured, and the upstream database leg can require independent CA + hostname verification. The repository also contains the first Proxima operator dashboard, deeper adversarial verification, and a documented Cloud control-plane boundary.
+The repository includes a real PostgreSQL integration test, independent RLS verification, malformed-frame property tests, connection safety limits, and an adversarial `Proxima Verify` harness. Client-side PostgreSQL TLS is now terminated at Proxima with Rustls when configured, and the upstream database leg can require independent CA + hostname verification. The repository also contains the Proxima operator dashboard, deeper adversarial verification, and a documented Cloud control-plane boundary.
+
+The 25–40 platform layer adds an authenticated, durable control plane with organization membership, tenant inventory, versioned policies, node enrollment, deployment intent, verification evidence, append-only audit events, support requests, OpenAPI documentation, a public product homepage, sign-up/sign-in and a full command center. The control plane is intentionally non-authoritative: an already-running Proxima Engine continues to enforce tenant isolation when the control plane is unavailable.
 
 ## License
 
