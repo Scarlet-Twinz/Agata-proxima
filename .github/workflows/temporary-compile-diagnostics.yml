@@ -20,7 +20,7 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          cargo check --workspace --all-targets 2>&1 | tee /tmp/check.log
+          cargo clippy --workspace --all-targets --all-features -- -D warnings 2>&1 | tee /tmp/check.log
       - name: Report
         if: steps.check.outcome == 'failure'
         env:
