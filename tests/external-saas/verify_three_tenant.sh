@@ -6,9 +6,11 @@ set -euo pipefail
 : "${PROXIMA_VERIFY_DATABASE:=proxima_dev}"
 : "${PROXIMA_VERIFY_USER:=proxima}"
 : "${PROXIMA_VERIFY_SIGNING_KEY:=}"
-: "${PROXIMA_VERIFY_PASSWORD:=}"
+: "${PROXIMA_VERIFY_TENANT_A_PASSWORD:=tenant-a-password}"
+: "${PROXIMA_VERIFY_TENANT_B_PASSWORD:=tenant-b-password}"
+: "${PROXIMA_VERIFY_TENANT_C_PASSWORD:=tenant-c-password}"
 
-if [[ -z "$PROXIMA_VERIFY_SIGNING_KEY" || -z "$PROXIMA_VERIFY_PASSWORD" ]]; then
+if [[ -z "$PROXIMA_VERIFY_SIGNING_KEY" ]]; then
   echo "Set PROXIMA_VERIFY_SIGNING_KEY and PROXIMA_VERIFY_PASSWORD." >&2
   exit 2
 fi
@@ -28,7 +30,9 @@ run_as() {
   local tenant="$1"; shift
   local token
   token="$(make_token "$tenant")"
-  PGPASSWORD="$PROXIMA_VERIFY_PASSWORD" PGHOST="$PROXIMA_VERIFY_HOST" PGPORT="$PROXIMA_VERIFY_PORT" PGUSER="$PROXIMA_VERIFY_USER" PGDATABASE="$PROXIMA_VERIFY_DATABASE" PGOPTIONS="-c proxima_tenant_token=$token" psql -v ON_ERROR_STOP=1 -Atqc "$1"
+  local password_var="PROXIMA_VERIFY_TENANT_${tenant^^}_PASSWORD"
+  local password="${!password_var}"
+  PGPASSWORD="$password" PGHOST="$PROXIMA_VERIFY_HOST" PGPORT="$PROXIMA_VERIFY_PORT" PGUSER="$PROXIMA_VERIFY_USER" PGDATABASE="$PROXIMA_VERIFY_DATABASE" PGOPTIONS="-c proxima_tenant_token=$token" psql -v ON_ERROR_STOP=1 -Atqc "$1"
 }
 
 assert_zero() {
@@ -43,7 +47,7 @@ assert_one() {
   echo "PASS: $label"
 }
 
-assert_one "tenant A sees one own row" "$(run_as tenant_a "SELECT count(*) FROM proxima_test.records WHERE tenant_id='tenant_a';")"
+assert_one "tenant A sees one own row" "$(run_as tenant_a "SELECT count(*) FROM proxima_external.records WHERE tenant_id='tenant_a';")"
 assert_one "tenant B sees one own row" "$(run_as tenant_b "SELECT count(*) FROM proxima_test.records WHERE tenant_id='tenant_b';")"
 assert_one "tenant C sees one own row" "$(run_as tenant_c "SELECT count(*) FROM proxima_test.records WHERE tenant_id='tenant_c';")"
 assert_zero "A cannot read B" "$(run_as tenant_a "SELECT count(*) FROM proxima_test.records WHERE tenant_id='tenant_b';")"
