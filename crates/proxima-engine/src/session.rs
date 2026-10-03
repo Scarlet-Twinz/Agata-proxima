@@ -45,9 +45,18 @@ pub async fn establish(
             client.write_all(&response).await?;
 
             if response[0] == b'S' {
-                return Err(io::Error::new(
-                    io::ErrorKind::PermissionDenied,
-                    "Proxima tenant enforcement cannot run through end-to-end TLS without TLS termination",
+                if verifier.is_some() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::PermissionDenied,
+                        "Proxima tenant enforcement cannot run through end-to-end TLS without TLS termination",
+                    ));
+                }
+                return Ok((
+                    client,
+                    upstream,
+                    EstablishedSession {
+                        tenant_context: None,
+                    },
                 ));
             }
 
