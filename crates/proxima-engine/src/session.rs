@@ -1,6 +1,4 @@
-use crate::auth::{
-    authenticate_upstream, drain_until_ready, send_authentication_ok, send_set_role,
-};
+use crate::auth::{authenticate_upstream, send_authentication_ok};
 use crate::protocol::{parse_startup_packet, StartupPacket};
 use crate::tenant::{TenantContext, TenantTokenVerifier};
 use std::io;
@@ -21,8 +19,7 @@ pub async fn establish(
     mut upstream: TcpStream,
     verifier: Option<&TenantTokenVerifier>,
     tenant_role_prefix: &str,
-    upstream_user: Option<&str>,
-    upstream_password: Option<&str>,
+    tenant_role_password: Option<&str>,
 ) -> io::Result<(TcpStream, TcpStream, EstablishedSession)> {
     let startup = read_startup(&mut client).await?;
 
@@ -42,27 +39,19 @@ pub async fn establish(
             forward_startup(&mut upstream, &startup).await?;
 
             if let Some(context) = tenant_context.as_ref() {
-                let user = upstream_user.ok_or_else(|| {
+                let role = tenant_role(tenant_role_prefix, &context.tenant_id)?;
+                let password = tenant_role_password.ok_or_else(|| {
                     io::Error::new(
                         io::ErrorKind::InvalidInput,
-                        "upstream user is required for tenant enforcement",
-                    )
-                })?;
-                let password = upstream_password.ok_or_else(|| {
-                    io::Error::new(
-                        io::ErrorKind::InvalidInput,
-                        "upstream password is required for tenant enforcement",
+                        "tenant role password is required for tenant enforcement",
                     )
                 })?;
 
-                authenticate_upstream(&mut upstream, user, password).await?;
+                authenticate_upstream(&mut upstream, &role, password).await?;
                 send_authentication_ok(&mut client).await?;
 
                 let ready =
                     crate::auth::forward_startup_until_ready(&mut upstream, &mut client).await?;
-                let role = tenant_role(tenant_role_prefix, &context.tenant_id)?;
-                send_set_role(&mut upstream, &role).await?;
-                drain_until_ready(&mut upstream).await?;
                 client.write_all(&ready).await?;
             }
 
@@ -103,28 +92,20 @@ pub async fn establish(
                     forward_startup(&mut upstream, &startup).await?;
 
                     if let Some(context) = tenant_context.as_ref() {
-                        let user = upstream_user.ok_or_else(|| {
+                        let role = tenant_role(tenant_role_prefix, &context.tenant_id)?;
+                        let password = tenant_role_password.ok_or_else(|| {
                             io::Error::new(
                                 io::ErrorKind::InvalidInput,
-                                "upstream user is required for tenant enforcement",
-                            )
-                        })?;
-                        let password = upstream_password.ok_or_else(|| {
-                            io::Error::new(
-                                io::ErrorKind::InvalidInput,
-                                "upstream password is required for tenant enforcement",
+                                "tenant role password is required for tenant enforcement",
                             )
                         })?;
 
-                        authenticate_upstream(&mut upstream, user, password).await?;
+                        authenticate_upstream(&mut upstream, &role, password).await?;
                         send_authentication_ok(&mut client).await?;
 
                         let ready =
                             crate::auth::forward_startup_until_ready(&mut upstream, &mut client)
                                 .await?;
-                        let role = tenant_role(tenant_role_prefix, &context.tenant_id)?;
-                        send_set_role(&mut upstream, &role).await?;
-                        drain_until_ready(&mut upstream).await?;
                         client.write_all(&ready).await?;
                     }
 
@@ -167,7 +148,7 @@ fn prepare_startup(
     protocol_version: i32,
     parameters: Vec<(String, String)>,
     verifier: Option<&TenantTokenVerifier>,
-    upstream_user: Option<&str>,
+    tenant_role_prefix: &str,
 ) -> io::Result<(StartupPacket, Option<TenantContext>)> {
     let mut tenant_token = None;
     let mut forwarded = Vec::with_capacity(parameters.len());
@@ -204,15 +185,10 @@ fn prepare_startup(
         None => None,
     };
 
-    if tenant_context.is_some() {
-        let user = upstream_user.ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "upstream user is required when tenant enforcement is enabled",
-            )
-        })?;
+    if let Some(context) = tenant_context.as_ref() {
+        let role = tenant_role(tenant_role_prefix, &context.tenant_id)?;
         forwarded.retain(|(key, _)| key != "user");
-        forwarded.push(("user".to_owned(), user.to_owned()));
+        forwarded.push(("user".to_owned(), role));
     }
 
     Ok((
@@ -342,7 +318,7 @@ mod tests {
                 (TENANT_TOKEN_PARAMETER.into(), token),
             ],
             Some(&verifier),
-            Some("proxima_gateway"),
+            "proxima_",
         )
         .unwrap();
 
