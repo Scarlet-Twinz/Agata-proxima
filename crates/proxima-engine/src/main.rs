@@ -18,13 +18,18 @@ use tracing::{error, info};
 #[tokio::main]
 async fn main() -> io::Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter(std::env::var("RUST_LOG").unwrap_or_else(|_| "proxima_engine=info".to_string()))
+        .with_env_filter(
+            std::env::var("RUST_LOG")
+                .unwrap_or_else(|_| "proxima_engine=info".to_string()),
+        )
         .init();
 
     let config = Config::from_env()?;
     let config_tenant_role_prefix = config.tenant_role_prefix.clone();
 
-    let verifier = config.tenant_signing_key.as_deref()
+    let verifier = config
+        .tenant_signing_key
+        .as_deref()
         .map(TenantTokenVerifier::new)
         .transpose()
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error.to_string()))?;
@@ -33,7 +38,10 @@ async fn main() -> io::Result<()> {
     let upstream_connector = upstream_connector(&config)?;
 
     if config.require_client_tls && client_acceptor.is_none() {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "client TLS is required but no certificate/key is configured"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "client TLS is required but no certificate/key is configured",
+        ));
     }
 
     let listener = TcpListener::bind(config.listen_addr).await?;
@@ -137,7 +145,10 @@ async fn handle_connection(
     let client_is_tls = client_wants_tls(&client).await?;
     let client: BoxedPgStream = if client_is_tls {
         let acceptor = client_acceptor.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::PermissionDenied, "client requested TLS but Proxima TLS termination is disabled")
+            io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "client requested TLS but Proxima TLS termination is disabled",
+            )
         })?;
         let mut request = [0u8; 8];
         client.read_exact(&mut request).await?;
@@ -145,21 +156,36 @@ async fn handle_connection(
         Box::new(accept_client_tls(acceptor, client, client_tls_timeout).await?)
     } else {
         if require_client_tls {
-            return Err(io::Error::new(io::ErrorKind::PermissionDenied, "plaintext PostgreSQL connection rejected because TLS is required"));
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "plaintext PostgreSQL connection rejected because TLS is required",
+            ));
         }
         Box::new(client)
     };
 
     let upstream_tcp = timeout(upstream_connect_timeout, TcpStream::connect(upstream_addr))
         .await
-        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "upstream connection timed out"))??;
+        .map_err(|_| {
+            io::Error::new(io::ErrorKind::TimedOut, "upstream connection timed out")
+        })??;
 
     let upstream: BoxedPgStream = if upstream_tls_mode != UpstreamTlsMode::Disable {
-        let connector = upstream_connector.ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "upstream TLS connector is not configured"))?;
-        let server_name = upstream_tls_server_name.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidInput, "upstream TLS server name is required")
+        let connector = upstream_connector.ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "upstream TLS connector is not configured",
+            )
         })?;
-        let tls = connect_upstream_tls(connector, upstream_tcp, &server_name, upstream_tls_timeout).await?;
+        let server_name = upstream_tls_server_name.ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "upstream TLS server name is required",
+            )
+        })?;
+        let tls =
+            connect_upstream_tls(connector, upstream_tcp, server_name, upstream_tls_timeout)
+                .await?;
         Box::new(tls)
     } else {
         Box::new(upstream_tcp)
@@ -170,15 +196,25 @@ async fn handle_connection(
 
     info!(
         peer = %peer,
-        tenant = session.tenant_context.as_ref().map(|context| context.tenant_id.as_str()).unwrap_or("unbound"),
+        tenant = session
+            .tenant_context
+            .as_ref()
+            .map(|context| context.tenant_id.as_str())
+            .unwrap_or("unbound"),
         client_tls = client_is_tls,
         upstream_tls = upstream_tls_mode != UpstreamTlsMode::Disable,
         "PostgreSQL session established"
     );
 
-    let (client_bytes, upstream_bytes) = copy_bidirectional(&mut client, &mut upstream).await?;
+    let (client_bytes, upstream_bytes) =
+        copy_bidirectional(&mut client, &mut upstream).await?;
 
-    info!(peer = %peer, client_to_database = client_bytes, database_to_client = upstream_bytes, "connection closed");
+    info!(
+        peer = %peer,
+        client_to_database = client_bytes,
+        database_to_client = upstream_bytes,
+        "connection closed"
+    );
     Ok(())
 }
 
@@ -194,7 +230,12 @@ async fn client_wants_tls(client: &TcpStream) -> io::Result<bool> {
         }
     })
     .await
-    .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "waiting for PostgreSQL startup packet timed out"))??;
+    .map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::TimedOut,
+            "waiting for PostgreSQL startup packet timed out",
+        )
+    })??;
 
     if n < 8 {
         return Ok(false);
@@ -204,4 +245,3 @@ async fn client_wants_tls(client: &TcpStream) -> io::Result<bool> {
     let code = i32::from_be_bytes(probe[4..8].try_into().unwrap());
     Ok(length == 8 && code == SSL_REQUEST_CODE)
 }
-
