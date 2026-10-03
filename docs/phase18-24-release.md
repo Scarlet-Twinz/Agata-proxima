@@ -114,3 +114,6 @@ The control-plane contract is documented under `cloud/`.
 A hosted multi-tenant control plane is not claimed as complete yet. The current dashboard is the local operator surface; Proxima Cloud requires its own authenticated API, durable state, organization/team model, fleet identity, audit storage, and deployment lifecycle.
 
 That distinction is intentional: a local dashboard is not marketed as a hosted cloud product.
+
+
+Verification pass: CI is the final gate for this phase set; no external SaaS or hosted Cloud completion is claimed without those environments.
