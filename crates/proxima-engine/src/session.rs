@@ -33,11 +33,7 @@ pub async fn establish(
                 "PostgreSQL startup packet received"
             );
             forward_startup(&mut upstream, &startup).await?;
-            Ok((
-                client,
-                upstream,
-                EstablishedSession { tenant_context },
-            ))
+            Ok((client, upstream, EstablishedSession { tenant_context }))
         }
         StartupPacket::SslRequest => {
             upstream
@@ -76,11 +72,7 @@ pub async fn establish(
                         tenant_role_prefix,
                     )?;
                     forward_startup(&mut upstream, &startup).await?;
-                    Ok((
-                        client,
-                        upstream,
-                        EstablishedSession { tenant_context },
-                    ))
+                    Ok((client, upstream, EstablishedSession { tenant_context }))
                 }
                 other => Err(io::Error::new(
                     io::ErrorKind::InvalidData,
@@ -232,10 +224,7 @@ fn encode_startup(startup: &StartupPacket) -> io::Result<Vec<u8>> {
 
             let length = body.len() + 4;
             let length = i32::try_from(length).map_err(|_| {
-                io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    "startup packet too large",
-                )
+                io::Error::new(io::ErrorKind::InvalidInput, "startup packet too large")
             })?;
 
             let mut packet = Vec::with_capacity(length as usize);
