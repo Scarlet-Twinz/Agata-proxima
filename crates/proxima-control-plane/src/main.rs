@@ -185,7 +185,10 @@ async fn main() -> Result<()> {
             post(production::reset_password),
         )
         .route("/api/v1/billing", get(production::billing_status))
-        .route("/api/v1/billing/plans", get(production::plans))
+        .route(
+            "/api/v1/billing/plans",
+            get(production::plans),
+        )
         .route("/api/v1/billing/entitlements", get(production::entitlements))
         .route("/api/v1/billing/checkout", post(production::checkout))
         .route("/api/v1/billing/portal", post(production::portal))
@@ -317,8 +320,15 @@ async fn signup(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Resp
         return db_error(e);
     }
 
-    if let Err(e) = sqlx::query("INSERT INTO organization_entitlements(organization_id) VALUES($1) ON CONFLICT DO NOTHING")
-        .bind(organization_id).execute(&mut *tx).await { return db_error(e); }
+    if let Err(e) = sqlx::query(
+        "INSERT INTO organization_entitlements(organization_id) VALUES($1) ON CONFLICT DO NOTHING",
+    )
+    .bind(organization_id)
+    .execute(&mut *tx)
+    .await
+    {
+        return db_error(e);
+    }
 
     if let Err(e) = sqlx::query(
         "INSERT INTO audit_events(organization_id,user_id,action,resource_type,resource_id,metadata)
@@ -539,8 +549,15 @@ async fn create_organization(
         return db_error(e);
     }
 
-    if let Err(e) = sqlx::query("INSERT INTO organization_entitlements(organization_id) VALUES($1) ON CONFLICT DO NOTHING")
-        .bind(id).execute(&s.db).await { return db_error(e); }
+    if let Err(e) = sqlx::query(
+        "INSERT INTO organization_entitlements(organization_id) VALUES($1) ON CONFLICT DO NOTHING",
+    )
+    .bind(id)
+    .execute(&s.db)
+    .await
+    {
+        return db_error(e);
+    }
 
     audit(
         &s.db,
@@ -611,7 +628,9 @@ async fn create_tenant(
         Err(e) => return db_error(e),
     };
 
-    if let Err(response) = production::enforce_capacity(&s.db, ctx.organization_id, "tenants").await {
+    if let Err(response) =
+        production::enforce_capacity(&s.db, ctx.organization_id, "tenants").await
+    {
         return response;
     }
 
@@ -752,12 +771,13 @@ async fn create_node(
         return response;
     }
 
-    let environment = input.environment.clone().unwrap_or_else(|| "production".into());
-    if let Err(response) = production::enforce_environment_capacity(
-        &s.db,
-        ctx.organization_id,
-        &environment,
-    ).await {
+    let environment = input
+        .environment
+        .clone()
+        .unwrap_or_else(|| "production".into());
+    if let Err(response) =
+        production::enforce_environment_capacity(&s.db, ctx.organization_id, &environment).await
+    {
         return response;
     }
 
@@ -873,7 +893,9 @@ async fn create_deployment(
         return c.into_response();
     }
 
-    if let Err(response) = production::require_feature(&s.db, ctx.organization_id, "fleet_controls").await {
+    if let Err(response) =
+        production::require_feature(&s.db, ctx.organization_id, "fleet_controls").await
+    {
         return response;
     }
 
@@ -927,7 +949,9 @@ async fn create_verification(
     }
 
     if input.kind.starts_with("advanced") {
-        if let Err(response) = production::require_feature(&s.db, ctx.organization_id, "advanced_verification").await {
+        if let Err(response) =
+            production::require_feature(&s.db, ctx.organization_id, "advanced_verification").await
+        {
             return response;
         }
     }
@@ -1003,7 +1027,9 @@ async fn create_support(
 
     let priority = input.priority.unwrap_or_else(|| "normal".into());
     if matches!(priority.as_str(), "high" | "urgent") {
-        if let Err(response) = production::require_feature(&s.db, ctx.organization_id, "priority_support").await {
+        if let Err(response) =
+            production::require_feature(&s.db, ctx.organization_id, "priority_support").await
+        {
             return response;
         }
     }
