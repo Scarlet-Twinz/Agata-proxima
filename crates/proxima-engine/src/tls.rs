@@ -4,15 +4,56 @@ use std::fs::File;
 use std::io::{self, BufReader};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use std::pin::Pin;
+use std::task::{Context, Poll};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 use tokio_rustls::{client::TlsStream as ClientTlsStream, server::TlsStream as ServerTlsStream, TlsAcceptor, TlsConnector};
 
 use crate::config::{ClientTlsMode, UpstreamTlsMode};
 
-pub type ClientStream = ServerTlsStream<TcpStream>;
-pub type UpstreamStream = ClientTlsStream<TcpStream>;
+pub enum ProximaStream {
+    Plain(TcpStream),
+    ClientTls(ClientTlsStream<TcpStream>),
+    ServerTls(ServerTlsStream<TcpStream>),
+}
+
+impl AsyncRead for ProximaStream {
+    fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<io::Result<()>> {
+        match &mut *self {
+            Self::Plain(stream) => Pin::new(stream).poll_read(cx, buf),
+            Self::ClientTls(stream) => Pin::new(stream).poll_read(cx, buf),
+            Self::ServerTls(stream) => Pin::new(stream).poll_read(cx, buf),
+        }
+    }
+}
+
+impl AsyncWrite for ProximaStream {
+    fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>, data: &[u8]) -> Poll<io::Result<usize>> {
+        match &mut *self {
+            Self::Plain(stream) => Pin::new(stream).poll_write(cx, data),
+            Self::ClientTls(stream) => Pin::new(stream).poll_write(cx, data),
+            Self::ServerTls(stream) => Pin::new(stream).poll_write(cx, data),
+        }
+    }
+
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        match &mut *self {
+            Self::Plain(stream) => Pin::new(stream).poll_flush(cx),
+            Self::ClientTls(stream) => Pin::new(stream).poll_flush(cx),
+            Self::ServerTls(stream) => Pin::new(stream).poll_flush(cx),
+        }
+    }
+
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        match &mut *self {
+            Self::Plain(stream) => Pin::new(stream).poll_shutdown(cx),
+            Self::ClientTls(stream) => Pin::new(stream).poll_shutdown(cx),
+            Self::ServerTls(stream) => Pin::new(stream).poll_shutdown(cx),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct TlsRuntime {
@@ -75,7 +116,7 @@ impl TlsRuntime {
     pub async fn accept_client(
         &self,
         mut stream: TcpStream,
-    ) -> io::Result<(ClientStream, bool)> {
+    ) -> io::Result<(ProximaStream, bool)> {
         let acceptor = self
             .client_acceptor
             .as_ref()
@@ -101,10 +142,10 @@ impl TlsRuntime {
             .await
             .map_err(|_| timed_out("client TLS handshake timed out"))?
             .map_err(|e| invalid(&format!("client TLS handshake failed: {e}")))?;
-        Ok((tls, true))
+        Ok((ProximaStream::ServerTls(tls), true))
     }
 
-    pub async fn connect_upstream(&self, mut stream: TcpStream) -> io::Result<UpstreamStream> {
+    pub async fn connect_upstream(&self, mut stream: TcpStream) -> io::Result<ProximaStream> {
         let connector = self
             .upstream_connector
             .as_ref()
@@ -133,6 +174,7 @@ impl TlsRuntime {
             .await
             .map_err(|_| timed_out("upstream TLS handshake timed out"))?
             .map_err(|e| invalid(&format!("upstream TLS handshake failed: {e}")))
+            .map(ProximaStream::ClientTls)
     }
 }
 
