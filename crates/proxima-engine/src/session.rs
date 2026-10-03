@@ -68,7 +68,7 @@ pub async fn establish(
                     parameters,
                 } => {
                     let (startup, tenant_context) =
-                        prepare_startup(protocol_version, parameters, verifier)?;
+                        prepare_startup(protocol_version, parameters, verifier, tenant_role_prefix)?;
                     forward_startup(&mut upstream, &startup).await?;
                     Ok((
                         client,
@@ -269,7 +269,7 @@ mod tests {
             startup,
             StartupPacket::Startup {
                 protocol_version: crate::protocol::PROTOCOL_3_0,
-                parameters: vec![("user".into(), "proxima".into())],
+                parameters: vec![("user".into(), "proxima_tenant_tenant_a".into())],
             }
         );
     }
