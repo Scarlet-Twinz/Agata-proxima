@@ -132,7 +132,6 @@ async fn handle_connection(
     } else {
         (ProximaStream::Plain(client), false)
     };
-    metrics.connection_opened(client_tls);
 
     let upstream_tcp = timeout(upstream_connect_timeout, TcpStream::connect(upstream_addr))
         .await
@@ -144,6 +143,7 @@ async fn handle_connection(
         ProximaStream::Plain(upstream_tcp)
     };
 
+    metrics.connection_opened(client_tls);
     let result = run_session(client, upstream, verifier, tenant_role_prefix, peer).await;
     metrics.connection_closed();
     result
