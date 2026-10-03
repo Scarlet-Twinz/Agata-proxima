@@ -21,7 +21,12 @@ pub fn client_acceptor(config: &Config) -> io::Result<Option<TlsAcceptor>> {
     let server = ServerConfig::builder()
         .with_no_client_auth()
         .with_single_cert(certs, key)
-        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, format!("invalid TLS certificate/key: {error}")))?;
+        .map_err(|error| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("invalid TLS certificate/key: {error}"),
+            )
+        })?;
 
     Ok(Some(TlsAcceptor::from(Arc::new(server))))
 }
@@ -32,13 +37,19 @@ pub fn upstream_connector(config: &Config) -> io::Result<Option<TlsConnector>> {
     }
 
     let ca_path = config.upstream_tls_ca_file.as_ref().ok_or_else(|| {
-        io::Error::new(io::ErrorKind::InvalidInput, "upstream TLS CA file is required")
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "upstream TLS CA file is required",
+        )
     })?;
 
     let mut roots = RootCertStore::empty();
     for cert in load_certs(ca_path)? {
         roots.add(cert).map_err(|error| {
-            io::Error::new(io::ErrorKind::InvalidInput, format!("invalid upstream CA certificate: {error}"))
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("invalid upstream CA certificate: {error}"),
+            )
         })?;
     }
 
@@ -56,29 +67,61 @@ pub async fn accept_client_tls(
 ) -> io::Result<ClientTlsStream> {
     tokio::time::timeout(timeout_duration, acceptor.accept(stream))
         .await
-        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "client TLS handshake timed out"))?
-        .map_err(|error| io::Error::new(io::ErrorKind::PermissionDenied, format!("client TLS handshake failed: {error}")))
+        .map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::TimedOut,
+                "client TLS handshake timed out",
+            )
+        })?
+        .map_err(|error| {
+            io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                format!("client TLS handshake failed: {error}"),
+            )
+        })
 }
 
 pub async fn connect_upstream_tls(
     connector: &TlsConnector,
-    stream: TcpStream,
+    mut stream: TcpStream,
     server_name: &str,
     timeout_duration: std::time::Duration,
 ) -> io::Result<TlsStream<TcpStream>> {
     stream.write_all(&8i32.to_be_bytes()).await?;
-    stream.write_all(&crate::protocol::SSL_REQUEST_CODE.to_be_bytes()).await?;
+    stream
+        .write_all(&crate::protocol::SSL_REQUEST_CODE.to_be_bytes())
+        .await?;
+
     let mut response = [0u8; 1];
     stream.read_exact(&mut response).await?;
     if response[0] != b'S' {
-        return Err(io::Error::new(io::ErrorKind::PermissionDenied, "PostgreSQL upstream rejected TLS"));
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "PostgreSQL upstream rejected TLS",
+        ));
     }
-    let name = ServerName::try_from(server_name.to_owned())
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "invalid upstream TLS server name"))?;
+
+    let name = ServerName::try_from(server_name.to_owned()).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "invalid upstream TLS server name",
+        )
+    })?;
+
     tokio::time::timeout(timeout_duration, connector.connect(name, stream))
         .await
-        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "upstream TLS handshake timed out"))?
-        .map_err(|error| io::Error::new(io::ErrorKind::PermissionDenied, format!("upstream TLS handshake failed: {error}")))
+        .map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::TimedOut,
+                "upstream TLS handshake timed out",
+            )
+        })?
+        .map_err(|error| {
+            io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                format!("upstream TLS handshake failed: {error}"),
+            )
+        })
 }
 
 fn load_certs(path: &str) -> io::Result<Vec<CertificateDer<'static>>> {
@@ -86,15 +129,27 @@ fn load_certs(path: &str) -> io::Result<Vec<CertificateDer<'static>>> {
     let mut reader = BufReader::new(file);
     rustls_pemfile::certs(&mut reader)
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, format!("failed to parse certificate PEM: {error}")))
+        .map_err(|error| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("failed to parse certificate PEM: {error}"),
+            )
+        })
 }
 
 fn load_private_key(path: &str) -> io::Result<PrivateKeyDer<'static>> {
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
     rustls_pemfile::private_key(&mut reader)
-        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, format!("failed to parse private key PEM: {error}")))?
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "no private key found in PEM"))
+        .map_err(|error| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("failed to parse private key PEM: {error}"),
+            )
+        })?
+        .ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "no private key found in PEM")
+        })
 }
 
 #[cfg(test)]
