@@ -50,3 +50,33 @@ jobs:
           PGPASSWORD: proxima-dev-only
           PGDATABASE: proxima_dev
         run: bash tests/postgres/verify_rls.sh
+
+      - name: Proxima end-to-end PostgreSQL verification
+        env:
+          PROXIMA_LISTEN_ADDR: 127.0.0.1:6432
+          PROXIMA_UPSTREAM_ADDR: 127.0.0.1:5432
+          PROXIMA_UPSTREAM_USER: proxima_gateway
+          PROXIMA_UPSTREAM_PASSWORD: proxima-gateway-dev-only
+          PROXIMA_TENANT_SIGNING_KEY: 01234567890123456789012345678901
+          PROXIMA_TENANT_ROLE_PREFIX: proxima_tenant_
+          RUST_LOG: proxima_engine=info
+        run: |
+          set -euo pipefail
+          cargo run -p proxima-engine --bin proxima-engine > /tmp/proxima-engine.log 2>&1 &
+          PROXIMA_PID=$!
+          trap 'kill "$PROXIMA_PID" 2>/dev/null || true' EXIT
+
+          for attempt in $(seq 1 50); do
+            if (echo > /dev/tcp/127.0.0.1/6432) >/dev/null 2>&1; then
+              break
+            fi
+            sleep 0.2
+          done
+
+          if ! kill -0 "$PROXIMA_PID" 2>/dev/null; then
+            cat /tmp/proxima-engine.log
+            exit 1
+          fi
+
+          python3 tests/postgres/verify_proxima.py
+          cat /tmp/proxima-engine.log
