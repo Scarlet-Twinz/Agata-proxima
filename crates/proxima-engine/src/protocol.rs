@@ -196,7 +196,7 @@ mod tests {
 
     #[test]
     fn recognizes_ssl_request() {
-        let packet = [0, 0, 0, 8, 8, 4, 21, 22];
+        let packet = [0, 0, 0, 8, 4, 210, 22, 47];
 
         let (startup, consumed) = parse_startup_packet(&packet).unwrap().unwrap();
         assert_eq!(startup, StartupPacket::SslRequest);
