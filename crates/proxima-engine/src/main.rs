@@ -2,6 +2,7 @@ use proxima_engine::{
     config::{Config, TlsMode},
     session::establish,
     tenant::TenantTokenVerifier,
+    telemetry::Telemetry,
     transport::{
         accept_postgres_tls, acceptor, boxed, client_config, connect_postgres_tls, connector,
         server_config, BoxedIo,
@@ -39,18 +40,32 @@ async fn main() -> io::Result<()> {
         (Some(ca), Some(_), TlsMode::Required) => Some(connector(client_config(ca)?)),
         _ => None,
     };
+    let telemetry = Telemetry::new();
+    let telemetry_server = {
+        let telemetry = telemetry.clone();
+        let addr = config.telemetry_addr;
+        let tls = matches!(config.tls_mode, TlsMode::Required);
+        let upstream_tls = matches!(config.upstream_tls_mode, TlsMode::Required);
+        let enforcement = verifier.is_some();
+        tokio::spawn(async move {
+            if let Err(err) = proxima_engine::telemetry::serve(addr, telemetry, tls, upstream_tls, enforcement).await {
+                error!(error=%err, "telemetry server stopped");
+            }
+        })
+    };
     let listener = TcpListener::bind(config.listen_addr).await?;
     let limit = Arc::new(Semaphore::new(config.max_connections));
-    info!(listen=%config.listen_addr,upstream=%config.upstream_addr,tenant_enforcement=verifier.is_some(),tls=matches!(config.tls_mode,TlsMode::Required),upstream_tls=matches!(config.upstream_tls_mode,TlsMode::Required),max_connections=config.max_connections,"Agata Proxima engine listening");
+    info!(listen=%config.listen_addr,upstream=%config.upstream_addr,tenant_enforcement=verifier.is_some(),tls=matches!(config.tls_mode,TlsMode::Required),upstream_tls=matches!(config.upstream_tls_mode,TlsMode::Required),max_connections=config.max_connections,telemetry=%config.telemetry_addr,"Agata Proxima engine listening");
     loop {
         tokio::select! {
          accept=listener.accept()=>{let(client,peer)=accept?;let permit=match limit.clone().try_acquire_owned(){Ok(p)=>p,Err(_)=>{error!(peer=%peer,"connection limit reached");drop(client);continue}};
-          let config=config.clone();let verifier=verifier.clone();let tls_acceptor=tls_acceptor.clone();let upstream_connector=upstream_connector.clone();
-          tokio::spawn(async move{let _permit=permit;if let Err(e)=handle_connection(client,peer,config,verifier.as_ref(),tls_acceptor,upstream_connector).await{error!(peer=%peer,error=%e,"connection failed");}});
+          let config=config.clone();let verifier=verifier.clone();let tls_acceptor=tls_acceptor.clone();let upstream_connector=upstream_connector.clone();let telemetry=telemetry.clone();
+          tokio::spawn(async move{let _permit=permit;let active=telemetry.accepted();if let Err(e)=handle_connection(client,peer,config,verifier.as_ref(),tls_acceptor,upstream_connector,telemetry.clone()).await{error!(peer=%peer,error=%e,"connection failed");}drop(active);});
          }
          _=tokio::signal::ctrl_c()=>{info!("shutdown signal received");break}
         }
     }
+    telemetry_server.abort();
     Ok(())
 }
 
@@ -61,11 +76,14 @@ async fn handle_connection(
     verifier: Option<&TenantTokenVerifier>,
     tls_acceptor: Option<tokio_rustls::TlsAcceptor>,
     upstream_connector: Option<tokio_rustls::TlsConnector>,
+    telemetry: Telemetry,
 ) -> io::Result<()> {
     info!(peer=%peer,"client connected");
     let client: BoxedIo = match (config.tls_mode, tls_acceptor) {
         (TlsMode::Required, Some(a)) => {
-            accept_postgres_tls(client, a, config.tls_handshake_timeout).await?
+            let stream = accept_postgres_tls(client, a, config.tls_handshake_timeout).await?;
+            telemetry.tls_session();
+            stream
         }
         (TlsMode::Disabled, None) => boxed(client),
         _ => {
