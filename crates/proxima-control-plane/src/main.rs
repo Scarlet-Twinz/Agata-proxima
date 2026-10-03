@@ -295,7 +295,7 @@ async fn overview(State(state): State<AppState>, headers: HeaderMap) -> Response
 
 async fn tenants(State(state): State<AppState>, headers: HeaderMap) -> Response {
     if let Err(r) = authorize(&state, &headers).await {
-        return r;
+        return r.into_response();
     }
     Json(state.store.read().await.tenants.clone()).into_response()
 }
@@ -306,7 +306,7 @@ async fn tenant(
     Path(id): Path<Uuid>,
 ) -> Response {
     if let Err(r) = authorize(&state, &headers).await {
-        return r;
+        return r.into_response();
     }
     match state
         .store
@@ -334,7 +334,7 @@ async fn create_tenant(
     Json(input): Json<CreateTenant>,
 ) -> Response {
     if let Err(r) = authorize(&state, &headers).await {
-        return r;
+        return r.into_response();
     }
     if input.name.trim().is_empty() || input.region.trim().is_empty() {
         return (
@@ -370,7 +370,7 @@ async fn create_tenant(
 
 async fn policies(State(state): State<AppState>, headers: HeaderMap) -> Response {
     if let Err(r) = authorize(&state, &headers).await {
-        return r;
+        return r.into_response();
     }
     Json(state.store.read().await.policies.clone()).into_response()
 }
@@ -381,7 +381,7 @@ async fn create_policy(
     Json(input): Json<CreatePolicy>,
 ) -> Response {
     if let Err(r) = authorize(&state, &headers).await {
-        return r;
+        return r.into_response();
     }
     if input.name.trim().is_empty() {
         return (
@@ -419,14 +419,14 @@ async fn create_policy(
 
 async fn nodes(State(state): State<AppState>, headers: HeaderMap) -> Response {
     if let Err(r) = authorize(&state, &headers).await {
-        return r;
+        return r.into_response();
     }
     Json(state.store.read().await.nodes.clone()).into_response()
 }
 
 async fn audit(State(state): State<AppState>, headers: HeaderMap) -> Response {
     if let Err(r) = authorize(&state, &headers).await {
-        return r;
+        return r.into_response();
     }
     Json(state.store.read().await.audit.clone()).into_response()
 }
