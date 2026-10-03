@@ -6,8 +6,11 @@ use std::net::SocketAddr;
 pub struct Config {
     pub listen_addr: SocketAddr,
     pub upstream_addr: String,
+    pub tenant_role_password: Option<String>,
     pub tenant_signing_key: Option<String>,
     pub tenant_role_prefix: String,
+    pub max_connections: usize,
+    pub startup_timeout_ms: u64,
 }
 
 impl Config {
@@ -58,11 +61,59 @@ impl Config {
             Err(_) => None,
         };
 
+        let max_connections = env::var("PROXIMA_MAX_CONNECTIONS")
+            .unwrap_or_else(|_| "1024".to_string())
+            .parse::<usize>()
+            .map_err(|error| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("invalid PROXIMA_MAX_CONNECTIONS: {error}"),
+                )
+            })?;
+
+        if max_connections == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "PROXIMA_MAX_CONNECTIONS must be greater than zero",
+            ));
+        }
+
+        let startup_timeout_ms = env::var("PROXIMA_STARTUP_TIMEOUT_MS")
+            .unwrap_or_else(|_| "5000".to_string())
+            .parse::<u64>()
+            .map_err(|error| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("invalid PROXIMA_STARTUP_TIMEOUT_MS: {error}"),
+                )
+            })?;
+
+        if startup_timeout_ms == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "PROXIMA_STARTUP_TIMEOUT_MS must be greater than zero",
+            ));
+        }
+
+        let tenant_role_password = env::var("PROXIMA_TENANT_ROLE_PASSWORD")
+            .ok()
+            .filter(|value| !value.is_empty());
+
+        if tenant_signing_key.is_some() && tenant_role_password.is_none() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "PROXIMA_TENANT_ROLE_PASSWORD is required when tenant enforcement is enabled",
+            ));
+        }
+
         Ok(Self {
             listen_addr,
             upstream_addr,
+            tenant_role_password,
             tenant_signing_key,
             tenant_role_prefix,
+            max_connections,
+            startup_timeout_ms,
         })
     }
 }
@@ -73,14 +124,25 @@ mod tests {
 
     #[test]
     fn defaults_are_valid() {
-        std::env::remove_var("PROXIMA_LISTEN_ADDR");
-        std::env::remove_var("PROXIMA_UPSTREAM_ADDR");
-        std::env::remove_var("PROXIMA_TENANT_SIGNING_KEY");
+        for key in [
+            "PROXIMA_LISTEN_ADDR",
+            "PROXIMA_UPSTREAM_ADDR",
+            "PROXIMA_TENANT_SIGNING_KEY",
+            "PROXIMA_TENANT_ROLE_PREFIX",
+            "PROXIMA_MAX_CONNECTIONS",
+            "PROXIMA_STARTUP_TIMEOUT_MS",
+            "PROXIMA_TENANT_ROLE_PASSWORD",
+        ] {
+            std::env::remove_var(key);
+        }
 
         let config = Config::from_env().unwrap();
         assert_eq!(config.listen_addr, "127.0.0.1:6432".parse().unwrap());
         assert_eq!(config.upstream_addr, "127.0.0.1:5432");
+        assert_eq!(config.tenant_role_password, None);
         assert_eq!(config.tenant_signing_key, None);
         assert_eq!(config.tenant_role_prefix, "proxima_tenant_");
+        assert_eq!(config.max_connections, 1024);
+        assert_eq!(config.startup_timeout_ms, 5000);
     }
 }

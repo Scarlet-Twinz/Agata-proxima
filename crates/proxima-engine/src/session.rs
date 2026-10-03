@@ -1,3 +1,4 @@
+use crate::auth::{authenticate_upstream, send_authentication_ok};
 use crate::protocol::{parse_startup_packet, StartupPacket};
 use crate::tenant::{TenantContext, TenantTokenVerifier};
 use std::io;
@@ -18,6 +19,7 @@ pub async fn establish(
     mut upstream: TcpStream,
     verifier: Option<&TenantTokenVerifier>,
     tenant_role_prefix: &str,
+    tenant_role_password: Option<&str>,
 ) -> io::Result<(TcpStream, TcpStream, EstablishedSession)> {
     let startup = read_startup(&mut client).await?;
 
@@ -28,11 +30,31 @@ pub async fn establish(
         } => {
             let (startup, tenant_context) =
                 prepare_startup(protocol_version, parameters, verifier, tenant_role_prefix)?;
+
             debug!(
                 tenant_bound = tenant_context.is_some(),
                 "PostgreSQL startup packet received"
             );
+
             forward_startup(&mut upstream, &startup).await?;
+
+            if let Some(context) = tenant_context.as_ref() {
+                let role = tenant_role(tenant_role_prefix, &context.tenant_id)?;
+                let password = tenant_role_password.ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "tenant role password is required for tenant enforcement",
+                    )
+                })?;
+
+                authenticate_upstream(&mut upstream, &role, password).await?;
+                send_authentication_ok(&mut client).await?;
+
+                let ready =
+                    crate::auth::forward_startup_until_ready(&mut upstream, &mut client).await?;
+                client.write_all(&ready).await?;
+            }
+
             Ok((client, upstream, EstablishedSession { tenant_context }))
         }
         StartupPacket::SslRequest => {
@@ -47,7 +69,7 @@ pub async fn establish(
                 if verifier.is_some() {
                     return Err(io::Error::new(
                         io::ErrorKind::PermissionDenied,
-                        "Proxima tenant enforcement cannot run through end-to-end TLS without TLS termination",
+                        "Proxima tenant enforcement requires TLS termination; end-to-end TLS is opaque to the policy layer",
                     ));
                 }
                 return Ok((
@@ -72,6 +94,25 @@ pub async fn establish(
                         tenant_role_prefix,
                     )?;
                     forward_startup(&mut upstream, &startup).await?;
+
+                    if let Some(context) = tenant_context.as_ref() {
+                        let role = tenant_role(tenant_role_prefix, &context.tenant_id)?;
+                        let password = tenant_role_password.ok_or_else(|| {
+                            io::Error::new(
+                                io::ErrorKind::InvalidInput,
+                                "tenant role password is required for tenant enforcement",
+                            )
+                        })?;
+
+                        authenticate_upstream(&mut upstream, &role, password).await?;
+                        send_authentication_ok(&mut client).await?;
+
+                        let ready =
+                            crate::auth::forward_startup_until_ready(&mut upstream, &mut client)
+                                .await?;
+                        client.write_all(&ready).await?;
+                    }
+
                     Ok((client, upstream, EstablishedSession { tenant_context }))
                 }
                 other => Err(io::Error::new(
@@ -149,7 +190,7 @@ fn prepare_startup(
     };
 
     if let Some(context) = tenant_context.as_ref() {
-        let role = format!("{tenant_role_prefix}{}", context.tenant_id);
+        let role = tenant_role(tenant_role_prefix, &context.tenant_id)?;
         forwarded.retain(|(key, _)| key != "user");
         forwarded.push(("user".to_owned(), role));
     }
@@ -161,6 +202,28 @@ fn prepare_startup(
         },
         tenant_context,
     ))
+}
+
+fn tenant_role(prefix: &str, tenant_id: &str) -> io::Result<String> {
+    let role = format!("{prefix}{tenant_id}");
+    if role.is_empty() || role.len() > 63 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "derived PostgreSQL tenant role exceeds the 63-byte identifier limit",
+        ));
+    }
+
+    if !role
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "derived PostgreSQL tenant role contains invalid identifier characters",
+        ));
+    }
+
+    Ok(role)
 }
 
 async fn read_startup(stream: &mut TcpStream) -> io::Result<StartupPacket> {
@@ -249,17 +312,17 @@ mod tests {
     }
 
     #[test]
-    fn extracts_and_removes_tenant_token() {
+    fn extracts_and_rewrites_tenant_startup() {
         let verifier = verifier();
         let token = verifier.sign_for_test("tenant_a", u64::MAX);
         let (startup, context) = prepare_startup(
             crate::protocol::PROTOCOL_3_0,
             vec![
-                ("user".into(), "proxima".into()),
+                ("user".into(), "client".into()),
                 (TENANT_TOKEN_PARAMETER.into(), token),
             ],
             Some(&verifier),
-            "proxima_tenant_",
+            "proxima_",
         )
         .unwrap();
 
@@ -268,7 +331,7 @@ mod tests {
             startup,
             StartupPacket::Startup {
                 protocol_version: crate::protocol::PROTOCOL_3_0,
-                parameters: vec![("user".into(), "proxima_tenant_tenant_a".into())],
+                parameters: vec![("user".into(), "proxima_tenant_a".into())],
             }
         );
     }
@@ -278,9 +341,9 @@ mod tests {
         let verifier = verifier();
         let error = prepare_startup(
             crate::protocol::PROTOCOL_3_0,
-            vec![("user".into(), "proxima".into())],
+            vec![("user".into(), "client".into())],
             Some(&verifier),
-            "proxima_tenant_",
+            "proxima_",
         )
         .unwrap_err();
 
@@ -298,10 +361,16 @@ mod tests {
                 (TENANT_TOKEN_PARAMETER.into(), token),
             ],
             Some(&verifier),
-            "proxima_tenant_",
+            "proxima_",
         )
         .unwrap_err();
 
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn rejects_tenant_role_over_identifier_limit() {
+        let tenant = "a".repeat(63);
+        assert!(tenant_role("proxima_", &tenant).is_err());
     }
 }

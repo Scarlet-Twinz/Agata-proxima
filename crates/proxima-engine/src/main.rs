@@ -1,8 +1,12 @@
 use std::io;
+use std::sync::Arc;
+use std::time::Duration;
 
 use proxima_engine::{config::Config, session::establish, tenant::TenantTokenVerifier};
 use tokio::io::copy_bidirectional;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::Semaphore;
+use tokio::time::timeout;
 use tracing::{error, info};
 
 #[tokio::main]
@@ -15,6 +19,10 @@ async fn main() -> io::Result<()> {
 
     let config = Config::from_env()?;
     let config_tenant_role_prefix = config.tenant_role_prefix.clone();
+    let tenant_role_password = config.tenant_role_password.clone();
+    let max_connections = config.max_connections;
+    let startup_timeout = Duration::from_millis(config.startup_timeout_ms);
+    let connection_slots = Arc::new(Semaphore::new(max_connections));
 
     let verifier = config
         .tenant_signing_key
@@ -37,14 +45,28 @@ async fn main() -> io::Result<()> {
         let upstream = config.upstream_addr.clone();
         let verifier = verifier.clone();
         let tenant_role_prefix = config_tenant_role_prefix.clone();
+        let tenant_role_password = tenant_role_password.clone();
+        let startup_timeout = startup_timeout;
+        let connection_slots = connection_slots.clone();
+
+        let permit = match connection_slots.try_acquire_owned() {
+            Ok(permit) => permit,
+            Err(_) => {
+                error!(peer = %peer, "connection rejected: Proxima connection limit reached");
+                continue;
+            }
+        };
 
         tokio::spawn(async move {
+            let _permit = permit;
             if let Err(err) = handle_connection(
                 client,
                 peer,
                 &upstream,
                 verifier.as_ref(),
                 &tenant_role_prefix,
+                tenant_role_password.as_deref(),
+                startup_timeout,
             )
             .await
             {
@@ -60,12 +82,29 @@ async fn handle_connection(
     upstream_addr: &str,
     verifier: Option<&TenantTokenVerifier>,
     tenant_role_prefix: &str,
+    tenant_role_password: Option<&str>,
+    startup_timeout: Duration,
 ) -> io::Result<()> {
     info!(peer = %peer, "client connected");
 
     let upstream = TcpStream::connect(upstream_addr).await?;
-    let (mut client, mut upstream, session) =
-        establish(client, upstream, verifier, tenant_role_prefix).await?;
+    let (mut client, mut upstream, session) = timeout(
+        startup_timeout,
+        establish(
+            client,
+            upstream,
+            verifier,
+            tenant_role_prefix,
+            tenant_role_password,
+        ),
+    )
+    .await
+    .map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::TimedOut,
+            "PostgreSQL startup/authentication exceeded Proxima startup timeout",
+        )
+    })??;
 
     info!(
         peer = %peer,

@@ -7,8 +7,13 @@ description = "Agata Proxima security infrastructure engine"
 repository = "https://github.com/Scarlet-Twinz/Agata-proxima"
 
 [dependencies]
+base64 = "0.22"
+clap = { version = "4", features = ["derive", "env"] }
 bytes = "1"
+hex = "0.4"
 hmac = "0.12"
+pbkdf2 = { version = "0.12", features = ["sha2"] }
+rand = "0.8"
 sha2 = "0.10"
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"

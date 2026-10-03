@@ -1,6 +1,6 @@
 -- Proxima PostgreSQL isolation verification fixture.
--- This is intentionally independent of the Rust engine: it proves the database
--- enforcement layer itself has the expected fail-closed behavior.
+-- The tenant roles are the authenticated database identities for Proxima
+-- sessions. They are intentionally non-superuser and NOBYPASSRLS.
 
 BEGIN;
 
@@ -9,10 +9,15 @@ CREATE SCHEMA IF NOT EXISTS proxima_test;
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'proxima_tenant_a') THEN
-    CREATE ROLE proxima_tenant_a NOLOGIN NOSUPERUSER NOBYPASSRLS;
+    CREATE ROLE proxima_tenant_a LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'proxima-tenant-dev-only';
+  ELSE
+    ALTER ROLE proxima_tenant_a WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'proxima-tenant-dev-only';
   END IF;
+
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'proxima_tenant_b') THEN
-    CREATE ROLE proxima_tenant_b NOLOGIN NOSUPERUSER NOBYPASSRLS;
+    CREATE ROLE proxima_tenant_b LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'proxima-tenant-dev-only';
+  ELSE
+    ALTER ROLE proxima_tenant_b WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'proxima-tenant-dev-only';
   END IF;
 END $$;
 

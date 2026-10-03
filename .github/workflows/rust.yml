@@ -15,6 +15,7 @@ jobs:
           POSTGRES_USER: proxima
           POSTGRES_PASSWORD: proxima-dev-only
           POSTGRES_DB: proxima_dev
+          POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=trust"
         ports:
           - 5432:5432
         options: >-
@@ -50,3 +51,44 @@ jobs:
           PGPASSWORD: proxima-dev-only
           PGDATABASE: proxima_dev
         run: bash tests/postgres/verify_rls.sh
+
+      - name: Require SCRAM for Proxima upstream connections
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: proxima
+          PGPASSWORD: proxima-dev-only
+          PGDATABASE: proxima_dev
+        run: |
+          psql -v ON_ERROR_STOP=1 -c "COPY (VALUES ('local all all trust'), ('host all all 0.0.0.0/0 scram-sha-256'), ('host all all ::0/0 scram-sha-256')) TO '/var/lib/postgresql/data/pg_hba.conf'"
+          psql -v ON_ERROR_STOP=1 -c "SELECT pg_reload_conf()"
+          psql -Atqc "SELECT type || '|' || array_to_string(database, ',') || '|' || array_to_string(user_name, ',') || '|' || COALESCE(address, '') || '|' || auth_method FROM pg_hba_file_rules"
+
+      - name: Proxima end-to-end PostgreSQL verification
+        env:
+          PROXIMA_LISTEN_ADDR: 127.0.0.1:6432
+          PROXIMA_UPSTREAM_ADDR: 127.0.0.1:5432
+          PROXIMA_TENANT_ROLE_PASSWORD: proxima-tenant-dev-only
+          PROXIMA_TENANT_SIGNING_KEY: "01234567890123456789012345678901"
+          PROXIMA_TENANT_ROLE_PREFIX: proxima_
+          RUST_LOG: proxima_engine=info
+        run: |
+          set -euo pipefail
+          cargo run -p proxima-engine --bin proxima-engine > /tmp/proxima-engine.log 2>&1 &
+          PROXIMA_PID=$!
+          trap 'cat /tmp/proxima-engine.log; kill "$PROXIMA_PID" 2>/dev/null || true' EXIT
+
+          for attempt in $(seq 1 50); do
+            if (echo > /dev/tcp/127.0.0.1/6432) >/dev/null 2>&1; then
+              break
+            fi
+            sleep 0.2
+          done
+
+          if ! kill -0 "$PROXIMA_PID" 2>/dev/null; then
+            cat /tmp/proxima-engine.log
+            exit 1
+          fi
+
+          python3 tests/postgres/verify_proxima.py
+          cat /tmp/proxima-engine.log
