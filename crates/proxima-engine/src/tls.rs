@@ -85,22 +85,14 @@ pub struct TlsRuntime {
 impl TlsRuntime {
     pub fn from_config(config: &crate::config::Config) -> io::Result<Self> {
         let client_acceptor = if config.client_tls_mode == ClientTlsMode::Required {
-            let certs = load_certificates(
-                config
-                    .client_tls_cert_file
-                    .as_deref()
-                    .ok_or_else(|| {
-                        invalid("PROXIMA_TLS_CERT_FILE is required when PROXIMA_TLS_MODE=required")
-                    })?,
-            )?;
-            let key = load_private_key(
-                config
-                    .client_tls_key_file
-                    .as_deref()
-                    .ok_or_else(|| {
-                        invalid("PROXIMA_TLS_KEY_FILE is required when PROXIMA_TLS_MODE=required")
-                    })?,
-            )?;
+            let certs =
+                load_certificates(config.client_tls_cert_file.as_deref().ok_or_else(|| {
+                    invalid("PROXIMA_TLS_CERT_FILE is required when PROXIMA_TLS_MODE=required")
+                })?)?;
+            let key =
+                load_private_key(config.client_tls_key_file.as_deref().ok_or_else(|| {
+                    invalid("PROXIMA_TLS_KEY_FILE is required when PROXIMA_TLS_MODE=required")
+                })?)?;
             let server = ServerConfig::builder()
                 .with_no_client_auth()
                 .with_single_cert(certs, key)
@@ -112,12 +104,9 @@ impl TlsRuntime {
 
         let (upstream_connector, upstream_server_name) =
             if config.upstream_tls_mode == UpstreamTlsMode::VerifyFull {
-                let ca_file = config
-                    .upstream_tls_ca_file
-                    .as_deref()
-                    .ok_or_else(|| {
-                        invalid("PROXIMA_UPSTREAM_TLS_CA_FILE is required for verify-full")
-                    })?;
+                let ca_file = config.upstream_tls_ca_file.as_deref().ok_or_else(|| {
+                    invalid("PROXIMA_UPSTREAM_TLS_CA_FILE is required for verify-full")
+                })?;
                 let server_name = config
                     .upstream_tls_server_name
                     .as_deref()
@@ -147,10 +136,7 @@ impl TlsRuntime {
         })
     }
 
-    pub async fn accept_client(
-        &self,
-        mut stream: TcpStream,
-    ) -> io::Result<(ProximaStream, bool)> {
+    pub async fn accept_client(&self, mut stream: TcpStream) -> io::Result<(ProximaStream, bool)> {
         let acceptor = self
             .client_acceptor
             .as_ref()
