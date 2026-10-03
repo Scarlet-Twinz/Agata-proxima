@@ -63,3 +63,32 @@ A future verification suite will exercise cases including:
 - administrative connections.
 
 No feature is considered secure merely because a happy-path test passes.
+
+
+## Implemented foundation
+
+The current engine includes:
+
+- typed environment configuration;
+- PostgreSQL startup-packet recognition;
+- SSLRequest and CancelRequest recognition;
+- frontend message framing with length validation;
+- protocol frame size limits;
+- protocol unit tests;
+- protocol-aware startup/session establishment;
+- asynchronous TCP forwarding after startup negotiation.
+
+The engine currently preserves an end-to-end TLS stream after PostgreSQL SSL negotiation. It does not claim to inspect encrypted PostgreSQL traffic. TLS termination and the resulting trust model are a separate security design decision.
+
+## Next enforcement boundary
+
+The next implementation boundary is not arbitrary SQL rewriting. It is the establishment of a trusted tenant context and a PostgreSQL-native enforcement strategy that remains correct across:
+
+- authentication;
+- connection reuse;
+- transactions;
+- prepared statements;
+- resets;
+- privileged operations.
+
+Only after that boundary is implemented and tested should Proxima advertise tenant isolation enforcement.
