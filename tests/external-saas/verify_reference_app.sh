@@ -63,7 +63,15 @@ C_SEES_A="$(request tenant_c "$TOKEN_C" "$EXTERNAL_SAAS_URL/records?tenant_id=te
 
 echo "PASS: cross-tenant reads are blocked by Proxima"
 
-if curl -sS -o /dev/null -w "%{http_code}" -H "X-Proxima-Tenant-Token: $EXPIRED" "$EXTERNAL_SAAS_URL/records?tenant_id=tenant_a" | grep -q '^401$'; then
+if curl -sS -o /dev/null -w "%{http_code}" -H "X-Proxima-Tenant-Token: $EXPIRED" "$EXTERNAL_SAAS_URL/records?tenant_id=tenant_a" | grep -q '^403; then
+  echo "PASS: expired tenant context rejected"
+else
+  echo "FAIL: expired tenant context was not rejected with HTTP 403" >&2
+  exit 1
+fi
+
+echo "External SaaS reference application acceptance: PASS"
+; then
   echo "PASS: expired tenant context rejected"
 else
   echo "FAIL: expired tenant context was not rejected with HTTP 401" >&2
