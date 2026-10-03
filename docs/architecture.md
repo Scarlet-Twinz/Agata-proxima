@@ -92,3 +92,29 @@ The next implementation boundary is not arbitrary SQL rewriting. It is the estab
 - privileged operations.
 
 Only after that boundary is implemented and tested should Proxima advertise tenant isolation enforcement.
+
+## Trusted tenant context
+
+Proxima now contains a cryptographic tenant-context primitive. The engine can verify a compact
+versioned token using an HMAC-SHA256 signing key before a tenant identity is admitted into the
+security context.
+
+The current token shape is:
+
+```
+v1.<tenant_id>.<expires_at_unix_seconds>.<hex_hmac_sha256>
+```
+
+The verifier requires a minimum 32-byte signing secret, rejects malformed or expired tokens, limits
+tenant identifiers to a conservative character set, and compares signatures without early-exit
+byte comparison.
+
+This token is an **identity assertion from the trusted application boundary**, not proof that a
+database client is trustworthy by itself. The application that holds the signing secret is therefore
+part of the Proxima trust model. A tenant token must never be accepted merely because a client
+supplied a tenant ID.
+
+The next integration step is to bind a verified context to the PostgreSQL session in a way that the
+database itself enforces. The implementation will prefer PostgreSQL-native authorization/RLS
+mechanisms over SQL text rewriting. Connection reuse, prepared statements, transaction boundaries,
+role changes, and administrative paths must remain covered by adversarial tests.
