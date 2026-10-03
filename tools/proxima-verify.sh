@@ -50,7 +50,11 @@ psql_proxima() {
   local password="$2"
   local token
   token="$(make_token "$tenant")"
-  PGHOST="$PROXIMA_VERIFY_HOST"   PGPORT="$PROXIMA_VERIFY_PORT"   PGUSER="$PROXIMA_VERIFY_USER"   PGDATABASE="$PROXIMA_VERIFY_DATABASE"   PGPASSWORD="$password"   PGOPTIONS="-c proxima_tenant_token=$token" PGCHANNELBINDING="${PGCHANNELBINDING:-disable}" PGSSLMODE="${PROXIMA_VERIFY_TLS:+require}" psql -v ON_ERROR_STOP=1 -Atqc "$3"
+  local sslmode=disable
+  if [[ "$PROXIMA_VERIFY_TLS" == "1" ]]; then
+    sslmode=require
+  fi
+  PGHOST="$PROXIMA_VERIFY_HOST" PGPORT="$PROXIMA_VERIFY_PORT" PGUSER="$PROXIMA_VERIFY_USER" PGDATABASE="$PROXIMA_VERIFY_DATABASE" PGPASSWORD="$password" PGOPTIONS="-c proxima_tenant_token=$token" PGCHANNELBINDING="${PGCHANNELBINDING:-disable}" PGSSLMODE="$sslmode" psql -v ON_ERROR_STOP=1 -Atqc "$3"
 }
 
 assert_eq() {
