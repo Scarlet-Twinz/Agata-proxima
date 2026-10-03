@@ -6,8 +6,7 @@ use std::net::SocketAddr;
 pub struct Config {
     pub listen_addr: SocketAddr,
     pub upstream_addr: String,
-    pub upstream_user: Option<String>,
-    pub upstream_password: Option<String>,
+    pub tenant_role_password: Option<String>,
     pub tenant_signing_key: Option<String>,
     pub tenant_role_prefix: String,
 }
@@ -78,8 +77,7 @@ impl Config {
         Ok(Self {
             listen_addr,
             upstream_addr,
-            upstream_user,
-            upstream_password,
+            tenant_role_password,
             tenant_signing_key,
             tenant_role_prefix,
         })
@@ -97,8 +95,7 @@ mod tests {
             "PROXIMA_UPSTREAM_ADDR",
             "PROXIMA_TENANT_SIGNING_KEY",
             "PROXIMA_TENANT_ROLE_PREFIX",
-            "PROXIMA_UPSTREAM_USER",
-            "PROXIMA_UPSTREAM_PASSWORD",
+            "PROXIMA_TENANT_ROLE_PASSWORD",
         ] {
             std::env::remove_var(key);
         }
@@ -106,8 +103,7 @@ mod tests {
         let config = Config::from_env().unwrap();
         assert_eq!(config.listen_addr, "127.0.0.1:6432".parse().unwrap());
         assert_eq!(config.upstream_addr, "127.0.0.1:5432");
-        assert_eq!(config.upstream_user, None);
-        assert_eq!(config.upstream_password, None);
+        assert_eq!(config.tenant_role_password, None);
         assert_eq!(config.tenant_signing_key, None);
         assert_eq!(config.tenant_role_prefix, "proxima_tenant_");
     }
