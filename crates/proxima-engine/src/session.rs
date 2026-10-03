@@ -327,7 +327,7 @@ mod tests {
             startup,
             StartupPacket::Startup {
                 protocol_version: crate::protocol::PROTOCOL_3_0,
-                parameters: vec![("user".into(), "proxima_gateway".into())],
+                parameters: vec![("user".into(), "proxima_tenant_a".into())],
             }
         );
     }
@@ -339,7 +339,7 @@ mod tests {
             crate::protocol::PROTOCOL_3_0,
             vec![("user".into(), "client".into())],
             Some(&verifier),
-            Some("proxima_gateway"),
+            "proxima_",
         )
         .unwrap_err();
 
