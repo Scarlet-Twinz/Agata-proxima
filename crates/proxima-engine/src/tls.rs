@@ -61,7 +61,7 @@ pub async fn accept_client_tls(
     acceptor: &TlsAcceptor,
     stream: TcpStream,
     timeout_duration: std::time::Duration,
-) -> io::Result<ClientTlsStream> {
+) -> io::Result<ServerTlsStream<TcpStream>> {
     tokio::time::timeout(timeout_duration, acceptor.accept(stream))
         .await
         .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "client TLS handshake timed out"))?
