@@ -29,6 +29,7 @@ fi
 
 make_token() {
   local tenant="$1"
+  local ttl="${2:-3600}"
   python3 - "$PROXIMA_VERIFY_SIGNING_KEY" "$tenant" <<'PY'
 import hashlib
 import hmac
@@ -37,7 +38,7 @@ import time
 
 secret = sys.argv[1].encode()
 tenant = sys.argv[2]
-expires = int(time.time()) + 3600
+expires = int(time.time()) + int(sys.argv[3])
 payload = f"v1.{tenant}.{expires}".encode()
 signature = hmac.new(secret, payload, hashlib.sha256).hexdigest()
 print(f"{payload.decode()}.{signature}")
@@ -80,5 +81,30 @@ assert_eq "UPDATE 0" "$a_update" "tenant A cannot update tenant B rows"
 
 b_delete="$(psql_proxima "$PROXIMA_VERIFY_TENANT_B" "$PROXIMA_VERIFY_TENANT_B_PASSWORD" "DELETE FROM $PROXIMA_VERIFY_TABLE WHERE $PROXIMA_VERIFY_TENANT_COLUMN = '$PROXIMA_VERIFY_TENANT_A';")"
 assert_eq "DELETE 0" "$b_delete" "tenant B cannot delete tenant A rows"
+
+echo "Proxima Verify: PASS"
+
+expect_reject() {
+  local label="$1"
+  shift
+  if "$@"; then
+    echo "FAIL: $label (request unexpectedly succeeded)" >&2
+    exit 1
+  fi
+  echo "PASS: $label"
+}
+
+psql_without_token() {
+  PGPASSWORD="$PROXIMA_VERIFY_TENANT_A_PASSWORD" PGHOST="$PROXIMA_VERIFY_HOST" PGPORT="$PROXIMA_VERIFY_PORT" PGUSER="$PROXIMA_VERIFY_USER" PGDATABASE="$PROXIMA_VERIFY_DATABASE" psql -v ON_ERROR_STOP=1 -Atqc "$1"
+}
+
+psql_with_expired_token() {
+  local token
+  token="$(make_token "$PROXIMA_VERIFY_TENANT_A" -60)"
+  PGHOST="$PROXIMA_VERIFY_HOST" PGPORT="$PROXIMA_VERIFY_PORT" PGUSER="$PROXIMA_VERIFY_USER" PGDATABASE="$PROXIMA_VERIFY_DATABASE" PGPASSWORD="$PROXIMA_VERIFY_TENANT_A_PASSWORD" PGOPTIONS="-c proxima_tenant_token=$token" psql -v ON_ERROR_STOP=1 -Atqc "SELECT 1;"
+}
+
+expect_reject "missing tenant context is rejected" psql_without_token "SELECT 1;"
+expect_reject "expired tenant token is rejected" psql_with_expired_token
 
 echo "Proxima Verify: PASS"
