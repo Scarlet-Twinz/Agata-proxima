@@ -1,7 +1,13 @@
 use std::io;
 use std::sync::Arc;
 
-use proxima_engine::{config::Config, session::establish, tenant::TenantTokenVerifier};
+use proxima_engine::{
+    admin::{self, AdminState, RuntimeMetrics},
+    config::{ClientTlsMode, Config, UpstreamTlsMode},
+    session::establish,
+    tenant::TenantTokenVerifier,
+    tls::{ProximaStream, TlsRuntime},
+};
 use tokio::io::copy_bidirectional;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Semaphore;
@@ -17,7 +23,14 @@ async fn main() -> io::Result<()> {
         .init();
 
     let config = Config::from_env()?;
-    let config_tenant_role_prefix = config.tenant_role_prefix.clone();
+    if config.upstream_tls_mode == UpstreamTlsMode::VerifyFull
+        && config.client_tls_mode != ClientTlsMode::Required
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "upstream TLS verification requires PROXIMA_TLS_MODE=required so plaintext cannot enter the TLS-only enforcement boundary",
+        ));
+    }
 
     let verifier = config
         .tenant_signing_key
@@ -26,13 +39,28 @@ async fn main() -> io::Result<()> {
         .transpose()
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error.to_string()))?;
 
+    let tls = TlsRuntime::from_config(&config)?;
     let listener = TcpListener::bind(config.listen_addr).await?;
     let connection_limit = Arc::new(Semaphore::new(config.max_connections));
+    let metrics = Arc::new(RuntimeMetrics::default());
+    metrics.start();
+
+    let admin_state = AdminState {
+        metrics: metrics.clone(),
+        tls_active: config.client_tls_mode == ClientTlsMode::Required,
+        tenant_enforcement: verifier.is_some(),
+        upstream_tls: config.upstream_tls_mode == UpstreamTlsMode::VerifyFull,
+        upstream_addr: config.upstream_addr.clone(),
+    };
+    let admin_task = tokio::spawn(admin::serve(config.admin_addr, admin_state));
 
     info!(
         listen = %config.listen_addr,
+        admin = %config.admin_addr,
         upstream = %config.upstream_addr,
         tenant_enforcement = verifier.is_some(),
+        client_tls = ?config.client_tls_mode,
+        upstream_tls = ?config.upstream_tls_mode,
         max_connections = config.max_connections,
         "Agata Proxima engine listening"
     );
@@ -44,26 +72,31 @@ async fn main() -> io::Result<()> {
                 let permit = match connection_limit.clone().try_acquire_owned() {
                     Ok(permit) => permit,
                     Err(_) => {
+                        metrics.rejected();
                         error!(peer = %peer, "connection limit reached");
                         drop(client);
                         continue;
                     }
                 };
 
-                let upstream = config.upstream_addr.clone();
+                let upstream_addr = config.upstream_addr.clone();
                 let verifier = verifier.clone();
-                let tenant_role_prefix = config_tenant_role_prefix.clone();
+                let tenant_role_prefix = config.tenant_role_prefix.clone();
                 let upstream_connect_timeout = config.upstream_connect_timeout;
+                let tls = tls.clone();
+                let metrics = metrics.clone();
 
                 tokio::spawn(async move {
                     let _permit = permit;
                     if let Err(err) = handle_connection(
                         client,
                         peer,
-                        &upstream,
+                        &upstream_addr,
                         verifier.as_ref(),
                         &tenant_role_prefix,
                         upstream_connect_timeout,
+                        &tls,
+                        metrics,
                     )
                     .await
                     {
@@ -78,6 +111,7 @@ async fn main() -> io::Result<()> {
         }
     }
 
+    admin_task.abort();
     Ok(())
 }
 
@@ -88,12 +122,40 @@ async fn handle_connection(
     verifier: Option<&TenantTokenVerifier>,
     tenant_role_prefix: &str,
     upstream_connect_timeout: std::time::Duration,
+    tls: &TlsRuntime,
+    metrics: Arc<RuntimeMetrics>,
 ) -> io::Result<()> {
     info!(peer = %peer, "client connected");
 
-    let upstream = timeout(upstream_connect_timeout, TcpStream::connect(upstream_addr))
+    let (client, client_tls) = if tls.client_mode == ClientTlsMode::Required {
+        tls.accept_client(client).await?
+    } else {
+        (ProximaStream::Plain(client), false)
+    };
+    metrics.connection_opened(client_tls);
+
+    let upstream_tcp = timeout(upstream_connect_timeout, TcpStream::connect(upstream_addr))
         .await
         .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "upstream connection timed out"))??;
+
+    let upstream = if tls.upstream_mode == UpstreamTlsMode::VerifyFull {
+        tls.connect_upstream(upstream_tcp).await?
+    } else {
+        ProximaStream::Plain(upstream_tcp)
+    };
+
+    let result = run_session(client, upstream, verifier, tenant_role_prefix, peer).await;
+    metrics.connection_closed();
+    result
+}
+
+async fn run_session(
+    client: ProximaStream,
+    upstream: ProximaStream,
+    verifier: Option<&TenantTokenVerifier>,
+    tenant_role_prefix: &str,
+    peer: std::net::SocketAddr,
+) -> io::Result<()> {
     let (mut client, mut upstream, session) =
         establish(client, upstream, verifier, tenant_role_prefix).await?;
 
