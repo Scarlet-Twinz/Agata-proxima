@@ -12,3 +12,6 @@ Planned responsibilities:
 - tenant and connection telemetry.
 
 A hosted multi-tenant Cloud service requires real authentication, persistent storage, isolation tests, deployment, observability and external security review. This repository must not claim those are complete until they exist.
+
+
+Phase gate: Cloud remains explicitly unclaimed until the hosted control plane is implemented and externally verified.
