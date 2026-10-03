@@ -8,6 +8,21 @@ on:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: proxima
+          POSTGRES_PASSWORD: proxima-dev-only
+          POSTGRES_DB: proxima_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U proxima -d proxima_dev"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 20
+
     steps:
       - uses: actions/checkout@v4
 
@@ -26,3 +41,12 @@ jobs:
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: PostgreSQL RLS verification
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: proxima
+          PGPASSWORD: proxima-dev-only
+          PGDATABASE: proxima_dev
+        run: bash tests/postgres/verify_rls.sh
