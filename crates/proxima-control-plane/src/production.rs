@@ -493,6 +493,22 @@ pub(crate) async fn verify_email(
     }
 }
 
+pub(crate) async fn reset_password_page(Query(q): Query<VerifyInput>) -> Response {
+    let token = q.token.replace('"', "");
+    Html(format!(
+        "<!doctype html><html><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\">
+        <h1>Reset your Agata Proxima password</h1>
+        <form id=\"f\"><input id=\"p\" type=\"password\" minlength=\"12\" placeholder=\"New password\" required style=\"padding:12px;width:320px\">
+        <button style=\"margin-left:8px;padding:12px\">Reset password</button></form>
+        <p id=\"m\"></p>
+        <script>
+        const token={token:?};
+        document.getElementById('f').onsubmit=async(e)=>{{e.preventDefault();const r=await fetch('/api/v1/auth/password-reset/confirm',{{method:'POST',headers:{{'content-type':'application/json'}},body:JSON.stringify({{token,password:document.getElementById('p').value}})}});const j=await r.json();document.getElementById('m').textContent=j.message||'Done';}};
+        </script></body></html>"
+    ))
+    .into_response()
+}
+
 pub(crate) async fn request_password_reset(
     State(s): State<AppState>,
     Json(input): Json<PasswordResetRequest>,
