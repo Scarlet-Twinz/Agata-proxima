@@ -72,3 +72,14 @@ jobs:
         run: |
           bash -n tests/control-plane/api_smoke.sh
           bash -n scripts/proxima-platform.sh
+
+      - name: Capture workspace lockfile
+        run: |
+          cargo generate-lockfile
+          mkdir -p /tmp/proxima-lock
+          cp Cargo.lock /tmp/proxima-lock/Cargo.lock
+      - name: Upload workspace lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: proxima-cargo-lock
+          path: /tmp/proxima-lock/Cargo.lock
