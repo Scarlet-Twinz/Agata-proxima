@@ -9,7 +9,7 @@
 - [x] Role-based write authorization
 - [x] Audit events
 - [x] Verification evidence
-- [ ] External identity provider / SSO
+- [ ] External identity provider / SSO — runtime activation still requires a real public callback and Entra tenant acceptance
 - [ ] Managed secret rotation
 - [ ] Independent security assessment
 
@@ -39,8 +39,14 @@
 - [x] Tenants / Policies / Fleet / Deployments
 - [x] Verification / Audit / Security / Infrastructure
 - [x] Developer / Support surfaces
-- [ ] Billing
-- [ ] Production email delivery
+- [x] Billing entitlement model and Stripe integration contract
+- [ ] Production email delivery — waiting for Agata-owned sending domain
 - [ ] Customer-facing status page
 
 Items marked unchecked are deliberate production gates, not hidden TODOs.
+
+## Phase 51–57 acceptance state
+
+The repository now contains the entitlement enforcement layer, plan catalog, billing UI, production email/deployment runbooks, adversarial gate, and independent external SaaS acceptance fixture.
+
+The following are intentionally deployment-gated rather than claimed as complete: real Microsoft Entra login, real Stripe checkout/webhook delivery, verified Resend delivery, public HTTPS deployment, measured backup/restore, and runtime external SaaS acceptance.
