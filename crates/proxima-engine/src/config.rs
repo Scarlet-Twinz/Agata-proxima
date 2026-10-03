@@ -15,10 +15,15 @@ impl Config {
         let listen_addr = env::var("PROXIMA_LISTEN_ADDR")
             .unwrap_or_else(|_| "127.0.0.1:6432".to_string())
             .parse()
-            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, format!("invalid PROXIMA_LISTEN_ADDR: {error}")))?;
+            .map_err(|error| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("invalid PROXIMA_LISTEN_ADDR: {error}"),
+                )
+            })?;
 
-        let upstream_addr = env::var("PROXIMA_UPSTREAM_ADDR")
-            .unwrap_or_else(|_| "127.0.0.1:5432".to_string());
+        let upstream_addr =
+            env::var("PROXIMA_UPSTREAM_ADDR").unwrap_or_else(|_| "127.0.0.1:5432".to_string());
 
         if upstream_addr.trim().is_empty() {
             return Err(io::Error::new(
@@ -27,8 +32,8 @@ impl Config {
             ));
         }
 
-        let tenant_role_prefix = env::var("PROXIMA_TENANT_ROLE_PREFIX")
-            .unwrap_or_else(|_| "proxima_tenant_".to_string());
+        let tenant_role_prefix =
+            env::var("PROXIMA_TENANT_ROLE_PREFIX").unwrap_or_else(|_| "proxima_tenant_".to_string());
 
         if tenant_role_prefix.is_empty()
             || !tenant_role_prefix
