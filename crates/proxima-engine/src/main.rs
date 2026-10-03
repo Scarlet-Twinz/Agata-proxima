@@ -1,7 +1,6 @@
-use std::env;
 use std::io;
-use std::net::SocketAddr;
 
+use proxima_engine::{config::Config, session::establish};
 use tokio::io::copy_bidirectional;
 use tokio::net::{TcpListener, TcpStream};
 use tracing::{error, info};
@@ -10,27 +9,22 @@ use tracing::{error, info};
 async fn main() -> io::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
-            env::var("RUST_LOG").unwrap_or_else(|_| "proxima_engine=info".to_string()),
+            std::env::var("RUST_LOG").unwrap_or_else(|_| "proxima_engine=info".to_string()),
         )
         .init();
 
-    let listen_addr = env::var("PROXIMA_LISTEN_ADDR")
-        .unwrap_or_else(|_| "127.0.0.1:6432".to_string());
-
-    let upstream_addr = env::var("PROXIMA_UPSTREAM_ADDR")
-        .unwrap_or_else(|_| "127.0.0.1:5432".to_string());
-
-    let listener = TcpListener::bind(&listen_addr).await?;
+    let config = Config::from_env()?;
+    let listener = TcpListener::bind(config.listen_addr).await?;
 
     info!(
-        listen = %listen_addr,
-        upstream = %upstream_addr,
+        listen = %config.listen_addr,
+        upstream = %config.upstream_addr,
         "Agata Proxima engine listening"
     );
 
     loop {
         let (client, peer) = listener.accept().await?;
-        let upstream = upstream_addr.clone();
+        let upstream = config.upstream_addr.clone();
 
         tokio::spawn(async move {
             if let Err(err) = handle_connection(client, peer, &upstream).await {
@@ -41,13 +35,14 @@ async fn main() -> io::Result<()> {
 }
 
 async fn handle_connection(
-    mut client: TcpStream,
-    peer: SocketAddr,
+    client: TcpStream,
+    peer: std::net::SocketAddr,
     upstream_addr: &str,
 ) -> io::Result<()> {
     info!(peer = %peer, "client connected");
 
-    let mut upstream = TcpStream::connect(upstream_addr).await?;
+    let upstream = TcpStream::connect(upstream_addr).await?;
+    let (mut client, mut upstream) = establish(client, upstream).await?;
 
     let (client_bytes, upstream_bytes) =
         copy_bidirectional(&mut client, &mut upstream).await?;
