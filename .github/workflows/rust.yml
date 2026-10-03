@@ -15,6 +15,7 @@ jobs:
           POSTGRES_USER: proxima
           POSTGRES_PASSWORD: proxima-dev-only
           POSTGRES_DB: proxima_dev
+          POSTGRES_HOST_AUTH_METHOD: scram-sha-256
         ports:
           - 5432:5432
         options: >-
