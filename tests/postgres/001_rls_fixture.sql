@@ -8,13 +8,23 @@ CREATE SCHEMA IF NOT EXISTS proxima_test;
 
 DO $$
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'proxima_gateway') THEN
+    CREATE ROLE proxima_gateway LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'proxima-gateway-dev-only';
+  ELSE
+    ALTER ROLE proxima_gateway WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'proxima-gateway-dev-only';
+  END IF;
+
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'proxima_tenant_a') THEN
     CREATE ROLE proxima_tenant_a NOLOGIN NOSUPERUSER NOBYPASSRLS;
   END IF;
+
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'proxima_tenant_b') THEN
     CREATE ROLE proxima_tenant_b NOLOGIN NOSUPERUSER NOBYPASSRLS;
   END IF;
 END $$;
+
+GRANT proxima_tenant_a TO proxima_gateway WITH SET TRUE;
+GRANT proxima_tenant_b TO proxima_gateway WITH SET TRUE;
 
 DROP TABLE IF EXISTS proxima_test.records;
 
