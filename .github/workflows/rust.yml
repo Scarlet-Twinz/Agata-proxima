@@ -54,7 +54,7 @@ jobs:
           bash tools/proxima-control-plane-smoke.sh
 
       - name: Verification harness syntax
-        run: bash -n tools/proxima-verify.sh tools/proxima-verify-3tenant.sh
+        run: bash -n tools/proxima-verify.sh tools/proxima-verify-3tenant.sh tools/proxima-control-plane-smoke.sh
 
       - name: PostgreSQL RLS verification
         env:
