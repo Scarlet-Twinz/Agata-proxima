@@ -2,23 +2,21 @@
 
 ## Core boundary
 
-Proxima sits between an application and PostgreSQL.
-
 ```
 Application
     |
-    | PostgreSQL connection
+    | client TLS
     v
 Proxima Engine
     |
-    | controlled database connection
+    | upstream TLS
     v
 PostgreSQL
 ```
 
-The engine now treats startup and authentication as an explicit protocol boundary. It verifies the signed tenant context before rewriting the upstream PostgreSQL startup user to a tenant-specific database role, then brokers the PostgreSQL authentication exchange until `ReadyForQuery`. Only after successful authentication does it enter the normal bidirectional query stream.
+Proxima treats the application-to-Proxima and Proxima-to-PostgreSQL channels as separate security boundaries. When verified upstream TLS is enabled, plaintext is not accepted at the client edge.
 
-## Trusted tenant context
+## Tenant context
 
 The tenant assertion is:
 
@@ -26,48 +24,72 @@ The tenant assertion is:
 v1.<tenant_id>.<expires_at_unix_seconds>.<hex_hmac_sha256>
 ```
 
-The signing secret is at least 32 bytes. Tenant identifiers are restricted to a conservative character set. The resulting role name must also fit PostgreSQL's 63-byte identifier limit.
-
-For libpq-compatible clients, the token may be carried in the startup `options` parameter as:
+The signing secret is at least 32 bytes. Proxima removes the private token before forwarding startup parameters and maps the verified tenant to a PostgreSQL role:
 
 ```
--c proxima_tenant_token=<signed-token>
+proxima_tenant_<tenant_id>
 ```
 
-Proxima removes that private option before forwarding the startup packet. A direct `proxima_tenant_token` startup parameter is also accepted.
-
-The application that holds the signing secret remains part of the trust boundary. A client cannot become a tenant merely by choosing a tenant identifier.
+The resulting role name must fit PostgreSQL's 63-byte identifier limit.
 
 ## Authentication boundary
 
-PostgreSQL SASL/SCRAM authentication is multi-step. Proxima forwards the authentication messages without terminating the password exchange, while tracking the server authentication state and refusing to enter the normal query relay until PostgreSQL has returned `AuthenticationOk` and `ReadyForQuery`.
+Proxima brokers PostgreSQL authentication until `AuthenticationOk` and `ReadyForQuery`. It does not invent a second password protocol.
 
-This preserves PostgreSQL's authentication mechanism rather than inventing a second password protocol inside the proxy.
+That choice creates a precise TLS limitation: SCRAM-SHA-256-PLUS includes channel binding to the server certificate. A TLS-terminating proxy has a different client-side TLS certificate from the PostgreSQL-side certificate, so PLUS authentication cannot simply be copied between the two channels. Proxima therefore does not claim transparent channel-bound SCRAM yet and does not silently downgrade a client that explicitly requires it.
 
 ## Database enforcement
 
-Tenant roles are ordinary PostgreSQL roles with `NOBYPASSRLS`. Row-level security remains the database-side enforcement mechanism. Proxima's role routing establishes which database principal performs authorization; PostgreSQL evaluates the row policy.
+Tenant roles must be `NOSUPERUSER` and `NOBYPASSRLS`. Protected tables should use RLS and, where appropriate, `FORCE ROW LEVEL SECURITY`.
 
-The deployment must prevent privileged alternate paths. Superusers and `BYPASSRLS` roles can bypass RLS, and table owners normally bypass RLS unless `FORCE ROW LEVEL SECURITY` is enabled.
+The proxy establishes the database principal; PostgreSQL remains responsible for row authorization.
 
-## Connection safety
+## TLS
 
-The engine has explicit upstream connection timeouts, a configurable concurrent-session limit, graceful shutdown handling, bounded PostgreSQL frame sizes, and fail-closed tenant binding.
+Client mode:
 
-## TLS boundary
+- `disabled`: preserve the existing plaintext development path.
+- `required`: require PostgreSQL SSLRequest, return `S`, terminate TLS with a configured certificate/key, then parse PostgreSQL startup inside the encrypted channel.
 
-End-to-end TLS is not silently treated as inspectable. If PostgreSQL accepts an SSL request while tenant enforcement is enabled, the current engine rejects the session because the encrypted PostgreSQL stream is opaque to the enforcement layer.
+Upstream mode:
 
-A future TLS-terminating mode must define certificate validation, upstream TLS trust, channel binding, and key-management behavior before it is advertised as an enforcement mode.
+- `disabled`: connect directly to PostgreSQL.
+- `verify-full`: negotiate PostgreSQL TLS, validate the configured CA, validate the configured server name, and fail closed on any certificate or handshake error.
 
-## Verification
+No silent TLS downgrade is permitted in verified topology.
 
-Security claims are backed by:
+## Connection lifecycle
 
-- protocol unit tests;
-- property-based malformed-frame tests;
-- independent PostgreSQL RLS tests;
-- real proxy-to-PostgreSQL integration tests;
-- the Proxima Verify adversarial harness.
+Every client gets a dedicated upstream PostgreSQL connection. Proxima does not pool or reuse a database session across tenants. The tenant role is selected before authentication and remains attached to that one upstream session for its lifetime.
 
-No feature is considered secure merely because a happy-path connection succeeds.
+This makes the lifecycle invariant concrete:
+
+> State from tenant A's PostgreSQL session is never reused as tenant B's PostgreSQL session.
+
+Prepared statements and transaction behavior are exercised through the real PostgreSQL integration suite.
+
+## Operational dashboard
+
+The engine exposes a separate local admin listener with:
+
+- `/api/health`
+- `/api/status`
+- a dashboard at `/`
+
+The admin surface contains operational counters only and never renders signing secrets or tenant tokens.
+
+## Product layers
+
+```
+                 AGATA PROXIMA
+                       |
+          +------------+------------+
+          |            |            |
+       Engine        Verify      Dashboard
+          |
+      PostgreSQL
+                       |
+                     Cloud
+```
+
+The cloud layer is deliberately separated from the data plane. The engine can run self-hosted without a hosted control plane.

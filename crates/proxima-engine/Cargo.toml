@@ -7,10 +7,15 @@ description = "Agata Proxima security infrastructure engine"
 repository = "https://github.com/Scarlet-Twinz/Agata-proxima"
 
 [dependencies]
+axum = "0.8"
 bytes = "1"
 hmac = "0.12"
+rustls = "0.23"
+rustls-pemfile = "2"
+serde = { version = "1", features = ["derive"] }
 sha2 = "0.10"
 tokio = { version = "1", features = ["full"] }
+tokio-rustls = "0.26"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 

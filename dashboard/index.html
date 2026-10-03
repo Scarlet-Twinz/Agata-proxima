@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agata Proxima</title>
+<style>
+:root{--bg:#07111f;--panel:#0d1b2d;--panel2:#10233a;--line:#1c3550;--text:#eaf3ff;--muted:#8da4bd;--good:#54e39a;--warn:#ffc857;--accent:#7cb7ff}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 80% 0,#123154 0,#07111f 42%);color:var(--text);font:14px/1.5 Inter,ui-sans-serif,system-ui,sans-serif}
+.shell{max-width:1180px;margin:auto;padding:32px}.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:30px}
+.brand{display:flex;align-items:center;gap:14px}.mark{width:48px;height:48px}.brand strong{font-size:20px;letter-spacing:.08em}.brand span{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.pill{border:1px solid var(--line);background:#0a1727;padding:8px 12px;border-radius:999px;color:var(--good);font-weight:700}
+.hero{margin-bottom:24px}.hero h1{font-size:34px;margin:0 0 5px;letter-spacing:-.03em}.hero p{margin:0;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.card{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 14px 40px #0003}.label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.12em}.value{font-size:25px;font-weight:750;margin-top:8px}.good{color:var(--good)}.muted{color:var(--muted)}
+.wide{grid-column:span 2}.section{margin:30px 0 12px;color:#cfe3fb;font-size:12px;letter-spacing:.16em;text-transform:uppercase}
+.rows{display:grid;gap:10px}.row{display:flex;justify-content:space-between;padding:13px 0;border-bottom:1px solid #ffffff0a}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--good);margin-right:8px}
+footer{margin-top:34px;color:#66809b;font-size:12px}@media(max-width:800px){.grid{grid-template-columns:1fr 1fr}.wide{grid-column:span 2}}@media(max-width:520px){.shell{padding:20px}.grid{grid-template-columns:1fr}.wide{grid-column:span 1}}
+</style>
+</head>
+<body>
+<div class="shell">
+<header class="top">
+<div class="brand">
+<img class="mark" src="/assets/proxima-ap-mark.svg" alt="Agata Proxima AP mark">
+<div><strong>AGATA PROXIMA</strong><span>secure infrastructure for multi-tenant PostgreSQL</span></div>
+</div>
+<div id="health" class="pill">CONNECTING</div>
+</header>
+<section class="hero"><h1>Control plane</h1><p>The operational view of the Proxima security boundary.</p></section>
+<div class="grid">
+<div class="card"><div class="label">Engine</div><div id="engine" class="value good">● Healthy</div></div>
+<div class="card"><div class="label">Tenant enforcement</div><div id="tenant" class="value">Loading</div></div>
+<div class="card"><div class="label">Client TLS</div><div id="tls" class="value">Loading</div></div>
+<div class="card"><div class="label">PostgreSQL</div><div id="pg" class="value">Loading</div></div>
+<div class="card wide"><div class="label">Connections</div><div class="value"><span id="active">0</span> active</div><div class="muted"><span id="total">0</span> total · <span id="rejected">0</span> rejected · <span id="tlsSessions">0</span> TLS sessions</div></div>
+<div class="card wide"><div class="label">Verification</div><div class="value good">● CI-backed</div><div class="muted">Protocol, RLS, integration and adversarial gates are part of the release path.</div></div>
+</div>
+<div class="section">Runtime</div>
+<div class="card rows">
+<div class="row"><span class="muted">Upstream</span><span id="upstream">—</span></div>
+<div class="row"><span class="muted">Uptime</span><span id="uptime">—</span></div>
+<div class="row"><span class="muted">Upstream TLS</span><span id="upstreamTls">—</span></div>
+</div>
+<footer>AGATA PROXIMA · Engine dashboard foundation · no secrets are rendered here.</footer>
+</div>
+<script>
+const set=(id,v)=>document.getElementById(id).textContent=v;
+async function refresh(){
+ try{
+  const r=await fetch('/api/status',{cache:'no-store'}); const s=await r.json();
+  set('health','HEALTHY'); set('tenant',s.tenant_enforcement?'● Active':'○ Disabled'); set('tls',s.tls_active?'● Active':'○ Disabled');
+  set('pg',s.upstream_tls?'● TLS verified':'● Connected'); set('active',s.active_connections); set('total',s.total_connections);
+  set('rejected',s.rejected_connections); set('tlsSessions',s.tls_sessions); set('upstream',s.upstream);
+  set('upstreamTls',s.upstream_tls?'verify-full':'disabled'); set('uptime',s.uptime_seconds+'s');
+ }catch(e){set('health','OFFLINE');}
+}
+refresh();setInterval(refresh,3000);
+</script>
+</body></html>
