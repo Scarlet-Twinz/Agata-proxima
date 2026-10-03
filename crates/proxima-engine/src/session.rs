@@ -239,10 +239,7 @@ fn extract_tenant_token_from_options(value: &str) -> io::Result<(String, Option<
     Ok((output.join(" "), tenant_token))
 }
 
-async fn broker_startup_authentication<C, U>(
-    client: &mut C,
-    upstream: &mut U,
-) -> io::Result<()>
+async fn broker_startup_authentication<C, U>(client: &mut C, upstream: &mut U) -> io::Result<()>
 where
     C: AsyncRead + AsyncWrite + Unpin,
     U: AsyncRead + AsyncWrite + Unpin,
