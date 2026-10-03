@@ -63,7 +63,8 @@ pub async fn establish(
                 authenticate_upstream(&mut upstream, user, password).await?;
                 send_authentication_ok(&mut client).await?;
 
-                let ready = crate::auth::forward_startup_until_ready(&mut upstream, &mut client).await?;
+                let ready =
+                    crate::auth::forward_startup_until_ready(&mut upstream, &mut client).await?;
                 let role = tenant_role(tenant_role_prefix, &context.tenant_id)?;
                 send_set_role(&mut upstream, &role).await?;
                 drain_until_ready(&mut upstream).await?;
