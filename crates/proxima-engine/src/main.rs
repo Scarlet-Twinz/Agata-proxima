@@ -58,7 +58,7 @@ async fn main() -> io::Result<()> {
     info!(listen=%config.listen_addr,upstream=%config.upstream_addr,tenant_enforcement=verifier.is_some(),tls=matches!(config.tls_mode,TlsMode::Required),upstream_tls=matches!(config.upstream_tls_mode,TlsMode::Required),max_connections=config.max_connections,telemetry=%config.telemetry_addr,"Agata Proxima engine listening");
     loop {
         tokio::select! {
-         accept=listener.accept()=>{let(client,peer)=accept?;let permit=match limit.clone().try_acquire_owned(){Ok(p)=>p,Err(_)=>{error!(peer=%peer,"connection limit reached");drop(client);continue}};
+         accept=listener.accept()=>{let(client,peer)=accept?;let permit=match limit.clone().try_acquire_owned(){Ok(p)=>p,Err(_)=>{error!(peer=%peer,"connection limit reached");telemetry.rejected();drop(client);continue}};
           let config=config.clone();let verifier=verifier.clone();let tls_acceptor=tls_acceptor.clone();let upstream_connector=upstream_connector.clone();let telemetry=telemetry.clone();
           tokio::spawn(async move{let _permit=permit;let active=telemetry.accepted();if let Err(e)=handle_connection(client,peer,config,verifier.as_ref(),tls_acceptor,upstream_connector,telemetry.clone()).await{error!(peer=%peer,error=%e,"connection failed");}drop(active);});
          }
@@ -93,12 +93,11 @@ async fn handle_connection(
             ))
         }
     };
-    let upstream_tcp = timeout(
-        config.upstream_connect_timeout,
-        TcpStream::connect(&config.upstream_addr),
-    )
-    .await
-    .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "upstream connection timed out"))??;
+    let upstream_tcp = match timeout(config.upstream_connect_timeout, TcpStream::connect(&config.upstream_addr)).await {
+        Ok(Ok(stream)) => stream,
+        Ok(Err(err)) => { telemetry.upstream_failure(); return Err(err); }
+        Err(_) => { telemetry.upstream_failure(); return Err(io::Error::new(io::ErrorKind::TimedOut, "upstream connection timed out")); }
+    };
     let upstream: BoxedIo = if let Some(connector) = upstream_connector {
         let name = config
             .upstream_tls_server_name
