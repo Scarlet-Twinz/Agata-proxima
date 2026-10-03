@@ -47,6 +47,48 @@ pub(crate) struct PasswordResetConfirm {
     pub token: String,
     pub password: String,
 }
+fn plan_for_price(price_id: Option<&str>) -> &'static str {
+    let starter = env::var("AGATA_STRIPE_STARTER_PRICE_ID").ok();
+    let growth = env::var("AGATA_STRIPE_GROWTH_PRICE_ID").ok();
+    let scale = env::var("AGATA_STRIPE_SCALE_PRICE_ID").ok();
+
+    match price_id {
+        Some(id) if starter.as_deref() == Some(id) => "starter",
+        Some(id) if growth.as_deref() == Some(id) => "growth",
+        Some(id) if scale.as_deref() == Some(id) => "scale",
+        _ => "free",
+    }
+}
+
+async fn apply_entitlements(db: &sqlx::PgPool, organization_id: Uuid, plan: &str) -> Result<(), sqlx::Error> {
+    let (nodes, tenants, environments, retention, advanced, fleet, priority, entra, private_deployment) =
+        match plan {
+            "starter" => (2, 25, 2, 30, false, true, false, false, false),
+            "growth" => (5, 100, 5, 180, true, true, true, true, false),
+            "scale" => (15, 500, 50, 365, true, true, true, true, true),
+            "enterprise" => (i32::MAX, i32::MAX, i32::MAX, 3650, true, true, true, true, true),
+            _ => (1, 3, 1, 7, false, false, false, false, false),
+        };
+    sqlx::query(
+        "INSERT INTO organization_entitlements
+            (organization_id,plan_key,billing_status,node_limit,tenant_limit,environment_limit,
+             audit_retention_days,advanced_verification,fleet_controls,priority_support,entra_oidc,
+             private_deployment,updated_at)
+         VALUES($1,$2,'active',$3,$4,$5,$6,$7,$8,$9,$10,$11,now())
+         ON CONFLICT (organization_id) DO UPDATE SET
+            plan_key=EXCLUDED.plan_key,billing_status=EXCLUDED.billing_status,
+            node_limit=EXCLUDED.node_limit,tenant_limit=EXCLUDED.tenant_limit,
+            environment_limit=EXCLUDED.environment_limit,audit_retention_days=EXCLUDED.audit_retention_days,
+            advanced_verification=EXCLUDED.advanced_verification,fleet_controls=EXCLUDED.fleet_controls,
+            priority_support=EXCLUDED.priority_support,entra_oidc=EXCLUDED.entra_oidc,
+            private_deployment=EXCLUDED.private_deployment,updated_at=now()"
+    )
+    .bind(organization_id).bind(plan).bind(nodes).bind(tenants).bind(environments).bind(retention)
+    .bind(advanced).bind(fleet).bind(priority).bind(entra).bind(private_deployment)
+    .execute(db).await?;
+    Ok(())
+}
+
 pub(crate) async fn billing_status(State(s): State<AppState>, headers: HeaderMap) -> Response {
     let ctx = match authenticate(&s, &headers).await {
         Ok(v) => v,
@@ -396,6 +438,10 @@ pub(crate) async fn stripe_webhook(State(s): State<AppState>, headers: HeaderMap
                 .bind(cancel_at_period_end)
                 .execute(&s.db)
                 .await {
+                    return db_error(e);
+                }
+                let plan = plan_for_price(price_id);
+                if let Err(e) = apply_entitlements(&s.db, org, plan).await {
                     return db_error(e);
                 }
             }
