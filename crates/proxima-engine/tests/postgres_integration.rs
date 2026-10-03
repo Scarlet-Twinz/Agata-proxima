@@ -91,6 +91,15 @@ async fn setup_database() -> Result<(), Box<dyn Error>> {
     )
     .await?;
 
+    let role_count: i64 = client
+        .query_one(
+            "SELECT count(*) FROM pg_roles WHERE rolname IN ('proxima_tenant_a', 'proxima_tenant_b')",
+            &[],
+        )
+        .await?
+        .get(0);
+    assert_eq!(role_count, 2, "tenant roles were not created");
+
     Ok(())
 }
 
