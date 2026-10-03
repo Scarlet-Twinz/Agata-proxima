@@ -34,7 +34,7 @@ assert_eq "A-secret" "$a_rows" "tenant A cannot read tenant B"
 b_rows="$(run_as_b "SELECT string_agg(secret, ',' ORDER BY secret) FROM proxima_test.records;")"
 assert_eq "B-secret" "$b_rows" "tenant B cannot read tenant A"
 
-prepared_rows="$(run_as_a "PREPARE tenant_lookup(text) AS SELECT string_agg(secret, ',' ORDER BY secret) FROM proxima_test.records WHERE tenant_id=\\$1; EXECUTE tenant_lookup('tenant_b');")"
+prepared_rows="$(run_as_a "PREPARE tenant_lookup(text) AS SELECT string_agg(secret, ',' ORDER BY secret) FROM proxima_test.records WHERE tenant_id=\$1; EXECUTE tenant_lookup('tenant_b');")"
 assert_eq "" "$prepared_rows" "prepared statement cannot bypass tenant policy"
 
 set +e
