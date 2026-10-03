@@ -40,6 +40,8 @@ jobs:
         run: cargo test --workspace --all-targets
 
       - name: Clippy
+        env:
+          CARGO_BUILD_JOBS: 2
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
       - name: Control plane build
