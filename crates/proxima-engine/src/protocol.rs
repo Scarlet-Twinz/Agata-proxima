@@ -337,13 +337,14 @@ mod tests {
         assert_eq!(&frame[..], b"Q\0\0\0\nSELECT");
     }
 
-proptest! {
-    #[test]
-    fn random_bytes_never_panic_startup_or_frontend(input in proptest::collection::vec(any::<u8>(), 0..1024)) {
-        let _ = parse_startup_packet(&input);
-        let _ = parse_frontend_frame(&input);
-        let _ = parse_backend_frame(&input);
+    proptest! {
+        #[test]
+        fn random_bytes_never_panic_startup_or_frontend(
+            input in proptest::collection::vec(any::<u8>(), 0..1024)
+        ) {
+            let _ = parse_startup_packet(&input);
+            let _ = parse_frontend_frame(&input);
+            let _ = parse_backend_frame(&input);
+        }
     }
-}
-
 }
