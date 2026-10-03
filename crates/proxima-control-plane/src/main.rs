@@ -1,3 +1,6 @@
+#[rustfmt::skip]
+mod production;
+
 use anyhow::Result;
 use argon2::{
     password_hash::{phc::PasswordHash, PasswordHasher, PasswordVerifier},
@@ -124,6 +127,9 @@ async fn main() -> Result<()> {
     sqlx::raw_sql(include_str!("../migrations/0001_control_plane.sql"))
         .execute(&db)
         .await?;
+    sqlx::raw_sql(include_str!("../migrations/0002_production.sql"))
+        .execute(&db)
+        .await?;
 
     let state = AppState {
         db,
@@ -161,6 +167,23 @@ async fn main() -> Result<()> {
         .route("/api/v1/audit", get(audit_events))
         .route("/api/v1/support", get(support).post(create_support))
         .route("/api/v1/nodes/:id/enrollment", post(start_enrollment))
+        .route("/verify-email", get(production::verify_email))
+        .route("/reset-password", get(production::reset_password_page))
+        .route("/accept-invite", get(production::accept_invite))
+        .route(
+            "/api/v1/auth/password-reset/request",
+            post(production::request_password_reset),
+        )
+        .route(
+            "/api/v1/auth/password-reset/confirm",
+            post(production::reset_password),
+        )
+        .route("/api/v1/billing", get(production::billing_status))
+        .route("/api/v1/billing/checkout", post(production::checkout))
+        .route("/api/v1/billing/portal", post(production::portal))
+        .route("/api/v1/webhooks/stripe", post(production::stripe_webhook))
+        .route("/api/v1/organization/invitations", post(production::invite))
+        .route("/api/v1/production/readiness", get(production::readiness))
         .with_state(state)
         .layer(TraceLayer::new_for_http());
 
@@ -297,6 +320,11 @@ async fn signup(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Resp
 
     if let Err(e) = tx.commit().await {
         return db_error(e);
+    }
+
+    if let Err(e) = production::send_verification_email(&s.db, user_id, &email, &display_name).await
+    {
+        tracing::error!(%e, "verification email delivery failed");
     }
 
     match create_session(&s.db, user_id, organization_id).await {
