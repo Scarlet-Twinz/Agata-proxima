@@ -1,6 +1,3 @@
-permissions:
-  contents: write
-
 name: Rust
 
 on:
@@ -76,11 +73,3 @@ jobs:
           bash -n tests/control-plane/api_smoke.sh
           bash -n scripts/proxima-platform.sh
 
-      - name: Commit workspace lockfile
-        run: |
-          cargo generate-lockfile
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Cargo.lock
-          git diff --cached --quiet || git commit -m "chore: pin workspace dependency graph"
-          git push
