@@ -176,7 +176,8 @@ def verify_tenant(tenant, expected_secret, forbidden_secret):
             )
         print(f"PASS: {tenant} cross-tenant INSERT rejected")
 
-        _, error = query(sock, "SET ROLE proxima_tenant_b")
+        other_role = "proxima_tenant_b" if tenant == "tenant_a" else "proxima_tenant_a"
+        _, error = query(sock, f"SET ROLE {other_role}")
         if not error or "permission denied to set role" not in error.lower():
             raise AssertionError(
                 f"{tenant} was able to switch database identity: {error!r}"
