@@ -48,16 +48,16 @@ async fn setup_database() -> Result<(), Box<dyn Error>> {
         r#"
         DROP SCHEMA IF EXISTS proxima_e2e CASCADE;
         DO 'BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ''proxima_tenant_a'') THEN
-                CREATE ROLE proxima_tenant_a LOGIN PASSWORD ''tenant-a-password'' NOSUPERUSER NOBYPASSRLS;
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ''proxima_tenant_tenant_a'') THEN
+                CREATE ROLE proxima_tenant_tenant_a LOGIN PASSWORD ''tenant-a-password'' NOSUPERUSER NOBYPASSRLS;
             END IF;
-            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ''proxima_tenant_b'') THEN
-                CREATE ROLE proxima_tenant_b LOGIN PASSWORD ''tenant-b-password'' NOSUPERUSER NOBYPASSRLS;
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ''proxima_tenant_tenant_b'') THEN
+                CREATE ROLE proxima_tenant_tenant_b LOGIN PASSWORD ''tenant-b-password'' NOSUPERUSER NOBYPASSRLS;
             END IF;
         END';
 
-        ALTER ROLE proxima_tenant_a LOGIN PASSWORD 'tenant-a-password';
-        ALTER ROLE proxima_tenant_b LOGIN PASSWORD 'tenant-b-password';
+        ALTER ROLE proxima_tenant_tenant_a LOGIN PASSWORD 'tenant-a-password';
+        ALTER ROLE proxima_tenant_tenant_b LOGIN PASSWORD 'tenant-b-password';
         CREATE SCHEMA proxima_e2e;
 
         CREATE TABLE proxima_e2e.records (
@@ -73,25 +73,25 @@ async fn setup_database() -> Result<(), Box<dyn Error>> {
         ALTER TABLE proxima_e2e.records FORCE ROW LEVEL SECURITY;
 
         CREATE POLICY tenant_a_policy ON proxima_e2e.records
-            FOR ALL TO proxima_tenant_a
+            FOR ALL TO proxima_tenant_tenant_a
             USING (tenant_id = 'tenant_a')
             WITH CHECK (tenant_id = 'tenant_a');
 
         CREATE POLICY tenant_b_policy ON proxima_e2e.records
-            FOR ALL TO proxima_tenant_b
+            FOR ALL TO proxima_tenant_tenant_b
             USING (tenant_id = 'tenant_b')
             WITH CHECK (tenant_id = 'tenant_b');
 
-        GRANT USAGE ON SCHEMA proxima_e2e TO proxima_tenant_a, proxima_tenant_b;
-        GRANT SELECT, INSERT, UPDATE, DELETE ON proxima_e2e.records TO proxima_tenant_a, proxima_tenant_b;
-        GRANT USAGE, SELECT ON SEQUENCE proxima_e2e.records_id_seq TO proxima_tenant_a, proxima_tenant_b;
+        GRANT USAGE ON SCHEMA proxima_e2e TO proxima_tenant_tenant_a, proxima_tenant_tenant_b;
+        GRANT SELECT, INSERT, UPDATE, DELETE ON proxima_e2e.records TO proxima_tenant_tenant_a, proxima_tenant_tenant_b;
+        GRANT USAGE, SELECT ON SEQUENCE proxima_e2e.records_id_seq TO proxima_tenant_tenant_a, proxima_tenant_tenant_b;
         "#,
     )
     .await?;
 
     let role_count: i64 = client
         .query_one(
-            "SELECT count(*) FROM pg_roles WHERE rolname IN ('proxima_tenant_a', 'proxima_tenant_b')",
+            "SELECT count(*) FROM pg_roles WHERE rolname IN ('proxima_tenant_tenant_a', 'proxima_tenant_tenant_b')",
             &[],
         )
         .await?
