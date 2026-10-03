@@ -233,6 +233,8 @@ pub(crate) async fn require_feature(
         "priority_support" => row.get("priority_support"),
         "entra_oidc" => row.get("entra_oidc"),
         "private_deployment" => row.get("private_deployment"),
+        // Policy authoring is a management capability and starts at Starter.
+        "policy_management" => row.get::<String, _>("plan_key") != "free",
         _ => return Ok(()),
     };
     if !enabled {
@@ -280,7 +282,8 @@ pub(crate) async fn plans() -> Response {
                 "fleet_controls": fleet,
                 "priority_support": priority,
                 "entra_oidc": entra,
-                "private_deployment": private_deployment
+                "private_deployment": private_deployment,
+                "policy_management": key != &"free"
             }
         })
     }).collect::<Vec<_>>();
@@ -317,7 +320,8 @@ pub(crate) async fn entitlements(State(s): State<AppState>, headers: HeaderMap) 
                 "fleet_controls": row.get::<bool,_>("fleet_controls"),
                 "priority_support": row.get::<bool,_>("priority_support"),
                 "entra_oidc": row.get::<bool,_>("entra_oidc"),
-                "private_deployment": row.get::<bool,_>("private_deployment")
+                "private_deployment": row.get::<bool,_>("private_deployment"),
+                "policy_management": row.get::<String,_>("plan_key") != "free"
             }
         })).into_response(),
         Ok(None) => service_unavailable("Organization entitlements are not initialized."),
