@@ -1,0 +1,48 @@
+name: Temporary Clippy service diagnostics
+
+on:
+  push:
+    branches:
+      - phase25-40-platform
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: proxima
+          POSTGRES_PASSWORD: proxima-dev-only
+          POSTGRES_DB: proxima_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U proxima -d proxima_dev"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Capture clippy
+        id: check
+        continue-on-error: true
+        env:
+          CARGO_BUILD_JOBS: 2
+        run: |
+          set -o pipefail
+          cargo clippy --workspace --all-targets --all-features -- -D warnings 2>&1 | tee /tmp/clippy.log
+      - name: Report
+        if: steps.check.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR="$(gh pr list --head "${GITHUB_REF_NAME}" --json number --jq '.[0].number')"
+          gh pr comment "$PR" --body-file /tmp/clippy.log
