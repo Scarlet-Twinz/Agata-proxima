@@ -1,10 +1,6 @@
 use std::io;
 
-use proxima_engine::{
-    config::Config,
-    session::establish,
-    tenant::TenantTokenVerifier,
-};
+use proxima_engine::{config::Config, session::establish, tenant::TenantTokenVerifier};
 use tokio::io::copy_bidirectional;
 use tokio::net::{TcpListener, TcpStream};
 use tracing::{error, info};
@@ -49,7 +45,9 @@ async fn main() -> io::Result<()> {
                 &upstream,
                 verifier.as_ref(),
                 &tenant_role_prefix,
-            ).await {
+            )
+            .await
+            {
                 error!(peer = %peer, error = %err, "connection failed");
             }
         });
@@ -71,7 +69,11 @@ async fn handle_connection(
 
     info!(
         peer = %peer,
-        tenant = session.tenant_context.as_ref().map(|context| context.tenant_id.as_str()).unwrap_or("unbound"),
+        tenant = session
+            .tenant_context
+            .as_ref()
+            .map(|context| context.tenant_id.as_str())
+            .unwrap_or("unbound"),
         "PostgreSQL session established"
     );
 
