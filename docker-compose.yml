@@ -19,6 +19,8 @@ services:
       PROXIMA_LISTEN_ADDR: 0.0.0.0:6432
       PROXIMA_UPSTREAM_ADDR: postgres:5432
       RUST_LOG: proxima_engine=info
+      PROXIMA_MAX_CONNECTIONS: 1024
+      PROXIMA_UPSTREAM_CONNECT_TIMEOUT_MS: 10000
     ports:
       - "6432:6432"
     depends_on:

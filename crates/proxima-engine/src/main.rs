@@ -1,8 +1,11 @@
 use std::io;
+use std::sync::Arc;
 
 use proxima_engine::{config::Config, session::establish, tenant::TenantTokenVerifier};
 use tokio::io::copy_bidirectional;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::Semaphore;
+use tokio::time::timeout;
 use tracing::{error, info};
 
 #[tokio::main]
@@ -24,34 +27,58 @@ async fn main() -> io::Result<()> {
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error.to_string()))?;
 
     let listener = TcpListener::bind(config.listen_addr).await?;
+    let connection_limit = Arc::new(Semaphore::new(config.max_connections));
 
     info!(
         listen = %config.listen_addr,
         upstream = %config.upstream_addr,
         tenant_enforcement = verifier.is_some(),
+        max_connections = config.max_connections,
         "Agata Proxima engine listening"
     );
 
     loop {
-        let (client, peer) = listener.accept().await?;
-        let upstream = config.upstream_addr.clone();
-        let verifier = verifier.clone();
-        let tenant_role_prefix = config_tenant_role_prefix.clone();
+        tokio::select! {
+            accept = listener.accept() => {
+                let (client, peer) = accept?;
+                let permit = match connection_limit.clone().try_acquire_owned() {
+                    Ok(permit) => permit,
+                    Err(_) => {
+                        error!(peer = %peer, "connection limit reached");
+                        drop(client);
+                        continue;
+                    }
+                };
 
-        tokio::spawn(async move {
-            if let Err(err) = handle_connection(
-                client,
-                peer,
-                &upstream,
-                verifier.as_ref(),
-                &tenant_role_prefix,
-            )
-            .await
-            {
-                error!(peer = %peer, error = %err, "connection failed");
+                let upstream = config.upstream_addr.clone();
+                let verifier = verifier.clone();
+                let tenant_role_prefix = config_tenant_role_prefix.clone();
+                let upstream_connect_timeout = config.upstream_connect_timeout;
+
+                tokio::spawn(async move {
+                    let _permit = permit;
+                    if let Err(err) = handle_connection(
+                        client,
+                        peer,
+                        &upstream,
+                        verifier.as_ref(),
+                        &tenant_role_prefix,
+                        upstream_connect_timeout,
+                    )
+                    .await
+                    {
+                        error!(peer = %peer, error = %err, "connection failed");
+                    }
+                });
             }
-        });
+            _ = tokio::signal::ctrl_c() => {
+                info!("shutdown signal received");
+                break;
+            }
+        }
     }
+
+    Ok(())
 }
 
 async fn handle_connection(
@@ -60,10 +87,13 @@ async fn handle_connection(
     upstream_addr: &str,
     verifier: Option<&TenantTokenVerifier>,
     tenant_role_prefix: &str,
+    upstream_connect_timeout: std::time::Duration,
 ) -> io::Result<()> {
     info!(peer = %peer, "client connected");
 
-    let upstream = TcpStream::connect(upstream_addr).await?;
+    let upstream = timeout(upstream_connect_timeout, TcpStream::connect(upstream_addr))
+        .await
+        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "upstream connection timed out"))??;
     let (mut client, mut upstream, session) =
         establish(client, upstream, verifier, tenant_role_prefix).await?;
 

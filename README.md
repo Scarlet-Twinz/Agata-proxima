@@ -40,8 +40,31 @@ Security guarantees will be documented against an explicit threat model. Proxima
 
 Early infrastructure development.
 
-The current code establishes the asynchronous TCP foundation. PostgreSQL protocol handling, trusted tenant-context establishment, policy enforcement, and verification are developed on top of this foundation.
+The current engine establishes a verified tenant context, maps it to a PostgreSQL role, brokers the PostgreSQL authentication/startup exchange, and then enters the normal query stream only after PostgreSQL reports a ready session.
+
+The repository includes a real PostgreSQL integration test, independent RLS verification, malformed-frame property tests, connection safety limits, and an adversarial `Proxima Verify` harness. End-to-end TLS is fail-closed while enforcement is enabled until a dedicated TLS termination and upstream-trust model is implemented.
 
 ## License
 
 MIT
+
+
+## Verification
+
+The primary verification gates are:
+
+```text
+cargo fmt --all -- --check
+cargo check --workspace --all-targets
+cargo test --workspace --all-targets
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+bash tests/postgres/verify_rls.sh
+```
+
+For a configured deployment, run:
+
+```bash
+bash tools/proxima-verify.sh
+```
+
+See [docs/verification.md](docs/verification.md) for the security verification model and deployment invariants.
