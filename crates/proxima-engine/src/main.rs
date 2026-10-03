@@ -77,8 +77,7 @@ async fn handle_connection(
         "PostgreSQL session established"
     );
 
-    let (client_bytes, upstream_bytes) =
-        copy_bidirectional(&mut client, &mut upstream).await?;
+    let (client_bytes, upstream_bytes) = copy_bidirectional(&mut client, &mut upstream).await?;
 
     info!(
         peer = %peer,
