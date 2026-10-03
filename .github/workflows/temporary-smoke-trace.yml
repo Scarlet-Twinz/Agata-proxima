@@ -1,0 +1,48 @@
+name: Temporary smoke trace
+
+on:
+  push:
+    branches:
+      - phase25-40-platform
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  trace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        run: cargo build --release -p proxima-control-plane
+      - name: Start
+        run: |
+          ./target/release/proxima-control-plane > /tmp/proxima.log 2>&1 &
+          echo $! > /tmp/proxima.pid
+          for i in {1..20}; do
+            if curl -fsS http://127.0.0.1:9090/api/v1/health; then break; fi
+            sleep 1
+          done
+      - name: Trace
+        id: trace
+        continue-on-error: true
+        run: |
+          set -x
+          bash tools/proxima-control-plane-smoke.sh
+      - name: Report
+        if: steps.trace.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo '## smoke trace'
+            echo '### control-plane log'
+            cat /tmp/proxima.log || true
+          } > /tmp/report.md
+          PR="$(gh pr list --head "${GITHUB_REF_NAME}" --json number --jq '.[0].number')"
+          gh pr comment "$PR" --body-file /tmp/report.md
+      - name: Stop
+        if: always()
+        run: kill "$(cat /tmp/proxima.pid)" || true
