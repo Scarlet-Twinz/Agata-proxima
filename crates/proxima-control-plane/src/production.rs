@@ -794,3 +794,35 @@ fn external_error<E: std::fmt::Display>(e: E) -> Response {
 fn service_unavailable(message: &str) -> Response {
     (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok":false,"message":message}))).into_response()
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stripe_signature_round_trip() {
+        let payload = r#"{"id":"evt_test","type":"invoice.paid"}"#;
+        let secret = "whsec_test";
+        let timestamp = chrono::Utc::now().timestamp();
+        let signed = format!("{timestamp}.{payload}");
+        let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
+        mac.update(signed.as_bytes());
+        let signature = hex::encode(mac.finalize().into_bytes());
+        let header = format!("t={timestamp},v1={signature}");
+        assert!(verify_stripe_signature(payload, &header, secret));
+    }
+
+    #[test]
+    fn expired_stripe_signature_is_rejected() {
+        let payload = "payload";
+        let secret = "whsec_test";
+        let timestamp = chrono::Utc::now().timestamp() - 301;
+        let signed = format!("{timestamp}.{payload}");
+        let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
+        mac.update(signed.as_bytes());
+        let signature = hex::encode(mac.finalize().into_bytes());
+        let header = format!("t={timestamp},v1={signature}");
+        assert!(!verify_stripe_signature(payload, &header, secret));
+    }
+}
