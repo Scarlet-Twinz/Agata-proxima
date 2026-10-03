@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${PGHOST:=localhost}"
-: "${PGPORT:=5432}"
-: "${PGUSER:=proxima}"
-: "${PGDATABASE:=proxima_dev}"
-: "${PGPASSWORD:=proxima-dev-only}"
+: "\${PGHOST:=localhost}"
+: "\${PGPORT:=5432}"
+: "\${PGUSER:=proxima}"
+: "\${PGDATABASE:=proxima_dev}"
+: "\${PGPASSWORD:=proxima-dev-only}"
 
 psql -v ON_ERROR_STOP=1 -f tests/postgres/001_rls_fixture.sql
+
+export PGUSER=proxima_gateway
+export PGPASSWORD=proxima-gateway-dev-only
 
 assert_eq() {
   local expected="$1"
