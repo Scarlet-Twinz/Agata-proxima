@@ -1,11 +1,25 @@
 # External SaaS Acceptance
 
-The first external integration must be a real multi-tenant SaaS application behind Proxima:
+The acceptance harness for a real SaaS deployment is deliberately separate from unit and CI tests.
 
-Application -> Proxima -> PostgreSQL
+Required topology:
 
-Acceptance requires at least three tenants and a normal workload containing CRUD, transactions, prepared statements, pooled connections, concurrent traffic, TLS and restarts.
+Real SaaS application -> Proxima -> PostgreSQL
 
-The application must deliberately attempt A -> B, B -> C and C -> A reads and writes. All cross-tenant attempts must be denied while legitimate same-tenant operations succeed.
+Minimum acceptance:
 
-This acceptance environment is the evidence required before describing Proxima as proven against a real SaaS workload.
+- three independent tenants;
+- normal CRUD;
+- transactions and rollback;
+- prepared statements;
+- application connection pooling;
+- concurrent traffic;
+- client TLS and upstream TLS;
+- restart/reconnect behavior;
+- deliberate A -> B, B -> C and C -> A read/write attempts;
+- all cross-tenant attempts denied;
+- legitimate same-tenant operations succeed.
+
+Run the two-tenant regression with `bash tools/proxima-verify.sh`, then the three-tenant matrix with `bash tools/proxima-verify-3tenant.sh`.
+
+This repository does not claim external SaaS proof until a real application has completed that acceptance matrix. That final evidence is intentionally a deployment test, not something CI can fake.
