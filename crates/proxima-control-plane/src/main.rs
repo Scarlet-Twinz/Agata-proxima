@@ -751,6 +751,15 @@ async fn create_node(
         return response;
     }
 
+    let environment = input.environment.clone().unwrap_or_else(|| "production".into());
+    if let Err(response) = production::enforce_environment_capacity(
+        &s.db,
+        ctx.organization_id,
+        &environment,
+    ).await {
+        return response;
+    }
+
     let id = Uuid::new_v4();
     let token = format!("{}-{}", Uuid::new_v4(), Uuid::new_v4());
     let token_hash_value = token_hash(&token);
@@ -761,7 +770,7 @@ async fn create_node(
     .bind(id)
     .bind(ctx.organization_id)
     .bind(&input.name)
-    .bind(input.environment.unwrap_or_else(|| "production".into()))
+    .bind(&environment)
     .bind(input.region.unwrap_or_else(|| "auto".into()))
     .bind(token_hash_value)
     .execute(&s.db)
@@ -991,6 +1000,13 @@ async fn create_support(
         return c.into_response();
     }
 
+    let priority = input.priority.unwrap_or_else(|| "normal".into());
+    if matches!(priority.as_str(), "high" | "urgent") {
+        if let Err(response) = production::require_feature(&s.db, ctx.organization_id, "priority_support").await {
+            return response;
+        }
+    }
+
     let id = Uuid::new_v4();
     match sqlx::query(
         "INSERT INTO support_requests(id,organization_id,user_id,subject,message,priority,status)
@@ -1001,7 +1017,7 @@ async fn create_support(
     .bind(ctx.user_id)
     .bind(&input.subject)
     .bind(&input.message)
-    .bind(input.priority.unwrap_or_else(|| "normal".into()))
+    .bind(&priority)
     .execute(&s.db)
     .await
     {
