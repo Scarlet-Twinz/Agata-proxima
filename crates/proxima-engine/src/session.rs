@@ -17,6 +17,7 @@ pub async fn establish(
     mut client: TcpStream,
     mut upstream: TcpStream,
     verifier: Option<&TenantTokenVerifier>,
+    tenant_role_prefix: &str,
 ) -> io::Result<(TcpStream, TcpStream, EstablishedSession)> {
     let startup = read_startup(&mut client).await?;
 
@@ -26,7 +27,7 @@ pub async fn establish(
             parameters,
         } => {
             let (startup, tenant_context) =
-                prepare_startup(protocol_version, parameters, verifier)?;
+                prepare_startup(protocol_version, parameters, verifier, tenant_role_prefix)?;
             debug!(
                 tenant_bound = tenant_context.is_some(),
                 "PostgreSQL startup packet received"
@@ -112,6 +113,7 @@ fn prepare_startup(
     protocol_version: i32,
     parameters: Vec<(String, String)>,
     verifier: Option<&TenantTokenVerifier>,
+    tenant_role_prefix: &str,
 ) -> io::Result<(StartupPacket, Option<TenantContext>)> {
     let mut tenant_token = None;
     let mut forwarded = Vec::with_capacity(parameters.len());
@@ -147,6 +149,12 @@ fn prepare_startup(
         }
         None => None,
     };
+
+    if let Some(context) = tenant_context.as_ref() {
+        let role = format!("{tenant_role_prefix}{}", context.tenant_id);
+        forwarded.retain(|(key, _)| key != "user");
+        forwarded.push(("user".to_owned(), role));
+    }
 
     Ok((
         StartupPacket::Startup {
@@ -252,6 +260,7 @@ mod tests {
                 (TENANT_TOKEN_PARAMETER.into(), token),
             ],
             Some(&verifier),
+            "proxima_tenant_",
         )
         .unwrap();
 
@@ -272,6 +281,7 @@ mod tests {
             crate::protocol::PROTOCOL_3_0,
             vec![("user".into(), "proxima".into())],
             Some(&verifier),
+            "proxima_tenant_",
         )
         .unwrap_err();
 
@@ -289,6 +299,7 @@ mod tests {
                 (TENANT_TOKEN_PARAMETER.into(), token),
             ],
             Some(&verifier),
+            "proxima_tenant_",
         )
         .unwrap_err();
 
