@@ -315,6 +315,10 @@ async fn signup(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Resp
         return db_error(e);
     }
 
+    if let Err(e) = production::send_verification_email(&s.db, user_id, &email, &display_name).await {
+        tracing::error!(%e, "verification email delivery failed");
+    }
+
     match create_session(&s.db, user_id, organization_id).await {
         Ok((token, csrf)) => auth_response(&s, user_id, organization_id, csrf, token),
         Err(e) => db_error(e),
