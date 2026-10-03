@@ -45,6 +45,12 @@ jobs:
       - name: Verification harness syntax
         run: bash -n tools/proxima-verify.sh tools/proxima-verify-3tenant.sh
 
+      - name: External SaaS reference syntax
+        run: |
+          bash -n tests/external-saas/verify_three_tenant.sh
+          bash -n tests/external-saas/verify_reference_app.sh
+          node --check tests/external-saas/reference-app/server.js
+
       - name: PostgreSQL RLS verification
         env:
           PGHOST: localhost
@@ -80,4 +86,3 @@ jobs:
         run: |
           bash -n tests/control-plane/api_smoke.sh
           bash -n scripts/proxima-platform.sh
-
