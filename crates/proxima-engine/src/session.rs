@@ -1,6 +1,6 @@
 use crate::protocol::{
-    parse_backend_frame, parse_frontend_frame, parse_startup_packet, BackendMessage,
-    StartupPacket, AUTHENTICATION_TAG, AUTH_OK, ERROR_RESPONSE_TAG, READY_FOR_QUERY_TAG,
+    parse_backend_frame, parse_frontend_frame, parse_startup_packet, BackendMessage, StartupPacket,
+    AUTHENTICATION_TAG, AUTH_OK, ERROR_RESPONSE_TAG, READY_FOR_QUERY_TAG,
 };
 use crate::tenant::{TenantContext, TenantTokenVerifier};
 use std::io;
@@ -188,7 +188,6 @@ fn prepare_startup(
     ))
 }
 
-
 fn extract_tenant_token_from_options(value: &str) -> io::Result<(String, Option<String>)> {
     let mut tokens = value.split_whitespace().peekable();
     let mut output = Vec::new();
@@ -201,10 +200,16 @@ fn extract_tenant_token_from_options(value: &str) -> io::Result<(String, Option<
             })?;
             if let Some(token_value) = assignment.strip_prefix("proxima_tenant_token=") {
                 if token_value.is_empty() {
-                    return Err(io::Error::new(io::ErrorKind::InvalidData, "Proxima tenant token in options is empty"));
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "Proxima tenant token in options is empty",
+                    ));
                 }
                 if tenant_token.replace(token_value.to_owned()).is_some() {
-                    return Err(io::Error::new(io::ErrorKind::InvalidData, "duplicate Proxima tenant token"));
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "duplicate Proxima tenant token",
+                    ));
                 }
                 continue;
             }
@@ -212,10 +217,16 @@ fn extract_tenant_token_from_options(value: &str) -> io::Result<(String, Option<
             output.push(assignment.to_owned());
         } else if let Some(token_value) = token.strip_prefix("proxima_tenant_token=") {
             if token_value.is_empty() {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Proxima tenant token in options is empty"));
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Proxima tenant token in options is empty",
+                ));
             }
             if tenant_token.replace(token_value.to_owned()).is_some() {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "duplicate Proxima tenant token"));
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "duplicate Proxima tenant token",
+                ));
             }
         } else {
             output.push(token.to_owned());
@@ -237,11 +248,16 @@ async fn broker_startup_authentication(
 
         let message = parse_backend_frame(&frame)
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?
-            .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "incomplete backend frame"))?
+            .ok_or_else(|| {
+                io::Error::new(io::ErrorKind::UnexpectedEof, "incomplete backend frame")
+            })?
             .0;
 
         if message.tag == ERROR_RESPONSE_TAG {
-            return Err(io::Error::new(io::ErrorKind::PermissionDenied, "PostgreSQL authentication/startup failed"));
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "PostgreSQL authentication/startup failed",
+            ));
         }
 
         if message.tag == AUTHENTICATION_TAG {
@@ -276,7 +292,10 @@ async fn broker_startup_authentication(
 
 fn parse_authentication_code(message: &BackendMessage) -> io::Result<i32> {
     if message.payload.len() < 4 {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "truncated PostgreSQL authentication message"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "truncated PostgreSQL authentication message",
+        ));
     }
     Ok(i32::from_be_bytes(message.payload[..4].try_into().unwrap()))
 }
@@ -286,7 +305,10 @@ async fn read_backend_frame(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
     stream.read_exact(&mut header).await?;
     let length = i32::from_be_bytes(header[1..5].try_into().unwrap());
     if !(4..=MAX_STARTUP_PACKET as i32).contains(&length) {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, format!("invalid PostgreSQL backend frame length: {length}")));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("invalid PostgreSQL backend frame length: {length}"),
+        ));
     }
     let mut frame = vec![0u8; 5 + length as usize - 4];
     frame[..5].copy_from_slice(&header);
@@ -299,7 +321,10 @@ async fn read_frontend_frame(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
     stream.read_exact(&mut header).await?;
     let length = i32::from_be_bytes(header[1..5].try_into().unwrap());
     if !(4..=MAX_STARTUP_PACKET as i32).contains(&length) {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, format!("invalid PostgreSQL frontend frame length: {length}")));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("invalid PostgreSQL frontend frame length: {length}"),
+        ));
     }
     let mut frame = vec![0u8; 5 + length as usize - 4];
     frame[..5].copy_from_slice(&header);
@@ -438,9 +463,10 @@ mod tests {
     fn extracts_token_from_libpq_options() {
         let verifier = verifier();
         let token = verifier.sign_for_test("tenant_a", u64::MAX);
-        let (options, extracted) =
-            extract_tenant_token_from_options(&format!("-c proxima_tenant_token={token} -c statement_timeout=1000"))
-                .unwrap();
+        let (options, extracted) = extract_tenant_token_from_options(&format!(
+            "-c proxima_tenant_token={token} -c statement_timeout=1000"
+        ))
+        .unwrap();
 
         assert_eq!(extracted, Some(token));
         assert_eq!(options, "-c statement_timeout=1000");
