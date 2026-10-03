@@ -118,7 +118,7 @@ def verify_tenant(tenant, expected_secret, forbidden_secret):
         if error:
             raise AssertionError(error)
         assert_equal(
-            [[f"proxima_{tenant}", "proxima_gateway"]],
+            [[f"proxima_{tenant}", f"proxima_{tenant}"]],
             rows,
             f"{tenant} session is bound to the expected PostgreSQL role",
         )
@@ -175,6 +175,13 @@ def verify_tenant(tenant, expected_secret, forbidden_secret):
                 f"{tenant} cross-tenant INSERT was not rejected by RLS: {error!r}"
             )
         print(f"PASS: {tenant} cross-tenant INSERT rejected")
+
+        _, error = query(sock, "SET ROLE proxima_tenant_b")
+        if not error or "permission denied to set role" not in error.lower():
+            raise AssertionError(
+                f"{tenant} was able to switch database identity: {error!r}"
+            )
+        print(f"PASS: {tenant} cannot switch database identity")
     finally:
         sock.close()
 
