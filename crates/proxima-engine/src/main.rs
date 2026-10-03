@@ -1,5 +1,6 @@
 use std::io;
 use std::sync::Arc;
+use std::time::Duration;
 
 use proxima_engine::{
     admin::{self, AdminState, RuntimeMetrics},
@@ -13,6 +14,16 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Semaphore;
 use tokio::time::timeout;
 use tracing::{error, info};
+
+#[derive(Clone)]
+struct ConnectionContext {
+    upstream_addr: String,
+    verifier: Option<TenantTokenVerifier>,
+    tenant_role_prefix: String,
+    upstream_connect_timeout: Duration,
+    tls: TlsRuntime,
+    metrics: Arc<RuntimeMetrics>,
+}
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
@@ -54,11 +65,20 @@ async fn main() -> io::Result<()> {
     };
     let admin_task = tokio::spawn(admin::serve(config.admin_addr, admin_state));
 
+    let context = ConnectionContext {
+        upstream_addr: config.upstream_addr.clone(),
+        verifier,
+        tenant_role_prefix: config.tenant_role_prefix.clone(),
+        upstream_connect_timeout: config.upstream_connect_timeout,
+        tls,
+        metrics: metrics.clone(),
+    };
+
     info!(
         listen = %config.listen_addr,
         admin = %config.admin_addr,
         upstream = %config.upstream_addr,
-        tenant_enforcement = verifier.is_some(),
+        tenant_enforcement = context.verifier.is_some(),
         client_tls = ?config.client_tls_mode,
         upstream_tls = ?config.upstream_tls_mode,
         max_connections = config.max_connections,
@@ -72,34 +92,18 @@ async fn main() -> io::Result<()> {
                 let permit = match connection_limit.clone().try_acquire_owned() {
                     Ok(permit) => permit,
                     Err(_) => {
-                        metrics.rejected();
+                        context.metrics.rejected();
                         error!(peer = %peer, "connection limit reached");
                         drop(client);
                         continue;
                     }
                 };
 
-                let upstream_addr = config.upstream_addr.clone();
-                let verifier = verifier.clone();
-                let tenant_role_prefix = config.tenant_role_prefix.clone();
-                let upstream_connect_timeout = config.upstream_connect_timeout;
-                let tls = tls.clone();
-                let metrics = metrics.clone();
+                let context = context.clone();
 
                 tokio::spawn(async move {
                     let _permit = permit;
-                    if let Err(err) = handle_connection(
-                        client,
-                        peer,
-                        &upstream_addr,
-                        verifier.as_ref(),
-                        &tenant_role_prefix,
-                        upstream_connect_timeout,
-                        &tls,
-                        metrics,
-                    )
-                    .await
-                    {
+                    if let Err(err) = handle_connection(client, peer, context).await {
                         error!(peer = %peer, error = %err, "connection failed");
                     }
                 });
@@ -118,34 +122,39 @@ async fn main() -> io::Result<()> {
 async fn handle_connection(
     client: TcpStream,
     peer: std::net::SocketAddr,
-    upstream_addr: &str,
-    verifier: Option<&TenantTokenVerifier>,
-    tenant_role_prefix: &str,
-    upstream_connect_timeout: std::time::Duration,
-    tls: &TlsRuntime,
-    metrics: Arc<RuntimeMetrics>,
+    context: ConnectionContext,
 ) -> io::Result<()> {
     info!(peer = %peer, "client connected");
 
-    let (client, client_tls) = if tls.client_mode == ClientTlsMode::Required {
-        tls.accept_client(client).await?
+    let (client, client_tls) = if context.tls.client_mode == ClientTlsMode::Required {
+        context.tls.accept_client(client).await?
     } else {
         (ProximaStream::Plain(client), false)
     };
 
-    let upstream_tcp = timeout(upstream_connect_timeout, TcpStream::connect(upstream_addr))
-        .await
-        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "upstream connection timed out"))??;
+    let upstream_tcp = timeout(
+        context.upstream_connect_timeout,
+        TcpStream::connect(&context.upstream_addr),
+    )
+    .await
+    .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "upstream connection timed out"))??;
 
-    let upstream = if tls.upstream_mode == UpstreamTlsMode::VerifyFull {
-        tls.connect_upstream(upstream_tcp).await?
+    let upstream = if context.tls.upstream_mode == UpstreamTlsMode::VerifyFull {
+        context.tls.connect_upstream(upstream_tcp).await?
     } else {
         ProximaStream::Plain(upstream_tcp)
     };
 
-    metrics.connection_opened(client_tls);
-    let result = run_session(client, upstream, verifier, tenant_role_prefix, peer).await;
-    metrics.connection_closed();
+    context.metrics.connection_opened(client_tls);
+    let result = run_session(
+        client,
+        upstream,
+        context.verifier.as_ref(),
+        &context.tenant_role_prefix,
+        peer,
+    )
+    .await;
+    context.metrics.connection_closed();
     result
 }
 
