@@ -6,7 +6,6 @@ use std::time::Duration;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UpstreamTlsMode {
     Disable,
-    VerifyCa,
     VerifyFull,
 }
 
@@ -14,11 +13,10 @@ impl UpstreamTlsMode {
     fn parse(value: &str) -> io::Result<Self> {
         match value.trim().to_ascii_lowercase().as_str() {
             "disable" => Ok(Self::Disable),
-            "verify-ca" => Ok(Self::VerifyCa),
             "verify-full" => Ok(Self::VerifyFull),
             other => Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!("invalid PROXIMA_UPSTREAM_TLS_MODE: {other}; expected disable, verify-ca, or verify-full"),
+                format!("invalid PROXIMA_UPSTREAM_TLS_MODE: {other}; expected disable or verify-full"),
             )),
         }
     }
