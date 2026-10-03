@@ -196,9 +196,15 @@ async fn main() -> Result<()> {
         .route("/api/v1/billing/checkout", post(production::checkout))
         .route("/api/v1/billing/portal", post(production::portal))
         .route("/api/v1/webhooks/stripe", post(production::stripe_webhook))
-        .route("/api/v1/organization/oidc/entra", post(production::configure_entra))
+        .route(
+            "/api/v1/organization/oidc/entra",
+            post(production::configure_entra),
+        )
         .route("/api/v1/auth/oidc/start", get(production::entra_start))
-        .route("/api/v1/auth/oidc/callback", get(production::entra_callback))
+        .route(
+            "/api/v1/auth/oidc/callback",
+            get(production::entra_callback),
+        )
         .route("/api/v1/organization/invitations", post(production::invite))
         .route("/api/v1/production/readiness", get(production::readiness))
         .with_state(state)
@@ -781,7 +787,9 @@ async fn create_node(
         .clone()
         .unwrap_or_else(|| "production".into());
     if environment.eq_ignore_ascii_case("private") {
-        if let Err(response) = production::require_feature(&s.db, ctx.organization_id, "private_deployment").await {
+        if let Err(response) =
+            production::require_feature(&s.db, ctx.organization_id, "private_deployment").await
+        {
             return response;
         }
     }
