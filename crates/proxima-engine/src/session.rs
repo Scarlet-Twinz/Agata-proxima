@@ -1,4 +1,7 @@
-use crate::protocol::{parse_startup_packet, StartupPacket};
+use crate::protocol::{
+    parse_backend_frame, parse_frontend_frame, parse_startup_packet, BackendMessage,
+    StartupPacket, AUTHENTICATION_TAG, AUTH_OK, ERROR_RESPONSE_TAG, READY_FOR_QUERY_TAG,
+};
 use crate::tenant::{TenantContext, TenantTokenVerifier};
 use std::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -7,6 +10,7 @@ use tracing::debug;
 
 const MAX_STARTUP_PACKET: usize = 16 * 1024 * 1024;
 const TENANT_TOKEN_PARAMETER: &str = "proxima_tenant_token";
+const POSTGRES_IDENTIFIER_MAX_BYTES: usize = 63;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EstablishedSession {
@@ -33,6 +37,7 @@ pub async fn establish(
                 "PostgreSQL startup packet received"
             );
             forward_startup(&mut upstream, &startup).await?;
+            broker_startup_authentication(&mut client, &mut upstream).await?;
             Ok((client, upstream, EstablishedSession { tenant_context }))
         }
         StartupPacket::SslRequest => {
@@ -72,6 +77,7 @@ pub async fn establish(
                         tenant_role_prefix,
                     )?;
                     forward_startup(&mut upstream, &startup).await?;
+                    broker_startup_authentication(&mut client, &mut upstream).await?;
                     Ok((client, upstream, EstablishedSession { tenant_context }))
                 }
                 other => Err(io::Error::new(
@@ -124,6 +130,19 @@ fn prepare_startup(
                     "duplicate Proxima tenant token",
                 ));
             }
+        } else if key == "options" {
+            let (clean_options, option_token) = extract_tenant_token_from_options(&value)?;
+            if let Some(option_token) = option_token {
+                if tenant_token.replace(option_token).is_some() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "duplicate Proxima tenant token",
+                    ));
+                }
+            }
+            if !clean_options.is_empty() {
+                forwarded.push((key, clean_options));
+            }
         } else {
             forwarded.push((key, value));
         }
@@ -150,6 +169,12 @@ fn prepare_startup(
 
     if let Some(context) = tenant_context.as_ref() {
         let role = format!("{tenant_role_prefix}{}", context.tenant_id);
+        if role.len() > POSTGRES_IDENTIFIER_MAX_BYTES {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "tenant role name exceeds PostgreSQL identifier limit",
+            ));
+        }
         forwarded.retain(|(key, _)| key != "user");
         forwarded.push(("user".to_owned(), role));
     }
@@ -161,6 +186,128 @@ fn prepare_startup(
         },
         tenant_context,
     ))
+}
+
+
+fn extract_tenant_token_from_options(value: &str) -> io::Result<(String, Option<String>)> {
+    let mut tokens = value.split_whitespace().peekable();
+    let mut output = Vec::new();
+    let mut tenant_token = None;
+
+    while let Some(token) = tokens.next() {
+        if token == "-c" {
+            let assignment = tokens.next().ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidData, "options contains incomplete -c")
+            })?;
+            if let Some(token_value) = assignment.strip_prefix("proxima_tenant_token=") {
+                if token_value.is_empty() {
+                    return Err(io::Error::new(io::ErrorKind::InvalidData, "Proxima tenant token in options is empty"));
+                }
+                if tenant_token.replace(token_value.to_owned()).is_some() {
+                    return Err(io::Error::new(io::ErrorKind::InvalidData, "duplicate Proxima tenant token"));
+                }
+                continue;
+            }
+            output.push("-c".to_owned());
+            output.push(assignment.to_owned());
+        } else if let Some(token_value) = token.strip_prefix("proxima_tenant_token=") {
+            if token_value.is_empty() {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "Proxima tenant token in options is empty"));
+            }
+            if tenant_token.replace(token_value.to_owned()).is_some() {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "duplicate Proxima tenant token"));
+            }
+        } else {
+            output.push(token.to_owned());
+        }
+    }
+
+    Ok((output.join(" "), tenant_token))
+}
+
+async fn broker_startup_authentication(
+    client: &mut TcpStream,
+    upstream: &mut TcpStream,
+) -> io::Result<()> {
+    let mut authenticated = false;
+
+    loop {
+        let frame = read_backend_frame(upstream).await?;
+        client.write_all(&frame).await?;
+
+        let message = parse_backend_frame(&frame)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?
+            .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "incomplete backend frame"))?
+            .0;
+
+        if message.tag == ERROR_RESPONSE_TAG {
+            return Err(io::Error::new(io::ErrorKind::PermissionDenied, "PostgreSQL authentication/startup failed"));
+        }
+
+        if message.tag == AUTHENTICATION_TAG {
+            let auth_code = parse_authentication_code(&message)?;
+            match auth_code {
+                AUTH_OK => authenticated = true,
+                3 | 5 | 7 | 8 | 9 | 10 | 11 => {
+                    let response = read_frontend_frame(client).await?;
+                    upstream.write_all(&response).await?;
+                }
+                12 => {}
+                other => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Unsupported,
+                        format!("unsupported PostgreSQL authentication method: {other}"),
+                    ));
+                }
+            }
+        }
+
+        if message.tag == READY_FOR_QUERY_TAG {
+            if !authenticated {
+                return Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "PostgreSQL session became ready without AuthenticationOk",
+                ));
+            }
+            return Ok(());
+        }
+    }
+}
+
+fn parse_authentication_code(message: &BackendMessage) -> io::Result<i32> {
+    if message.payload.len() < 4 {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "truncated PostgreSQL authentication message"));
+    }
+    Ok(i32::from_be_bytes(message.payload[..4].try_into().unwrap()))
+}
+
+async fn read_backend_frame(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
+    let mut header = [0u8; 5];
+    stream.read_exact(&mut header).await?;
+    let length = i32::from_be_bytes(header[1..5].try_into().unwrap());
+    if !(4..=MAX_STARTUP_PACKET as i32).contains(&length) {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, format!("invalid PostgreSQL backend frame length: {length}")));
+    }
+    let mut frame = vec![0u8; 5 + length as usize - 4];
+    frame[..5].copy_from_slice(&header);
+    stream.read_exact(&mut frame[5..]).await?;
+    Ok(frame)
+}
+
+async fn read_frontend_frame(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
+    let mut header = [0u8; 5];
+    stream.read_exact(&mut header).await?;
+    let length = i32::from_be_bytes(header[1..5].try_into().unwrap());
+    if !(4..=MAX_STARTUP_PACKET as i32).contains(&length) {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, format!("invalid PostgreSQL frontend frame length: {length}")));
+    }
+    let mut frame = vec![0u8; 5 + length as usize - 4];
+    frame[..5].copy_from_slice(&header);
+    stream.read_exact(&mut frame[5..]).await?;
+    parse_frontend_frame(&frame)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?
+        .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "incomplete frontend frame"))?;
+    Ok(frame)
 }
 
 async fn read_startup(stream: &mut TcpStream) -> io::Result<StartupPacket> {
@@ -285,6 +432,45 @@ mod tests {
         .unwrap_err();
 
         assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+    }
+
+    #[test]
+    fn extracts_token_from_libpq_options() {
+        let verifier = verifier();
+        let token = verifier.sign_for_test("tenant_a", u64::MAX);
+        let (options, extracted) =
+            extract_tenant_token_from_options(&format!("-c proxima_tenant_token={token} -c statement_timeout=1000"))
+                .unwrap();
+
+        assert_eq!(extracted, Some(token));
+        assert_eq!(options, "-c statement_timeout=1000");
+    }
+
+    #[test]
+    fn rejects_duplicate_option_tokens() {
+        let verifier = verifier();
+        let token = verifier.sign_for_test("tenant_a", u64::MAX);
+        let error = extract_tenant_token_from_options(&format!(
+            "-c proxima_tenant_token={token} proxima_tenant_token={token}"
+        ))
+        .unwrap_err();
+
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn rejects_role_names_over_postgres_limit() {
+        let verifier = verifier();
+        let token = verifier.sign_for_test("tenant_a", u64::MAX);
+        let error = prepare_startup(
+            crate::protocol::PROTOCOL_3_0,
+            vec![(TENANT_TOKEN_PARAMETER.into(), token)],
+            Some(&verifier),
+            &"x".repeat(63),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
     }
 
     #[test]
