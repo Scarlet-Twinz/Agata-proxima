@@ -9,6 +9,7 @@ Prevent an authenticated request for tenant A from obtaining or modifying tenant
 - tenant-scoped database rows;
 - tenant identity and authorization context;
 - database credentials;
+- TLS private keys and certificate trust roots;
 - policy configuration;
 - security/audit events;
 - connection/session state.
@@ -43,11 +44,35 @@ An administrative or privileged database path accidentally bypasses the intended
 
 Malformed or unexpected PostgreSQL messages cause the engine to interpret connection state incorrectly.
 
+### TLS downgrade
+
+A client or upstream database is induced to fall back from the configured TLS boundary to plaintext.
+
+**Mitigation:** verified topology requires explicit TLS modes; Proxima rejects unsafe mixed configurations and fails closed on upstream TLS rejection or certificate validation failure.
+
+### TLS trust failure
+
+A malicious or misconfigured certificate, CA, hostname, or interrupted handshake attempts to enter the enforcement boundary.
+
+**Mitigation:** rustls certificate verification, configured trust roots, hostname verification, and bounded handshakes are required for the verified upstream mode.
+
+### Channel-bound authentication mismatch
+
+SCRAM-SHA-256-PLUS binds authentication to TLS channel data. A TLS-terminating proxy has separate client and upstream channels, so blindly forwarding a channel-bound exchange is unsafe.
+
+**Mitigation:** Proxima does not claim transparent SCRAM-PLUS support and does not silently downgrade clients that explicitly require channel binding. Full authentication ownership is a separate future boundary.
+
 ## Explicit non-goals
 
 Proxima does not claim to protect a system merely because traffic passes through the proxy.
 
-In particular, an end-to-end encrypted PostgreSQL connection cannot be inspected by a passive proxy. TLS termination and its trust model must be explicitly designed before Proxima claims protocol-level policy enforcement inside that encrypted stream.
+It does not protect against:
+
+- a PostgreSQL superuser or BYPASSRLS role;
+- direct access to PostgreSQL with privileged credentials;
+- a compromised tenant-signing secret;
+- an intentionally unsupported deployment topology;
+- transparent SCRAM channel binding across separately terminated TLS sessions.
 
 ## Verification requirements
 
@@ -63,6 +88,11 @@ Security tests must cover:
 - context changes;
 - administrative paths;
 - malformed protocol frames;
-- TLS mode behavior.
+- client TLS negotiation;
+- plaintext-to-TLS rejection;
+- upstream TLS verification;
+- certificate and hostname failures;
+- TLS handshake interruption;
+- channel-binding behavior.
 
 Every security guarantee must have a corresponding executable test or a documented architectural proof.
