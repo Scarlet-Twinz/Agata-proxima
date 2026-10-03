@@ -10,7 +10,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use sha2::Sha256;
 use sqlx::Row;
-use std::{collections::HashMap, env};
+use std::env;
 use uuid::Uuid;
 
 use super::{
@@ -47,12 +47,6 @@ pub(crate) struct PasswordResetConfirm {
     pub token: String,
     pub password: String,
 }
-
-#[derive(Deserialize)]
-pub(crate) struct BillingEventQuery {
-    pub event: Option<String>,
-}
-
 pub(crate) async fn billing_status(State(s): State<AppState>, headers: HeaderMap) -> Response {
     let ctx = match authenticate(&s, &headers).await {
         Ok(v) => v,
