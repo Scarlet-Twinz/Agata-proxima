@@ -88,7 +88,7 @@ pub async fn establish(
                     parameters,
                 } => {
                     let (startup, tenant_context) =
-                        prepare_startup(protocol_version, parameters, verifier, upstream_user)?;
+                        prepare_startup(protocol_version, parameters, verifier, tenant_role_prefix)?;
                     forward_startup(&mut upstream, &startup).await?;
 
                     if let Some(context) = tenant_context.as_ref() {
@@ -357,7 +357,7 @@ mod tests {
                 (TENANT_TOKEN_PARAMETER.into(), token),
             ],
             Some(&verifier),
-            Some("proxima_gateway"),
+            "proxima_",
         )
         .unwrap_err();
 
