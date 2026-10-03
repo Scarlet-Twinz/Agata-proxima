@@ -985,6 +985,21 @@ fn service_unavailable(message: &str) -> Response {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn entitlement_matrix_matches_launch_contract() {
+        assert_eq!(super::plan_limits("free"), (1, 3, 1, 7, false, false, false, false, false));
+        assert_eq!(super::plan_limits("starter"), (2, 25, 2, 30, false, true, false, false, false));
+        assert_eq!(super::plan_limits("growth"), (5, 100, 5, 180, true, true, true, true, false));
+        assert_eq!(super::plan_limits("scale"), (15, 500, 50, 365, true, true, true, true, true));
+        assert_eq!(super::plan_limits("enterprise"), (i32::MAX, i32::MAX, i32::MAX, 3650, true, true, true, true, true));
+    }
+
+    #[test]
+    fn unknown_plan_defaults_to_free_entitlements() {
+        assert_eq!(super::plan_limits("unknown"), super::plan_limits("free"));
+    }
+
+
     use super::*;
 
     #[test]
