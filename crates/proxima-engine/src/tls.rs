@@ -67,12 +67,7 @@ pub async fn accept_client_tls(
 ) -> io::Result<ClientTlsStream> {
     tokio::time::timeout(timeout_duration, acceptor.accept(stream))
         .await
-        .map_err(|_| {
-            io::Error::new(
-                io::ErrorKind::TimedOut,
-                "client TLS handshake timed out",
-            )
-        })?
+        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "client TLS handshake timed out"))?
         .map_err(|error| {
             io::Error::new(
                 io::ErrorKind::PermissionDenied,
@@ -110,12 +105,7 @@ pub async fn connect_upstream_tls(
 
     tokio::time::timeout(timeout_duration, connector.connect(name, stream))
         .await
-        .map_err(|_| {
-            io::Error::new(
-                io::ErrorKind::TimedOut,
-                "upstream TLS handshake timed out",
-            )
-        })?
+        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "upstream TLS handshake timed out"))?
         .map_err(|error| {
             io::Error::new(
                 io::ErrorKind::PermissionDenied,
@@ -147,9 +137,7 @@ fn load_private_key(path: &str) -> io::Result<PrivateKeyDer<'static>> {
                 format!("failed to parse private key PEM: {error}"),
             )
         })?
-        .ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidData, "no private key found in PEM")
-        })
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "no private key found in PEM"))
 }
 
 #[cfg(test)]
