@@ -1,3 +1,4 @@
+#[rustfmt::skip]
 mod production;
 
 use anyhow::Result;
@@ -169,8 +170,14 @@ async fn main() -> Result<()> {
         .route("/verify-email", get(production::verify_email))
         .route("/reset-password", get(production::reset_password_page))
         .route("/accept-invite", get(production::accept_invite))
-        .route("/api/v1/auth/password-reset/request", post(production::request_password_reset))
-        .route("/api/v1/auth/password-reset/confirm", post(production::reset_password))
+        .route(
+            "/api/v1/auth/password-reset/request",
+            post(production::request_password_reset),
+        )
+        .route(
+            "/api/v1/auth/password-reset/confirm",
+            post(production::reset_password),
+        )
         .route("/api/v1/billing", get(production::billing_status))
         .route("/api/v1/billing/checkout", post(production::checkout))
         .route("/api/v1/billing/portal", post(production::portal))
@@ -315,7 +322,8 @@ async fn signup(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Resp
         return db_error(e);
     }
 
-    if let Err(e) = production::send_verification_email(&s.db, user_id, &email, &display_name).await {
+    if let Err(e) = production::send_verification_email(&s.db, user_id, &email, &display_name).await
+    {
         tracing::error!(%e, "verification email delivery failed");
     }
 
