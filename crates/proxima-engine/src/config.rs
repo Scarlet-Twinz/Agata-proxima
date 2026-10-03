@@ -48,7 +48,7 @@ impl Config {
 
         let tenant_signing_key = match env::var("PROXIMA_TENANT_SIGNING_KEY") {
             Ok(value) if value.trim().is_empty() => None,
-            Ok(value) if value.as_bytes().len() < 32 => {
+            Ok(value) if value.len() < 32 => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
                     "PROXIMA_TENANT_SIGNING_KEY must be at least 32 bytes",
