@@ -626,9 +626,9 @@ pub(crate) async fn entra_callback(
 
     match create_session(&s.db, user_id, organization_id).await {
         Ok((token, _csrf)) => {
-            let mut response = Html(format!(
+            let mut response = Html(
                 "<html><head><meta http-equiv=\"refresh\" content=\"0;url=/app\"></head><body style=\"background:#05090d;color:#eef7f7;font-family:Arial;padding:60px\">Signing you in…</body></html>"
-            )).into_response();
+            ).into_response();
             let cookie_value = if s.secure_cookie {
                 format!("proxima_session={token}; Path=/; HttpOnly; SameSite=Strict; Secure")
             } else {
