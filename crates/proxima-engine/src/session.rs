@@ -266,6 +266,12 @@ async fn broker_startup_authentication(
                 AUTH_OK => authenticated = true,
                 3 | 5 | 7 | 8 | 9 | 10 | 11 => {
                     let response = read_frontend_frame(client).await?;
+                    if response[0] != b'p' {
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "unexpected PostgreSQL frontend message during authentication",
+                        ));
+                    }
                     upstream.write_all(&response).await?;
                 }
                 12 => {}
