@@ -2,6 +2,8 @@
 
 > Security work is accepted only when the executable gate is green.
 
+Final verification follows the same gate on the current branch head.
+
 ## Phase 18 — TLS Security Boundary
 
 Implemented:
