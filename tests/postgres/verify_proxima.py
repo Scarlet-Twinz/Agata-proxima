@@ -21,12 +21,13 @@ def frame(tag, payload=b""):
     return tag + struct.pack("!I", len(payload) + 4) + payload
 
 
-def startup(tenant):
+def startup(tenant, token=None):
+    token = token or token_for(tenant)
     params = (
         b"user\0client\0"
         b"database\0proxima_dev\0"
         + b"proxima_tenant_token\0"
-        + token_for(tenant).encode()
+        + token.encode()
         + b"\0"
     )
     body = struct.pack("!I", 196608) + params
@@ -180,7 +181,7 @@ def verify_tenant(tenant, expected_secret, forbidden_secret):
 
 def verify_bad_token():
     sock = socket.create_connection((HOST, PORT), timeout=5)
-    bad = startup("tenant_a").replace(token_for("tenant_a").encode(), b"v1.tenant_b.4102444800.bad")
+    bad = startup("tenant_a", "v1.tenant_b.4102444800.bad")
     sock.sendall(bad)
     try:
         while True:
