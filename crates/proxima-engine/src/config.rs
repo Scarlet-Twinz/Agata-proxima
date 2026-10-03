@@ -9,6 +9,8 @@ pub struct Config {
     pub tenant_role_password: Option<String>,
     pub tenant_signing_key: Option<String>,
     pub tenant_role_prefix: String,
+    pub max_connections: usize,
+    pub startup_timeout_ms: u64,
 }
 
 impl Config {
@@ -59,6 +61,40 @@ impl Config {
             Err(_) => None,
         };
 
+        let max_connections = env::var("PROXIMA_MAX_CONNECTIONS")
+            .unwrap_or_else(|_| "1024".to_string())
+            .parse::<usize>()
+            .map_err(|error| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("invalid PROXIMA_MAX_CONNECTIONS: {error}"),
+                )
+            })?;
+
+        if max_connections == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "PROXIMA_MAX_CONNECTIONS must be greater than zero",
+            ));
+        }
+
+        let startup_timeout_ms = env::var("PROXIMA_STARTUP_TIMEOUT_MS")
+            .unwrap_or_else(|_| "5000".to_string())
+            .parse::<u64>()
+            .map_err(|error| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("invalid PROXIMA_STARTUP_TIMEOUT_MS: {error}"),
+                )
+            })?;
+
+        if startup_timeout_ms == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "PROXIMA_STARTUP_TIMEOUT_MS must be greater than zero",
+            ));
+        }
+
         let tenant_role_password = env::var("PROXIMA_TENANT_ROLE_PASSWORD")
             .ok()
             .filter(|value| !value.is_empty());
@@ -76,6 +112,8 @@ impl Config {
             tenant_role_password,
             tenant_signing_key,
             tenant_role_prefix,
+            max_connections,
+            startup_timeout_ms,
         })
     }
 }
@@ -91,6 +129,8 @@ mod tests {
             "PROXIMA_UPSTREAM_ADDR",
             "PROXIMA_TENANT_SIGNING_KEY",
             "PROXIMA_TENANT_ROLE_PREFIX",
+            "PROXIMA_MAX_CONNECTIONS",
+            "PROXIMA_STARTUP_TIMEOUT_MS",
             "PROXIMA_TENANT_ROLE_PASSWORD",
         ] {
             std::env::remove_var(key);
@@ -102,5 +142,7 @@ mod tests {
         assert_eq!(config.tenant_role_password, None);
         assert_eq!(config.tenant_signing_key, None);
         assert_eq!(config.tenant_role_prefix, "proxima_tenant_");
+        assert_eq!(config.max_connections, 1024);
+        assert_eq!(config.startup_timeout_ms, 5000);
     }
 }
