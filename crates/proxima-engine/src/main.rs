@@ -63,8 +63,7 @@ async fn handle_connection(
     upstream_addr: &str,
     verifier: Option<&TenantTokenVerifier>,
     tenant_role_prefix: &str,
-    upstream_user: Option<&str>,
-    upstream_password: Option<&str>,
+    tenant_role_password: Option<&str>,
 ) -> io::Result<()> {
     info!(peer = %peer, "client connected");
 
@@ -74,8 +73,7 @@ async fn handle_connection(
         upstream,
         verifier,
         tenant_role_prefix,
-        upstream_user,
-        upstream_password,
+        tenant_role_password,
     )
     .await?;
 
