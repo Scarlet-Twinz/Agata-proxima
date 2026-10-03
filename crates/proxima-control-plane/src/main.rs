@@ -1049,10 +1049,7 @@ fn auth_response(
 }
 
 fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error> {
-    let salt = SaltString::generate(&mut OsRng);
-    Ok(Argon2::default()
-        .hash_password(password.as_bytes(), &salt)?
-        .to_string())
+    Ok(Argon2::default().hash_password(password.as_bytes())?.to_string())
 }
 
 fn verify_password(password: &str, hash: &str) -> bool {
