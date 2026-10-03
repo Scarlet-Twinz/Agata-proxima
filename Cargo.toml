@@ -2,4 +2,5 @@
 resolver = "2"
 members = [
     "crates/proxima-engine",
+    "crates/proxima-control-plane",
 ]
