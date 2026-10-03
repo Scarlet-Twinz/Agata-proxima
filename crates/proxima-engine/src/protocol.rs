@@ -221,6 +221,7 @@ pub fn encode_frontend_frame(tag: u8, payload: &[u8]) -> io::Result<Bytes> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn parses_postgres_startup_packet() {
@@ -334,5 +335,15 @@ mod tests {
     fn encodes_frontend_frame() {
         let frame = encode_frontend_frame(b'Q', b"SELECT").unwrap();
         assert_eq!(&frame[..], b"Q\0\0\0\nSELECT");
+    }
+}
+
+
+proptest! {
+    #[test]
+    fn random_bytes_never_panic_startup_or_frontend(input in proptest::collection::vec(any::<u8>(), 0..1024)) {
+        let _ = parse_startup_packet(&input);
+        let _ = parse_frontend_frame(&input);
+        let _ = parse_backend_frame(&input);
     }
 }
