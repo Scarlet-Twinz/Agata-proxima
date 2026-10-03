@@ -302,3 +302,104 @@ async fn forward_startup(stream: &mut BoxedIo, startup: &StartupPacket) -> io::R
         )),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tenant::TenantTokenVerifier;
+
+    fn verifier() -> TenantTokenVerifier {
+        TenantTokenVerifier::new(b"01234567890123456789012345678901").unwrap()
+    }
+
+    #[test]
+    fn extracts_and_removes_tenant_token() {
+        let v = verifier();
+        let token = v.sign_for_test("tenant_a", u64::MAX);
+        let (startup, context) = prepare_startup(
+            crate::protocol::PROTOCOL_3_0,
+            vec![
+                ("user".into(), "proxima".into()),
+                (TENANT_TOKEN_PARAMETER.into(), token),
+            ],
+            Some(&v),
+            "proxima_tenant_",
+        )
+        .unwrap();
+        assert_eq!(context.unwrap().tenant_id, "tenant_a");
+        assert_eq!(
+            startup,
+            StartupPacket::Startup {
+                protocol_version: crate::protocol::PROTOCOL_3_0,
+                parameters: vec![("user".into(), "proxima_tenant_tenant_a".into())],
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_missing_token_when_enforcement_is_enabled() {
+        let v = verifier();
+        let error = prepare_startup(
+            crate::protocol::PROTOCOL_3_0,
+            vec![("user".into(), "proxima".into())],
+            Some(&v),
+            "proxima_tenant_",
+        )
+        .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+    }
+
+    #[test]
+    fn extracts_token_from_libpq_options() {
+        let v = verifier();
+        let token = v.sign_for_test("tenant_a", u64::MAX);
+        let (options, extracted) = extract_tenant_token_from_options(&format!(
+            "-c proxima_tenant_token={token} -c statement_timeout=1000"
+        ))
+        .unwrap();
+        assert_eq!(extracted, Some(token));
+        assert_eq!(options, "-c statement_timeout=1000");
+    }
+
+    #[test]
+    fn rejects_duplicate_option_tokens() {
+        let v = verifier();
+        let token = v.sign_for_test("tenant_a", u64::MAX);
+        let error = extract_tenant_token_from_options(&format!(
+            "-c proxima_tenant_token={token} proxima_tenant_token={token}"
+        ))
+        .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn rejects_role_names_over_postgres_limit() {
+        let v = verifier();
+        let token = v.sign_for_test("tenant_a", u64::MAX);
+        let error = prepare_startup(
+            crate::protocol::PROTOCOL_3_0,
+            vec![(TENANT_TOKEN_PARAMETER.into(), token)],
+            Some(&v),
+            &"x".repeat(63),
+        )
+        .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn rejects_duplicate_tokens() {
+        let v = verifier();
+        let token = v.sign_for_test("tenant_a", u64::MAX);
+        let error = prepare_startup(
+            crate::protocol::PROTOCOL_3_0,
+            vec![
+                (TENANT_TOKEN_PARAMETER.into(), token.clone()),
+                (TENANT_TOKEN_PARAMETER.into(), token),
+            ],
+            Some(&v),
+            "proxima_tenant_",
+        )
+        .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    }
+}

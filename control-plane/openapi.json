@@ -1,0 +1,12 @@
+{
+  "openapi":"3.1.0",
+  "info":{"title":"Agata Proxima Control Plane","version":"0.1.0"},
+  "paths":{
+    "/api/v1/health":{"get":{"responses":{"200":{"description":"Control plane health"}}}},
+    "/api/v1/overview":{"get":{"responses":{"200":{"description":"Runtime and security overview"}}}},
+    "/api/v1/verification":{"get":{"responses":{"200":{"description":"Verification status/history"}}}},
+    "/api/v1/tenants":{"get":{"responses":{"200":{"description":"Tenant inventory"}}}},
+    "/api/v1/connections":{"get":{"responses":{"200":{"description":"Connection inventory"}}}},
+    "/api/v1/audit":{"get":{"responses":{"200":{"description":"Security audit events"}}}}
+  }
+}
