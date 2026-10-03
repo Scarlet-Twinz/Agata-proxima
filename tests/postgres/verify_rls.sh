@@ -26,10 +26,19 @@ assert_eq "A-secret" "$a_rows" "tenant A cannot read tenant B"
 b_rows="$(psql -Atqc "SET ROLE proxima_tenant_b; SELECT string_agg(secret, ',' ORDER BY secret) FROM proxima_test.records;")"
 assert_eq "B-secret" "$b_rows" "tenant B cannot read tenant A"
 
+prepared_rows="$(psql -Atqc "SET ROLE proxima_tenant_a; PREPARE tenant_lookup(text) AS SELECT string_agg(secret, ',' ORDER BY secret) FROM proxima_test.records WHERE tenant_id=\$1; EXECUTE tenant_lookup('tenant_b');")"
+assert_eq "" "$prepared_rows" "prepared statement cannot bypass tenant policy"
+
+cross_insert="$(psql -Atqc "SET ROLE proxima_tenant_a; INSERT INTO proxima_test.records (tenant_id, secret) VALUES ('tenant_b', 'forbidden'); SELECT count(*) FROM proxima_test.records WHERE secret='forbidden';")"
+assert_eq "0" "$cross_insert" "tenant A cannot insert into tenant B"
+
 cross_update="$(psql -Atqc "SET ROLE proxima_tenant_a; UPDATE proxima_test.records SET secret='blocked' WHERE tenant_id='tenant_b'; SELECT count(*) FROM proxima_test.records WHERE secret='blocked';")"
 assert_eq "0" "$cross_update" "tenant A cannot update tenant B"
 
 cross_delete="$(psql -Atqc "SET ROLE proxima_tenant_b; DELETE FROM proxima_test.records WHERE tenant_id='tenant_a'; SELECT count(*) FROM proxima_test.records WHERE tenant_id='tenant_a';")"
 assert_eq "1" "$cross_delete" "tenant B cannot delete tenant A"
+
+transaction_state="$(psql -Atqc "SET ROLE proxima_tenant_a; BEGIN; INSERT INTO proxima_test.records (tenant_id, secret) VALUES ('tenant_a', 'temporary'); ROLLBACK; SELECT count(*) FROM proxima_test.records WHERE secret='temporary';")"
+assert_eq "0" "$transaction_state" "tenant transaction rollback leaves no cross-session state"
 
 echo "PostgreSQL RLS isolation verification: PASS"
