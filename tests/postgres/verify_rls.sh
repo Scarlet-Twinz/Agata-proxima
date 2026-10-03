@@ -29,8 +29,19 @@ assert_eq "B-secret" "$b_rows" "tenant B cannot read tenant A"
 prepared_rows="$(psql -Atqc "SET ROLE proxima_tenant_a; PREPARE tenant_lookup(text) AS SELECT string_agg(secret, ',' ORDER BY secret) FROM proxima_test.records WHERE tenant_id=\$1; EXECUTE tenant_lookup('tenant_b');")"
 assert_eq "" "$prepared_rows" "prepared statement cannot bypass tenant policy"
 
-cross_insert="$(psql -Atqc "SET ROLE proxima_tenant_a; INSERT INTO proxima_test.records (tenant_id, secret) VALUES ('tenant_b', 'forbidden'); SELECT count(*) FROM proxima_test.records WHERE secret='forbidden';")"
-assert_eq "0" "$cross_insert" "tenant A cannot insert into tenant B"
+set +e
+insert_error="$(psql -Atqc "SET ROLE proxima_tenant_a; INSERT INTO proxima_test.records (tenant_id, secret) VALUES ('tenant_b', 'forbidden');" 2>&1)"
+insert_status=$?
+set -e
+if [[ "$insert_status" -eq 0 ]]; then
+  echo "FAIL: tenant A cannot insert into tenant B" >&2
+  exit 1
+fi
+if [[ "$insert_error" != *"row-level security"* ]]; then
+  echo "FAIL: cross-tenant insert was rejected for an unexpected reason: $insert_error" >&2
+  exit 1
+fi
+echo "PASS: tenant A cannot insert into tenant B"
 
 cross_update="$(psql -Atqc "SET ROLE proxima_tenant_a; UPDATE proxima_test.records SET secret='blocked' WHERE tenant_id='tenant_b'; SELECT count(*) FROM proxima_test.records WHERE secret='blocked';")"
 assert_eq "0" "$cross_update" "tenant A cannot update tenant B"
