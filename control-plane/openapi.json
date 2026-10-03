@@ -1,12 +1,24 @@
 {
   "openapi":"3.1.0",
-  "info":{"title":"Agata Proxima Control Plane","version":"0.1.0"},
+  "info":{"title":"Agata Proxima Control Plane API","version":"0.2.0","description":"Authenticated management plane for organizations, tenants, policies, fleet, deployments, verification, audit and support. The Proxima Engine remains the independent data-plane enforcement authority."},
+  "servers":[{"url":"http://127.0.0.1:8080"}],
+  "security":[{"sessionCookie":[]}],
   "paths":{
-    "/api/v1/health":{"get":{"responses":{"200":{"description":"Control plane health"}}}},
-    "/api/v1/overview":{"get":{"responses":{"200":{"description":"Runtime and security overview"}}}},
-    "/api/v1/verification":{"get":{"responses":{"200":{"description":"Verification status/history"}}}},
-    "/api/v1/tenants":{"get":{"responses":{"200":{"description":"Tenant inventory"}}}},
-    "/api/v1/connections":{"get":{"responses":{"200":{"description":"Connection inventory"}}}},
-    "/api/v1/audit":{"get":{"responses":{"200":{"description":"Security audit events"}}}}
-  }
+    "/api/v1/health":{"get":{"security":[],"responses":{"200":{"description":"Control plane healthy"},"503":{"description":"Control plane degraded"}}}},
+    "/api/v1/auth/signup":{"post":{"security":[],"requestBody":{"required":true},"responses":{"200":{"description":"Workspace created and session established"},"400":{"description":"Validation error"},"409":{"description":"Identity already exists"}}}},
+    "/api/v1/auth/login":{"post":{"security":[],"requestBody":{"required":true},"responses":{"200":{"description":"Session established"},"401":{"description":"Invalid credentials"}}}},
+    "/api/v1/auth/logout":{"post":{"responses":{"200":{"description":"Session revoked"}}}},
+    "/api/v1/session":{"get":{"responses":{"200":{"description":"Current session"},"401":{"description":"Unauthenticated"}}}},
+    "/api/v1/platform/status":{"get":{"responses":{"200":{"description":"Organization platform status"}}}},
+    "/api/v1/organizations":{"get":{"responses":{"200":{"description":"Organizations visible to the current user"}},"post":{"requestBody":{"required":true},"responses":{"200":{"description":"Organization created"}}}},
+    "/api/v1/tenants":{"get":{"responses":{"200":{"description":"Tenant inventory"}},"post":{"requestBody":{"required":true},"responses":{"200":{"description":"Tenant created"}}}},
+    "/api/v1/policies":{"get":{"responses":{"200":{"description":"Policy versions"}},"post":{"requestBody":{"required":true},"responses":{"200":{"description":"Policy draft created"}}}},
+    "/api/v1/nodes":{"get":{"responses":{"200":{"description":"Fleet inventory"}},"post":{"requestBody":{"required":true},"responses":{"200":{"description":"Node registered; one-time enrollment token returned"}}}},
+    "/api/v1/nodes/{id}/enrollment":{"post":{"parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}],"responses":{"200":{"description":"Enrollment started"},"404":{"description":"Node not found"}}}},
+    "/api/v1/deployments":{"get":{"responses":{"200":{"description":"Deployment history"}},"post":{"requestBody":{"required":true},"responses":{"200":{"description":"Deployment queued"}}}},
+    "/api/v1/verifications":{"get":{"responses":{"200":{"description":"Verification evidence"}},"post":{"requestBody":{"required":true},"responses":{"200":{"description":"Verification evidence recorded"}}}},
+    "/api/v1/audit":{"get":{"responses":{"200":{"description":"Organization audit events"}}}},
+    "/api/v1/support":{"get":{"responses":{"200":{"description":"Support request queue"}},"post":{"requestBody":{"required":true},"responses":{"200":{"description":"Support request created"}}}}
+  },
+  "components":{"securitySchemes":{"sessionCookie":{"type":"apiKey","in":"cookie","name":"proxima_session"}}}
 }
