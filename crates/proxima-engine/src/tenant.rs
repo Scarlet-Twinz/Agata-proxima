@@ -212,7 +212,7 @@ mod tests {
         let verifier = verifier();
 
         assert_eq!(
-            verifier.verify("v1.tenant.a.00", 0),
+            verifier.verify("v1.bad!.2000.00", 0),
             Err(TenantTokenError::InvalidTenantId)
         );
     }
