@@ -1,3 +1,6 @@
+permissions:
+  contents: write
+
 name: Rust
 
 on:
@@ -73,13 +76,11 @@ jobs:
           bash -n tests/control-plane/api_smoke.sh
           bash -n scripts/proxima-platform.sh
 
-      - name: Capture workspace lockfile
+      - name: Commit workspace lockfile
         run: |
           cargo generate-lockfile
-          mkdir -p /tmp/proxima-lock
-          cp Cargo.lock /tmp/proxima-lock/Cargo.lock
-      - name: Upload workspace lockfile
-        uses: actions/upload-artifact@v4
-        with:
-          name: proxima-cargo-lock
-          path: /tmp/proxima-lock/Cargo.lock
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.lock
+          git diff --cached --quiet || git commit -m "chore: pin workspace dependency graph"
+          git push
