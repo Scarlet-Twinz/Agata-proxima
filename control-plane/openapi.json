@@ -1,12 +1,19 @@
 {
   "openapi":"3.1.0",
-  "info":{"title":"Agata Proxima Control Plane","version":"0.1.0"},
+  "info":{"title":"Agata Proxima Control Plane API","version":"1.0.0","description":"Management API for organizations, tenants, policies, fleet nodes, audit and authenticated sessions. The API is outside the Proxima data-plane enforcement path."},
+  "servers":[{"url":"http://127.0.0.1:9090"}],
   "paths":{
-    "/api/v1/health":{"get":{"responses":{"200":{"description":"Control plane health"}}}},
-    "/api/v1/overview":{"get":{"responses":{"200":{"description":"Runtime and security overview"}}}},
-    "/api/v1/verification":{"get":{"responses":{"200":{"description":"Verification status/history"}}}},
-    "/api/v1/tenants":{"get":{"responses":{"200":{"description":"Tenant inventory"}}}},
-    "/api/v1/connections":{"get":{"responses":{"200":{"description":"Connection inventory"}}}},
-    "/api/v1/audit":{"get":{"responses":{"200":{"description":"Security audit events"}}}}
-  }
+    "/api/v1/health":{"get":{"summary":"Control-plane health","responses":{"200":{"description":"Healthy"}}}},
+    "/api/v1/overview":{"get":{"summary":"Workspace overview","responses":{"200":{"description":"Current control-plane inventory"}}}},
+    "/api/v1/tenants":{"get":{"summary":"List tenants","responses":{"200":{"description":"Tenant inventory"}}},"post":{"summary":"Create tenant","responses":{"200":{"description":"Tenant created"},"400":{"description":"Invalid tenant"}}}},
+    "/api/v1/tenants/{id}":{"get":{"summary":"Get tenant","parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}],"responses":{"200":{"description":"Tenant"},"404":{"description":"Not found"}}}},
+    "/api/v1/policies":{"get":{"summary":"List policies","responses":{"200":{"description":"Policy inventory"}}},"post":{"summary":"Create policy","responses":{"200":{"description":"Policy created"}}}},
+    "/api/v1/nodes":{"get":{"summary":"List fleet nodes","responses":{"200":{"description":"Fleet inventory"}}}},
+    "/api/v1/audit":{"get":{"summary":"List audit events","responses":{"200":{"description":"Audit history"}}}},
+    "/api/v1/auth/signup":{"post":{"summary":"Create an account and session","requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/Credentials"}}}},"responses":{"200":{"description":"Session created"},"409":{"description":"Account exists"}}}},
+    "/api/v1/auth/login":{"post":{"summary":"Create an authenticated session","requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/Credentials"}}}},"responses":{"200":{"description":"Session created"},"401":{"description":"Invalid credentials"}}}},
+    "/api/v1/auth/logout":{"post":{"summary":"Revoke current session","responses":{"200":{"description":"Signed out"}}}},
+    "/api/v1/auth/me":{"get":{"summary":"Get current user","responses":{"200":{"description":"Current user"},"401":{"description":"Not authenticated"}}}}
+  },
+  "components":{"schemas":{"Credentials":{"type":"object","required":["email","password"],"properties":{"email":{"type":"string","format":"email"},"password":{"type":"string","minLength":15}}}}}
 }
