@@ -42,6 +42,7 @@ pub(crate) struct VerifyInput {
 #[derive(Deserialize)]
 pub(crate) struct OidcConfigureInput {
     pub tenant_id: String,
+    pub jit_provisioning: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -378,13 +379,14 @@ pub(crate) async fn configure_entra(
     let issuer = format!("https://login.microsoftonline.com/{tenant_id}/v2.0");
 
     match sqlx::query(
-        "INSERT INTO organization_oidc_connections(organization_id,provider,tenant_id,issuer,client_id,enabled,updated_at)
-         VALUES($1,'microsoft-entra',$2,$3,$4,true,now())
+        "INSERT INTO organization_oidc_connections(organization_id,provider,tenant_id,issuer,client_id,enabled,jit_provisioning,updated_at)
+         VALUES($1,'microsoft-entra',$2,$3,$4,true,$5,now())
          ON CONFLICT (organization_id) DO UPDATE SET
            provider='microsoft-entra',tenant_id=EXCLUDED.tenant_id,issuer=EXCLUDED.issuer,
            client_id=EXCLUDED.client_id,enabled=true,updated_at=now()"
     )
     .bind(ctx.organization_id).bind(tenant_id).bind(&issuer).bind(&client_id)
+    .bind(input.jit_provisioning.unwrap_or(false))
     .execute(&s.db).await {
         Ok(_) => {
             audit(&s.db, ctx.organization_id, ctx.user_id, "identity.entra.configured",
@@ -404,7 +406,7 @@ pub(crate) async fn entra_start(
         None => return bad("organization_id is required."),
     };
     let connection = match sqlx::query(
-        "SELECT tenant_id,issuer,client_id FROM organization_oidc_connections
+        "SELECT tenant_id,issuer,client_id,jit_provisioning FROM organization_oidc_connections
          WHERE organization_id=$1 AND provider='microsoft-entra' AND enabled=true"
     ).bind(organization_id).fetch_optional(&s.db).await {
         Ok(Some(row)) => row,
@@ -473,6 +475,7 @@ pub(crate) async fn entra_callback(
     let tenant_id: Uuid = connection.get("tenant_id");
     let expected_issuer: String = connection.get("issuer");
     let client_id: String = connection.get("client_id");
+    let jit_provisioning: bool = connection.get("jit_provisioning");
     let secret = match env::var("PROXIMA_OIDC_CLIENT_SECRET") {
         Ok(v) if !v.trim().is_empty() => v,
         _ => return service_unavailable("Microsoft Entra client secret is not configured."),
@@ -571,25 +574,33 @@ pub(crate) async fn entra_callback(
     ).bind(&claims.iss).bind(&subject).bind(organization_id).fetch_optional(&s.db).await {
         Ok(Some(row)) => row.get("user_id"),
         Ok(None) => {
-            let existing = match sqlx::query("SELECT id FROM users WHERE lower(email)=lower($1)").bind(&email).fetch_optional(&s.db).await {
-                Ok(v) => v,
+            if !jit_provisioning {
+                return (StatusCode::FORBIDDEN, Json(json!({
+                    "ok":false,
+                    "error":"sso_identity_not_linked",
+                    "message":"This Microsoft Entra identity is not linked to the organization."
+                }))).into_response();
+            }
+            let email_exists = match sqlx::query("SELECT 1 FROM users WHERE lower(email)=lower($1)")
+                .bind(&email).fetch_optional(&s.db).await {
+                Ok(v) => v.is_some(),
                 Err(e) => return db_error(e),
             };
-            let uid = match existing {
-                Some(row) => row.get::<Uuid,_>("id"),
-                None => {
-                    let uid = Uuid::new_v4();
-                    if let Err(e) = sqlx::query(
-                        "INSERT INTO users(id,email,display_name,password_hash) VALUES($1,$2,$3,$4)"
-                    ).bind(uid).bind(&email).bind(&display_name).bind("OIDC_MANAGED_IDENTITY").execute(&s.db).await {
-                        return db_error(e);
-                    }
-                    uid
-                }
-            };
+            if email_exists {
+                return (StatusCode::CONFLICT, Json(json!({
+                    "ok":false,
+                    "error":"sso_identity_requires_link",
+                    "message":"An Agata account already uses this email. An organization administrator must link the Entra identity explicitly."
+                }))).into_response();
+            }
+            let uid = Uuid::new_v4();
             if let Err(e) = sqlx::query(
-                "INSERT INTO memberships(user_id,organization_id,role) VALUES($1,$2,'viewer')
-                 ON CONFLICT (user_id,organization_id) DO NOTHING"
+                "INSERT INTO users(id,email,display_name,password_hash) VALUES($1,$2,$3,$4)"
+            ).bind(uid).bind(&email).bind(&display_name).bind("OIDC_MANAGED_IDENTITY").execute(&s.db).await {
+                return db_error(e);
+            }
+            if let Err(e) = sqlx::query(
+                "INSERT INTO memberships(user_id,organization_id,role) VALUES($1,$2,'viewer')"
             ).bind(uid).bind(organization_id).execute(&s.db).await {
                 return db_error(e);
             }
