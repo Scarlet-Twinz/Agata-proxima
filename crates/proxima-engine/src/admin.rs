@@ -1,4 +1,10 @@
-use axum::{extract::State, http::header, response::{Html, IntoResponse}, routing::get, Json, Router};
+use axum::{
+    extract::State,
+    http::header,
+    response::{Html, IntoResponse},
+    routing::get,
+    Json, Router,
+};
 use serde::Serialize;
 use std::sync::Arc;
 use std::time::Instant;
