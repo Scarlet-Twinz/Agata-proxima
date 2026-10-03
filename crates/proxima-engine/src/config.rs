@@ -67,7 +67,8 @@ impl Config {
             .ok()
             .filter(|value| !value.is_empty());
 
-        if tenant_signing_key.is_some() && (upstream_user.is_none() || upstream_password.is_none()) {
+        if tenant_signing_key.is_some() && (upstream_user.is_none() || upstream_password.is_none())
+        {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "PROXIMA_UPSTREAM_USER and PROXIMA_UPSTREAM_PASSWORD are required when tenant enforcement is enabled",
