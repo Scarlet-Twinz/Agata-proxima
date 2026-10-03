@@ -1,1 +1,57 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agata Proxima — Command Center</title><link rel="stylesheet" href="styles.css"></head><body><div class="shell"><aside class="sidebar"><div class="brand"><div class="logo-slot">AP</div><div><b>AGATA</b><small>PROXIMA</small></div></div><nav><a class="active">Overview</a><a>Tenants</a><a>Connections</a><a>Policies</a><a>Security</a><a>Verification</a><a>Audit</a><a>Infrastructure</a><a>Settings</a></nav><div class="side-foot">PROXIMA ENGINE<br><small>SECURE DATA PLANE</small></div></aside><main><header><div><div class="eyebrow">AGATA PROXIMA</div><h1>Command Center</h1><p>The security boundary between your application and PostgreSQL.</p></div><div class="status"><i></i> SYSTEM OPERATIONAL</div></header><section class="hero-grid"><article class="hero"><span>SECURITY POSTURE</span><h2>Tenant isolation is the boundary.</h2><p>Proxima verifies tenant context, routes the session to the correct PostgreSQL role, and keeps database-side RLS in the enforcement chain.</p><div><button>Run verification</button><button class="ghost">View audit</button></div></article><article class="runtime"><span>RUNTIME</span><div><b>Engine</b><em>Healthy</em></div><div><b>PostgreSQL</b><em>Connected</em></div><div><b>TLS</b><em>Active</em></div><div><b>Tenant Enforcement</b><em>Active</em></div><div><b>RLS</b><em>Verified</em></div></article></section><section class="metrics"><article><span>ACTIVE TENANTS</span><strong>24</strong><small>0 isolation violations</small></article><article><span>CONNECTIONS</span><strong>137</strong><small>131 TLS sessions</small></article><article><span>REJECTED</span><strong>4</strong><small>boundary enforced</small></article><article><span>LAST VERIFY</span><strong>2m</strong><small>verification passed</small></article></section><section class="lower"><article class="panel"><div class="panel-head"><h3>Verification</h3><em>PASSED</em></div><p>Cross-tenant read <b>blocked</b></p><p>Cross-tenant write <b>blocked</b></p><p>Prepared statement escape <b>blocked</b></p><p>TLS downgrade <b>blocked</b></p></article><article class="panel"><div class="panel-head"><h3>Architecture</h3><em>LIVE MODEL</em></div><div class="flow"><span>APPLICATION</span><b>→</b><strong>PROXIMA</strong><b>→</b><span>POSTGRESQL</span></div><p>Two independent TLS boundaries. Signed tenant context. PostgreSQL RLS as the database-side enforcement layer.</p></article></section><footer><span>AGATA PROXIMA</span><span>ENGINE · VERIFY · CLOUD</span></footer></main></div><script src="app.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#07090d">
+<title>Agata Proxima — Command Center</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="shell">
+<aside class="sidebar">
+  <div class="brand">
+    <img class="brand-mark" src="assets/agata-proxima-mark.svg" alt="Agata Proxima">
+    <div><b>AGATA</b><small>PROXIMA</small></div>
+  </div>
+  <nav>
+    <a class="active" href="#overview">Overview</a><a href="#tenants">Tenants</a><a href="#connections">Connections</a>
+    <a href="#policies">Policies</a><a href="#security">Security</a><a href="#verification">Verification</a>
+    <a href="#audit">Audit</a><a href="#infrastructure">Infrastructure</a><a href="#settings">Settings</a>
+  </nav>
+  <div class="side-foot">PROXIMA ENGINE<br><small>SECURE DATA PLANE</small></div>
+</aside>
+<main id="overview">
+<header>
+  <div><div class="eyebrow">AGATA PROXIMA / COMMAND CENTER</div><h1>Security, at the boundary.</h1>
+  <p>One place to see the Proxima engine, PostgreSQL path and tenant-isolation posture.</p></div>
+  <div id="system-status" class="status"><i></i> CONNECTING</div>
+</header>
+<section class="hero-grid">
+<article class="hero">
+  <span>SECURITY POSTURE</span><h2>Tenant isolation belongs in infrastructure.</h2>
+  <p>Proxima binds verified tenant context before authentication completes, routes the session to its PostgreSQL role, and keeps RLS in the enforcement chain.</p>
+  <div><button id="verify">Run verification</button><a class="ghost" href="https://github.com/Scarlet-Twinz/Agata-proxima" target="_blank" rel="noreferrer">Open repository</a></div>
+</article>
+<article class="runtime"><span>RUNTIME</span>
+  <div><b>Engine</b><em id="engine">—</em></div><div><b>PostgreSQL</b><em id="postgres">—</em></div>
+  <div><b>Client TLS</b><em id="tls">—</em></div><div><b>Upstream TLS</b><em id="upstream-tls">—</em></div>
+  <div><b>Tenant Enforcement</b><em id="enforcement">—</em></div>
+</article>
+</section>
+<section class="metrics">
+<article><span>ACTIVE CONNECTIONS</span><strong id="active">—</strong><small id="accepted">waiting for telemetry</small></article>
+<article><span>TLS SESSIONS</span><strong id="tls-count">—</strong><small>client-side terminated sessions</small></article>
+<article><span>REJECTED</span><strong id="rejected">—</strong><small>connection-admission boundary</small></article>
+<article><span>AUTH FAILURES</span><strong id="auth-failures">—</strong><small>failed session boundaries</small></article>
+</section>
+<section class="lower">
+<article class="panel" id="verification"><div class="panel-head"><h3>Verification contract</h3><em>ENGINE RULES</em></div>
+<p>Cross-tenant read <b>blocked</b></p><p>Cross-tenant write <b>blocked</b></p><p>Prepared statement escape <b>blocked</b></p><p>TLS downgrade <b>blocked</b></p></article>
+<article class="panel" id="infrastructure"><div class="panel-head"><h3>Architecture</h3><em>LIVE MODEL</em></div>
+<div class="flow"><span>APPLICATION</span><b>→</b><strong>PROXIMA</strong><b>→</b><span>POSTGRESQL</span></div>
+<p>Client TLS terminates at Proxima when required. The upstream hop can independently require certificate-verified TLS. Tenant context is verified before the normal query stream begins.</p></article>
+</section>
+<footer><span>AGATA PROXIMA</span><span>ENGINE · VERIFY · CLOUD</span></footer>
+</main></div>
+<script src="app.js"></script>
+</body></html>
