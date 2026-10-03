@@ -96,7 +96,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/v1/auth/logout", post(logout))
         .route("/api/v1/auth/me", get(me))
         .route("/api/v1/tenants/{id}", get(tenant))
-        .layer(CorsLayer::new().allow_origin([\n            "http://127.0.0.1:9080".parse::<HeaderValue>().unwrap(),\n            "http://localhost:9080".parse::<HeaderValue>().unwrap(),\n        ]).allow_credentials(true).allow_methods(Any).allow_headers(Any))
+        .layer(CorsLayer::new().allow_origin([
+            "http://127.0.0.1:9080".parse::<HeaderValue>().unwrap(),
+            "http://localhost:9080".parse::<HeaderValue>().unwrap(),
+        ]).allow_credentials(true).allow_methods(Any).allow_headers(Any))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
     let addr: SocketAddr = env::var("PROXIMA_CONTROL_PLANE_LISTEN_ADDR").unwrap_or_else(|_| "127.0.0.1:9090".into()).parse()?;
