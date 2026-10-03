@@ -42,6 +42,17 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+      - name: Control plane build
+        run: cargo build --release -p proxima-control-plane
+
+      - name: Control plane smoke
+        run: |
+          ./target/release/proxima-control-plane > /tmp/proxima-control-plane.log 2>&1 &
+          CONTROL_PLANE_PID=$!
+          trap "kill $CONTROL_PLANE_PID || true" EXIT
+          for i in {1..20}; do curl -fsS http://127.0.0.1:9090/api/v1/health && break || sleep 1; done
+          bash tools/proxima-control-plane-smoke.sh
+
       - name: Verification harness syntax
         run: bash -n tools/proxima-verify.sh tools/proxima-verify-3tenant.sh
 
