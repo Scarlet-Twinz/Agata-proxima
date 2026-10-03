@@ -40,9 +40,16 @@ async fn main() -> io::Result<()> {
         let (client, peer) = listener.accept().await?;
         let upstream = config.upstream_addr.clone();
         let verifier = verifier.clone();
+        let tenant_role_prefix = config_tenant_role_prefix.clone();
 
         tokio::spawn(async move {
-            if let Err(err) = handle_connection(client, peer, &upstream, verifier.as_ref()).await {
+            if let Err(err) = handle_connection(
+                client,
+                peer,
+                &upstream,
+                verifier.as_ref(),
+                &tenant_role_prefix,
+            ).await {
                 error!(peer = %peer, error = %err, "connection failed");
             }
         });
@@ -54,6 +61,7 @@ async fn handle_connection(
     peer: std::net::SocketAddr,
     upstream_addr: &str,
     verifier: Option<&TenantTokenVerifier>,
+    tenant_role_prefix: &str,
 ) -> io::Result<()> {
     info!(peer = %peer, "client connected");
 
