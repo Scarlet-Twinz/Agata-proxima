@@ -59,18 +59,14 @@ impl Config {
             Err(_) => None,
         };
 
-        let upstream_user = env::var("PROXIMA_UPSTREAM_USER")
-            .ok()
-            .filter(|value| !value.trim().is_empty());
-        let upstream_password = env::var("PROXIMA_UPSTREAM_PASSWORD")
+        let tenant_role_password = env::var("PROXIMA_TENANT_ROLE_PASSWORD")
             .ok()
             .filter(|value| !value.is_empty());
 
-        if tenant_signing_key.is_some() && (upstream_user.is_none() || upstream_password.is_none())
-        {
+        if tenant_signing_key.is_some() && tenant_role_password.is_none() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "PROXIMA_UPSTREAM_USER and PROXIMA_UPSTREAM_PASSWORD are required when tenant enforcement is enabled",
+                "PROXIMA_TENANT_ROLE_PASSWORD is required when tenant enforcement is enabled",
             ));
         }
 
