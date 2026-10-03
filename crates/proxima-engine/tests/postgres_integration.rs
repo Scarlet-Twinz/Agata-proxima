@@ -155,7 +155,10 @@ async fn real_postgres_session_enforces_tenant_isolation() -> Result<(), Box<dyn
                 &[],
             )
             .await?;
-        assert_eq!(a_visible.get::<_, Option<String>>(0).as_deref(), Some("A-secret"));
+        assert_eq!(
+            a_visible.get::<_, Option<String>>(0).as_deref(),
+            Some("A-secret")
+        );
 
         let a_cross = tenant_a
             .query_one(
@@ -171,7 +174,10 @@ async fn real_postgres_session_enforces_tenant_isolation() -> Result<(), Box<dyn
                 &[],
             )
             .await?;
-        assert_eq!(b_visible.get::<_, Option<String>>(0).as_deref(), Some("B-secret"));
+        assert_eq!(
+            b_visible.get::<_, Option<String>>(0).as_deref(),
+            Some("B-secret")
+        );
 
         let b_cross = tenant_b
             .query_one(
@@ -195,7 +201,10 @@ async fn real_postgres_session_enforces_tenant_isolation() -> Result<(), Box<dyn
                 &[&"tenant_b", &"forbidden"],
             )
             .await;
-        assert!(insert.is_err(), "cross-tenant insert unexpectedly succeeded");
+        assert!(
+            insert.is_err(),
+            "cross-tenant insert unexpectedly succeeded"
+        );
 
         Ok::<(), Box<dyn Error>>(())
     }
