@@ -133,6 +133,9 @@ async fn main() -> Result<()> {
     sqlx::raw_sql(include_str!("../migrations/0003_entitlements.sql"))
         .execute(&db)
         .await?;
+    sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
+        .execute(&db)
+        .await?;
 
     let state = AppState {
         db,
