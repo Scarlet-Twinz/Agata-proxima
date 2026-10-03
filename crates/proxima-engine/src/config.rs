@@ -141,8 +141,7 @@ impl Config {
 
         let tls_handshake_timeout = duration_ms("PROXIMA_TLS_HANDSHAKE_TIMEOUT_MS", 10000)?;
         let upstream_tls_mode = UpstreamTlsMode::parse(
-            &env::var("PROXIMA_UPSTREAM_TLS_MODE")
-                .unwrap_or_else(|_| "disable".to_string()),
+            &env::var("PROXIMA_UPSTREAM_TLS_MODE").unwrap_or_else(|_| "disable".to_string()),
         )?;
         let upstream_tls_ca_file = non_empty_env("PROXIMA_UPSTREAM_TLS_CA_FILE");
         let upstream_tls_server_name = non_empty_env("PROXIMA_UPSTREAM_TLS_SERVER_NAME");
