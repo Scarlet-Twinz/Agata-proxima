@@ -12,6 +12,7 @@ set -euo pipefail
 : "${PROXIMA_VERIFY_TENANT_A_PASSWORD:=}"
 : "${PROXIMA_VERIFY_TENANT_B_PASSWORD:=}"
 : "${PROXIMA_VERIFY_SIGNING_KEY:=}"
+: "${PROXIMA_VERIFY_TLS:=0}"
 
 if [[ -z "$PROXIMA_VERIFY_TENANT_A_PASSWORD" || -z "$PROXIMA_VERIFY_TENANT_B_PASSWORD" || -z "$PROXIMA_VERIFY_SIGNING_KEY" ]]; then
   echo "Set tenant passwords and PROXIMA_VERIFY_SIGNING_KEY before running Proxima Verify." >&2
@@ -49,7 +50,7 @@ psql_proxima() {
   local password="$2"
   local token
   token="$(make_token "$tenant")"
-  PGHOST="$PROXIMA_VERIFY_HOST"   PGPORT="$PROXIMA_VERIFY_PORT"   PGUSER="$PROXIMA_VERIFY_USER"   PGDATABASE="$PROXIMA_VERIFY_DATABASE"   PGPASSWORD="$password"   PGOPTIONS="-c proxima_tenant_token=$token"     psql -v ON_ERROR_STOP=1 -Atqc "$3"
+  PGHOST="$PROXIMA_VERIFY_HOST"   PGPORT="$PROXIMA_VERIFY_PORT"   PGUSER="$PROXIMA_VERIFY_USER"   PGDATABASE="$PROXIMA_VERIFY_DATABASE"   PGPASSWORD="$password"   PGOPTIONS="-c proxima_tenant_token=$token" PGCHANNELBINDING="${PGCHANNELBINDING:-disable}" PGSSLMODE="${PROXIMA_VERIFY_TLS:+require}" psql -v ON_ERROR_STOP=1 -Atqc "$3"
 }
 
 assert_eq() {
@@ -80,5 +81,13 @@ assert_eq "UPDATE 0" "$a_update" "tenant A cannot update tenant B rows"
 
 b_delete="$(psql_proxima "$PROXIMA_VERIFY_TENANT_B" "$PROXIMA_VERIFY_TENANT_B_PASSWORD" "DELETE FROM $PROXIMA_VERIFY_TABLE WHERE $PROXIMA_VERIFY_TENANT_COLUMN = '$PROXIMA_VERIFY_TENANT_A';")"
 assert_eq "DELETE 0" "$b_delete" "tenant B cannot delete tenant A rows"
+
+if [[ "$PROXIMA_VERIFY_TLS" == "1" ]]; then
+  echo "PASS: client TLS verification path requested"
+  if [[ "${PGSSLMODE:-}" != "require" ]]; then
+    echo "FAIL: TLS verification requested but PGSSLMODE was not set" >&2
+    exit 1
+  fi
+fi
 
 echo "Proxima Verify: PASS"
