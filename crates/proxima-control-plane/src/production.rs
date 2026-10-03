@@ -142,14 +142,15 @@ pub(crate) async fn checkout(
     let customer_id = match existing_customer {
         Some(id) => id,
         None => {
+            let customer_params = vec![
+                ("email".to_string(), user.clone()),
+                ("description".to_string(), "Agata Proxima organization".to_string()),
+                ("metadata[organization_id]".to_string(), ctx.organization_id.to_string()),
+            ];
             let response = match client
                 .post("https://api.stripe.com/v1/customers")
                 .bearer_auth(&secret)
-                .form(&[
-                    ("email", user.as_str()),
-                    ("description", "Agata Proxima organization"),
-                    ("metadata[organization_id]", &ctx.organization_id.to_string()),
-                ])
+                .form(&customer_params)
                 .send()
                 .await
             {
@@ -188,20 +189,21 @@ pub(crate) async fn checkout(
         .trim_end_matches('/')
         .to_string();
 
+    let checkout_params = vec![
+        ("mode".to_string(), "subscription".to_string()),
+        ("customer".to_string(), customer_id.clone()),
+        ("line_items[0][price]".to_string(), price_id.clone()),
+        ("line_items[0][quantity]".to_string(), "1".to_string()),
+        ("success_url".to_string(), format!("{base_url}/app?billing=success")),
+        ("cancel_url".to_string(), format!("{base_url}/app?billing=cancelled")),
+        ("client_reference_id".to_string(), ctx.organization_id.to_string()),
+        ("metadata[organization_id]".to_string(), ctx.organization_id.to_string()),
+        ("subscription_data[metadata][organization_id]".to_string(), ctx.organization_id.to_string()),
+    ];
     let response = match client
         .post("https://api.stripe.com/v1/checkout/sessions")
         .bearer_auth(&secret)
-        .form(&[
-            ("mode", "subscription"),
-            ("customer", customer_id.as_str()),
-            ("line_items[0][price]", price_id.as_str()),
-            ("line_items[0][quantity]", "1"),
-            ("success_url", &format!("{base_url}/app?billing=success")),
-            ("cancel_url", &format!("{base_url}/app?billing=cancelled")),
-            ("client_reference_id", &ctx.organization_id.to_string()),
-            ("metadata[organization_id]", &ctx.organization_id.to_string()),
-            ("subscription_data[metadata][organization_id]", &ctx.organization_id.to_string()),
-        ])
+        .form(&checkout_params)
         .send()
         .await
     {
@@ -270,13 +272,14 @@ pub(crate) async fn portal(State(s): State<AppState>, headers: HeaderMap) -> Res
         .trim_end_matches('/')
         .to_string();
 
+    let portal_params = vec![
+        ("customer".to_string(), customer_id.clone()),
+        ("return_url".to_string(), format!("{base_url}/app?billing=portal")),
+    ];
     let response = match Client::new()
         .post("https://api.stripe.com/v1/billing_portal/sessions")
         .bearer_auth(&secret)
-        .form(&[
-            ("customer", customer_id.as_str()),
-            ("return_url", &format!("{base_url}/app?billing=portal")),
-        ])
+        .form(&portal_params)
         .send()
         .await
     {
