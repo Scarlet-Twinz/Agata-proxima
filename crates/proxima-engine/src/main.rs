@@ -18,6 +18,8 @@ async fn main() -> io::Result<()> {
         .init();
 
     let config = Config::from_env()?;
+    let config_tenant_role_prefix = config.tenant_role_prefix.clone();
+
     let verifier = config
         .tenant_signing_key
         .as_deref()
