@@ -33,7 +33,7 @@ A supported tenant-isolation deployment requires:
 
 Proxima does not currently claim:
 
-- transparent policy enforcement inside opaque end-to-end PostgreSQL TLS;
+- transparent policy enforcement inside opaque end-to-end PostgreSQL TLS without TLS termination;
 - protection against a database superuser;
 - protection when an attacker can bypass Proxima and connect directly with privileged database credentials;
 - automatic conversion of arbitrary application schemas into correct tenant policies;
@@ -43,6 +43,6 @@ Those are separate engineering and product boundaries.
 
 ## Roadmap after this boundary
 
-The next production work is TLS termination/upstream TLS trust, stronger connection/session lifecycle handling, richer verification coverage, observability, deployment hardening, and a real external SaaS integration.
+The current repository has the TLS termination/upstream trust boundary, lifecycle model, adversarial verification, deployment hardening, and first operator dashboard. Remaining acceptance gates are a real external SaaS deployment and the hosted Proxima Cloud control plane.
 
 The public release should describe the supported security model precisely rather than implying broader guarantees.
