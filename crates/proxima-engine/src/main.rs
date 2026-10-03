@@ -105,18 +105,20 @@ async fn handle_connection(
         }
     };
     let upstream: BoxedIo = if let Some(connector) = upstream_connector {
-        let name = config
-            .upstream_tls_server_name
-            .clone()
-            .unwrap()
-            .try_into()
-            .map_err(|_| {
-                io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    "invalid upstream TLS server name",
-                )
-            })?;
-        connect_postgres_tls(upstream_tcp, connector, name, config.tls_handshake_timeout).await?
+        let name = match config.upstream_tls_server_name.clone().unwrap().try_into() {
+            Ok(name) => name,
+            Err(_) => {
+                telemetry.upstream_failure();
+                return Err(io::Error::new(io::ErrorKind::InvalidInput, "invalid upstream TLS server name"));
+            }
+        };
+        match connect_postgres_tls(upstream_tcp, connector, name, config.tls_handshake_timeout).await {
+            Ok(stream) => stream,
+            Err(err) => {
+                telemetry.upstream_failure();
+                return Err(err);
+            }
+        }
     } else {
         boxed(upstream_tcp)
     };
