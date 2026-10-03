@@ -118,3 +118,6 @@ The next integration step is to bind a verified context to the PostgreSQL sessio
 database itself enforces. The implementation will prefer PostgreSQL-native authorization/RLS
 mechanisms over SQL text rewriting. Connection reuse, prepared statements, transaction boundaries,
 role changes, and administrative paths must remain covered by adversarial tests.
+
+
+CI verification marker: formatting resolved.
