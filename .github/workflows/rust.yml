@@ -52,6 +52,17 @@ jobs:
           PGDATABASE: proxima_dev
         run: bash tests/postgres/verify_rls.sh
 
+      - name: Require SCRAM for Proxima upstream connections
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: proxima
+          PGPASSWORD: proxima-dev-only
+          PGDATABASE: proxima_dev
+        run: |
+          psql -v ON_ERROR_STOP=1 -c "COPY (VALUES ('local all all trust'), ('host all all 0.0.0.0/0 scram-sha-256'), ('host all all ::0/0 scram-sha-256')) TO '/var/lib/postgresql/data/pg_hba.conf'"
+          psql -v ON_ERROR_STOP=1 -c "SELECT pg_reload_conf()"
+
       - name: Proxima end-to-end PostgreSQL verification
         env:
           PROXIMA_LISTEN_ADDR: 127.0.0.1:6432
