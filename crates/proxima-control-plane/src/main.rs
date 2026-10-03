@@ -452,8 +452,7 @@ async fn signup(State(state): State<AppState>, Json(input): Json<Credentials>) -
         )
             .into_response();
     }
-    let salt = SaltString::generate(&mut argon2::password_hash::rand_core::OsRng);
-    let hash = match Argon2::default().hash_password(input.password.as_bytes(), &salt) {
+    let hash = match Argon2::default().hash_password(input.password.as_bytes()) {
         Ok(h) => h.to_string(),
         Err(_) => {
             return (
