@@ -2,7 +2,7 @@
 
 Agata Proxima is security infrastructure for multi-tenant applications.
 
-Proxima is being built around a simple principle:
+The core idea is simple:
 
 > Tenant isolation should be an infrastructure boundary that can be enforced, tested, and audited — not a security assumption repeated throughout application code.
 
@@ -10,48 +10,72 @@ Proxima is being built around a simple principle:
 
 ```
 Application
-    |
-    v
-+----------------------+
-|    Proxima Engine    |
-|                      |
-| connection lifecycle |
-| identity/context     |
-| policy enforcement   |
-| verification        |
-| audit                |
-+----------+-----------+
-           |
-           v
-      PostgreSQL
+     |
+     | TLS (optional, required for verified upstream TLS)
+     v
++-------------------------+
+|     Proxima Engine      |
+|                         |
+| tenant identity         |
+| PostgreSQL auth boundary|
+| connection lifecycle    |
+| TLS termination         |
+| verification            |
+| operational telemetry   |
++------------+------------+
+             |
+             | TLS (verify-full) or plaintext
+             v
+        PostgreSQL
 ```
 
 The first implementation targets PostgreSQL and is written in Rust with Tokio.
 
-## Product direction
+## Product surface
 
-- **Proxima Engine** — the self-hosted data-plane component.
-- **Proxima Verify** — isolation verification and adversarial security testing.
-- **Proxima Cloud** — the hosted control plane for policies, deployments, audit, monitoring, and fleet management.
+- **Proxima Engine** — self-hosted data plane.
+- **Proxima Verify** — adversarial tenant-isolation verification.
+- **Proxima Dashboard** — local operational view at the admin address.
+- **Proxima Cloud** — future hosted control plane for policy, fleet, audit and verification history.
 
-Security guarantees will be documented against an explicit threat model. Proxima will not claim protection that it cannot demonstrate with tests.
+## What is implemented
 
-## Status
+- signed tenant-context verification;
+- tenant-specific PostgreSQL role routing;
+- PostgreSQL authentication brokering;
+- bounded PostgreSQL protocol framing;
+- one upstream PostgreSQL session per client connection;
+- connection limits and upstream connect timeouts;
+- client-side PostgreSQL TLS termination with rustls;
+- upstream PostgreSQL TLS with CA and hostname verification;
+- TLS handshake timeouts;
+- explicit rejection of unsafe mixed plaintext/TLS topology;
+- structured runtime counters exposed to the dashboard;
+- independent RLS verification;
+- real proxy-to-PostgreSQL integration tests;
+- malformed-frame property tests;
+- adversarial verification scripts;
+- non-root, read-only Docker runtime defaults.
 
-Early infrastructure development.
+## TLS security boundary
 
-The current engine establishes a verified tenant context, maps it to a PostgreSQL role, brokers the PostgreSQL authentication/startup exchange, and then enters the normal query stream only after PostgreSQL reports a ready session.
+When `PROXIMA_TLS_MODE=required`, clients must begin with PostgreSQL's SSLRequest. Proxima returns `S`, terminates TLS, and only then parses the PostgreSQL startup packet. The upstream TLS mode `verify-full` independently verifies PostgreSQL's certificate and hostname.
 
-The repository includes a real PostgreSQL integration test, independent RLS verification, malformed-frame property tests, connection safety limits, and an adversarial `Proxima Verify` harness. End-to-end TLS is fail-closed while enforcement is enabled until a dedicated TLS termination and upstream-trust model is implemented.
+There is an important authentication limitation: Proxima currently brokers PostgreSQL SCRAM messages rather than owning the password exchange. SCRAM-SHA-256-PLUS binds authentication to the TLS certificate seen by the client. Because Proxima terminates client TLS and creates a separate upstream TLS session, it cannot transparently forward channel-bound SCRAM. Therefore the current TLS-terminating deployment must use `channel_binding=disable`/equivalent client configuration until Proxima owns the authentication exchange. It does not silently downgrade a client that explicitly requires channel binding.
 
-## License
+PostgreSQL RLS remains the database-side authorization mechanism. Superusers, BYPASSRLS roles, privileged table owners, and direct database bypass paths remain outside Proxima's tenant-isolation guarantee.
 
-MIT
+## Dashboard
 
+Run Proxima and open:
 
-## Verification
+```
+http://127.0.0.1:9080/
+```
 
-The primary verification gates are:
+The dashboard is intentionally operational rather than decorative. It reports engine health, tenant enforcement, client TLS, upstream TLS, active connections, rejected connections, TLS session count and uptime. No tenant tokens or secrets are rendered.
+
+## Verification gates
 
 ```text
 cargo fmt --all -- --check
@@ -61,10 +85,26 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 bash tests/postgres/verify_rls.sh
 ```
 
-For a configured deployment, run:
+For a configured deployment:
 
 ```bash
 bash tools/proxima-verify.sh
 ```
 
-See [docs/verification.md](docs/verification.md) for the security verification model and deployment invariants.
+For the adversarial scenario matrix:
+
+```bash
+bash tools/proxima-verify-scenarios.sh
+```
+
+See:
+
+- [docs/architecture.md](docs/architecture.md)
+- [docs/threat-model.md](docs/threat-model.md)
+- [docs/verification.md](docs/verification.md)
+- [docs/release-readiness.md](docs/release-readiness.md)
+- [docs/phase18-24.md](docs/phase18-24.md)
+
+## License
+
+MIT
