@@ -110,7 +110,7 @@ fn prepare_startup(
 
 fn extract_tenant_token_from_options(value: &str) -> io::Result<(String, Option<String>)> {
     let mut tokens = value.split_whitespace();
-    let mut output = Vec::new();
+    let mut output: Vec<String> = Vec::new();
     let mut tenant_token = None;
     while let Some(token) = tokens.next() {
         if token == "-c" {
@@ -132,8 +132,8 @@ fn extract_tenant_token_from_options(value: &str) -> io::Result<(String, Option<
                 }
                 continue;
             }
-            output.push("-c".into());
-            output.push(assignment.into());
+            output.push("-c".to_owned());
+            output.push(assignment.to_owned());
         } else if let Some(v) = token.strip_prefix("proxima_tenant_token=") {
             if v.is_empty() {
                 return Err(io::Error::new(
@@ -149,7 +149,7 @@ fn extract_tenant_token_from_options(value: &str) -> io::Result<(String, Option<
             }
             continue;
         } else {
-            output.push(token.into());
+            output.push(token.to_owned());
         }
     }
     Ok((output.join(" "), tenant_token))
