@@ -39,7 +39,7 @@ impl fmt::Display for FrameError {
             Self::InvalidLength(length) => write!(f, "invalid PostgreSQL frame length: {length}"),
             Self::FrameTooLarge(length) => {
                 write!(f, "PostgreSQL frame exceeds maximum length: {length}")
-            },
+            }
         }
     }
 }
@@ -68,22 +68,20 @@ pub fn parse_startup_packet(input: &[u8]) -> Result<Option<(StartupPacket, usize
 
     let packet = match code {
         SSL_REQUEST_CODE if length == 8 => StartupPacket::SslRequest,
-        CANCEL_REQUEST_CODE if length == 16 => {
-            StartupPacket::CancelRequest {
-                process_id: body.get_i32(),
-                secret_key: body.get_i32(),
-            }
-        }
+        CANCEL_REQUEST_CODE if length == 16 => StartupPacket::CancelRequest {
+            process_id: body.get_i32(),
+            secret_key: body.get_i32(),
+        },
         PROTOCOL_3_0 => {
             let mut parameters = Vec::new();
             while body.has_remaining() {
-                let key = read_cstring(&mut body)
-                    .ok_or(FrameError::InvalidLength(length as i32))?;
+                let key =
+                    read_cstring(&mut body).ok_or(FrameError::InvalidLength(length as i32))?;
                 if key.is_empty() {
                     break;
                 }
-                let value = read_cstring(&mut body)
-                    .ok_or(FrameError::InvalidLength(length as i32))?;
+                let value =
+                    read_cstring(&mut body).ok_or(FrameError::InvalidLength(length as i32))?;
                 parameters.push((key, value));
             }
             StartupPacket::Startup {
@@ -91,12 +89,10 @@ pub fn parse_startup_packet(input: &[u8]) -> Result<Option<(StartupPacket, usize
                 parameters,
             }
         }
-        _ => {
-            StartupPacket::Unknown {
-                code,
-                payload: Bytes::copy_from_slice(body),
-            }
-        }
+        _ => StartupPacket::Unknown {
+            code,
+            payload: Bytes::copy_from_slice(body),
+        },
     };
 
     Ok(Some((packet, length)))
