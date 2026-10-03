@@ -232,8 +232,10 @@ fn duration_ms(name: &str, default: u64) -> io::Result<Duration> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
+    #[serial]
     fn defaults_are_valid() {
         for name in [
             "PROXIMA_LISTEN_ADDR",
@@ -269,6 +271,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn tls_cert_and_key_are_a_pair() {
         std::env::set_var("PROXIMA_TLS_CERT_FILE", "/tmp/cert.pem");
         std::env::remove_var("PROXIMA_TLS_KEY_FILE");
@@ -278,6 +281,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn upstream_verify_full_requires_server_name() {
         std::env::set_var("PROXIMA_UPSTREAM_TLS_MODE", "verify-full");
         std::env::set_var("PROXIMA_UPSTREAM_TLS_CA_FILE", "/tmp/ca.pem");
