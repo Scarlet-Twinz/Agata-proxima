@@ -88,7 +88,9 @@ pub async fn connect_upstream_tls(
         .await?;
 
     let mut response = [0u8; 1];
-    stream.read_exact(&mut response).await?;
+    tokio::time::timeout(timeout_duration, stream.read_exact(&mut response))
+        .await
+        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "upstream TLS negotiation timed out"))??;
     if response[0] != b'S' {
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
