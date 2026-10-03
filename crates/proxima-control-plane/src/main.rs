@@ -133,6 +133,9 @@ async fn main() -> Result<()> {
     sqlx::raw_sql(include_str!("../migrations/0003_entitlements.sql"))
         .execute(&db)
         .await?;
+    sqlx::raw_sql(include_str!("../migrations/0004_oidc.sql"))
+        .execute(&db)
+        .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
@@ -193,6 +196,9 @@ async fn main() -> Result<()> {
         .route("/api/v1/billing/checkout", post(production::checkout))
         .route("/api/v1/billing/portal", post(production::portal))
         .route("/api/v1/webhooks/stripe", post(production::stripe_webhook))
+        .route("/api/v1/organization/oidc/entra", post(production::configure_entra))
+        .route("/api/v1/auth/oidc/start", get(production::entra_start))
+        .route("/api/v1/auth/oidc/callback", get(production::entra_callback))
         .route("/api/v1/organization/invitations", post(production::invite))
         .route("/api/v1/production/readiness", get(production::readiness))
         .with_state(state)
