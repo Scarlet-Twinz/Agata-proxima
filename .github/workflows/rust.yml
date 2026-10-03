@@ -62,6 +62,7 @@ jobs:
         run: |
           psql -v ON_ERROR_STOP=1 -c "COPY (VALUES ('local all all trust'), ('host all all 0.0.0.0/0 scram-sha-256'), ('host all all ::0/0 scram-sha-256')) TO '/var/lib/postgresql/data/pg_hba.conf'"
           psql -v ON_ERROR_STOP=1 -c "SELECT pg_reload_conf()"
+          psql -Atqc "SELECT type || '|' || database || '|' || user_name || '|' || COALESCE(address, '') || '|' || auth_method FROM pg_hba_file_rules"
 
       - name: Proxima end-to-end PostgreSQL verification
         env:
