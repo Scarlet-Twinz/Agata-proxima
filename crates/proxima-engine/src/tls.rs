@@ -4,6 +4,7 @@ use rustls::{ClientConfig, RootCertStore, ServerConfig};
 use std::fs::File;
 use std::io::{self, BufReader};
 use std::sync::Arc;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio_rustls::{TlsAcceptor, TlsConnector, TlsStream};
 
@@ -65,6 +66,13 @@ pub async fn connect_upstream_tls(
     server_name: &str,
     timeout_duration: std::time::Duration,
 ) -> io::Result<TlsStream<TcpStream>> {
+    stream.write_all(&8i32.to_be_bytes()).await?;
+    stream.write_all(&crate::protocol::SSL_REQUEST_CODE.to_be_bytes()).await?;
+    let mut response = [0u8; 1];
+    stream.read_exact(&mut response).await?;
+    if response[0] != b'S' {
+        return Err(io::Error::new(io::ErrorKind::PermissionDenied, "PostgreSQL upstream rejected TLS"));
+    }
     let name = ServerName::try_from(server_name.to_owned())
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "invalid upstream TLS server name"))?;
     tokio::time::timeout(timeout_duration, connector.connect(name, stream))
