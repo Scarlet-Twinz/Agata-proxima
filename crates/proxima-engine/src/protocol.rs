@@ -338,7 +338,6 @@ mod tests {
     }
 }
 
-
 proptest! {
     #[test]
     fn random_bytes_never_panic_startup_or_frontend(input in proptest::collection::vec(any::<u8>(), 0..1024)) {
