@@ -263,9 +263,9 @@ mod tests {
         assert_eq!(config.upstream_connect_timeout, Duration::from_secs(10));
         assert_eq!(config.max_connections, 1024);
         assert_eq!(config.tls_cert_file, None);
-        assert_eq!(config.require_client_tls, false);
+        assert!(!config.require_client_tls);
         assert_eq!(config.upstream_tls_mode, UpstreamTlsMode::Disable);
-        assert_eq!(config.dashboard_enabled, true);
+        assert!(config.dashboard_enabled);
     }
 
     #[test]
