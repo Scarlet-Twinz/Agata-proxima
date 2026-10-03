@@ -274,7 +274,7 @@ async fn health() -> impl IntoResponse {
 
 async fn overview(State(state): State<AppState>, headers: HeaderMap) -> Response {
     if let Err(r) = authorize(&state, &headers).await {
-        return r;
+        return r.into_response();
     }
     let s = state.store.read().await;
     Json(serde_json::json!({
@@ -632,8 +632,7 @@ async fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), (StatusC
         Json(Message {
             message: "authentication required".into(),
         }),
-    )
-        .into_response())
+    ))
 }
 
 async fn session_user(state: &AppState, headers: &HeaderMap) -> Option<User> {
