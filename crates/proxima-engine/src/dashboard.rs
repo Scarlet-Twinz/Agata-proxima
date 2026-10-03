@@ -43,14 +43,48 @@ async fn handle(stream: &mut tokio::net::TcpStream) -> io::Result<()> {
         "/" => respond(stream, "200 OK", "text/html; charset=utf-8", INDEX).await,
         "/logo.svg" => respond(stream, "200 OK", "image/svg+xml", LOGO).await,
         "/platform/logo.svg" => respond(stream, "200 OK", "image/svg+xml", PLATFORM_LOGO).await,
-        "/platform/styles.css" => respond(stream, "200 OK", "text/css; charset=utf-8", PLATFORM_CSS).await,
-        "/platform/app.js" => respond(stream, "200 OK", "application/javascript; charset=utf-8", PLATFORM_JS).await,
+        "/platform/styles.css" => {
+            respond(stream, "200 OK", "text/css; charset=utf-8", PLATFORM_CSS).await
+        }
+        "/platform/app.js" => {
+            respond(
+                stream,
+                "200 OK",
+                "application/javascript; charset=utf-8",
+                PLATFORM_JS,
+            )
+            .await
+        }
         "/home" => respond(stream, "200 OK", "text/html; charset=utf-8", PLATFORM_HOME).await,
         "/login" => respond(stream, "200 OK", "text/html; charset=utf-8", PLATFORM_LOGIN).await,
-        "/signup" => respond(stream, "200 OK", "text/html; charset=utf-8", PLATFORM_SIGNUP).await,
+        "/signup" => {
+            respond(
+                stream,
+                "200 OK",
+                "text/html; charset=utf-8",
+                PLATFORM_SIGNUP,
+            )
+            .await
+        }
         "/docs" => respond(stream, "200 OK", "text/html; charset=utf-8", PLATFORM_DOCS).await,
-        "/pricing" => respond(stream, "200 OK", "text/html; charset=utf-8", PLATFORM_PRICING).await,
-        "/support" => respond(stream, "200 OK", "text/html; charset=utf-8", PLATFORM_SUPPORT).await,
+        "/pricing" => {
+            respond(
+                stream,
+                "200 OK",
+                "text/html; charset=utf-8",
+                PLATFORM_PRICING,
+            )
+            .await
+        }
+        "/support" => {
+            respond(
+                stream,
+                "200 OK",
+                "text/html; charset=utf-8",
+                PLATFORM_SUPPORT,
+            )
+            .await
+        }
         "/app" => respond(stream, "200 OK", "text/html; charset=utf-8", PLATFORM_APP).await,
         "/health" => respond(stream, "200 OK", "text/plain; charset=utf-8", "ok\n").await,
         "/api/status" => {
