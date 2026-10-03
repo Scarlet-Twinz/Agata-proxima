@@ -19,8 +19,7 @@ use tracing::{error, info};
 async fn main() -> io::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
-            std::env::var("RUST_LOG")
-                .unwrap_or_else(|_| "proxima_engine=info".to_string()),
+            std::env::var("RUST_LOG").unwrap_or_else(|_| "proxima_engine=info".to_string()),
         )
         .init();
 
@@ -166,9 +165,7 @@ async fn handle_connection(
 
     let upstream_tcp = timeout(upstream_connect_timeout, TcpStream::connect(upstream_addr))
         .await
-        .map_err(|_| {
-            io::Error::new(io::ErrorKind::TimedOut, "upstream connection timed out")
-        })??;
+        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "upstream connection timed out"))??;
 
     let upstream: BoxedPgStream = if upstream_tls_mode != UpstreamTlsMode::Disable {
         let connector = upstream_connector.ok_or_else(|| {
@@ -183,9 +180,8 @@ async fn handle_connection(
                 "upstream TLS server name is required",
             )
         })?;
-        let tls =
-            connect_upstream_tls(connector, upstream_tcp, server_name, upstream_tls_timeout)
-                .await?;
+        let tls = connect_upstream_tls(connector, upstream_tcp, server_name, upstream_tls_timeout)
+            .await?;
         Box::new(tls)
     } else {
         Box::new(upstream_tcp)
@@ -206,8 +202,7 @@ async fn handle_connection(
         "PostgreSQL session established"
     );
 
-    let (client_bytes, upstream_bytes) =
-        copy_bidirectional(&mut client, &mut upstream).await?;
+    let (client_bytes, upstream_bytes) = copy_bidirectional(&mut client, &mut upstream).await?;
 
     info!(
         peer = %peer,
