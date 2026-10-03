@@ -6,14 +6,23 @@ on:
   pull_request:
 
 jobs:
-  check:
+  quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: dtolnay/rust-toolchain@stable
-      - name: Check
-        run: cargo check --workspace
-      - name: Test
-        run: cargo test --workspace
+        with:
+          components: rustfmt, clippy
+
       - name: Format
         run: cargo fmt --all -- --check
+
+      - name: Check
+        run: cargo check --workspace --all-targets
+
+      - name: Test
+        run: cargo test --workspace --all-targets
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
