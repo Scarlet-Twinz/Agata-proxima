@@ -32,11 +32,19 @@ async fn handle(stream: &mut tokio::net::TcpStream) -> io::Result<()> {
     match path {
         "/" => respond(stream, "200 OK", "text/html; charset=utf-8", INDEX).await,
         "/logo.svg" => respond(stream, "200 OK", "image/svg+xml", LOGO).await,
-        "/health" => respond(stream, "200 OK", "text/plain; charset=utf-8", "ok\n").await,
+        "/health" => {
+            respond(
+                stream,
+                "200 OK",
+                "text/plain; charset=utf-8",
+                "ok\n",
+            )
+            .await
+        }
         "/api/status" => {
             let config = Config::from_env()?;
             let body = format!(
-                "{{"tenant_enforcement":{},"client_tls":{},"upstream_tls":{},"listen_addr":"{}","upstream_addr":"{}","max_connections":{}}}",
+                "{{\"tenant_enforcement\":{},\"client_tls\":{},\"upstream_tls\":{},\"listen_addr\":\"{}\",\"upstream_addr\":\"{}\",\"max_connections\":{}}}",
                 config.tenant_signing_key.is_some(),
                 config.tls_cert_file.is_some(),
                 config.upstream_tls_mode != crate::config::UpstreamTlsMode::Disable,
@@ -46,11 +54,24 @@ async fn handle(stream: &mut tokio::net::TcpStream) -> io::Result<()> {
             );
             respond(stream, "200 OK", "application/json; charset=utf-8", &body).await
         }
-        _ => respond(stream, "404 Not Found", "text/plain; charset=utf-8", "not found\n").await,
+        _ => {
+            respond(
+                stream,
+                "404 Not Found",
+                "text/plain; charset=utf-8",
+                "not found\n",
+            )
+            .await
+        }
     }
 }
 
-async fn respond(stream: &mut tokio::net::TcpStream, status: &str, content_type: &str, body: &str) -> io::Result<()> {
+async fn respond(
+    stream: &mut tokio::net::TcpStream,
+    status: &str,
+    content_type: &str,
+    body: &str,
+) -> io::Result<()> {
     let header = format!(
         "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n",
         body.as_bytes().len()
