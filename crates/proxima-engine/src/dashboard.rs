@@ -61,5 +61,5 @@ async fn respond(stream: &mut tokio::net::TcpStream, status: &str, content_type:
 }
 
 fn escape_json(value: &str) -> String {
-    value.replace('\\', "\\\\").replace('"', "\\"")
+    value.replace('\\', "\\\\").replace('"', "\\\"")
 }
