@@ -1,5 +1,7 @@
 # Agata Proxima — Phases 25–40
 
+Release train: platform foundation / verification gate
+
 This release moves Proxima from a hardened engine plus operator dashboard into a product-shaped management and deployment platform.
 
 ## Non-negotiable invariant
