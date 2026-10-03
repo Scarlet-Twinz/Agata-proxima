@@ -15,6 +15,8 @@ async fn main() -> io::Result<()> {
 
     let config = Config::from_env()?;
     let config_tenant_role_prefix = config.tenant_role_prefix.clone();
+    let upstream_user = config.upstream_user.clone();
+    let upstream_password = config.upstream_password.clone();
 
     let verifier = config
         .tenant_signing_key
@@ -37,6 +39,8 @@ async fn main() -> io::Result<()> {
         let upstream = config.upstream_addr.clone();
         let verifier = verifier.clone();
         let tenant_role_prefix = config_tenant_role_prefix.clone();
+        let upstream_user = upstream_user.clone();
+        let upstream_password = upstream_password.clone();
 
         tokio::spawn(async move {
             if let Err(err) = handle_connection(
@@ -45,6 +49,8 @@ async fn main() -> io::Result<()> {
                 &upstream,
                 verifier.as_ref(),
                 &tenant_role_prefix,
+                upstream_user.as_deref(),
+                upstream_password.as_deref(),
             )
             .await
             {
@@ -60,12 +66,21 @@ async fn handle_connection(
     upstream_addr: &str,
     verifier: Option<&TenantTokenVerifier>,
     tenant_role_prefix: &str,
+    upstream_user: Option<&str>,
+    upstream_password: Option<&str>,
 ) -> io::Result<()> {
     info!(peer = %peer, "client connected");
 
     let upstream = TcpStream::connect(upstream_addr).await?;
-    let (mut client, mut upstream, session) =
-        establish(client, upstream, verifier, tenant_role_prefix).await?;
+    let (mut client, mut upstream, session) = establish(
+        client,
+        upstream,
+        verifier,
+        tenant_role_prefix,
+        upstream_user,
+        upstream_password,
+    )
+    .await?;
 
     info!(
         peer = %peer,
