@@ -7,6 +7,7 @@ pub struct Config {
     pub listen_addr: SocketAddr,
     pub upstream_addr: String,
     pub tenant_signing_key: Option<String>,
+    pub tenant_role_prefix: String,
 }
 
 impl Config {
@@ -26,6 +27,20 @@ impl Config {
             ));
         }
 
+        let tenant_role_prefix = env::var("PROXIMA_TENANT_ROLE_PREFIX")
+            .unwrap_or_else(|_| "proxima_tenant_".to_string());
+
+        if tenant_role_prefix.is_empty()
+            || !tenant_role_prefix
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "PROXIMA_TENANT_ROLE_PREFIX must contain only ASCII letters, digits, and underscores",
+            ));
+        }
+
         let tenant_signing_key = match env::var("PROXIMA_TENANT_SIGNING_KEY") {
             Ok(value) if value.trim().is_empty() => None,
             Ok(value) if value.as_bytes().len() < 32 => {
@@ -42,6 +57,7 @@ impl Config {
             listen_addr,
             upstream_addr,
             tenant_signing_key,
+            tenant_role_prefix,
         })
     }
 }
@@ -60,5 +76,6 @@ mod tests {
         assert_eq!(config.listen_addr, "127.0.0.1:6432".parse().unwrap());
         assert_eq!(config.upstream_addr, "127.0.0.1:5432");
         assert_eq!(config.tenant_signing_key, None);
+        assert_eq!(config.tenant_role_prefix, "proxima_tenant_");
     }
 }
