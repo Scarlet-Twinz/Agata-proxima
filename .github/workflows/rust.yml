@@ -42,6 +42,9 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+      - name: Verification harness syntax
+        run: bash -n tools/proxima-verify.sh tools/proxima-verify-3tenant.sh
+
       - name: PostgreSQL RLS verification
         env:
           PGHOST: localhost
