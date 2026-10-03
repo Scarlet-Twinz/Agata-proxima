@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS organization_oidc_connections (
     issuer TEXT NOT NULL,
     client_id TEXT NOT NULL,
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    jit_provisioning BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
