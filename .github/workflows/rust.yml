@@ -2,7 +2,7 @@ name: Rust
 
 on:
   push:
-    branches: ["main", "phase18-24-final"]
+    branches: ["main"]
   pull_request:
 
 jobs:
