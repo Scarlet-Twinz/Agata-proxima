@@ -12,11 +12,15 @@ pub enum ClientTlsMode {
 
 impl FromStr for ClientTlsMode {
     type Err = io::Error;
+
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {
             "disabled" => Ok(Self::Disabled),
             "required" => Ok(Self::Required),
-            _ => Err(io::Error::new(io::ErrorKind::InvalidInput, "PROXIMA_TLS_MODE must be disabled or required")),
+            _ => Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "PROXIMA_TLS_MODE must be disabled or required",
+            )),
         }
     }
 }
@@ -29,11 +33,15 @@ pub enum UpstreamTlsMode {
 
 impl FromStr for UpstreamTlsMode {
     type Err = io::Error;
+
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {
             "disabled" => Ok(Self::Disabled),
             "verify-full" => Ok(Self::VerifyFull),
-            _ => Err(io::Error::new(io::ErrorKind::InvalidInput, "PROXIMA_UPSTREAM_TLS_MODE must be disabled or verify-full")),
+            _ => Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "PROXIMA_UPSTREAM_TLS_MODE must be disabled or verify-full",
+            )),
         }
     }
 }
@@ -69,29 +77,39 @@ impl Config {
         let tenant_role_prefix = env::var("PROXIMA_TENANT_ROLE_PREFIX")
             .unwrap_or_else(|_| "proxima_tenant_".to_string());
         if tenant_role_prefix.is_empty()
-            || !tenant_role_prefix.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+            || !tenant_role_prefix
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
         {
-            return Err(invalid("PROXIMA_TENANT_ROLE_PREFIX must contain only ASCII letters, digits, and underscores"));
+            return Err(invalid(
+                "PROXIMA_TENANT_ROLE_PREFIX must contain only ASCII letters, digits, and underscores",
+            ));
         }
 
         let tenant_signing_key = match env::var("PROXIMA_TENANT_SIGNING_KEY") {
             Ok(value) if value.trim().is_empty() => None,
             Ok(value) if value.len() < 32 => {
-                return Err(invalid("PROXIMA_TENANT_SIGNING_KEY must be at least 32 bytes"));
+                return Err(invalid(
+                    "PROXIMA_TENANT_SIGNING_KEY must be at least 32 bytes",
+                ));
             }
             Ok(value) => Some(value),
             Err(_) => None,
         };
 
-        let upstream_connect_timeout = duration_ms("PROXIMA_UPSTREAM_CONNECT_TIMEOUT_MS", 10_000)?;
-        let tls_handshake_timeout = duration_ms("PROXIMA_TLS_HANDSHAKE_TIMEOUT_MS", 10_000)?;
+        let upstream_connect_timeout =
+            duration_ms("PROXIMA_UPSTREAM_CONNECT_TIMEOUT_MS", 10_000)?;
+        let tls_handshake_timeout =
+            duration_ms("PROXIMA_TLS_HANDSHAKE_TIMEOUT_MS", 10_000)?;
 
         let max_connections = env::var("PROXIMA_MAX_CONNECTIONS")
             .unwrap_or_else(|_| "1024".to_string())
             .parse::<usize>()
             .map_err(|e| invalid(&format!("invalid PROXIMA_MAX_CONNECTIONS: {e}")))?;
         if max_connections == 0 {
-            return Err(invalid("PROXIMA_MAX_CONNECTIONS must be greater than zero"));
+            return Err(invalid(
+                "PROXIMA_MAX_CONNECTIONS must be greater than zero",
+            ));
         }
 
         let client_tls_mode = env::var("PROXIMA_TLS_MODE")
@@ -102,7 +120,9 @@ impl Config {
         if client_tls_mode == ClientTlsMode::Required
             && (client_tls_cert_file.is_none() || client_tls_key_file.is_none())
         {
-            return Err(invalid("PROXIMA_TLS_CERT_FILE and PROXIMA_TLS_KEY_FILE are required when PROXIMA_TLS_MODE=required"));
+            return Err(invalid(
+                "PROXIMA_TLS_CERT_FILE and PROXIMA_TLS_KEY_FILE are required when PROXIMA_TLS_MODE=required",
+            ));
         }
 
         let upstream_tls_mode = env::var("PROXIMA_UPSTREAM_TLS_MODE")
@@ -113,12 +133,16 @@ impl Config {
         if upstream_tls_mode == UpstreamTlsMode::VerifyFull
             && (upstream_tls_ca_file.is_none() || upstream_tls_server_name.is_none())
         {
-            return Err(invalid("PROXIMA_UPSTREAM_TLS_CA_FILE and PROXIMA_UPSTREAM_TLS_SERVER_NAME are required when PROXIMA_UPSTREAM_TLS_MODE=verify-full"));
+            return Err(invalid(
+                "PROXIMA_UPSTREAM_TLS_CA_FILE and PROXIMA_UPSTREAM_TLS_SERVER_NAME are required when PROXIMA_UPSTREAM_TLS_MODE=verify-full",
+            ));
         }
         if upstream_tls_mode == UpstreamTlsMode::VerifyFull
             && client_tls_mode != ClientTlsMode::Required
         {
-            return Err(invalid("PROXIMA_UPSTREAM_TLS_MODE=verify-full requires PROXIMA_TLS_MODE=required"));
+            return Err(invalid(
+                "PROXIMA_UPSTREAM_TLS_MODE=verify-full requires PROXIMA_TLS_MODE=required",
+            ));
         }
 
         Ok(Self {
@@ -148,7 +172,9 @@ fn parse_addr(name: &str, default: &str) -> io::Result<SocketAddr> {
 }
 
 fn optional_env(name: &str) -> Option<String> {
-    env::var(name).ok().filter(|value| !value.trim().is_empty())
+    env::var(name)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
 }
 
 fn duration_ms(name: &str, default: u64) -> io::Result<Duration> {
@@ -172,11 +198,19 @@ mod tests {
 
     fn clear() {
         for key in [
-            "PROXIMA_LISTEN_ADDR", "PROXIMA_ADMIN_ADDR", "PROXIMA_UPSTREAM_ADDR",
-            "PROXIMA_TENANT_SIGNING_KEY", "PROXIMA_UPSTREAM_CONNECT_TIMEOUT_MS",
-            "PROXIMA_MAX_CONNECTIONS", "PROXIMA_TLS_MODE", "PROXIMA_TLS_CERT_FILE",
-            "PROXIMA_TLS_KEY_FILE", "PROXIMA_UPSTREAM_TLS_MODE", "PROXIMA_UPSTREAM_TLS_CA_FILE",
-            "PROXIMA_UPSTREAM_TLS_SERVER_NAME", "PROXIMA_TLS_HANDSHAKE_TIMEOUT_MS",
+            "PROXIMA_LISTEN_ADDR",
+            "PROXIMA_ADMIN_ADDR",
+            "PROXIMA_UPSTREAM_ADDR",
+            "PROXIMA_TENANT_SIGNING_KEY",
+            "PROXIMA_UPSTREAM_CONNECT_TIMEOUT_MS",
+            "PROXIMA_MAX_CONNECTIONS",
+            "PROXIMA_TLS_MODE",
+            "PROXIMA_TLS_CERT_FILE",
+            "PROXIMA_TLS_KEY_FILE",
+            "PROXIMA_UPSTREAM_TLS_MODE",
+            "PROXIMA_UPSTREAM_TLS_CA_FILE",
+            "PROXIMA_UPSTREAM_TLS_SERVER_NAME",
+            "PROXIMA_TLS_HANDSHAKE_TIMEOUT_MS",
         ] {
             std::env::remove_var(key);
         }
