@@ -5,6 +5,8 @@ use axum::{
     Json,
 };
 use hmac::{Hmac, Mac};
+use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
+use jsonwebtoken::jwk::JwkSet;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -35,6 +37,31 @@ pub(crate) struct InviteInput {
 #[derive(Deserialize)]
 pub(crate) struct VerifyInput {
     pub token: String,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct OidcConfigureInput {
+    pub tenant_id: String,
+}
+
+#[derive(Deserialize)]
+struct OidcCallbackQuery {
+    code: String,
+    state: String,
+}
+
+#[derive(Deserialize)]
+struct OidcClaims {
+    sub: String,
+    tid: String,
+    iss: String,
+    aud: String,
+    exp: usize,
+    nonce: String,
+    oid: Option<String>,
+    email: Option<String>,
+    preferred_username: Option<String>,
+    name: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -318,6 +345,298 @@ async fn apply_entitlements(db: &sqlx::PgPool, organization_id: Uuid, plan: &str
     .bind(advanced).bind(fleet).bind(priority).bind(entra).bind(private_deployment)
     .execute(db).await?;
     Ok(())
+}
+
+
+pub(crate) async fn configure_entra(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<OidcConfigureInput>,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if !matches!(ctx.role.as_str(), "owner" | "admin") {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
+    if let Err(response) = require_feature(&s.db, ctx.organization_id, "entra_oidc").await {
+        return response;
+    }
+
+    let tenant_id = match Uuid::parse_str(input.tenant_id.trim()) {
+        Ok(v) => v,
+        Err(_) => return bad("Microsoft Entra tenant_id must be a UUID."),
+    };
+    let client_id = match env::var("PROXIMA_OIDC_CLIENT_ID") {
+        Ok(v) if !v.trim().is_empty() => v,
+        _ => return service_unavailable("Microsoft Entra client ID is not configured."),
+    };
+    let issuer = format!("https://login.microsoftonline.com/{tenant_id}/v2.0");
+
+    match sqlx::query(
+        "INSERT INTO organization_oidc_connections(organization_id,provider,tenant_id,issuer,client_id,enabled,updated_at)
+         VALUES($1,'microsoft-entra',$2,$3,$4,true,now())
+         ON CONFLICT (organization_id) DO UPDATE SET
+           provider='microsoft-entra',tenant_id=EXCLUDED.tenant_id,issuer=EXCLUDED.issuer,
+           client_id=EXCLUDED.client_id,enabled=true,updated_at=now()"
+    )
+    .bind(ctx.organization_id).bind(tenant_id).bind(&issuer).bind(&client_id)
+    .execute(&s.db).await {
+        Ok(_) => {
+            audit(&s.db, ctx.organization_id, ctx.user_id, "identity.entra.configured",
+                "oidc_connection", None, json!({"tenant_id":tenant_id,"provider":"microsoft-entra"})).await;
+            Json(json!({"ok":true,"provider":"microsoft-entra","tenant_id":tenant_id,"issuer":issuer})).into_response()
+        }
+        Err(e) => db_error(e),
+    }
+}
+
+pub(crate) async fn entra_start(
+    State(s): State<AppState>,
+    Query(q): Query<std::collections::HashMap<String,String>>,
+) -> Response {
+    let organization_id = match q.get("organization_id").and_then(|v| Uuid::parse_str(v).ok()) {
+        Some(v) => v,
+        None => return bad("organization_id is required."),
+    };
+    let connection = match sqlx::query(
+        "SELECT tenant_id,issuer,client_id FROM organization_oidc_connections
+         WHERE organization_id=$1 AND provider='microsoft-entra' AND enabled=true"
+    ).bind(organization_id).fetch_optional(&s.db).await {
+        Ok(Some(row)) => row,
+        Ok(None) => return bad("Microsoft Entra SSO is not configured for this organization."),
+        Err(e) => return db_error(e),
+    };
+
+    let tenant_id: Uuid = connection.get("tenant_id");
+    let issuer: String = connection.get("issuer");
+    let client_id: String = connection.get("client_id");
+    let nonce = format!("{}-{}", Uuid::new_v4(), Uuid::new_v4());
+    let state = format!("{}-{}", Uuid::new_v4(), Uuid::new_v4());
+    let state_hash = token_hash(&state);
+
+    if let Err(e) = sqlx::query(
+        "INSERT INTO oidc_login_states(state_hash,organization_id,nonce,expires_at)
+         VALUES($1,$2,$3,now()+interval '10 minutes')"
+    ).bind(state_hash).bind(organization_id).bind(&nonce).execute(&s.db).await {
+        return db_error(e);
+    }
+
+    let authorize = match reqwest::Url::parse("https://login.microsoftonline.com/organizations/oauth2/v2.0/authorize") {
+        Ok(mut url) => {
+            url.query_pairs_mut()
+                .append_pair("client_id", &client_id)
+                .append_pair("response_type", "code")
+                .append_pair("redirect_uri", &oidc_redirect_uri())
+                .append_pair("response_mode", "query")
+                .append_pair("scope", "openid profile email")
+                .append_pair("state", &state)
+                .append_pair("nonce", &nonce)
+                .append_pair("prompt", "select_account");
+            url.to_string()
+        }
+        Err(_) => return service_unavailable("Unable to construct Microsoft Entra authorization URL."),
+    };
+
+    Json(json!({"ok":true,"authorization_url":authorize,"tenant_id":tenant_id,"issuer":issuer})).into_response()
+}
+
+pub(crate) async fn entra_callback(
+    State(s): State<AppState>,
+    Query(q): Query<OidcCallbackQuery>,
+) -> Response {
+    let state_hash = token_hash(&q.state);
+    let state_row = match sqlx::query(
+        "SELECT organization_id,nonce FROM oidc_login_states
+         WHERE state_hash=$1 AND expires_at>now()"
+    ).bind(&state_hash).fetch_optional(&s.db).await {
+        Ok(Some(row)) => row,
+        Ok(None) => return bad("SSO state is invalid or expired."),
+        Err(e) => return db_error(e),
+    };
+    let organization_id: Uuid = state_row.get("organization_id");
+    let expected_nonce: String = state_row.get("nonce");
+    let _ = sqlx::query("DELETE FROM oidc_login_states WHERE state_hash=$1").bind(&state_hash).execute(&s.db).await;
+
+    let connection = match sqlx::query(
+        "SELECT tenant_id,issuer,client_id FROM organization_oidc_connections
+         WHERE organization_id=$1 AND provider='microsoft-entra' AND enabled=true"
+    ).bind(organization_id).fetch_optional(&s.db).await {
+        Ok(Some(row)) => row,
+        Ok(None) => return bad("Microsoft Entra SSO is not configured for this organization."),
+        Err(e) => return db_error(e),
+    };
+    let tenant_id: Uuid = connection.get("tenant_id");
+    let expected_issuer: String = connection.get("issuer");
+    let client_id: String = connection.get("client_id");
+    let secret = match env::var("PROXIMA_OIDC_CLIENT_SECRET") {
+        Ok(v) if !v.trim().is_empty() => v,
+        _ => return service_unavailable("Microsoft Entra client secret is not configured."),
+    };
+
+    let client = Client::new();
+    let token_response = match client
+        .post("https://login.microsoftonline.com/organizations/oauth2/v2.0/token")
+        .form(&[
+            ("client_id", client_id.as_str()),
+            ("client_secret", secret.as_str()),
+            ("grant_type", "authorization_code"),
+            ("code", q.code.as_str()),
+            ("redirect_uri", oidc_redirect_uri().as_str()),
+        ])
+        .send().await {
+        Ok(v) => v,
+        Err(e) => return external_error(e),
+    };
+    if !token_response.status().is_success() {
+        return service_unavailable("Microsoft Entra token exchange failed.");
+    }
+    let token_body: Value = match token_response.json().await {
+        Ok(v) => v,
+        Err(e) => return external_error(e),
+    };
+    let id_token = match token_body.get("id_token").and_then(Value::as_str) {
+        Some(v) => v,
+        None => return bad("Microsoft Entra did not return an ID token."),
+    };
+
+    let header = match decode_header(id_token) {
+        Ok(v) => v,
+        Err(_) => return bad("Invalid Microsoft Entra ID token header."),
+    };
+    if header.alg != Algorithm::RS256 {
+        return bad("Unsupported Microsoft Entra token signing algorithm.");
+    }
+    let kid = match header.kid {
+        Some(v) => v,
+        None => return bad("Microsoft Entra token is missing a key identifier."),
+    };
+
+    let discovery: Value = match client
+        .get("https://login.microsoftonline.com/organizations/v2.0/.well-known/openid-configuration")
+        .send().await {
+        Ok(v) => match v.json().await { Ok(x) => x, Err(e) => return external_error(e) },
+        Err(e) => return external_error(e),
+    };
+    let jwks_uri = match discovery.get("jwks_uri").and_then(Value::as_str) {
+        Some(v) => v,
+        None => return service_unavailable("Microsoft Entra discovery metadata has no JWKS URI."),
+    };
+    let jwks: JwkSet = match client.get(jwks_uri).send().await {
+        Ok(v) => match v.json().await { Ok(x) => x, Err(e) => return external_error(e) },
+        Err(e) => return external_error(e),
+    };
+    let jwk = match jwks.keys.iter().find(|k| k.common.key_id.as_deref() == Some(kid.as_str())) {
+        Some(v) => v,
+        None => return bad("Microsoft Entra signing key is not published in the current JWKS."),
+    };
+    let key = match DecodingKey::from_jwk(jwk) {
+        Ok(v) => v,
+        Err(_) => return bad("Microsoft Entra signing key could not be loaded."),
+    };
+
+    let mut validation = Validation::new(Algorithm::RS256);
+    validation.set_audience(&[client_id.as_str()]);
+    validation.set_issuer(&[expected_issuer.as_str()]);
+    validation.set_required_spec_claims(&["exp","iss","aud","sub"]);
+    validation.validate_nbf = true;
+
+    let decoded = match decode::<OidcClaims>(id_token, &key, &validation) {
+        Ok(v) => v,
+        Err(_) => return bad("Microsoft Entra ID token validation failed."),
+    };
+    let claims = decoded.claims;
+    if claims.tid != tenant_id.to_string()
+        || claims.iss != expected_issuer
+        || claims.aud != client_id
+        || claims.nonce != expected_nonce {
+        return bad("Microsoft Entra identity boundary validation failed.");
+    }
+
+    let subject = claims.oid.clone().unwrap_or_else(|| claims.sub.clone());
+    let email = claims.email.clone().or(claims.preferred_username.clone());
+    let email = match email {
+        Some(v) if v.contains('@') => v.to_lowercase(),
+        _ => return bad("Microsoft Entra did not provide a usable email address."),
+    };
+    let display_name = claims.name.clone().unwrap_or_else(|| email.split('@').next().unwrap_or("Operator").to_string());
+
+    let user_id = match sqlx::query(
+        "SELECT user_id FROM user_identities WHERE provider='microsoft-entra'
+         AND issuer=$1 AND subject=$2 AND organization_id=$3"
+    ).bind(&claims.iss).bind(&subject).bind(organization_id).fetch_optional(&s.db).await {
+        Ok(Some(row)) => row.get("user_id"),
+        Ok(None) => {
+            let existing = match sqlx::query("SELECT id FROM users WHERE lower(email)=lower($1)").bind(&email).fetch_optional(&s.db).await {
+                Ok(v) => v,
+                Err(e) => return db_error(e),
+            };
+            let uid = match existing {
+                Some(row) => row.get::<Uuid,_>("id"),
+                None => {
+                    let uid = Uuid::new_v4();
+                    if let Err(e) = sqlx::query(
+                        "INSERT INTO users(id,email,display_name,password_hash) VALUES($1,$2,$3,$4)"
+                    ).bind(uid).bind(&email).bind(&display_name).bind("OIDC_MANAGED_IDENTITY").execute(&s.db).await {
+                        return db_error(e);
+                    }
+                    uid
+                }
+            };
+            if let Err(e) = sqlx::query(
+                "INSERT INTO memberships(user_id,organization_id,role) VALUES($1,$2,'viewer')
+                 ON CONFLICT (user_id,organization_id) DO NOTHING"
+            ).bind(uid).bind(organization_id).execute(&s.db).await {
+                return db_error(e);
+            }
+            if let Err(e) = sqlx::query(
+                "INSERT INTO user_identities(id,user_id,organization_id,provider,issuer,subject)
+                 VALUES($1,$2,$3,'microsoft-entra',$4,$5)"
+            ).bind(Uuid::new_v4()).bind(uid).bind(organization_id).bind(&claims.iss).bind(&subject).execute(&s.db).await {
+                return db_error(e);
+            }
+            uid
+        }
+        Err(e) => return db_error(e),
+    };
+
+    if let Err(e) = sqlx::query(
+        "UPDATE user_identities SET last_login_at=now() WHERE user_id=$1 AND organization_id=$2
+         AND provider='microsoft-entra' AND issuer=$3 AND subject=$4"
+    ).bind(user_id).bind(organization_id).bind(&claims.iss).bind(&subject).execute(&s.db).await {
+        return db_error(e);
+    }
+
+    audit(&s.db, organization_id, user_id, "auth.login", "session", None,
+        json!({"method":"microsoft-entra-oidc","tenant_id":tenant_id,"subject":subject})).await;
+
+    match create_session(&s.db, user_id, organization_id).await {
+        Ok((token, csrf)) => {
+            let mut response = Html(format!(
+                "<html><head><meta http-equiv=\"refresh\" content=\"0;url=/app\"></head><body style=\"background:#05090d;color:#eef7f7;font-family:Arial;padding:60px\">Signing you in…</body></html>"
+            )).into_response();
+            let cookie_value = if s.secure_cookie {
+                format!("proxima_session={token}; Path=/; HttpOnly; SameSite=Strict; Secure")
+            } else {
+                format!("proxima_session={token}; Path=/; HttpOnly; SameSite=Strict")
+            };
+            response.headers_mut().insert(
+                header::SET_COOKIE,
+                HeaderValue::from_str(&cookie_value).unwrap_or_else(|_| HeaderValue::from_static("proxima_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict"))
+            );
+            response
+        }
+        Err(e) => db_error(e),
+    }
+}
+
+fn oidc_redirect_uri() -> String {
+    let base = env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:8080".into());
+    format!("{}/api/v1/auth/oidc/callback", base.trim_end_matches('/'))
 }
 
 pub(crate) async fn billing_status(State(s): State<AppState>, headers: HeaderMap) -> Response {
@@ -994,13 +1313,13 @@ pub(crate) async fn accept_invite(
 pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
     let db_ok = sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
     let stripe = env::var("STRIPE_SECRET_KEY").map(|v| !v.is_empty()).unwrap_or(false);
-    let stripe_price = env::var("AGATA_STRIPE_PRICE_ID").map(|v| !v.is_empty()).unwrap_or(false);
+    let stripe_price = ["AGATA_STRIPE_STARTER_PRICE_ID","AGATA_STRIPE_GROWTH_PRICE_ID","AGATA_STRIPE_SCALE_PRICE_ID"]
+        .iter().all(|key| env::var(key).map(|v| !v.trim().is_empty()).unwrap_or(false));
     let stripe_webhook = env::var("STRIPE_WEBHOOK_SECRET").map(|v| !v.is_empty()).unwrap_or(false);
     let resend = env::var("RESEND_API_KEY").map(|v| !v.is_empty()).unwrap_or(false);
     let from = env::var("RESEND_FROM_EMAIL").map(|v| !v.is_empty()).unwrap_or(false);
     let base = env::var("AGATA_PUBLIC_BASE_URL").map(|v| !v.is_empty()).unwrap_or(false);
-    let oidc = env::var("PROXIMA_OIDC_ISSUER").map(|v| !v.is_empty()).unwrap_or(false)
-        && env::var("PROXIMA_OIDC_CLIENT_ID").map(|v| !v.is_empty()).unwrap_or(false)
+    let oidc = env::var("PROXIMA_OIDC_CLIENT_ID").map(|v| !v.is_empty()).unwrap_or(false)
         && env::var("PROXIMA_OIDC_CLIENT_SECRET").map(|v| !v.is_empty()).unwrap_or(false);
     let all = db_ok && stripe && stripe_price && stripe_webhook && resend && from && base && oidc;
     Json(json!({
@@ -1021,8 +1340,10 @@ pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
 
 async fn send_email(to: &str, subject: &str, html: &str) -> anyhow::Result<()> {
     let key = env::var("RESEND_API_KEY")?;
-    let from = env::var("RESEND_FROM_EMAIL")
-        .unwrap_or_else(|_| "Agata Proxima <noreply@agata.cypheris.name.ng>".into());
+    let from = match env::var("RESEND_FROM_EMAIL") {
+        Ok(v) if !v.trim().is_empty() => v,
+        _ => anyhow::bail!("RESEND_FROM_EMAIL is not configured for the current deployment"),
+    };
     let response = Client::new()
         .post("https://api.resend.com/emails")
         .bearer_auth(key)
