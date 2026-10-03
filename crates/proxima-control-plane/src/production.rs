@@ -1,6 +1,6 @@
 use axum::{
     extract::{Query, State},
-    http::{HeaderMap, StatusCode},
+    http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{Html, IntoResponse, Response},
     Json,
 };
@@ -16,7 +16,7 @@ use std::env;
 use uuid::Uuid;
 
 use super::{
-    audit, authenticate, bad, db_error, hash_password, internal, require_write, token_hash,
+    audit, authenticate, bad, create_session, db_error, hash_password, internal, require_write, token_hash,
     AppState,
 };
 
