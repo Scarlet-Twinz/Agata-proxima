@@ -4,7 +4,7 @@
 
 Agata Proxima's first enterprise SSO integration is **Microsoft Entra ID over OpenID Connect (OIDC)**.
 
-Microsoft's current guidance recommends OIDC for new, modern SaaS development and a multitenant application registration for SaaS ISVs. citeturn2search2turn2search3
+Microsoft's current guidance recommends OIDC for new, modern SaaS development and a multitenant application registration for SaaS ISVs.
 
 SAML is a later compatibility layer for customers whose enterprise identity systems require it. It is not the first implementation.
 
@@ -47,9 +47,9 @@ https://<AGATA_PUBLIC_BASE_URL_HOST>/api/v1/auth/oidc/callback
 
 Local development callback can use localhost.
 
-Microsoft Entra requires the callback to be registered exactly; redirect URIs are a security boundary and must match the request. citeturn3search0turn3search3
+Microsoft Entra requires the callback to be registered exactly; redirect URIs are a security boundary and must match the request.
 
-Use the authorization-code flow. Do not enable the legacy implicit flow. Microsoft's current guidance recommends authorization code flow for new web applications. citeturn3search5turn3search10
+Use the authorization-code flow. Do not enable the legacy implicit flow.
 
 ## OIDC configuration
 
@@ -63,7 +63,7 @@ PROXIMA_OIDC_CLIENT_SECRET=
 
 For the multitenant Microsoft Entra deployment, the authority is based on the Microsoft identity platform's `organizations` authority. The application must validate the tenant-specific issuer returned during sign-in rather than assuming every customer has the same issuer.
 
-Microsoft publishes discovery metadata, authorization/token endpoints, and JWKS metadata through the OIDC configuration document. citeturn2search0turn2search10
+Microsoft publishes discovery metadata, authorization/token endpoints, and JWKS metadata through the OIDC configuration document.
 
 Required scopes for the first implementation:
 
@@ -90,9 +90,9 @@ This prevents an authenticated Microsoft account from selecting an arbitrary Aga
 
 ## Production credential handling
 
-Do not put the Entra client secret in Git, the browser, Docker image layers, or this chat.
+Do not put the Entra client secret in Git, the browser, Docker image layers, or chat.
 
-Use the deployment platform's secret store. For production, Microsoft also documents certificates/federated credentials as the stronger credential option for confidential clients. citeturn3search4
+Use the deployment platform's secret store. For production, Microsoft also documents certificates/federated credentials as the stronger credential option for confidential clients.
 
 ## What is deliberately waiting
 
@@ -109,3 +109,9 @@ The remaining activation gates are:
 - end-to-end login test against a real Entra tenant.
 
 This is intentional. The repository can carry the contract now, but a real identity provider callback cannot be honestly accepted until it has a real registered redirect endpoint.
+
+## Primary references
+
+- Microsoft Entra OIDC: https://learn.microsoft.com/en-us/entra/identity-platform/v2-protocols-oidc
+- Microsoft Entra multitenant ISV SSO: https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/plan-sso-integration-isv
+- Microsoft Entra redirect URI guidance: https://learn.microsoft.com/en-us/entra/identity-platform/reply-url
