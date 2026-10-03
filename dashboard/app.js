@@ -1,0 +1,1 @@
+document.querySelectorAll("nav a").forEach(a=>a.addEventListener("click",e=>{e.preventDefault();document.querySelectorAll("nav a").forEach(x=>x.classList.remove("active"));a.classList.add("active")}));document.querySelector(".hero button").addEventListener("click",()=>alert("Verification will bind to the Proxima Verify API when the control plane is connected."));
