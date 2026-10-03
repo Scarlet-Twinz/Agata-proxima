@@ -201,10 +201,10 @@ mod tests {
 
     #[test]
     fn rejects_weak_signing_secret() {
-        assert_eq!(
+        assert!(matches!(
             TenantTokenVerifier::new("too-short"),
             Err(TenantTokenError::InvalidSignature)
-        );
+        ));
     }
 
     #[test]
