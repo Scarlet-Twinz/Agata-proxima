@@ -194,9 +194,7 @@ impl Config {
 }
 
 fn non_empty_env(name: &str) -> Option<String> {
-    env::var(name)
-        .ok()
-        .filter(|value| !value.trim().is_empty())
+    env::var(name).ok().filter(|value| !value.trim().is_empty())
 }
 
 fn parse_bool(name: &str, default: bool) -> io::Result<bool> {
