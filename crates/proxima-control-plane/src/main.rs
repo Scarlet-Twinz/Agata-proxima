@@ -780,6 +780,11 @@ async fn create_node(
         .environment
         .clone()
         .unwrap_or_else(|| "production".into());
+    if environment.eq_ignore_ascii_case("private") {
+        if let Err(response) = production::require_feature(&s.db, ctx.organization_id, "private_deployment").await {
+            return response;
+        }
+    }
     if let Err(response) =
         production::enforce_environment_capacity(&s.db, ctx.organization_id, &environment).await
     {
