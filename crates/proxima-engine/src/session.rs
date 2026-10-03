@@ -40,7 +40,9 @@ pub async fn establish(
             ))
         }
         StartupPacket::SslRequest => {
-            upstream.write_all(&encode_startup(&StartupPacket::SslRequest)?).await?;
+            upstream
+                .write_all(&encode_startup(&StartupPacket::SslRequest)?)
+                .await?;
             let mut response = [0u8; 1];
             upstream.read_exact(&mut response).await?;
             client.write_all(&response).await?;
@@ -67,8 +69,12 @@ pub async fn establish(
                     protocol_version,
                     parameters,
                 } => {
-                    let (startup, tenant_context) =
-                        prepare_startup(protocol_version, parameters, verifier, tenant_role_prefix)?;
+                    let (startup, tenant_context) = prepare_startup(
+                        protocol_version,
+                        parameters,
+                        verifier,
+                        tenant_role_prefix,
+                    )?;
                     forward_startup(&mut upstream, &startup).await?;
                     Ok((
                         client,
@@ -225,8 +231,12 @@ fn encode_startup(startup: &StartupPacket) -> io::Result<Vec<u8>> {
             body.push(0);
 
             let length = body.len() + 4;
-            let length = i32::try_from(length)
-                .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "startup packet too large"))?;
+                    let length = i32::try_from(length).map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "startup packet too large",
+                )
+            })?;
 
             let mut packet = Vec::with_capacity(length as usize);
             packet.extend_from_slice(&length.to_be_bytes());
