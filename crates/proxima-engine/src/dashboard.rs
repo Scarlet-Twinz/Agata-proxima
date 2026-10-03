@@ -32,15 +32,7 @@ async fn handle(stream: &mut tokio::net::TcpStream) -> io::Result<()> {
     match path {
         "/" => respond(stream, "200 OK", "text/html; charset=utf-8", INDEX).await,
         "/logo.svg" => respond(stream, "200 OK", "image/svg+xml", LOGO).await,
-        "/health" => {
-            respond(
-                stream,
-                "200 OK",
-                "text/plain; charset=utf-8",
-                "ok\n",
-            )
-            .await
-        }
+        "/health" => respond(stream, "200 OK", "text/plain; charset=utf-8", "ok\n").await,
         "/api/status" => {
             let config = Config::from_env()?;
             let body = format!(
