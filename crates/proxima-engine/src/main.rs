@@ -99,6 +99,7 @@ async fn main() -> io::Result<()> {
                         upstream_tls_timeout,
                         require_client_tls,
                         upstream_tls_mode,
+                        config.upstream_tls_server_name.as_deref(),
                     ).await {
                         error!(peer = %peer, error = %err, "connection failed");
                     }
@@ -128,6 +129,7 @@ async fn handle_connection(
     upstream_tls_timeout: std::time::Duration,
     require_client_tls: bool,
     upstream_tls_mode: UpstreamTlsMode,
+    upstream_tls_server_name: Option<&str>,
 ) -> io::Result<()> {
     info!(peer = %peer, "client connected");
 
@@ -153,8 +155,8 @@ async fn handle_connection(
 
     let upstream: BoxedPgStream = if upstream_tls_mode != UpstreamTlsMode::Disable {
         let connector = upstream_connector.ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "upstream TLS connector is not configured"))?;
-        let server_name = extract_upstream_server_name(upstream_addr).ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidInput, "cannot derive upstream TLS server name from address")
+        let server_name = upstream_tls_server_name.ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "upstream TLS server name is required")
         })?;
         let tls = connect_upstream_tls(connector, upstream_tcp, &server_name, upstream_tls_timeout).await?;
         Box::new(tls)
@@ -187,6 +189,7 @@ async fn client_wants_tls(client: &TcpStream) -> io::Result<bool> {
             if n >= 8 || n == 0 {
                 break Ok::<usize, io::Error>(n);
             }
+            tokio::task::yield_now().await;
         }
     })
     .await
@@ -201,11 +204,3 @@ async fn client_wants_tls(client: &TcpStream) -> io::Result<bool> {
     Ok(length == 8 && code == SSL_REQUEST_CODE)
 }
 
-fn extract_upstream_server_name(address: &str) -> Option<String> {
-    let host = address.rsplit_once(':').map(|(host, _)| host).unwrap_or(address);
-    let host = host.trim_matches(['[', ']']);
-    if host.parse::<std::net::IpAddr>().is_ok() {
-        return None;
-    }
-    Some(host.to_string())
-}
