@@ -67,7 +67,7 @@ async fn handle_connection(
 
     let upstream = TcpStream::connect(upstream_addr).await?;
     let (mut client, mut upstream, session) =
-        establish(client, upstream, verifier).await?;
+        establish(client, upstream, verifier, tenant_role_prefix).await?;
 
     info!(
         peer = %peer,
