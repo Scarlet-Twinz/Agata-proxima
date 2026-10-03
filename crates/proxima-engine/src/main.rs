@@ -66,6 +66,7 @@ async fn main() -> io::Result<()> {
                 verifier.as_ref(),
                 &tenant_role_prefix,
                 tenant_role_password.as_deref(),
+                startup_timeout,
             )
             .await
             {
@@ -82,6 +83,7 @@ async fn handle_connection(
     verifier: Option<&TenantTokenVerifier>,
     tenant_role_prefix: &str,
     tenant_role_password: Option<&str>,
+    startup_timeout: Duration,
 ) -> io::Result<()> {
     info!(peer = %peer, "client connected");
 
