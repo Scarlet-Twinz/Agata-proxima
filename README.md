@@ -42,7 +42,7 @@ Early infrastructure development.
 
 The current engine establishes a verified tenant context, maps it to a PostgreSQL role, brokers the PostgreSQL authentication/startup exchange, and then enters the normal query stream only after PostgreSQL reports a ready session.
 
-The repository includes a real PostgreSQL integration test, independent RLS verification, malformed-frame property tests, connection safety limits, and an adversarial `Proxima Verify` harness. TLS can now be terminated at Proxima with an explicit PostgreSQL SSLRequest boundary, and the Proxima-to-PostgreSQL hop can independently require certificate-verified TLS. The repository also contains a command-center dashboard foundation; its displayed metrics remain placeholders until a live control-plane telemetry API is connected.
+The repository includes a real PostgreSQL integration test, independent RLS verification, malformed-frame property tests, connection safety limits, and an adversarial `Proxima Verify` harness. Client-side PostgreSQL TLS is now terminated at Proxima with Rustls when configured, and the upstream database leg can require independent CA + hostname verification. The repository also contains the first Proxima operator dashboard, deeper adversarial verification, and a documented Cloud control-plane boundary.
 
 ## License
 
@@ -68,3 +68,21 @@ bash tools/proxima-verify.sh
 ```
 
 See [docs/verification.md](docs/verification.md) for the security verification model and deployment invariants.
+
+
+## Operator dashboard
+
+When `PROXIMA_DASHBOARD_ENABLED=true`, open `http://127.0.0.1:9080/`.
+
+The dashboard is intentionally a local operator surface. It reports configuration/runtime telemetry and does not invent database health.
+
+## TLS
+
+For PostgreSQL clients using standard SSLRequest negotiation:
+
+- set `PROXIMA_TLS_CERT_FILE` and `PROXIMA_TLS_KEY_FILE`;
+- clients can use `sslmode=require`;
+- set `PROXIMA_TLS_REQUIRE_CLIENT=true` to reject plaintext;
+- set `PROXIMA_UPSTREAM_TLS_MODE=verify-full` with a trusted CA and server name for encrypted database transport.
+
+See `docs/phase18-24-release.md` for the exact security boundary and remaining external acceptance gates.
