@@ -99,11 +99,11 @@ async fn handle(
     let n = stream.read(&mut buf).await?;
     let request = String::from_utf8_lossy(&buf[..n]);
     let path = request.lines().next().and_then(|line| line.split_whitespace().nth(1)).unwrap_or("/");
-    let (status, body, content_type) = match path {
-        "/healthz" => ("200 OK", "{\"status\":\"ok\"}", "application/json"),
-        "/readyz" => ("200 OK", "{\"status\":\"ready\"}", "application/json"),
-        "/metrics" => ("200 OK", &telemetry.json(tls, upstream_tls, enforcement), "application/json"),
-        _ => ("404 Not Found", "{\"status\":\"not_found\"}", "application/json"),
+    let (status, body, content_type): (&str, String, &str) = match path {
+        "/healthz" => ("200 OK", "{\"status\":\"ok\"}".to_owned(), "application/json"),
+        "/readyz" => ("200 OK", "{\"status\":\"ready\"}".to_owned(), "application/json"),
+        "/metrics" => ("200 OK", telemetry.json(tls, upstream_tls, enforcement), "application/json"),
+        _ => ("404 Not Found", "{\"status\":\"not_found\"}".to_owned(), "application/json"),
     };
     let response = format!(
         "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nAccess-Control-Allow-Origin: *\r\nCache-Control: no-store\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
