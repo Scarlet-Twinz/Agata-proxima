@@ -70,6 +70,7 @@ fn plan_limits(plan: &str) -> (i32, i32, i32, i32, bool, bool, bool, bool, bool)
     }
 }
 
+#[allow(clippy::result_large_err)]
 pub(crate) async fn enforce_capacity(
     db: &sqlx::PgPool,
     organization_id: Uuid,
@@ -110,6 +111,7 @@ pub(crate) async fn enforce_capacity(
     Ok(())
 }
 
+#[allow(clippy::result_large_err)]
 pub(crate) async fn enforce_environment_capacity(
     db: &sqlx::PgPool,
     organization_id: Uuid,
@@ -175,6 +177,7 @@ pub(crate) async fn enforce_environment_capacity(
     Ok(())
 }
 
+#[allow(clippy::result_large_err)]
 pub(crate) async fn require_feature(
     db: &sqlx::PgPool,
     organization_id: Uuid,
