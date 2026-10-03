@@ -119,6 +119,7 @@ async fn main() -> io::Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_connection(
     client: TcpStream,
     peer: std::net::SocketAddr,
