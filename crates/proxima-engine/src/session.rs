@@ -20,7 +20,6 @@ pub async fn establish(
     mut client: TcpStream,
     mut upstream: TcpStream,
     verifier: Option<&TenantTokenVerifier>,
-    tenant_role_prefix: &str,
     upstream_user: Option<&str>,
     upstream_password: Option<&str>,
 ) -> io::Result<(TcpStream, TcpStream, EstablishedSession)> {
@@ -35,7 +34,6 @@ pub async fn establish(
                 protocol_version,
                 parameters,
                 verifier,
-                tenant_role_prefix,
                 upstream_user,
             )?;
 
@@ -107,7 +105,6 @@ pub async fn establish(
                         protocol_version,
                         parameters,
                         verifier,
-                        tenant_role_prefix,
                         upstream_user,
                     )?;
                     forward_startup(&mut upstream, &startup).await?;
@@ -353,7 +350,6 @@ mod tests {
                 (TENANT_TOKEN_PARAMETER.into(), token),
             ],
             Some(&verifier),
-            "proxima_tenant_",
             Some("proxima_gateway"),
         )
         .unwrap();
