@@ -46,7 +46,7 @@ echo "PASS: tenant A cannot insert into tenant B"
 cross_update="$(psql -Atqc "SET ROLE proxima_tenant_a; UPDATE proxima_test.records SET secret='blocked' WHERE tenant_id='tenant_b'; SELECT count(*) FROM proxima_test.records WHERE secret='blocked';")"
 assert_eq "0" "$cross_update" "tenant A cannot update tenant B"
 
-cross_delete="$(psql -Atqc "SET ROLE proxima_tenant_b; DELETE FROM proxima_test.records WHERE tenant_id='tenant_a'; SELECT count(*) FROM proxima_test.records WHERE tenant_id='tenant_a';")"
+cross_delete="$(psql -Atqc "SET ROLE proxima_tenant_b; DELETE FROM proxima_test.records WHERE tenant_id='tenant_a'; RESET ROLE; SELECT count(*) FROM proxima_test.records WHERE tenant_id='tenant_a';")"
 assert_eq "1" "$cross_delete" "tenant B cannot delete tenant A"
 
 transaction_state="$(psql -Atqc "SET ROLE proxima_tenant_a; BEGIN; INSERT INTO proxima_test.records (tenant_id, secret) VALUES ('tenant_a', 'temporary'); ROLLBACK; SELECT count(*) FROM proxima_test.records WHERE secret='temporary';")"
