@@ -107,7 +107,7 @@ impl TenantTokenVerifier {
     }
 
     #[cfg(test)]
-    fn sign_for_test(&self, tenant_id: &str, expires_at: u64) -> String {
+    pub(crate) fn sign_for_test(&self, tenant_id: &str, expires_at: u64) -> String {
         validate_tenant_id(tenant_id).unwrap();
         format!(
             "{VERSION}.{tenant_id}.{expires_at}.{}",
