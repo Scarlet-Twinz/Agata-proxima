@@ -57,6 +57,12 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+      - name: Shell and dashboard checks
+        run: |
+          bash -n tools/proxima-verify.sh tools/proxima-verify-3tenant.sh
+          node --check dashboard/app.js
+          test -s dashboard/assets/agata-proxima-mark.svg
+
       - name: PostgreSQL RLS verification
         env:
           PGHOST: localhost
