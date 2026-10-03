@@ -231,7 +231,7 @@ fn encode_startup(startup: &StartupPacket) -> io::Result<Vec<u8>> {
             body.push(0);
 
             let length = body.len() + 4;
-                    let length = i32::try_from(length).map_err(|_| {
+            let length = i32::try_from(length).map_err(|_| {
                 io::Error::new(
                     io::ErrorKind::InvalidInput,
                     "startup packet too large",
