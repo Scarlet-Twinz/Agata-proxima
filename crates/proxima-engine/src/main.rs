@@ -33,7 +33,7 @@ async fn main() -> io::Result<()> {
     };
     let upstream_connector = match (
         &config.upstream_tls_ca_file,
-        config.upstream_tls_server_name,
+        &config.upstream_tls_server_name,
         config.upstream_tls_mode,
     ) {
         (Some(ca), Some(_), TlsMode::Required) => Some(connector(client_config(ca)?)),
