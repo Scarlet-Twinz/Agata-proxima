@@ -27,7 +27,11 @@ impl fmt::Display for BindingError {
 impl std::error::Error for BindingError {}
 
 impl TenantBinding {
-    pub fn bind(&mut self, context: TenantContext, now_unix_seconds: u64) -> Result<(), BindingError> {
+    pub fn bind(
+        &mut self,
+        context: TenantContext,
+        now_unix_seconds: u64,
+    ) -> Result<(), BindingError> {
         if now_unix_seconds >= context.expires_at {
             return Err(BindingError::ContextExpired);
         }
