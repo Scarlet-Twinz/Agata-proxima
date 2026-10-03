@@ -2,7 +2,7 @@
 
 Agata Proxima is security infrastructure for multi-tenant applications.
 
-Proxima is being built around a simple principle:
+Proxima is built around a simple principle:
 
 > Tenant isolation should be an infrastructure boundary that can be enforced, tested, and audited — not a security assumption repeated throughout application code.
 
@@ -11,60 +11,60 @@ Proxima is being built around a simple principle:
 ```
 Application
     |
+    | PostgreSQL connection
     v
-+----------------------+
-|    Proxima Engine    |
-|                      |
-| connection lifecycle |
-| identity/context     |
-| policy enforcement   |
-| verification        |
-| audit                |
-+----------+-----------+
-           |
-           v
-      PostgreSQL
++---------------------------+
+|      Proxima Engine       |
+|                           |
+| TLS termination (optional)|
+| tenant identity/context   |
+| PostgreSQL auth boundary  |
+| lifecycle limits          |
+| runtime telemetry         |
++-------------+-------------+
+              |
+              | TLS (optional, verified)
+              v
+         PostgreSQL
 ```
 
 The first implementation targets PostgreSQL and is written in Rust with Tokio.
 
 ## Product direction
 
-- **Proxima Engine** — the self-hosted data-plane component.
-- **Proxima Verify** — isolation verification and adversarial security testing.
-- **Proxima Cloud** — the hosted control plane for policies, deployments, audit, monitoring, and fleet management.
+- **Proxima Engine** — self-hosted data plane.
+- **Proxima Verify** — adversarial tenant-isolation verification.
+- **Proxima Cloud** — hosted control plane for fleets, policies, verification history, audit and operations.
 
-Security guarantees will be documented against an explicit threat model. Proxima will not claim protection that it cannot demonstrate with tests.
+## Current engineering boundary
 
-## Status
+The engine can terminate PostgreSQL client TLS when explicitly configured and can independently require certificate-verified TLS on the PostgreSQL hop. It verifies tenant context before the normal query stream and maps the verified tenant to a PostgreSQL role.
 
-Early infrastructure development.
+The runtime also exposes private-loopback telemetry for the command center, enforces connection/session limits, and runs as a non-root container.
 
-The current engine establishes a verified tenant context, maps it to a PostgreSQL role, brokers the PostgreSQL authentication/startup exchange, and then enters the normal query stream only after PostgreSQL reports a ready session.
-
-The repository includes a real PostgreSQL integration test, independent RLS verification, malformed-frame property tests, connection safety limits, and an adversarial `Proxima Verify` harness. TLS can now be terminated at Proxima with an explicit PostgreSQL SSLRequest boundary, and the Proxima-to-PostgreSQL hop can independently require certificate-verified TLS. The repository also contains a command-center dashboard foundation; its displayed metrics remain placeholders until a live control-plane telemetry API is connected.
-
-## License
-
-MIT
-
+The dashboard in `dashboard/` is a real static command center and consumes live engine telemetry. It does not fabricate verification results.
 
 ## Verification
 
-The primary verification gates are:
+Primary gates:
 
-```text
+```bash
 cargo fmt --all -- --check
 cargo check --workspace --all-targets
 cargo test --workspace --all-targets
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 bash tests/postgres/verify_rls.sh
+bash -n tools/proxima-verify.sh tools/proxima-verify-3tenant.sh
+node --check dashboard/app.js
 ```
 
-For a configured deployment, run:
+For a configured deployment:
 
 ```bash
 bash tools/proxima-verify.sh
+bash tools/proxima-verify-3tenant.sh
 ```
 
-See [docs/verification.md](docs/verification.md) for the security verification model and deployment invariants.
+The three-tenant script is an acceptance harness for a real SaaS integration; CI does not pretend to be external customer evidence.
+
+See `docs/release-readiness.md` and `docs/external-saas.md`.
