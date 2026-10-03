@@ -9,9 +9,10 @@ RUN useradd --create-home --uid 10001 proxima
 COPY --from=builder /app/target/release/proxima-engine /usr/local/bin/proxima-engine
 
 USER proxima
-EXPOSE 6432
+EXPOSE 6432 9080
 
 ENV PROXIMA_LISTEN_ADDR=0.0.0.0:6432
+ENV PROXIMA_ADMIN_ADDR=0.0.0.0:9080
 ENV PROXIMA_UPSTREAM_ADDR=host.docker.internal:5432
 
 ENTRYPOINT ["/usr/local/bin/proxima-engine"]
