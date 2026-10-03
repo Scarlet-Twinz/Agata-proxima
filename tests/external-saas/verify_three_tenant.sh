@@ -11,7 +11,7 @@ set -euo pipefail
 : "${PROXIMA_VERIFY_TENANT_C_PASSWORD:=tenant-c-password}"
 
 if [[ -z "$PROXIMA_VERIFY_SIGNING_KEY" ]]; then
-  echo "Set PROXIMA_VERIFY_SIGNING_KEY and PROXIMA_VERIFY_PASSWORD." >&2
+  echo "Set PROXIMA_VERIFY_SIGNING_KEY before running the external SaaS harness." >&2
   exit 2
 fi
 
@@ -47,7 +47,7 @@ assert_one() {
   echo "PASS: $label"
 }
 
-assert_one "tenant A sees one own row" "$(run_as tenant_a "SELECT count(*) FROM proxima_external.records WHERE tenant_id='tenant_a';")"
+assert_one "tenant A sees one own row" "$(run_as tenant_a "SELECT count(*) FROM proxima_test.records WHERE tenant_id='tenant_a';")"
 assert_one "tenant B sees one own row" "$(run_as tenant_b "SELECT count(*) FROM proxima_test.records WHERE tenant_id='tenant_b';")"
 assert_one "tenant C sees one own row" "$(run_as tenant_c "SELECT count(*) FROM proxima_test.records WHERE tenant_id='tenant_c';")"
 assert_zero "A cannot read B" "$(run_as tenant_a "SELECT count(*) FROM proxima_test.records WHERE tenant_id='tenant_b';")"
