@@ -608,7 +608,10 @@ async fn me(State(state): State<AppState>, headers: HeaderMap) -> Response {
     }
 }
 
-async fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), (StatusCode, Json<Message>)> {
+async fn authorize(
+    state: &AppState,
+    headers: &HeaderMap,
+) -> Result<(), (StatusCode, Json<Message>)> {
     if let Some(key) = &state.api_key {
         let expected = format!("Bearer {key}");
         if headers
