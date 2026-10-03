@@ -54,3 +54,34 @@ fn invalid_tls_material_fails_closed() {
     assert!(server_config("/does/not/exist", "/does/not/exist").is_err());
     assert!(client_config("/does/not/exist").is_err());
 }
+
+#[tokio::test]
+async fn upstream_tls_rejects_hostname_mismatch() {
+    let cert = generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
+    let (cert_path, key_path) = fixture_paths();
+    fs::write(&cert_path, cert.cert.pem()).unwrap();
+    fs::write(&key_path, cert.signing_key.serialize_pem()).unwrap();
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let acceptor = acceptor(server_config(cert_path.to_str().unwrap(), key_path.to_str().unwrap()).unwrap());
+    let connector = connector(client_config(cert_path.to_str().unwrap()).unwrap());
+
+    let server = tokio::spawn(async move {
+        let (tcp, _) = listener.accept().await.unwrap();
+        let _ = accept_postgres_tls(tcp, acceptor, Duration::from_secs(2)).await;
+    });
+
+    let tcp = tokio::net::TcpStream::connect(addr).await.unwrap();
+    let result = connect_postgres_tls(
+        tcp,
+        connector,
+        ServerName::try_from("wrong.example".to_string()).unwrap(),
+        Duration::from_secs(2),
+    ).await;
+    assert!(result.is_err());
+    timeout(Duration::from_secs(3), server).await.unwrap().unwrap();
+
+    let _ = fs::remove_file(cert_path);
+    let _ = fs::remove_file(key_path);
+}
