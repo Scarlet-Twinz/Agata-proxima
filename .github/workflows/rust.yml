@@ -1,4 +1,5 @@
 name: Rust
+# Phase 51-57 launch gate: build, test, lint, migrations, API contracts, and acceptance syntax.
 
 on:
   push:
