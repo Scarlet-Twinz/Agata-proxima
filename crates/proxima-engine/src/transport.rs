@@ -1,7 +1,5 @@
 use std::io;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{Context, Poll};
 
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName};
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
@@ -104,20 +102,3 @@ pub async fn connect_postgres_tls(
 
 pub fn connector(config: Arc<ClientConfig>) -> TlsConnector { TlsConnector::from(config) }
 pub fn acceptor(config: Arc<ServerConfig>) -> TlsAcceptor { TlsAcceptor::from(config) }
-
-impl AsyncRead for BoxedIo {
-    fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<io::Result<()>> {
-        Pin::new(&mut **self).poll_read(cx, buf)
-    }
-}
-impl AsyncWrite for BoxedIo {
-    fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>, data: &[u8]) -> Poll<io::Result<usize>> {
-        Pin::new(&mut **self).poll_write(cx, data)
-    }
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Pin::new(&mut **self).poll_flush(cx)
-    }
-    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Pin::new(&mut **self).poll_shutdown(cx)
-    }
-}
