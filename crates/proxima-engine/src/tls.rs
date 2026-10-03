@@ -6,10 +6,7 @@ use std::io::{self, BufReader};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tokio_rustls::{
-    client::TlsStream as ClientTlsStream, server::TlsStream as ServerTlsStream, TlsAcceptor,
-    TlsConnector,
-};
+use tokio_rustls::{client::TlsStream as ClientTlsStream, server::TlsStream as ServerTlsStream, TlsAcceptor, TlsConnector};
 
 pub fn client_acceptor(config: &Config) -> io::Result<Option<TlsAcceptor>> {
     let (Some(cert_path), Some(key_path)) = (&config.tls_cert_file, &config.tls_key_file) else {
