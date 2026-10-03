@@ -35,7 +35,9 @@ count_records() {
 post_record() {
   local token="$1"
   local tenant="$2"
-  curl -fsS     -H "Content-Type: application/json"     -H "X-Proxima-Tenant-Token: $token"     -d "{"tenant_id":"$tenant","payload":{"source":"external-saas-acceptance"}}"     "$EXTERNAL_SAAS_URL/records" >/dev/null
+  local payload
+  payload="$(printf '{"tenant_id":"%s","payload":{"source":"external-saas-acceptance"}}' "$tenant")"
+  curl -fsS     -H "Content-Type: application/json"     -H "X-Proxima-Tenant-Token: $token"     --data "$payload"     "$EXTERNAL_SAAS_URL/records" >/dev/null
 }
 
 TOKEN_A="$(make_token tenant_a 3600)"
