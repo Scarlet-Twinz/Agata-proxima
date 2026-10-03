@@ -81,3 +81,18 @@ DROP TRIGGER IF EXISTS nodes_touch ON nodes;
 CREATE TRIGGER nodes_touch BEFORE UPDATE ON nodes FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
 DROP TRIGGER IF EXISTS deployments_touch ON deployments;
 CREATE TRIGGER deployments_touch BEFORE UPDATE ON deployments FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
+
+CREATE TABLE IF NOT EXISTS support_requests (
+  id uuid PRIMARY KEY,
+  organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+  subject text NOT NULL,
+  message text NOT NULL,
+  priority text NOT NULL DEFAULT 'normal' CHECK (priority IN ('low','normal','high','urgent')),
+  status text NOT NULL DEFAULT 'open' CHECK (status IN ('open','in_progress','resolved','closed')),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_support_org_created ON support_requests(organization_id, created_at DESC);
+DROP TRIGGER IF EXISTS support_touch ON support_requests;
+CREATE TRIGGER support_touch BEFORE UPDATE ON support_requests FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
