@@ -336,7 +336,6 @@ mod tests {
         let frame = encode_frontend_frame(b'Q', b"SELECT").unwrap();
         assert_eq!(&frame[..], b"Q\0\0\0\nSELECT");
     }
-}
 
 proptest! {
     #[test]
@@ -345,4 +344,6 @@ proptest! {
         let _ = parse_frontend_frame(&input);
         let _ = parse_backend_frame(&input);
     }
+}
+
 }
