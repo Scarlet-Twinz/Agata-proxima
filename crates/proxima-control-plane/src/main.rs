@@ -185,6 +185,7 @@ async fn main() -> Result<()> {
             post(production::reset_password),
         )
         .route("/api/v1/billing", get(production::billing_status))
+        .route("/api/v1/billing/plans", get(production::plans))
         .route("/api/v1/billing/entitlements", get(production::entitlements))
         .route("/api/v1/billing/checkout", post(production::checkout))
         .route("/api/v1/billing/portal", post(production::portal))
