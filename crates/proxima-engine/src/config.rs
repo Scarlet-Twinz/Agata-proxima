@@ -6,6 +6,7 @@ use std::net::SocketAddr;
 pub struct Config {
     pub listen_addr: SocketAddr,
     pub upstream_addr: String,
+    pub tenant_signing_key: Option<String>,
 }
 
 impl Config {
@@ -25,9 +26,22 @@ impl Config {
             ));
         }
 
+        let tenant_signing_key = match env::var("PROXIMA_TENANT_SIGNING_KEY") {
+            Ok(value) if value.trim().is_empty() => None,
+            Ok(value) if value.as_bytes().len() < 32 => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "PROXIMA_TENANT_SIGNING_KEY must be at least 32 bytes",
+                ));
+            }
+            Ok(value) => Some(value),
+            Err(_) => None,
+        };
+
         Ok(Self {
             listen_addr,
             upstream_addr,
+            tenant_signing_key,
         })
     }
 }
@@ -38,8 +52,13 @@ mod tests {
 
     #[test]
     fn defaults_are_valid() {
+        std::env::remove_var("PROXIMA_LISTEN_ADDR");
+        std::env::remove_var("PROXIMA_UPSTREAM_ADDR");
+        std::env::remove_var("PROXIMA_TENANT_SIGNING_KEY");
+
         let config = Config::from_env().unwrap();
         assert_eq!(config.listen_addr, "127.0.0.1:6432".parse().unwrap());
         assert_eq!(config.upstream_addr, "127.0.0.1:5432");
+        assert_eq!(config.tenant_signing_key, None);
     }
 }
