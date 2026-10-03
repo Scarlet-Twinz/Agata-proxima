@@ -242,7 +242,7 @@ mod tests {
         let (message, consumed) = parse_frontend_frame(&frame).unwrap().unwrap();
 
         assert_eq!(message.tag, b'Q');
-        assert_eq!(&message.payload[..], b"SELECT");
+        assert_eq!(&message.payload[..], b"SELECT\0");
         assert_eq!(consumed, frame.len());
     }
 
