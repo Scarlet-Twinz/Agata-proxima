@@ -3,7 +3,7 @@ use sha2::Sha256;
 use std::error::Error;
 use std::process::{Child, Command};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tokio_postgres::{Client, NoTls};
+use tokio_postgres::{config::SslMode, Client, NoTls};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -103,6 +103,7 @@ async fn connect_tenant(tenant_id: &str, password: &str) -> Result<Client, Box<d
         .user("proxima")
         .password(password)
         .dbname("proxima_dev")
+        .ssl_mode(SslMode::Disable)
         .options(&format!("-c proxima_tenant_token={}", token(tenant_id)));
 
     let (client, connection) = config.connect(NoTls).await?;
