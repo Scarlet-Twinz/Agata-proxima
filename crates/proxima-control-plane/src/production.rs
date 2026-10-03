@@ -527,22 +527,26 @@ pub(crate) async fn stripe_webhook(State(s): State<AppState>, headers: HeaderMap
         let period_end = object.get("current_period_end").and_then(Value::as_i64);
 
         match event_type {
-            "checkout.session.completed" | "customer.subscription.created" |
-            "customer.subscription.updated" | "customer.subscription.deleted" |
-            "invoice.payment_failed" | "invoice.paid" => {
+            "checkout.session.completed"
+            | "customer.subscription.created"
+            | "customer.subscription.updated"
+            | "customer.subscription.deleted" => {
                 let normalized_status = if event_type == "customer.subscription.deleted" {
                     "canceled"
-                } else if event_type == "invoice.payment_failed" {
-                    "past_due"
                 } else {
                     status
+                };
+                let plan = if event_type == "customer.subscription.deleted" {
+                    "free"
+                } else {
+                    plan_for_price(price_id).unwrap_or("free")
                 };
                 if let Err(e) = sqlx::query(
                     "INSERT INTO billing_accounts(
                         organization_id,stripe_customer_id,stripe_subscription_id,stripe_price_id,
                         plan_key,status,current_period_end,cancel_at_period_end,updated_at)
-                     VALUES($1,$2,$3,$4,COALESCE($5,'free'), $6,
-                        CASE WHEN $6::bigint IS NULL THEN NULL ELSE to_timestamp($6) END,$7,now())
+                     VALUES($1,$2,$3,$4,$5,$6,
+                        CASE WHEN $7::bigint IS NULL THEN NULL ELSE to_timestamp($7) END,$8,now())
                      ON CONFLICT (organization_id) DO UPDATE SET
                        stripe_customer_id=COALESCE(EXCLUDED.stripe_customer_id,billing_accounts.stripe_customer_id),
                        stripe_subscription_id=COALESCE(EXCLUDED.stripe_subscription_id,billing_accounts.stripe_subscription_id),
@@ -555,7 +559,7 @@ pub(crate) async fn stripe_webhook(State(s): State<AppState>, headers: HeaderMap
                 .bind(customer_id)
                 .bind(subscription_id)
                 .bind(price_id)
-                .bind(plan_for_price(price_id).unwrap_or("free"))
+                .bind(plan)
                 .bind(normalized_status)
                 .bind(period_end)
                 .bind(cancel_at_period_end)
@@ -563,18 +567,28 @@ pub(crate) async fn stripe_webhook(State(s): State<AppState>, headers: HeaderMap
                 .await {
                     return db_error(e);
                 }
-                let plan = if event_type == "customer.subscription.deleted" {
-                    "free"
-                } else {
-                    plan_for_price(price_id).unwrap_or("free")
-                };
                 if let Err(e) = apply_entitlements(&s.db, org, plan).await {
+                    return db_error(e);
+                }
+            }
+            "invoice.payment_failed" | "invoice.paid" => {
+                let normalized_status = if event_type == "invoice.payment_failed" {
+                    "past_due"
+                } else {
+                    "active"
+                };
+                if let Err(e) = sqlx::query(
+                    "UPDATE billing_accounts SET status=$1,updated_at=now() WHERE organization_id=$2",
+                )
+                .bind(normalized_status)
+                .bind(org)
+                .execute(&s.db)
+                .await {
                     return db_error(e);
                 }
             }
             _ => {}
         }
-
         audit(
             &s.db,
             org,
