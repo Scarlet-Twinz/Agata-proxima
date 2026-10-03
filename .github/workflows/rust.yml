@@ -68,8 +68,7 @@ jobs:
         env:
           PROXIMA_LISTEN_ADDR: 127.0.0.1:6432
           PROXIMA_UPSTREAM_ADDR: 127.0.0.1:5432
-          PROXIMA_UPSTREAM_USER: proxima_gateway
-          PROXIMA_UPSTREAM_PASSWORD: proxima-gateway-dev-only
+          PROXIMA_TENANT_ROLE_PASSWORD: proxima-tenant-dev-only
           PROXIMA_TENANT_SIGNING_KEY: "01234567890123456789012345678901"
           PROXIMA_TENANT_ROLE_PREFIX: proxima_
           RUST_LOG: proxima_engine=info
