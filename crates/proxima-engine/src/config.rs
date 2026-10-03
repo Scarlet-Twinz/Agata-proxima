@@ -97,19 +97,15 @@ impl Config {
             Err(_) => None,
         };
 
-        let upstream_connect_timeout =
-            duration_ms("PROXIMA_UPSTREAM_CONNECT_TIMEOUT_MS", 10_000)?;
-        let tls_handshake_timeout =
-            duration_ms("PROXIMA_TLS_HANDSHAKE_TIMEOUT_MS", 10_000)?;
+        let upstream_connect_timeout = duration_ms("PROXIMA_UPSTREAM_CONNECT_TIMEOUT_MS", 10_000)?;
+        let tls_handshake_timeout = duration_ms("PROXIMA_TLS_HANDSHAKE_TIMEOUT_MS", 10_000)?;
 
         let max_connections = env::var("PROXIMA_MAX_CONNECTIONS")
             .unwrap_or_else(|_| "1024".to_string())
             .parse::<usize>()
             .map_err(|e| invalid(&format!("invalid PROXIMA_MAX_CONNECTIONS: {e}")))?;
         if max_connections == 0 {
-            return Err(invalid(
-                "PROXIMA_MAX_CONNECTIONS must be greater than zero",
-            ));
+            return Err(invalid("PROXIMA_MAX_CONNECTIONS must be greater than zero"));
         }
 
         let client_tls_mode = env::var("PROXIMA_TLS_MODE")
@@ -172,9 +168,7 @@ fn parse_addr(name: &str, default: &str) -> io::Result<SocketAddr> {
 }
 
 fn optional_env(name: &str) -> Option<String> {
-    env::var(name)
-        .ok()
-        .filter(|value| !value.trim().is_empty())
+    env::var(name).ok().filter(|value| !value.trim().is_empty())
 }
 
 fn duration_ms(name: &str, default: u64) -> io::Result<Duration> {
