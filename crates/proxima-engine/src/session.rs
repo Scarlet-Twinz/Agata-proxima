@@ -30,12 +30,8 @@ pub async fn establish(
             protocol_version,
             parameters,
         } => {
-            let (startup, tenant_context) = prepare_startup(
-                protocol_version,
-                parameters,
-                verifier,
-                upstream_user,
-            )?;
+            let (startup, tenant_context) =
+                prepare_startup(protocol_version, parameters, verifier, upstream_user)?;
 
             debug!(
                 tenant_bound = tenant_context.is_some(),
