@@ -30,7 +30,7 @@ jobs:
         continue-on-error: true
         run: |
           set -x
-          bash tools/proxima-control-plane-smoke.sh
+          bash tools/proxima-control-plane-smoke.sh > /tmp/smoke.log 2>&1
       - name: Report
         if: steps.trace.outcome == 'failure'
         env:
@@ -38,6 +38,8 @@ jobs:
         run: |
           {
             echo '## smoke trace'
+            echo '### smoke log'
+            cat /tmp/smoke.log || true
             echo '### control-plane log'
             cat /tmp/proxima.log || true
           } > /tmp/report.md
