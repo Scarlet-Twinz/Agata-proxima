@@ -83,6 +83,7 @@ async fn main() -> io::Result<()> {
                 let upstream_tls_timeout = config.upstream_tls_handshake_timeout;
                 let require_client_tls = config.require_client_tls;
                 let upstream_tls_mode = config.upstream_tls_mode;
+                let upstream_tls_server_name = config.upstream_tls_server_name.clone();
 
                 tokio::spawn(async move {
                     let _permit = permit;
@@ -99,7 +100,7 @@ async fn main() -> io::Result<()> {
                         upstream_tls_timeout,
                         require_client_tls,
                         upstream_tls_mode,
-                        config.upstream_tls_server_name.as_deref(),
+                        upstream_tls_server_name.as_deref(),
                     ).await {
                         error!(peer = %peer, error = %err, "connection failed");
                     }
