@@ -46,3 +46,12 @@ Those are separate engineering and product boundaries.
 The next production work is TLS termination/upstream TLS trust, stronger connection/session lifecycle handling, richer verification coverage, observability, deployment hardening, and a real external SaaS integration.
 
 The public release should describe the supported security model precisely rather than implying broader guarantees.
+
+
+## Phase 18 TLS boundary
+
+Client TLS and upstream PostgreSQL TLS are independent and explicit. Required mode refuses plaintext client startup, requires a successful PostgreSQL SSLRequest negotiation, bounds the TLS handshake, and verifies upstream certificates against an operator-provided CA and server name. There is no certificate-bypass configuration.
+
+## Phase 22 dashboard
+
+A command-center presentation surface exists under dashboard/. It reserves the final Agata Proxima logo position and deliberately labels its current metrics as presentation data until the control plane supplies live telemetry.

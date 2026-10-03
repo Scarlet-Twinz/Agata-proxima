@@ -1,7 +1,14 @@
+use proxima_engine::{
+    config::{Config, TlsMode},
+    session::establish,
+    tenant::TenantTokenVerifier,
+    transport::{
+        accept_postgres_tls, acceptor, boxed, client_config, connect_postgres_tls, connector,
+        server_config, BoxedIo,
+    },
+};
 use std::io;
 use std::sync::Arc;
-
-use proxima_engine::{config::Config, session::establish, tenant::TenantTokenVerifier};
 use tokio::io::copy_bidirectional;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Semaphore;
@@ -11,110 +18,89 @@ use tracing::{error, info};
 #[tokio::main]
 async fn main() -> io::Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter(
-            std::env::var("RUST_LOG").unwrap_or_else(|_| "proxima_engine=info".to_string()),
-        )
+        .with_env_filter(std::env::var("RUST_LOG").unwrap_or_else(|_| "proxima_engine=info".into()))
         .init();
-
     let config = Config::from_env()?;
-    let config_tenant_role_prefix = config.tenant_role_prefix.clone();
-
     let verifier = config
         .tenant_signing_key
         .as_deref()
         .map(TenantTokenVerifier::new)
         .transpose()
-        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error.to_string()))?;
-
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e.to_string()))?;
+    let tls_acceptor = match (&config.tls_cert_file, &config.tls_key_file, config.tls_mode) {
+        (Some(c), Some(k), TlsMode::Required) => Some(acceptor(server_config(c, k)?)),
+        _ => None,
+    };
+    let upstream_connector = match (
+        &config.upstream_tls_ca_file,
+        &config.upstream_tls_server_name,
+        config.upstream_tls_mode,
+    ) {
+        (Some(ca), Some(_), TlsMode::Required) => Some(connector(client_config(ca)?)),
+        _ => None,
+    };
     let listener = TcpListener::bind(config.listen_addr).await?;
-    let connection_limit = Arc::new(Semaphore::new(config.max_connections));
-
-    info!(
-        listen = %config.listen_addr,
-        upstream = %config.upstream_addr,
-        tenant_enforcement = verifier.is_some(),
-        max_connections = config.max_connections,
-        "Agata Proxima engine listening"
-    );
-
+    let limit = Arc::new(Semaphore::new(config.max_connections));
+    info!(listen=%config.listen_addr,upstream=%config.upstream_addr,tenant_enforcement=verifier.is_some(),tls=matches!(config.tls_mode,TlsMode::Required),upstream_tls=matches!(config.upstream_tls_mode,TlsMode::Required),max_connections=config.max_connections,"Agata Proxima engine listening");
     loop {
         tokio::select! {
-            accept = listener.accept() => {
-                let (client, peer) = accept?;
-                let permit = match connection_limit.clone().try_acquire_owned() {
-                    Ok(permit) => permit,
-                    Err(_) => {
-                        error!(peer = %peer, "connection limit reached");
-                        drop(client);
-                        continue;
-                    }
-                };
-
-                let upstream = config.upstream_addr.clone();
-                let verifier = verifier.clone();
-                let tenant_role_prefix = config_tenant_role_prefix.clone();
-                let upstream_connect_timeout = config.upstream_connect_timeout;
-
-                tokio::spawn(async move {
-                    let _permit = permit;
-                    if let Err(err) = handle_connection(
-                        client,
-                        peer,
-                        &upstream,
-                        verifier.as_ref(),
-                        &tenant_role_prefix,
-                        upstream_connect_timeout,
-                    )
-                    .await
-                    {
-                        error!(peer = %peer, error = %err, "connection failed");
-                    }
-                });
-            }
-            _ = tokio::signal::ctrl_c() => {
-                info!("shutdown signal received");
-                break;
-            }
+         accept=listener.accept()=>{let(client,peer)=accept?;let permit=match limit.clone().try_acquire_owned(){Ok(p)=>p,Err(_)=>{error!(peer=%peer,"connection limit reached");drop(client);continue}};
+          let config=config.clone();let verifier=verifier.clone();let tls_acceptor=tls_acceptor.clone();let upstream_connector=upstream_connector.clone();
+          tokio::spawn(async move{let _permit=permit;if let Err(e)=handle_connection(client,peer,config,verifier.as_ref(),tls_acceptor,upstream_connector).await{error!(peer=%peer,error=%e,"connection failed");}});
+         }
+         _=tokio::signal::ctrl_c()=>{info!("shutdown signal received");break}
         }
     }
-
     Ok(())
 }
 
 async fn handle_connection(
     client: TcpStream,
     peer: std::net::SocketAddr,
-    upstream_addr: &str,
+    config: Config,
     verifier: Option<&TenantTokenVerifier>,
-    tenant_role_prefix: &str,
-    upstream_connect_timeout: std::time::Duration,
+    tls_acceptor: Option<tokio_rustls::TlsAcceptor>,
+    upstream_connector: Option<tokio_rustls::TlsConnector>,
 ) -> io::Result<()> {
-    info!(peer = %peer, "client connected");
-
-    let upstream = timeout(upstream_connect_timeout, TcpStream::connect(upstream_addr))
-        .await
-        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "upstream connection timed out"))??;
+    info!(peer=%peer,"client connected");
+    let client: BoxedIo = match (config.tls_mode, tls_acceptor) {
+        (TlsMode::Required, Some(a)) => {
+            accept_postgres_tls(client, a, config.tls_handshake_timeout).await?
+        }
+        (TlsMode::Disabled, None) => boxed(client),
+        _ => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "invalid TLS configuration",
+            ))
+        }
+    };
+    let upstream_tcp = timeout(
+        config.upstream_connect_timeout,
+        TcpStream::connect(&config.upstream_addr),
+    )
+    .await
+    .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "upstream connection timed out"))??;
+    let upstream: BoxedIo = if let Some(connector) = upstream_connector {
+        let name = config
+            .upstream_tls_server_name
+            .clone()
+            .unwrap()
+            .try_into()
+            .map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "invalid upstream TLS server name",
+                )
+            })?;
+        connect_postgres_tls(upstream_tcp, connector, name, config.tls_handshake_timeout).await?
+    } else {
+        boxed(upstream_tcp)
+    };
     let (mut client, mut upstream, session) =
-        establish(client, upstream, verifier, tenant_role_prefix).await?;
-
-    info!(
-        peer = %peer,
-        tenant = session
-            .tenant_context
-            .as_ref()
-            .map(|context| context.tenant_id.as_str())
-            .unwrap_or("unbound"),
-        "PostgreSQL session established"
-    );
-
-    let (client_bytes, upstream_bytes) = copy_bidirectional(&mut client, &mut upstream).await?;
-
-    info!(
-        peer = %peer,
-        client_to_database = client_bytes,
-        database_to_client = upstream_bytes,
-        "connection closed"
-    );
-
+        establish(client, upstream, verifier, &config.tenant_role_prefix).await?;
+    info!(peer=%peer,tenant=session.tenant_context.as_ref().map(|c|c.tenant_id.as_str()).unwrap_or("unbound"),"PostgreSQL session established");
+    let (a, b) = copy_bidirectional(&mut client, &mut upstream).await?;
+    info!(peer=%peer,client_to_database=a,database_to_client=b,"connection closed");
     Ok(())
 }

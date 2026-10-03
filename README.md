@@ -42,7 +42,7 @@ Early infrastructure development.
 
 The current engine establishes a verified tenant context, maps it to a PostgreSQL role, brokers the PostgreSQL authentication/startup exchange, and then enters the normal query stream only after PostgreSQL reports a ready session.
 
-The repository includes a real PostgreSQL integration test, independent RLS verification, malformed-frame property tests, connection safety limits, and an adversarial `Proxima Verify` harness. End-to-end TLS is fail-closed while enforcement is enabled until a dedicated TLS termination and upstream-trust model is implemented.
+The repository includes a real PostgreSQL integration test, independent RLS verification, malformed-frame property tests, connection safety limits, and an adversarial `Proxima Verify` harness. TLS can now be terminated at Proxima with an explicit PostgreSQL SSLRequest boundary, and the Proxima-to-PostgreSQL hop can independently require certificate-verified TLS. The repository also contains a command-center dashboard foundation; its displayed metrics remain placeholders until a live control-plane telemetry API is connected.
 
 ## License
 
