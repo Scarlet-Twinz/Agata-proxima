@@ -110,6 +110,71 @@ pub(crate) async fn enforce_capacity(
     Ok(())
 }
 
+pub(crate) async fn enforce_environment_capacity(
+    db: &sqlx::PgPool,
+    organization_id: Uuid,
+    environment: &str,
+) -> Result<(), Response> {
+    let row = sqlx::query(
+        "SELECT environment_limit,billing_status,plan_key
+         FROM organization_entitlements WHERE organization_id=$1",
+    )
+    .bind(organization_id)
+    .fetch_optional(db)
+    .await
+    .map_err(db_error)?;
+
+    let row = row.ok_or_else(|| service_unavailable("Organization entitlements are not initialized."))?;
+    let status: String = row.get("billing_status");
+    if matches!(status.as_str(), "canceled" | "unpaid") {
+        return Err((
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"ok":false,"error":"subscription_inactive","message":"Restore an active Agata Proxima subscription to use this capacity."}))
+        ).into_response());
+    }
+
+    let limit: i32 = row.get("environment_limit");
+    let exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS(
+            SELECT 1 FROM nodes WHERE organization_id=$1 AND environment=$2
+        )",
+    )
+    .bind(organization_id)
+    .bind(environment)
+    .fetch_one(db)
+    .await
+    .map_err(db_error)?;
+
+    if exists {
+        return Ok(());
+    }
+
+    let count: i64 = sqlx::query_scalar(
+        "SELECT count(DISTINCT environment) FROM nodes WHERE organization_id=$1",
+    )
+    .bind(organization_id)
+    .fetch_one(db)
+    .await
+    .map_err(db_error)?;
+
+    if count >= i64::from(limit) {
+        let plan: String = row.get("plan_key");
+        return Err((
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({
+                "ok":false,
+                "error":"plan_limit_reached",
+                "resource":"environments",
+                "limit":limit,
+                "plan":plan,
+                "message":"Environment capacity reached. Upgrade the Agata Proxima plan to continue."
+            }))
+        ).into_response());
+    }
+
+    Ok(())
+}
+
 pub(crate) async fn require_feature(
     db: &sqlx::PgPool,
     organization_id: Uuid,
