@@ -47,6 +47,279 @@ pub(crate) struct PasswordResetConfirm {
     pub token: String,
     pub password: String,
 }
+fn plan_for_price(price_id: Option<&str>) -> Option<&'static str> {
+    let starter = env::var("AGATA_STRIPE_STARTER_PRICE_ID").ok();
+    let growth = env::var("AGATA_STRIPE_GROWTH_PRICE_ID").ok();
+    let scale = env::var("AGATA_STRIPE_SCALE_PRICE_ID").ok();
+
+    match price_id {
+        Some(id) if starter.as_deref() == Some(id) => Some("starter"),
+        Some(id) if growth.as_deref() == Some(id) => Some("growth"),
+        Some(id) if scale.as_deref() == Some(id) => Some("scale"),
+        _ => None,
+    }
+}
+
+fn plan_limits(plan: &str) -> (i32, i32, i32, i32, bool, bool, bool, bool, bool) {
+    match plan {
+        "starter" => (2, 25, 2, 30, false, true, false, false, false),
+        "growth" => (5, 100, 5, 180, true, true, true, true, false),
+        "scale" => (15, 500, 50, 365, true, true, true, true, true),
+        "enterprise" => (i32::MAX, i32::MAX, i32::MAX, 3650, true, true, true, true, true),
+        _ => (1, 3, 1, 7, false, false, false, false, false),
+    }
+}
+
+#[allow(clippy::result_large_err)]
+pub(crate) async fn enforce_capacity(
+    db: &sqlx::PgPool,
+    organization_id: Uuid,
+    resource: &str,
+) -> Result<(), Response> {
+    let row = sqlx::query(
+        "SELECT node_limit,tenant_limit,environment_limit,billing_status,plan_key
+         FROM organization_entitlements WHERE organization_id=$1",
+    )
+    .bind(organization_id)
+    .fetch_optional(db)
+    .await
+    .map_err(db_error)?;
+
+    let row = row.ok_or_else(|| service_unavailable("Organization entitlements are not initialized."))?;
+    let status: String = row.get("billing_status");
+    if matches!(status.as_str(), "canceled" | "unpaid") {
+        return Err((
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"ok":false,"error":"subscription_inactive","message":"Restore an active Agata Proxima subscription to use this capacity."}))
+        ).into_response());
+    }
+
+    let (limit_column, count_sql) = match resource {
+        "tenants" => ("tenant_limit", "SELECT count(*) FROM tenants t JOIN projects p ON p.id=t.project_id WHERE p.organization_id=$1"),
+        "nodes" => ("node_limit", "SELECT count(*) FROM nodes WHERE organization_id=$1"),
+        _ => return Ok(()),
+    };
+    let limit: i32 = row.get(limit_column);
+    let count: i64 = sqlx::query_scalar(count_sql).bind(organization_id).fetch_one(db).await.map_err(db_error)?;
+    if count >= i64::from(limit) {
+        let plan: String = row.get("plan_key");
+        return Err((
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"ok":false,"error":"plan_limit_reached","resource":resource,"limit":limit,"plan":plan,"message":"Plan capacity reached. Upgrade the Agata Proxima plan to continue."}))
+        ).into_response());
+    }
+    Ok(())
+}
+
+#[allow(clippy::result_large_err)]
+pub(crate) async fn enforce_environment_capacity(
+    db: &sqlx::PgPool,
+    organization_id: Uuid,
+    environment: &str,
+) -> Result<(), Response> {
+    let row = sqlx::query(
+        "SELECT environment_limit,billing_status,plan_key
+         FROM organization_entitlements WHERE organization_id=$1",
+    )
+    .bind(organization_id)
+    .fetch_optional(db)
+    .await
+    .map_err(db_error)?;
+
+    let row = row.ok_or_else(|| service_unavailable("Organization entitlements are not initialized."))?;
+    let status: String = row.get("billing_status");
+    if matches!(status.as_str(), "canceled" | "unpaid") {
+        return Err((
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({"ok":false,"error":"subscription_inactive","message":"Restore an active Agata Proxima subscription to use this capacity."}))
+        ).into_response());
+    }
+
+    let limit: i32 = row.get("environment_limit");
+    let exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS(
+            SELECT 1 FROM nodes WHERE organization_id=$1 AND environment=$2
+        )",
+    )
+    .bind(organization_id)
+    .bind(environment)
+    .fetch_one(db)
+    .await
+    .map_err(db_error)?;
+
+    if exists {
+        return Ok(());
+    }
+
+    let count: i64 = sqlx::query_scalar(
+        "SELECT count(DISTINCT environment) FROM nodes WHERE organization_id=$1",
+    )
+    .bind(organization_id)
+    .fetch_one(db)
+    .await
+    .map_err(db_error)?;
+
+    if count >= i64::from(limit) {
+        let plan: String = row.get("plan_key");
+        return Err((
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({
+                "ok":false,
+                "error":"plan_limit_reached",
+                "resource":"environments",
+                "limit":limit,
+                "plan":plan,
+                "message":"Environment capacity reached. Upgrade the Agata Proxima plan to continue."
+            }))
+        ).into_response());
+    }
+
+    Ok(())
+}
+
+#[allow(clippy::result_large_err)]
+pub(crate) async fn require_feature(
+    db: &sqlx::PgPool,
+    organization_id: Uuid,
+    feature: &str,
+) -> Result<(), Response> {
+    let row = sqlx::query(
+        "SELECT billing_status,plan_key,advanced_verification,fleet_controls,priority_support,entra_oidc,private_deployment
+         FROM organization_entitlements WHERE organization_id=$1",
+    )
+    .bind(organization_id)
+    .fetch_optional(db)
+    .await
+    .map_err(db_error)?;
+
+    let row = row.ok_or_else(|| service_unavailable("Organization entitlements are not initialized."))?;
+    let status: String = row.get("billing_status");
+    if matches!(status.as_str(), "canceled" | "unpaid") {
+        return Err((StatusCode::PAYMENT_REQUIRED, Json(json!({
+            "ok":false,"error":"subscription_inactive","message":"This organization does not have an active subscription."
+        }))).into_response());
+    }
+
+    let enabled: bool = match feature {
+        "advanced_verification" => row.get("advanced_verification"),
+        "fleet_controls" => row.get("fleet_controls"),
+        "priority_support" => row.get("priority_support"),
+        "entra_oidc" => row.get("entra_oidc"),
+        "private_deployment" => row.get("private_deployment"),
+        _ => return Ok(()),
+    };
+    if !enabled {
+        let plan: String = row.get("plan_key");
+        return Err((StatusCode::FORBIDDEN, Json(json!({
+            "ok":false,"error":"feature_not_in_plan","feature":feature,"plan":plan,
+            "message":"This capability is not included in the current Agata Proxima plan."
+        }))).into_response());
+    }
+    Ok(())
+}
+
+pub(crate) async fn plans() -> Response {
+    let catalog = [
+        ("free", "Free", 0_i32, "Evaluation and small proofs of concept", "AGATA_STRIPE_FREE_PRICE_ID"),
+        ("starter", "Starter", 79_i32, "First production SaaS deployments", "AGATA_STRIPE_STARTER_PRICE_ID"),
+        ("growth", "Growth", 249_i32, "Multi-tenant production workloads", "AGATA_STRIPE_GROWTH_PRICE_ID"),
+        ("scale", "Scale", 799_i32, "Larger fleets and security operations", "AGATA_STRIPE_SCALE_PRICE_ID"),
+        ("enterprise", "Enterprise", 0_i32, "Contracted enterprise deployments", ""),
+    ];
+
+    let plans = catalog.iter().map(|(key, name, monthly_usd, description, env_name)| {
+        let price_id = if env_name.is_empty() {
+            None
+        } else {
+            env::var(env_name).ok().filter(|v| !v.trim().is_empty())
+        };
+        let (nodes, tenants, environments, retention, advanced, fleet, priority, entra, private_deployment) =
+            plan_limits(key);
+        json!({
+            "key": key,
+            "name": name,
+            "monthly_usd": monthly_usd,
+            "description": description,
+            "price_id": price_id,
+            "checkout_available": key != &"free" && key != &"enterprise" && price_id.is_some(),
+            "limits": {
+                "nodes": nodes,
+                "tenants": tenants,
+                "environments": environments,
+                "audit_retention_days": retention
+            },
+            "features": {
+                "advanced_verification": advanced,
+                "fleet_controls": fleet,
+                "priority_support": priority,
+                "entra_oidc": entra,
+                "private_deployment": private_deployment
+            }
+        })
+    }).collect::<Vec<_>>();
+
+    Json(json!({ "currency": "usd", "billing_interval": "month", "plans": plans })).into_response()
+}
+
+pub(crate) async fn entitlements(State(s): State<AppState>, headers: HeaderMap) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    match sqlx::query(
+        "SELECT plan_key,billing_status,node_limit,tenant_limit,environment_limit,
+                audit_retention_days,advanced_verification,fleet_controls,priority_support,
+                entra_oidc,private_deployment,updated_at
+         FROM organization_entitlements WHERE organization_id=$1",
+    )
+    .bind(ctx.organization_id)
+    .fetch_optional(&s.db)
+    .await
+    {
+        Ok(Some(row)) => Json(json!({
+            "plan": row.get::<String,_>("plan_key"),
+            "billing_status": row.get::<String,_>("billing_status"),
+            "limits": {
+                "nodes": row.get::<i32,_>("node_limit"),
+                "tenants": row.get::<i32,_>("tenant_limit"),
+                "environments": row.get::<i32,_>("environment_limit"),
+                "audit_retention_days": row.get::<i32,_>("audit_retention_days")
+            },
+            "features": {
+                "advanced_verification": row.get::<bool,_>("advanced_verification"),
+                "fleet_controls": row.get::<bool,_>("fleet_controls"),
+                "priority_support": row.get::<bool,_>("priority_support"),
+                "entra_oidc": row.get::<bool,_>("entra_oidc"),
+                "private_deployment": row.get::<bool,_>("private_deployment")
+            }
+        })).into_response(),
+        Ok(None) => service_unavailable("Organization entitlements are not initialized."),
+        Err(e) => db_error(e),
+    }
+}
+
+async fn apply_entitlements(db: &sqlx::PgPool, organization_id: Uuid, plan: &str) -> Result<(), sqlx::Error> {
+    let (nodes, tenants, environments, retention, advanced, fleet, priority, entra, private_deployment) = plan_limits(plan);
+    sqlx::query(
+        "INSERT INTO organization_entitlements
+            (organization_id,plan_key,billing_status,node_limit,tenant_limit,environment_limit,
+             audit_retention_days,advanced_verification,fleet_controls,priority_support,entra_oidc,
+             private_deployment,updated_at)
+         VALUES($1,$2,'active',$3,$4,$5,$6,$7,$8,$9,$10,$11,now())
+         ON CONFLICT (organization_id) DO UPDATE SET
+            plan_key=EXCLUDED.plan_key,billing_status=EXCLUDED.billing_status,
+            node_limit=EXCLUDED.node_limit,tenant_limit=EXCLUDED.tenant_limit,
+            environment_limit=EXCLUDED.environment_limit,audit_retention_days=EXCLUDED.audit_retention_days,
+            advanced_verification=EXCLUDED.advanced_verification,fleet_controls=EXCLUDED.fleet_controls,
+            priority_support=EXCLUDED.priority_support,entra_oidc=EXCLUDED.entra_oidc,
+            private_deployment=EXCLUDED.private_deployment,updated_at=now()"
+    )
+    .bind(organization_id).bind(plan).bind(nodes).bind(tenants).bind(environments).bind(retention)
+    .bind(advanced).bind(fleet).bind(priority).bind(entra).bind(private_deployment)
+    .execute(db).await?;
+    Ok(())
+}
+
 pub(crate) async fn billing_status(State(s): State<AppState>, headers: HeaderMap) -> Response {
     let ctx = match authenticate(&s, &headers).await {
         Ok(v) => v,
@@ -101,13 +374,15 @@ pub(crate) async fn checkout(
         Ok(v) if !v.is_empty() => v,
         _ => return service_unavailable("Stripe secret is not configured."),
     };
-    let price_id = input
-        .price_id
-        .or_else(|| env::var("AGATA_STRIPE_PRICE_ID").ok())
-        .filter(|v| !v.trim().is_empty())
-        .unwrap_or_default();
-    if price_id.is_empty() {
-        return service_unavailable("AGATA_STRIPE_PRICE_ID is not configured.");
+    let price_id = match input.price_id.as_deref().filter(|v| !v.trim().is_empty()) {
+        Some(value) => value.to_string(),
+        None => return bad("Select an Agata Proxima plan before checkout."),
+    };
+    if plan_for_price(Some(&price_id)).is_none() {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"ok":false,"error":"invalid_agata_price","message":"The selected Stripe Price is not an Agata Proxima plan."})),
+        ).into_response();
     }
 
     let user = match sqlx::query("SELECT email FROM users WHERE id=$1")
@@ -363,22 +638,26 @@ pub(crate) async fn stripe_webhook(State(s): State<AppState>, headers: HeaderMap
         let period_end = object.get("current_period_end").and_then(Value::as_i64);
 
         match event_type {
-            "checkout.session.completed" | "customer.subscription.created" |
-            "customer.subscription.updated" | "customer.subscription.deleted" |
-            "invoice.payment_failed" | "invoice.paid" => {
+            "checkout.session.completed"
+            | "customer.subscription.created"
+            | "customer.subscription.updated"
+            | "customer.subscription.deleted" => {
                 let normalized_status = if event_type == "customer.subscription.deleted" {
                     "canceled"
-                } else if event_type == "invoice.payment_failed" {
-                    "past_due"
                 } else {
                     status
+                };
+                let plan = if event_type == "customer.subscription.deleted" {
+                    "free"
+                } else {
+                    plan_for_price(price_id).unwrap_or("free")
                 };
                 if let Err(e) = sqlx::query(
                     "INSERT INTO billing_accounts(
                         organization_id,stripe_customer_id,stripe_subscription_id,stripe_price_id,
                         plan_key,status,current_period_end,cancel_at_period_end,updated_at)
-                     VALUES($1,$2,$3,$4,'agata', $5,
-                        CASE WHEN $6::bigint IS NULL THEN NULL ELSE to_timestamp($6) END,$7,now())
+                     VALUES($1,$2,$3,$4,$5,$6,
+                        CASE WHEN $7::bigint IS NULL THEN NULL ELSE to_timestamp($7) END,$8,now())
                      ON CONFLICT (organization_id) DO UPDATE SET
                        stripe_customer_id=COALESCE(EXCLUDED.stripe_customer_id,billing_accounts.stripe_customer_id),
                        stripe_subscription_id=COALESCE(EXCLUDED.stripe_subscription_id,billing_accounts.stripe_subscription_id),
@@ -391,6 +670,7 @@ pub(crate) async fn stripe_webhook(State(s): State<AppState>, headers: HeaderMap
                 .bind(customer_id)
                 .bind(subscription_id)
                 .bind(price_id)
+                .bind(plan)
                 .bind(normalized_status)
                 .bind(period_end)
                 .bind(cancel_at_period_end)
@@ -398,10 +678,28 @@ pub(crate) async fn stripe_webhook(State(s): State<AppState>, headers: HeaderMap
                 .await {
                     return db_error(e);
                 }
+                if let Err(e) = apply_entitlements(&s.db, org, plan).await {
+                    return db_error(e);
+                }
+            }
+            "invoice.payment_failed" | "invoice.paid" => {
+                let normalized_status = if event_type == "invoice.payment_failed" {
+                    "past_due"
+                } else {
+                    "active"
+                };
+                if let Err(e) = sqlx::query(
+                    "UPDATE billing_accounts SET status=$1,updated_at=now() WHERE organization_id=$2",
+                )
+                .bind(normalized_status)
+                .bind(org)
+                .execute(&s.db)
+                .await {
+                    return db_error(e);
+                }
             }
             _ => {}
         }
-
         audit(
             &s.db,
             org,
@@ -798,6 +1096,21 @@ fn service_unavailable(message: &str) -> Response {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn entitlement_matrix_matches_launch_contract() {
+        assert_eq!(super::plan_limits("free"), (1, 3, 1, 7, false, false, false, false, false));
+        assert_eq!(super::plan_limits("starter"), (2, 25, 2, 30, false, true, false, false, false));
+        assert_eq!(super::plan_limits("growth"), (5, 100, 5, 180, true, true, true, true, false));
+        assert_eq!(super::plan_limits("scale"), (15, 500, 50, 365, true, true, true, true, true));
+        assert_eq!(super::plan_limits("enterprise"), (i32::MAX, i32::MAX, i32::MAX, 3650, true, true, true, true, true));
+    }
+
+    #[test]
+    fn unknown_plan_defaults_to_free_entitlements() {
+        assert_eq!(super::plan_limits("unknown"), super::plan_limits("free"));
+    }
+
+
     use super::*;
 
     #[test]

@@ -130,6 +130,12 @@ async fn main() -> Result<()> {
     sqlx::raw_sql(include_str!("../migrations/0002_production.sql"))
         .execute(&db)
         .await?;
+    sqlx::raw_sql(include_str!("../migrations/0003_entitlements.sql"))
+        .execute(&db)
+        .await?;
+    sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
+        .execute(&db)
+        .await?;
 
     let state = AppState {
         db,
@@ -179,6 +185,11 @@ async fn main() -> Result<()> {
             post(production::reset_password),
         )
         .route("/api/v1/billing", get(production::billing_status))
+        .route("/api/v1/billing/plans", get(production::plans))
+        .route(
+            "/api/v1/billing/entitlements",
+            get(production::entitlements),
+        )
         .route("/api/v1/billing/checkout", post(production::checkout))
         .route("/api/v1/billing/portal", post(production::portal))
         .route("/api/v1/webhooks/stripe", post(production::stripe_webhook))
@@ -301,6 +312,16 @@ async fn signup(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Resp
 
     if let Err(e) = sqlx::query(
         "INSERT INTO projects(organization_id,name,slug) VALUES($1,'Production','production')",
+    )
+    .bind(organization_id)
+    .execute(&mut *tx)
+    .await
+    {
+        return db_error(e);
+    }
+
+    if let Err(e) = sqlx::query(
+        "INSERT INTO organization_entitlements(organization_id) VALUES($1) ON CONFLICT DO NOTHING",
     )
     .bind(organization_id)
     .execute(&mut *tx)
@@ -528,6 +549,16 @@ async fn create_organization(
         return db_error(e);
     }
 
+    if let Err(e) = sqlx::query(
+        "INSERT INTO organization_entitlements(organization_id) VALUES($1) ON CONFLICT DO NOTHING",
+    )
+    .bind(id)
+    .execute(&s.db)
+    .await
+    {
+        return db_error(e);
+    }
+
     audit(
         &s.db,
         id,
@@ -596,6 +627,11 @@ async fn create_tenant(
         }
         Err(e) => return db_error(e),
     };
+
+    if let Err(response) = production::enforce_capacity(&s.db, ctx.organization_id, "tenants").await
+    {
+        return response;
+    }
 
     let id = Uuid::new_v4();
     let mode = input
@@ -730,6 +766,20 @@ async fn create_node(
         return c.into_response();
     }
 
+    if let Err(response) = production::enforce_capacity(&s.db, ctx.organization_id, "nodes").await {
+        return response;
+    }
+
+    let environment = input
+        .environment
+        .clone()
+        .unwrap_or_else(|| "production".into());
+    if let Err(response) =
+        production::enforce_environment_capacity(&s.db, ctx.organization_id, &environment).await
+    {
+        return response;
+    }
+
     let id = Uuid::new_v4();
     let token = format!("{}-{}", Uuid::new_v4(), Uuid::new_v4());
     let token_hash_value = token_hash(&token);
@@ -740,7 +790,7 @@ async fn create_node(
     .bind(id)
     .bind(ctx.organization_id)
     .bind(&input.name)
-    .bind(input.environment.unwrap_or_else(|| "production".into()))
+    .bind(&environment)
     .bind(input.region.unwrap_or_else(|| "auto".into()))
     .bind(token_hash_value)
     .execute(&s.db)
@@ -842,6 +892,12 @@ async fn create_deployment(
         return c.into_response();
     }
 
+    if let Err(response) =
+        production::require_feature(&s.db, ctx.organization_id, "fleet_controls").await
+    {
+        return response;
+    }
+
     let id = Uuid::new_v4();
     match sqlx::query(
         "INSERT INTO deployments(id,organization_id,node_id,version,desired_state,observed_state,status,created_by)
@@ -889,6 +945,14 @@ async fn create_verification(
     }
     if let Err(c) = require_write(&ctx, &headers) {
         return c.into_response();
+    }
+
+    if input.kind.starts_with("advanced") {
+        if let Err(response) =
+            production::require_feature(&s.db, ctx.organization_id, "advanced_verification").await
+        {
+            return response;
+        }
     }
 
     let id = Uuid::new_v4();
@@ -960,6 +1024,15 @@ async fn create_support(
         return c.into_response();
     }
 
+    let priority = input.priority.unwrap_or_else(|| "normal".into());
+    if matches!(priority.as_str(), "high" | "urgent") {
+        if let Err(response) =
+            production::require_feature(&s.db, ctx.organization_id, "priority_support").await
+        {
+            return response;
+        }
+    }
+
     let id = Uuid::new_v4();
     match sqlx::query(
         "INSERT INTO support_requests(id,organization_id,user_id,subject,message,priority,status)
@@ -970,7 +1043,7 @@ async fn create_support(
     .bind(ctx.user_id)
     .bind(&input.subject)
     .bind(&input.message)
-    .bind(input.priority.unwrap_or_else(|| "normal".into()))
+    .bind(&priority)
     .execute(&s.db)
     .await
     {

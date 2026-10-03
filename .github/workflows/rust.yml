@@ -45,6 +45,12 @@ jobs:
       - name: Verification harness syntax
         run: bash -n tools/proxima-verify.sh tools/proxima-verify-3tenant.sh
 
+      - name: External SaaS reference syntax
+        run: |
+          bash -n tests/external-saas/verify_three_tenant.sh
+          bash -n tests/external-saas/verify_reference_app.sh
+          node --check tests/external-saas/reference-app/server.js
+
       - name: PostgreSQL RLS verification
         env:
           PGHOST: localhost
@@ -65,6 +71,7 @@ jobs:
           psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE proxima_control" || true
           PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0001_control_plane.sql
           PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0002_production.sql
+          PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0003_entitlements.sql
 
       - name: Control plane OpenAPI JSON
         run: python -m json.tool control-plane/openapi.json >/dev/null
@@ -80,4 +87,3 @@ jobs:
         run: |
           bash -n tests/control-plane/api_smoke.sh
           bash -n scripts/proxima-platform.sh
-
