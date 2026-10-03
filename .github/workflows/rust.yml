@@ -64,9 +64,17 @@ jobs:
         run: |
           psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE proxima_control" || true
           PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0001_control_plane.sql
+          PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0002_production.sql
 
       - name: Control plane OpenAPI JSON
         run: python -m json.tool control-plane/openapi.json >/dev/null
+
+      - name: Production environment contract
+        run: |
+          grep -q "AGATA_PUBLIC_BASE_URL" .env.example
+          grep -q "STRIPE_SECRET_KEY" .env.example
+          grep -q "RESEND_API_KEY" .env.example
+          grep -q "PROXIMA_OIDC_ISSUER" .env.example
 
       - name: Control plane operational scripts
         run: |
