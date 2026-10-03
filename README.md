@@ -106,7 +106,7 @@ cargo run -p proxima-control-plane
 
 Then open:
 
-- Engine operator dashboard: `http://127.0.0.1:8080` when the Engine dashboard is configured on that port.
-- Proxima Command Center: `http://127.0.0.1:8080` for the control-plane default, or the configured control-plane bind address.
+- Engine operator dashboard: `http://127.0.0.1:9080` by default (`PROXIMA_DASHBOARD_LISTEN_ADDR` can change it).
+- Proxima Command Center: `http://127.0.0.1:8080` by default (`PROXIMA_CONTROL_BIND` can change it).
 
 On Windows, use `scripts/proxima-platform.ps1` after Docker Desktop and the Rust MSVC toolchain are available.
