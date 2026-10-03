@@ -18,11 +18,19 @@ services:
     environment:
       PROXIMA_LISTEN_ADDR: 0.0.0.0:6432
       PROXIMA_UPSTREAM_ADDR: postgres:5432
+      PROXIMA_TELEMETRY_ADDR: 0.0.0.0:9090
       RUST_LOG: proxima_engine=info
       PROXIMA_MAX_CONNECTIONS: 1024
       PROXIMA_UPSTREAM_CONNECT_TIMEOUT_MS: 10000
+      PROXIMA_SESSION_MAX_DURATION_MS: 0
     ports:
       - "6432:6432"
+      - "9090:9090"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       postgres:
         condition: service_healthy
