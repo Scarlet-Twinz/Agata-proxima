@@ -110,7 +110,7 @@ async fn connect_tenant(tenant_id: &str, password: &str) -> Result<Client, Box<d
         .password(password)
         .dbname("proxima_dev")
         .ssl_mode(SslMode::Disable)
-        .options(&format!("-c proxima_tenant_token={}", token(tenant_id)));
+         .options(format!("-c proxima_tenant_token={}", token(tenant_id)));
 
     let (client, connection) = config.connect(NoTls).await?;
     tokio::spawn(async move {
