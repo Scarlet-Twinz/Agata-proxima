@@ -101,12 +101,8 @@ pub async fn establish(
                     protocol_version,
                     parameters,
                 } => {
-                    let (startup, tenant_context) = prepare_startup(
-                        protocol_version,
-                        parameters,
-                        verifier,
-                        upstream_user,
-                    )?;
+                    let (startup, tenant_context) =
+                        prepare_startup(protocol_version, parameters, verifier, upstream_user)?;
                     forward_startup(&mut upstream, &startup).await?;
 
                     if let Some(context) = tenant_context.as_ref() {
