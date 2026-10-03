@@ -15,8 +15,14 @@ pub enum StartupPacket {
         parameters: Vec<(String, String)>,
     },
     SslRequest,
-    CancelRequest { process_id: i32, secret_key: i32 },
-    Unknown { code: i32, payload: Bytes },
+    CancelRequest {
+        process_id: i32,
+        secret_key: i32,
+    },
+    Unknown {
+        code: i32,
+        payload: Bytes,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
