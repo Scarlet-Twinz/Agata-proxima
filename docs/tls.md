@@ -1,15 +1,40 @@
-# Proxima TLS Boundary
+# TLS Security Boundary
 
-Phase 18 establishes two independent TLS boundaries:
+Proxima uses two explicit TLS boundaries when TLS-required modes are enabled:
 
-Application -> TLS -> Proxima -> TLS -> PostgreSQL
+```
+Application --TLS--> Proxima --TLS--> PostgreSQL
+```
 
-With PROXIMA_TLS_MODE=required, Proxima performs the standard PostgreSQL SSLRequest exchange, sends exactly S, terminates the client TLS session, and only then parses the startup packet and tenant token.
+## Client -> Proxima
 
-The upstream side can independently use PROXIMA_UPSTREAM_TLS_MODE=required. Proxima sends PostgreSQL's SSLRequest, requires S, then verifies the PostgreSQL certificate against the configured CA and server name.
+Set:
 
-There is no trust-any-certificate or silent plaintext downgrade mode.
+- `PROXIMA_TLS_MODE=required`
+- `PROXIMA_TLS_CERT_FILE=/path/server-cert.pem`
+- `PROXIMA_TLS_KEY_FILE=/path/server-key.pem`
+- `PROXIMA_TLS_HANDSHAKE_TIMEOUT_MS=10000`
 
-The client certificate is not the tenant identity. Tenant identity remains the signed Proxima tenant token and the PostgreSQL role selected from that verified context.
+The listener requires the PostgreSQL SSLRequest first, returns `S`, and then terminates TLS. Plaintext startup packets are rejected. Rustls safe protocol defaults are used.
 
-Required release tests cover successful TLS, plaintext rejection, handshake timeout/failure, invalid certificate material, upstream TLS refusal, wrong CA, hostname mismatch, and tenant isolation after TLS termination.
+## Proxima -> PostgreSQL
+
+Set:
+
+- `PROXIMA_UPSTREAM_TLS_MODE=required`
+- `PROXIMA_UPSTREAM_TLS_CA_FILE=/path/ca.pem`
+- `PROXIMA_UPSTREAM_TLS_SERVER_NAME=postgres.example.internal`
+
+The upstream certificate chain is validated against the configured CA and the server name is verified by rustls. There is no certificate-verification bypass switch. If PostgreSQL refuses the SSLRequest or the handshake fails, the session is terminated.
+
+## Security properties
+
+- no silent TLS downgrade;
+- handshake timeouts are bounded;
+- client and upstream trust are independent;
+- private keys are loaded from configured files, never logged;
+- tenant enforcement runs after client TLS termination and before query relay;
+- wrong-host upstream certificates fail;
+- invalid TLS material fails closed.
+
+Production deployments should use an external certificate/secret manager and rotate certificates without committing them to the repository.
