@@ -130,6 +130,9 @@ async fn main() -> Result<()> {
     sqlx::raw_sql(include_str!("../migrations/0002_production.sql"))
         .execute(&db)
         .await?;
+    sqlx::raw_sql(include_str!("../migrations/0003_entitlements.sql"))
+        .execute(&db)
+        .await?;
 
     let state = AppState {
         db,
