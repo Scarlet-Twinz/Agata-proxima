@@ -1,4 +1,4 @@
-use axum::{extract::State, response::Html, routing::get, Json, Router};
+use axum::{extract::State, http::header, response::{Html, IntoResponse}, routing::get, Json, Router};
 use serde::Serialize;
 use std::sync::Arc;
 use std::time::Instant;
@@ -68,6 +68,7 @@ struct Status {
 pub async fn serve(addr: std::net::SocketAddr, state: AdminState) -> std::io::Result<()> {
     let app = Router::new()
         .route("/", get(index))
+        .route("/assets/proxima-ap-mark.svg", get(mark))
         .route("/api/health", get(health))
         .route("/api/status", get(status))
         .with_state(state);
@@ -84,6 +85,16 @@ async fn index() -> Html<&'static str> {
         env!("CARGO_MANIFEST_DIR"),
         "/../../dashboard/index.html"
     )))
+}
+
+async fn mark() -> impl IntoResponse {
+    (
+        [(header::CONTENT_TYPE, "image/svg+xml")],
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../dashboard/assets/proxima-ap-mark.svg"
+        )),
+    )
 }
 
 async fn health() -> &'static str {
