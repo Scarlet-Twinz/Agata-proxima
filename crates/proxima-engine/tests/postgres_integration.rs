@@ -47,16 +47,14 @@ async fn setup_database() -> Result<(), Box<dyn Error>> {
     client.batch_execute(
         r#"
         DROP SCHEMA IF EXISTS proxima_e2e CASCADE;
-        DO $
-        BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'proxima_tenant_a') THEN
-                CREATE ROLE proxima_tenant_a LOGIN PASSWORD 'tenant-a-password' NOSUPERUSER NOBYPASSRLS;
+        DO 'BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ''proxima_tenant_a'') THEN
+                CREATE ROLE proxima_tenant_a LOGIN PASSWORD ''tenant-a-password'' NOSUPERUSER NOBYPASSRLS;
             END IF;
-            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'proxima_tenant_b') THEN
-                CREATE ROLE proxima_tenant_b LOGIN PASSWORD 'tenant-b-password' NOSUPERUSER NOBYPASSRLS;
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ''proxima_tenant_b'') THEN
+                CREATE ROLE proxima_tenant_b LOGIN PASSWORD ''tenant-b-password'' NOSUPERUSER NOBYPASSRLS;
             END IF;
-        END
-        $;
+        END';
 
         ALTER ROLE proxima_tenant_a LOGIN PASSWORD 'tenant-a-password';
         ALTER ROLE proxima_tenant_b LOGIN PASSWORD 'tenant-b-password';
