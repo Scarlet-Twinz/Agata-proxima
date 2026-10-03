@@ -315,6 +315,9 @@ async fn signup(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Resp
         return db_error(e);
     }
 
+    if let Err(e) = sqlx::query("INSERT INTO organization_entitlements(organization_id) VALUES($1) ON CONFLICT DO NOTHING")
+        .bind(organization_id).execute(&mut *tx).await { return db_error(e); }
+
     if let Err(e) = sqlx::query(
         "INSERT INTO audit_events(organization_id,user_id,action,resource_type,resource_id,metadata)
          VALUES($1,$2,'organization.created','organization',$1,$3)"
@@ -534,6 +537,9 @@ async fn create_organization(
         return db_error(e);
     }
 
+    if let Err(e) = sqlx::query("INSERT INTO organization_entitlements(organization_id) VALUES($1) ON CONFLICT DO NOTHING")
+        .bind(id).execute(&s.db).await { return db_error(e); }
+
     audit(
         &s.db,
         id,
@@ -602,6 +608,10 @@ async fn create_tenant(
         }
         Err(e) => return db_error(e),
     };
+
+    if let Err(response) = production::enforce_capacity(&s.db, ctx.organization_id, "tenants").await {
+        return response;
+    }
 
     let id = Uuid::new_v4();
     let mode = input
@@ -736,6 +746,10 @@ async fn create_node(
         return c.into_response();
     }
 
+    if let Err(response) = production::enforce_capacity(&s.db, ctx.organization_id, "nodes").await {
+        return response;
+    }
+
     let id = Uuid::new_v4();
     let token = format!("{}-{}", Uuid::new_v4(), Uuid::new_v4());
     let token_hash_value = token_hash(&token);
@@ -848,6 +862,10 @@ async fn create_deployment(
         return c.into_response();
     }
 
+    if let Err(response) = production::require_feature(&s.db, ctx.organization_id, "fleet_controls").await {
+        return response;
+    }
+
     let id = Uuid::new_v4();
     match sqlx::query(
         "INSERT INTO deployments(id,organization_id,node_id,version,desired_state,observed_state,status,created_by)
@@ -895,6 +913,12 @@ async fn create_verification(
     }
     if let Err(c) = require_write(&ctx, &headers) {
         return c.into_response();
+    }
+
+    if input.kind.starts_with("advanced") {
+        if let Err(response) = production::require_feature(&s.db, ctx.organization_id, "advanced_verification").await {
+            return response;
+        }
     }
 
     let id = Uuid::new_v4();
