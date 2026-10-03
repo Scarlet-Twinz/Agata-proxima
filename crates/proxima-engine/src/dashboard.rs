@@ -66,7 +66,7 @@ async fn respond(
 ) -> io::Result<()> {
     let header = format!(
         "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n",
-        body.as_bytes().len()
+        body.len()
     );
     stream.write_all(header.as_bytes()).await?;
     stream.write_all(body.as_bytes()).await?;
