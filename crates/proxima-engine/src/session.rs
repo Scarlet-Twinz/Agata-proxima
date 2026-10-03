@@ -1,54 +1,151 @@
 use crate::protocol::{parse_startup_packet, StartupPacket};
+use crate::tenant::{TenantContext, TenantTokenVerifier};
 use std::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tracing::debug;
 
 const MAX_STARTUP_PACKET: usize = 16 * 1024 * 1024;
+const TENANT_TOKEN_PARAMETER: &str = "proxima_tenant_token";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EstablishedSession {
+    pub tenant_context: Option<TenantContext>,
+}
 
 pub async fn establish(
     mut client: TcpStream,
     mut upstream: TcpStream,
-) -> io::Result<(TcpStream, TcpStream)> {
+    verifier: Option<&TenantTokenVerifier>,
+) -> io::Result<(TcpStream, TcpStream, EstablishedSession)> {
     let startup = read_startup(&mut client).await?;
 
-    match &startup {
-        StartupPacket::Startup { parameters, .. } => {
+    match startup {
+        StartupPacket::Startup {
+            protocol_version,
+            parameters,
+        } => {
+            let (startup, tenant_context) =
+                prepare_startup(protocol_version, parameters, verifier)?;
             debug!(
-                parameter_count = parameters.len(),
+                tenant_bound = tenant_context.is_some(),
                 "PostgreSQL startup packet received"
             );
             forward_startup(&mut upstream, &startup).await?;
+            Ok((
+                client,
+                upstream,
+                EstablishedSession { tenant_context },
+            ))
         }
         StartupPacket::SslRequest => {
-            upstream.write_all(&encode_startup(&startup)?).await?;
+            upstream.write_all(&encode_startup(&StartupPacket::SslRequest)?).await?;
             let mut response = [0u8; 1];
             upstream.read_exact(&mut response).await?;
             client.write_all(&response).await?;
 
-            // TLS turns the PostgreSQL protocol into an encrypted byte stream.
-            // Proxima does not claim to inspect or enforce tenant policy inside
-            // an end-to-end TLS tunnel until explicit TLS termination is added.
             if response[0] == b'S' {
-                return Ok((client, upstream));
+                return Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "Proxima tenant enforcement cannot run through end-to-end TLS without TLS termination",
+                ));
             }
 
             let startup = read_startup(&mut client).await?;
-            forward_startup(&mut upstream, &startup).await?;
+            match startup {
+                StartupPacket::Startup {
+                    protocol_version,
+                    parameters,
+                } => {
+                    let (startup, tenant_context) =
+                        prepare_startup(protocol_version, parameters, verifier)?;
+                    forward_startup(&mut upstream, &startup).await?;
+                    Ok((
+                        client,
+                        upstream,
+                        EstablishedSession { tenant_context },
+                    ))
+                }
+                other => Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("expected PostgreSQL startup after SSL rejection, got {other:?}"),
+                )),
+            }
         }
-        StartupPacket::CancelRequest { .. } => {
-            forward_startup(&mut upstream, &startup).await?;
-            return Ok((client, upstream));
+        StartupPacket::CancelRequest {
+            process_id,
+            secret_key,
+        } => {
+            forward_startup(
+                &mut upstream,
+                &StartupPacket::CancelRequest {
+                    process_id,
+                    secret_key,
+                },
+            )
+            .await?;
+            Ok((
+                client,
+                upstream,
+                EstablishedSession {
+                    tenant_context: None,
+                },
+            ))
         }
-        StartupPacket::Unknown { .. } => {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "unsupported PostgreSQL startup packet",
-            ));
+        StartupPacket::Unknown { .. } => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "unsupported PostgreSQL startup packet",
+        )),
+    }
+}
+
+fn prepare_startup(
+    protocol_version: i32,
+    parameters: Vec<(String, String)>,
+    verifier: Option<&TenantTokenVerifier>,
+) -> io::Result<(StartupPacket, Option<TenantContext>)> {
+    let mut tenant_token = None;
+    let mut forwarded = Vec::with_capacity(parameters.len());
+
+    for (key, value) in parameters {
+        if key == TENANT_TOKEN_PARAMETER {
+            if tenant_token.replace(value).is_some() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "duplicate Proxima tenant token",
+                ));
+            }
+        } else {
+            forwarded.push((key, value));
         }
     }
 
-    Ok((client, upstream))
+    let tenant_context = match verifier {
+        Some(verifier) => {
+            let token = tenant_token.ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "Proxima tenant token is required",
+                )
+            })?;
+
+            Some(verifier.verify_now(&token).map_err(|error| {
+                io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    format!("invalid Proxima tenant token: {error}"),
+                )
+            })?)
+        }
+        None => None,
+    };
+
+    Ok((
+        StartupPacket::Startup {
+            protocol_version,
+            parameters: forwarded,
+        },
+        tenant_context,
+    ))
 }
 
 async fn read_startup(stream: &mut TcpStream) -> io::Result<StartupPacket> {
@@ -123,5 +220,69 @@ fn encode_startup(startup: &StartupPacket) -> io::Result<Vec<u8>> {
             io::ErrorKind::InvalidData,
             "cannot encode unknown startup packet",
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tenant::TenantTokenVerifier;
+
+    fn verifier() -> TenantTokenVerifier {
+        TenantTokenVerifier::new(b"01234567890123456789012345678901").unwrap()
+    }
+
+    #[test]
+    fn extracts_and_removes_tenant_token() {
+        let verifier = verifier();
+        let token = verifier.sign_for_test("tenant_a", u64::MAX);
+        let (startup, context) = prepare_startup(
+            crate::protocol::PROTOCOL_3_0,
+            vec![
+                ("user".into(), "proxima".into()),
+                (TENANT_TOKEN_PARAMETER.into(), token),
+            ],
+            Some(&verifier),
+        )
+        .unwrap();
+
+        assert_eq!(context.unwrap().tenant_id, "tenant_a");
+        assert_eq!(
+            startup,
+            StartupPacket::Startup {
+                protocol_version: crate::protocol::PROTOCOL_3_0,
+                parameters: vec![("user".into(), "proxima".into())],
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_missing_token_when_enforcement_is_enabled() {
+        let verifier = verifier();
+        let error = prepare_startup(
+            crate::protocol::PROTOCOL_3_0,
+            vec![("user".into(), "proxima".into())],
+            Some(&verifier),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+    }
+
+    #[test]
+    fn rejects_duplicate_tokens() {
+        let verifier = verifier();
+        let token = verifier.sign_for_test("tenant_a", u64::MAX);
+        let error = prepare_startup(
+            crate::protocol::PROTOCOL_3_0,
+            vec![
+                (TENANT_TOKEN_PARAMETER.into(), token.clone()),
+                (TENANT_TOKEN_PARAMETER.into(), token),
+            ],
+            Some(&verifier),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
     }
 }
