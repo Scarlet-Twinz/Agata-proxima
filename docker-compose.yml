@@ -18,11 +18,26 @@ services:
     environment:
       PROXIMA_LISTEN_ADDR: 0.0.0.0:6432
       PROXIMA_UPSTREAM_ADDR: postgres:5432
+      PROXIMA_DASHBOARD_LISTEN_ADDR: 0.0.0.0:9080
+      PROXIMA_DASHBOARD_ENABLED: "true"
       RUST_LOG: proxima_engine=info
       PROXIMA_MAX_CONNECTIONS: 1024
       PROXIMA_UPSTREAM_CONNECT_TIMEOUT_MS: 10000
+      PROXIMA_TLS_REQUIRE_CLIENT: "false"
+      PROXIMA_UPSTREAM_TLS_MODE: disable
     ports:
       - "6432:6432"
+      - "9080:9080"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/127.0.0.1/9080'"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
