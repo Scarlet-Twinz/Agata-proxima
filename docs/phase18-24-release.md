@@ -1,5 +1,7 @@
 # Phase 18–24 Release Record
 
+> Security work is accepted only when the executable gate is green.
+
 ## Phase 18 — TLS Security Boundary
 
 Implemented:
