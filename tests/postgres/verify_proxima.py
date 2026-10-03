@@ -117,7 +117,7 @@ def verify_tenant(tenant, expected_secret, forbidden_secret):
         if error:
             raise AssertionError(error)
         assert_equal(
-            [[f"proxima_tenant_{tenant}", "proxima_gateway"]],
+            [[f"proxima_{tenant}", "proxima_gateway"]],
             rows,
             f"{tenant} session is bound to the expected PostgreSQL role",
         )
