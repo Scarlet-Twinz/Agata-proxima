@@ -710,6 +710,11 @@ async fn create_policy(
     if let Err(c) = require_write(&ctx, &headers) {
         return c.into_response();
     }
+    if let Err(response) =
+        production::require_feature(&s.db, ctx.organization_id, "policy_management").await
+    {
+        return response;
+    }
 
     let id = Uuid::new_v4();
     match sqlx::query(
