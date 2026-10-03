@@ -185,11 +185,11 @@ async fn main() -> Result<()> {
             post(production::reset_password),
         )
         .route("/api/v1/billing", get(production::billing_status))
+        .route("/api/v1/billing/plans", get(production::plans))
         .route(
-            "/api/v1/billing/plans",
-            get(production::plans),
+            "/api/v1/billing/entitlements",
+            get(production::entitlements),
         )
-        .route("/api/v1/billing/entitlements", get(production::entitlements))
         .route("/api/v1/billing/checkout", post(production::checkout))
         .route("/api/v1/billing/portal", post(production::portal))
         .route("/api/v1/webhooks/stripe", post(production::stripe_webhook))
@@ -628,8 +628,7 @@ async fn create_tenant(
         Err(e) => return db_error(e),
     };
 
-    if let Err(response) =
-        production::enforce_capacity(&s.db, ctx.organization_id, "tenants").await
+    if let Err(response) = production::enforce_capacity(&s.db, ctx.organization_id, "tenants").await
     {
         return response;
     }
