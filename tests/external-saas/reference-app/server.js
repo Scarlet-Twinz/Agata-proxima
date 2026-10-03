@@ -100,6 +100,12 @@ const server = http.createServer(async (req, res) => {
     return json(res, 404, { ok: false, error: "not found" });
   } catch (error) {
     console.error(error);
+    // PostgreSQL auth/privilege failures are surfaced as a boundary denial.
+    // The application still does not inspect or validate the tenant token itself.
+    const code = error && typeof error.code === "string" ? error.code : "";
+    if (["28P01", "28000", "42501"].includes(code)) {
+      return json(res, 403, { ok: false, error: "proxima_boundary_denied" });
+    }
     return json(res, 500, { ok: false, error: "reference application error" });
   }
 });
