@@ -5,7 +5,7 @@ COPY . .
 RUN cargo build --release -p proxima-control-plane
 
 FROM debian:bookworm-slim
-RUN useradd --create-home --uid 10002 proxima
+RUN useradd --create-home --uid 10002 proxima && mkdir -p /var/lib/proxima && chown -R proxima:proxima /var/lib/proxima
 COPY --from=builder /app/target/release/proxima-control-plane /usr/local/bin/proxima-control-plane
 USER proxima
 EXPOSE 9090
