@@ -1,0 +1,42 @@
+name: Temporary control-plane smoke diagnostics
+
+on:
+  push:
+    branches:
+      - phase25-40-platform
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        run: cargo build --release -p proxima-control-plane
+      - name: Start
+        run: |
+          ./target/release/proxima-control-plane > /tmp/proxima-control-plane.log 2>&1 &
+          echo $! > /tmp/proxima.pid
+          for i in {1..20}; do curl -fsS http://127.0.0.1:9090/api/v1/health && break || sleep 1; done
+      - name: Smoke
+        id: smoke
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          bash -x tools/proxima-control-plane-smoke.sh 2>&1 | tee /tmp/smoke.log
+      - name: Report
+        if: steps.smoke.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo '--- CONTROL PLANE LOG ---' >> /tmp/smoke.log
+          cat /tmp/proxima-control-plane.log >> /tmp/smoke.log
+          PR="$(gh pr list --head "${GITHUB_REF_NAME}" --json number --jq '.[0].number')"
+          gh pr comment "$PR" --body-file /tmp/smoke.log
+      - name: Stop
+        if: always()
+        run: kill "$(cat /tmp/proxima.pid)" || true
