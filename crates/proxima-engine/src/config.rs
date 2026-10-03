@@ -1,6 +1,7 @@
 use std::env;
 use std::io;
 use std::net::SocketAddr;
+use std::time::Duration;
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -8,6 +9,8 @@ pub struct Config {
     pub upstream_addr: String,
     pub tenant_signing_key: Option<String>,
     pub tenant_role_prefix: String,
+    pub upstream_connect_timeout: Duration,
+    pub max_connections: usize,
 }
 
 impl Config {
@@ -58,11 +61,45 @@ impl Config {
             Err(_) => None,
         };
 
+        let upstream_connect_timeout_ms = env::var("PROXIMA_UPSTREAM_CONNECT_TIMEOUT_MS")
+            .unwrap_or_else(|_| "10000".to_string())
+            .parse::<u64>()
+            .map_err(|error| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("invalid PROXIMA_UPSTREAM_CONNECT_TIMEOUT_MS: {error}"),
+                )
+            })?;
+        if upstream_connect_timeout_ms == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "PROXIMA_UPSTREAM_CONNECT_TIMEOUT_MS must be greater than zero",
+            ));
+        }
+
+        let max_connections = env::var("PROXIMA_MAX_CONNECTIONS")
+            .unwrap_or_else(|_| "1024".to_string())
+            .parse::<usize>()
+            .map_err(|error| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("invalid PROXIMA_MAX_CONNECTIONS: {error}"),
+                )
+            })?;
+        if max_connections == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "PROXIMA_MAX_CONNECTIONS must be greater than zero",
+            ));
+        }
+
         Ok(Self {
             listen_addr,
             upstream_addr,
             tenant_signing_key,
             tenant_role_prefix,
+            upstream_connect_timeout: Duration::from_millis(upstream_connect_timeout_ms),
+            max_connections,
         })
     }
 }
@@ -76,11 +113,15 @@ mod tests {
         std::env::remove_var("PROXIMA_LISTEN_ADDR");
         std::env::remove_var("PROXIMA_UPSTREAM_ADDR");
         std::env::remove_var("PROXIMA_TENANT_SIGNING_KEY");
+        std::env::remove_var("PROXIMA_UPSTREAM_CONNECT_TIMEOUT_MS");
+        std::env::remove_var("PROXIMA_MAX_CONNECTIONS");
 
         let config = Config::from_env().unwrap();
         assert_eq!(config.listen_addr, "127.0.0.1:6432".parse().unwrap());
         assert_eq!(config.upstream_addr, "127.0.0.1:5432");
         assert_eq!(config.tenant_signing_key, None);
         assert_eq!(config.tenant_role_prefix, "proxima_tenant_");
+        assert_eq!(config.upstream_connect_timeout, Duration::from_secs(10));
+        assert_eq!(config.max_connections, 1024);
     }
 }
