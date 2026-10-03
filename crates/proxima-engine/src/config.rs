@@ -115,6 +115,11 @@ impl Config {
         {
             return Err(invalid("PROXIMA_UPSTREAM_TLS_CA_FILE and PROXIMA_UPSTREAM_TLS_SERVER_NAME are required when PROXIMA_UPSTREAM_TLS_MODE=verify-full"));
         }
+        if upstream_tls_mode == UpstreamTlsMode::VerifyFull
+            && client_tls_mode != ClientTlsMode::Required
+        {
+            return Err(invalid("PROXIMA_UPSTREAM_TLS_MODE=verify-full requires PROXIMA_TLS_MODE=required"));
+        }
 
         Ok(Self {
             listen_addr,
