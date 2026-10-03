@@ -215,6 +215,49 @@ pub(crate) async fn require_feature(
     Ok(())
 }
 
+pub(crate) async fn plans() -> Response {
+    let catalog = [
+        ("free", "Free", 0_i32, "Evaluation and small proofs of concept", "AGATA_STRIPE_FREE_PRICE_ID"),
+        ("starter", "Starter", 79_i32, "First production SaaS deployments", "AGATA_STRIPE_STARTER_PRICE_ID"),
+        ("growth", "Growth", 249_i32, "Multi-tenant production workloads", "AGATA_STRIPE_GROWTH_PRICE_ID"),
+        ("scale", "Scale", 799_i32, "Larger fleets and security operations", "AGATA_STRIPE_SCALE_PRICE_ID"),
+        ("enterprise", "Enterprise", 0_i32, "Contracted enterprise deployments", ""),
+    ];
+
+    let plans = catalog.iter().map(|(key, name, monthly_usd, description, env_name)| {
+        let price_id = if env_name.is_empty() {
+            None
+        } else {
+            env::var(env_name).ok().filter(|v| !v.trim().is_empty())
+        };
+        let (nodes, tenants, environments, retention, advanced, fleet, priority, entra, private_deployment) =
+            plan_limits(key);
+        json!({
+            "key": key,
+            "name": name,
+            "monthly_usd": monthly_usd,
+            "description": description,
+            "price_id": price_id,
+            "checkout_available": key != &"free" && key != &"enterprise" && price_id.is_some(),
+            "limits": {
+                "nodes": nodes,
+                "tenants": tenants,
+                "environments": environments,
+                "audit_retention_days": retention
+            },
+            "features": {
+                "advanced_verification": advanced,
+                "fleet_controls": fleet,
+                "priority_support": priority,
+                "entra_oidc": entra,
+                "private_deployment": private_deployment
+            }
+        })
+    }).collect::<Vec<_>>();
+
+    Json(json!({ "currency": "usd", "billing_interval": "month", "plans": plans })).into_response()
+}
+
 pub(crate) async fn entitlements(State(s): State<AppState>, headers: HeaderMap) -> Response {
     let ctx = match authenticate(&s, &headers).await {
         Ok(v) => v,
