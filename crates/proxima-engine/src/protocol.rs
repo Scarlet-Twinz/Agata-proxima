@@ -10,7 +10,10 @@ const MAX_FRAME_LENGTH: usize = 16 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StartupPacket {
-    Startup { protocol_version: i32, parameters: Vec<(String, String)> },
+    Startup {
+        protocol_version: i32,
+        parameters: Vec<(String, String)>,
+    },
     SslRequest,
     CancelRequest { process_id: i32, secret_key: i32 },
     Unknown { code: i32, payload: Bytes },
@@ -34,7 +37,9 @@ impl fmt::Display for FrameError {
         match self {
             Self::Incomplete => write!(f, "incomplete PostgreSQL frame"),
             Self::InvalidLength(length) => write!(f, "invalid PostgreSQL frame length: {length}"),
-            Self::FrameTooLarge(length) => write!(f, "PostgreSQL frame exceeds maximum length: {length}"),
+            Self::FrameTooLarge(length) => {
+                write!(f, "PostgreSQL frame exceeds maximum length: {length}")
+            },
         }
     }
 }
@@ -72,11 +77,13 @@ pub fn parse_startup_packet(input: &[u8]) -> Result<Option<(StartupPacket, usize
         PROTOCOL_3_0 => {
             let mut parameters = Vec::new();
             while body.has_remaining() {
-                let key = read_cstring(&mut body).ok_or(FrameError::InvalidLength(length as i32))?;
+                let key = read_cstring(&mut body)
+                    .ok_or(FrameError::InvalidLength(length as i32))?;
                 if key.is_empty() {
                     break;
                 }
-                let value = read_cstring(&mut body).ok_or(FrameError::InvalidLength(length as i32))?;
+                let value = read_cstring(&mut body)
+                    .ok_or(FrameError::InvalidLength(length as i32))?;
                 parameters.push((key, value));
             }
             StartupPacket::Startup {
@@ -143,7 +150,10 @@ pub fn encode_frontend_frame(tag: u8, payload: &[u8]) -> io::Result<Bytes> {
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "payload too large"))?;
 
     if length > MAX_FRAME_LENGTH {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "payload exceeds Proxima frame limit"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "payload exceeds Proxima frame limit",
+        ));
     }
 
     let length = u32::try_from(length)
@@ -184,9 +194,7 @@ mod tests {
 
     #[test]
     fn recognizes_ssl_request() {
-        let packet = [
-            0, 0, 0, 8, 8, 4, 21, 22,
-        ];
+        let packet = [0, 0, 0, 8, 8, 4, 21, 22];
 
         let (startup, consumed) = parse_startup_packet(&packet).unwrap().unwrap();
         assert_eq!(startup, StartupPacket::SslRequest);
@@ -220,7 +228,10 @@ mod tests {
     #[test]
     fn rejects_short_startup_length() {
         let packet = [0, 0, 0, 4, 0, 0, 0, 0];
-        assert_eq!(parse_startup_packet(&packet), Err(FrameError::InvalidLength(4)));
+        assert_eq!(
+            parse_startup_packet(&packet),
+            Err(FrameError::InvalidLength(4))
+        );
     }
 
     #[test]
@@ -242,7 +253,10 @@ mod tests {
     #[test]
     fn rejects_invalid_frontend_length() {
         let frame = [b'Q', 0, 0, 0, 3, 0];
-        assert_eq!(parse_frontend_frame(&frame), Err(FrameError::InvalidLength(3)));
+        assert_eq!(
+            parse_frontend_frame(&frame),
+            Err(FrameError::InvalidLength(3))
+        );
     }
 
     #[test]
