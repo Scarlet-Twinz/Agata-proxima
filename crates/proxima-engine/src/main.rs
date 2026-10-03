@@ -95,8 +95,14 @@ async fn handle_connection(
     };
     let upstream_tcp = match timeout(config.upstream_connect_timeout, TcpStream::connect(&config.upstream_addr)).await {
         Ok(Ok(stream)) => stream,
-        Ok(Err(err)) => { telemetry.upstream_failure(); return Err(err); }
-        Err(_) => { telemetry.upstream_failure(); return Err(io::Error::new(io::ErrorKind::TimedOut, "upstream connection timed out")); }
+        Ok(Err(err)) => {
+            telemetry.upstream_failure();
+            return Err(err);
+        }
+        Err(_) => {
+            telemetry.upstream_failure();
+            return Err(io::Error::new(io::ErrorKind::TimedOut, "upstream connection timed out"));
+        }
     };
     let upstream: BoxedIo = if let Some(connector) = upstream_connector {
         let name = config
