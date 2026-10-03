@@ -37,6 +37,8 @@ pub struct Config {
     pub upstream_tls_mode: TlsMode,
     pub upstream_tls_ca_file: Option<String>,
     pub upstream_tls_server_name: Option<String>,
+    pub telemetry_addr: SocketAddr,
+    pub session_max_duration: Duration,
 }
 
 impl Config {
@@ -146,6 +148,14 @@ impl Config {
         let upstream_tls_server_name = env::var("PROXIMA_UPSTREAM_TLS_SERVER_NAME")
             .ok()
             .filter(|v| !v.trim().is_empty());
+        let telemetry_addr = env::var("PROXIMA_TELEMETRY_ADDR")
+            .unwrap_or_else(|_| "127.0.0.1:9090".into())
+            .parse()
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, format!("invalid PROXIMA_TELEMETRY_ADDR: {e}")))?;
+        let session_max_duration_ms = env::var("PROXIMA_SESSION_MAX_DURATION_MS")
+            .unwrap_or_else(|_| "0".into())
+            .parse::<u64>()
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, format!("invalid PROXIMA_SESSION_MAX_DURATION_MS: {e}")))?;
 
         if tls_mode == TlsMode::Required && (tls_cert_file.is_none() || tls_key_file.is_none()) {
             return Err(io::Error::new(
@@ -173,6 +183,8 @@ impl Config {
             upstream_tls_mode,
             upstream_tls_ca_file,
             upstream_tls_server_name,
+            telemetry_addr,
+            session_max_duration: Duration::from_millis(session_max_duration_ms),
         })
     }
 }
@@ -195,6 +207,8 @@ mod tests {
             "PROXIMA_UPSTREAM_TLS_MODE",
             "PROXIMA_UPSTREAM_TLS_CA_FILE",
             "PROXIMA_UPSTREAM_TLS_SERVER_NAME",
+            "PROXIMA_TELEMETRY_ADDR",
+            "PROXIMA_SESSION_MAX_DURATION_MS",
         ] {
             std::env::remove_var(key);
         }
@@ -202,6 +216,8 @@ mod tests {
         assert_eq!(c.listen_addr, "127.0.0.1:6432".parse().unwrap());
         assert_eq!(c.tls_mode, TlsMode::Disabled);
         assert_eq!(c.upstream_tls_mode, TlsMode::Disabled);
+        assert_eq!(c.telemetry_addr, "127.0.0.1:9090".parse().unwrap());
+        assert!(c.session_max_duration.is_zero());
     }
     #[test]
     fn required_tls_needs_material() {
