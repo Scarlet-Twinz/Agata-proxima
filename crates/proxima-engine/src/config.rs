@@ -32,8 +32,8 @@ impl Config {
             ));
         }
 
-        let tenant_role_prefix =
-            env::var("PROXIMA_TENANT_ROLE_PREFIX").unwrap_or_else(|_| "proxima_tenant_".to_string());
+        let tenant_role_prefix = env::var("PROXIMA_TENANT_ROLE_PREFIX")
+            .unwrap_or_else(|_| "proxima_tenant_".to_string());
 
         if tenant_role_prefix.is_empty()
             || !tenant_role_prefix
