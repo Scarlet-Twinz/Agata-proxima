@@ -232,6 +232,16 @@
         }
       }
     },
+    "/api/v1/billing/plans": {
+      "get": {
+        "summary": "List Agata Proxima plans and checkout availability",
+        "responses": {
+          "200": {
+            "description": "Plan catalog"
+          }
+        }
+      }
+    },
     "/api/v1/billing/entitlements": {
       "get": {
         "summary": "Get organization plan entitlements",
