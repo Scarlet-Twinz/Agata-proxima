@@ -1,10 +1,10 @@
-use axum::{extract::{Path, State}, http::{header, HeaderMap, StatusCode}, response::{IntoResponse, Response}, routing::{get, post}, Json, Router};
+use axum::{extract::{Path, State}, http::{header, HeaderMap, HeaderValue, Method, StatusCode}, response::{IntoResponse, Response}, routing::{get, post}, Json, Router};
 use argon2::{password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString}, Argon2};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{env, fs, net::SocketAddr, path::PathBuf, sync::Arc, time::{SystemTime, UNIX_EPOCH}};
 use tokio::sync::RwLock;
-use tower_http::{cors::CorsLayer, trace::TraceLayer};
+use tower_http::{cors::{Any, CorsLayer}, trace::TraceLayer};
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -96,7 +96,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/v1/auth/logout", post(logout))
         .route("/api/v1/auth/me", get(me))
         .route("/api/v1/tenants/{id}", get(tenant))
-        .layer(CorsLayer::permissive())
+        .layer(CorsLayer::new().allow_origin([\n            "http://127.0.0.1:9080".parse::<HeaderValue>().unwrap(),\n            "http://localhost:9080".parse::<HeaderValue>().unwrap(),\n        ]).allow_credentials(true).allow_methods(Any).allow_headers(Any))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
     let addr: SocketAddr = env::var("PROXIMA_CONTROL_PLANE_LISTEN_ADDR").unwrap_or_else(|_| "127.0.0.1:9090".into()).parse()?;
