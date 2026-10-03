@@ -15,14 +15,23 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     environment:
       PROXIMA_LISTEN_ADDR: 0.0.0.0:6432
+      PROXIMA_ADMIN_ADDR: 0.0.0.0:9080
       PROXIMA_UPSTREAM_ADDR: postgres:5432
       RUST_LOG: proxima_engine=info
       PROXIMA_MAX_CONNECTIONS: 1024
       PROXIMA_UPSTREAM_CONNECT_TIMEOUT_MS: 10000
+      PROXIMA_TLS_MODE: disabled
+      PROXIMA_UPSTREAM_TLS_MODE: disabled
     ports:
       - "6432:6432"
+      - "9080:9080"
     depends_on:
       postgres:
         condition: service_healthy
