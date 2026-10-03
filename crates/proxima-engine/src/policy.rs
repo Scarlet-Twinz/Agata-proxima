@@ -95,10 +95,7 @@ mod tests {
             expires_at: 2_000,
         };
 
-        assert_eq!(
-            binding.bind(other, 1_000),
-            Err(BindingError::AlreadyBound)
-        );
+        assert_eq!(binding.bind(other, 1_000), Err(BindingError::AlreadyBound));
         assert_eq!(binding.tenant_id(1_000).unwrap(), "tenant_a");
     }
 
@@ -107,10 +104,7 @@ mod tests {
         let mut binding = TenantBinding::Unbound;
         binding.bind(context(2_000), 1_000).unwrap();
 
-        assert_eq!(
-            binding.tenant_id(2_000),
-            Err(BindingError::ContextExpired)
-        );
+        assert_eq!(binding.tenant_id(2_000), Err(BindingError::ContextExpired));
     }
 
     #[test]
