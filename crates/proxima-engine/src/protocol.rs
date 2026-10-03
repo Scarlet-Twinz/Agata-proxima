@@ -163,7 +163,7 @@ mod tests {
     #[test]
     fn parses_postgres_startup_packet() {
         let mut packet = Vec::new();
-        packet.extend_from_slice(&[0, 0, 0, 31]);
+        packet.extend_from_slice(&[0, 0, 0, 33]);
         packet.extend_from_slice(&PROTOCOL_3_0.to_be_bytes());
         packet.extend_from_slice(b"user\0alice\0database\0app\0\0");
 
@@ -213,7 +213,7 @@ mod tests {
 
     #[test]
     fn incomplete_startup_is_not_an_error() {
-        let packet = [0, 0, 0, 31, 0];
+        let packet = [0, 0, 0, 33, 0];
         assert_eq!(parse_startup_packet(&packet).unwrap(), None);
     }
 
@@ -225,7 +225,7 @@ mod tests {
 
     #[test]
     fn parses_frontend_message() {
-        let frame = [b'Q', 0, 0, 0, 8, b'S', b'E', b'L', b'E', b'C', b'T', 0];
+        let frame = [b'Q', 0, 0, 0, 11, b'S', b'E', b'L', b'E', b'C', b'T', 0];
         let (message, consumed) = parse_frontend_frame(&frame).unwrap().unwrap();
 
         assert_eq!(message.tag, b'Q');
@@ -235,7 +235,7 @@ mod tests {
 
     #[test]
     fn frontend_frame_waits_for_complete_payload() {
-        let frame = [b'Q', 0, 0, 0, 8, b'S'];
+        let frame = [b'Q', 0, 0, 0, 11, b'S'];
         assert_eq!(parse_frontend_frame(&frame).unwrap(), None);
     }
 
