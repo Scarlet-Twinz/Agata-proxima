@@ -1,0 +1,1 @@
+Proxima Command Center. The sidebar contains a reserved AP logo slot. Current metrics are presentation placeholders; live values must come from the future control-plane API.
