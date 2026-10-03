@@ -4,8 +4,7 @@ use crate::protocol::{
 };
 use crate::tenant::{TenantContext, TenantTokenVerifier};
 use std::io;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 pub trait PgStream: AsyncRead + AsyncWrite + Unpin + Send {}
 impl<T> PgStream for T where T: AsyncRead + AsyncWrite + Unpin + Send {}
