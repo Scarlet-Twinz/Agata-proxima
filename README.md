@@ -86,3 +86,35 @@ For PostgreSQL clients using standard SSLRequest negotiation:
 - set `PROXIMA_UPSTREAM_TLS_MODE=verify-full` with a trusted CA and server name for encrypted database transport.
 
 See `docs/phase18-24-release.md` for the exact security boundary and remaining external acceptance gates.
+
+
+## Proxima platform surface
+
+The repository now contains the product-facing platform surface:
+
+- /home — public product homepage
+- /login — authenticated session entry
+- /signup — account creation
+- /app — Proxima Cloud console
+- /docs — architecture and deployment model
+- /pricing — packaging surface
+- /support — customer/security support surface
+
+The console talks to the control-plane API at 127.0.0.1:9090. Run the two development processes separately:
+
+    cargo run -p proxima-control-plane
+    cargo run -p proxima-engine
+
+Then open http://127.0.0.1:9080/home for the public platform and http://127.0.0.1:9080/app for the console.
+
+For a complete container topology:
+
+    docker compose up --build
+
+The control plane persists development state to its configured state file. Production deployments should use the PostgreSQL schema under control-plane/migrations/001_control_plane.sql, external identity, durable session storage, TLS and managed secrets.
+
+## Platform security invariant
+
+Proxima Cloud is a management plane, not the authorization engine for every database query. The Proxima Engine remains the local enforcement point. Losing the control plane must not silently disable an already-running tenant boundary.
+
+See docs/phase25-40-platform.md, docs/failure-engineering.md, docs/performance.md, and docs/production-deployment.md.
