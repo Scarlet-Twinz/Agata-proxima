@@ -88,3 +88,25 @@ For PostgreSQL clients using standard SSLRequest negotiation:
 - set `PROXIMA_UPSTREAM_TLS_MODE=verify-full` with a trusted CA and server name for encrypted database transport.
 
 See `docs/phase18-24-release.md` for the exact security boundary and remaining external acceptance gates.
+
+## Run the platform locally
+
+The Engine remains the default workspace target:
+
+```bash
+cargo run
+```
+
+The management platform runs separately so the control plane never becomes a dependency of Engine enforcement:
+
+```bash
+docker compose up -d control-postgres
+cargo run -p proxima-control-plane
+```
+
+Then open:
+
+- Engine operator dashboard: `http://127.0.0.1:8080` when the Engine dashboard is configured on that port.
+- Proxima Command Center: `http://127.0.0.1:8080` for the control-plane default, or the configured control-plane bind address.
+
+On Windows, use `scripts/proxima-platform.ps1` after Docker Desktop and the Rust MSVC toolchain are available.
