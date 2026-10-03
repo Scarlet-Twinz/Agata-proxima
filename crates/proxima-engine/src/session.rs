@@ -5,7 +5,11 @@ use crate::protocol::{
 use crate::tenant::{TenantContext, TenantTokenVerifier};
 use std::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream;
+use tokio::io::{AsyncRead, AsyncWrite};
+
+pub trait PgStream: AsyncRead + AsyncWrite + Unpin + Send {}
+impl<T> PgStream for T where T: AsyncRead + AsyncWrite + Unpin + Send {}
+pub type BoxedPgStream = Box<dyn PgStream>;
 use tracing::debug;
 
 const MAX_STARTUP_PACKET: usize = 16 * 1024 * 1024;
@@ -18,11 +22,11 @@ pub struct EstablishedSession {
 }
 
 pub async fn establish(
-    mut client: TcpStream,
-    mut upstream: TcpStream,
+    mut client: BoxedPgStream,
+    mut upstream: BoxedPgStream,
     verifier: Option<&TenantTokenVerifier>,
     tenant_role_prefix: &str,
-) -> io::Result<(TcpStream, TcpStream, EstablishedSession)> {
+) -> io::Result<(BoxedPgStream, BoxedPgStream, EstablishedSession)> {
     let startup = read_startup(&mut client).await?;
 
     match startup {
@@ -237,8 +241,8 @@ fn extract_tenant_token_from_options(value: &str) -> io::Result<(String, Option<
 }
 
 async fn broker_startup_authentication(
-    client: &mut TcpStream,
-    upstream: &mut TcpStream,
+    client: &mut dyn PgStream,
+    upstream: &mut dyn PgStream,
 ) -> io::Result<()> {
     let mut authenticated = false;
 
@@ -300,7 +304,7 @@ fn parse_authentication_code(message: &BackendMessage) -> io::Result<i32> {
     Ok(i32::from_be_bytes(message.payload[..4].try_into().unwrap()))
 }
 
-async fn read_backend_frame(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
+async fn read_backend_frame(stream: &mut dyn PgStream) -> io::Result<Vec<u8>> {
     let mut header = [0u8; 5];
     stream.read_exact(&mut header).await?;
     let length = i32::from_be_bytes(header[1..5].try_into().unwrap());
@@ -316,7 +320,7 @@ async fn read_backend_frame(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
     Ok(frame)
 }
 
-async fn read_frontend_frame(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
+async fn read_frontend_frame(stream: &mut dyn PgStream) -> io::Result<Vec<u8>> {
     let mut header = [0u8; 5];
     stream.read_exact(&mut header).await?;
     let length = i32::from_be_bytes(header[1..5].try_into().unwrap());
@@ -335,7 +339,7 @@ async fn read_frontend_frame(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
     Ok(frame)
 }
 
-async fn read_startup(stream: &mut TcpStream) -> io::Result<StartupPacket> {
+async fn read_startup(stream: &mut dyn PgStream) -> io::Result<StartupPacket> {
     let mut length_bytes = [0u8; 4];
     stream.read_exact(&mut length_bytes).await?;
 
@@ -357,7 +361,7 @@ async fn read_startup(stream: &mut TcpStream) -> io::Result<StartupPacket> {
         .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "incomplete startup packet"))
 }
 
-async fn forward_startup(stream: &mut TcpStream, startup: &StartupPacket) -> io::Result<()> {
+async fn forward_startup(stream: &mut dyn PgStream, startup: &StartupPacket) -> io::Result<()> {
     stream.write_all(&encode_startup(startup)?).await
 }
 
