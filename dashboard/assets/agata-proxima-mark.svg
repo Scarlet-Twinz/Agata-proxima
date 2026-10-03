@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+<title>Agata Proxima AP mark</title><desc>Interlocking geometric A and P symbol</desc>
+<rect width="128" height="128" rx="28" fill="#07090d"/>
+<path d="M26 94 50 24h17l14 40 14 30H78l-6-17H45l-6 17H26Zm25-33h17l-8-22-9 22Z" fill="none" stroke="#78e4ff" stroke-width="8" stroke-linejoin="round"/>
+<path d="M61 24h24c12 0 20 8 20 19s-8 19-20 19H61" fill="none" stroke="#f3f7fb" stroke-width="8" stroke-linecap="round"/>
+<path d="M61 62v32" stroke="#f3f7fb" stroke-width="8" stroke-linecap="round"/>
+<path d="M37 105h54" stroke="#5de39a" stroke-width="5" stroke-linecap="round"/>
+</svg>
