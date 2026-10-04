@@ -499,7 +499,8 @@ async fn session(State(s): State<AppState>, headers: HeaderMap) -> Response {
                     "organization_name": row.get::<String,_>("organization_name"),
                     "role": ctx.role,
                     "csrf_token": ctx.csrf
-                }))\n                .into_response(),
+                }))
+                .into_response(),
                 Ok(None) => unauthorized(),
                 Err(e) => db_error(e),
             }
