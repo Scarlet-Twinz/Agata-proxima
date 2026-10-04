@@ -147,6 +147,13 @@ async fn main() -> Result<()> {
 
     let app = Router::new()
         .route("/", get(home))
+        .route("/platform", get(platform_page))
+        .route("/security", get(security_page))
+        .route("/developers", get(developers_page))
+        .route("/developer-console", get(developer_console_page))
+        .route("/pricing", get(pricing_page))
+        .route("/billing", get(billing_page))
+        .route("/faq", get(faq_page))
         .route("/login", get(login_page))
         .route("/signup", get(signup_page))
         .route("/app", get(app_page))
@@ -175,7 +182,7 @@ async fn main() -> Result<()> {
         )
         .route("/api/v1/audit", get(audit_events))
         .route("/api/v1/support", get(support).post(create_support))
-        .route("/api/v1/nodes/:id/enrollment", post(start_enrollment))
+        .route("/api/v1/nodes/{id}/enrollment", post(start_enrollment))
         .route("/verify-email", get(production::verify_email))
         .route("/reset-password", get(production::reset_password_page))
         .route("/accept-invite", get(production::accept_invite))
@@ -205,7 +212,10 @@ async fn main() -> Result<()> {
             "/api/v1/auth/oidc/callback",
             get(production::entra_callback),
         )
-        .route("/api/v1/organization/invitations", post(production::invite))
+        .route(
+            "/api/v1/organization/invitations",
+            get(production::team).post(production::invite),
+        )
         .route("/api/v1/production/readiness", get(production::readiness))
         .with_state(state)
         .layer(TraceLayer::new_for_http());
@@ -223,6 +233,34 @@ async fn main() -> Result<()> {
 async fn home() -> Html<&'static str> {
     Html(include_str!("../web/home.html"))
 }
+async fn platform_page() -> Html<&'static str> {
+    Html(include_str!("../web/platform.html"))
+}
+
+async fn security_page() -> Html<&'static str> {
+    Html(include_str!("../web/security.html"))
+}
+
+async fn developers_page() -> Html<&'static str> {
+    Html(include_str!("../web/developers.html"))
+}
+
+async fn developer_console_page() -> Html<&'static str> {
+    Html(include_str!("../web/developer-console.html"))
+}
+
+async fn pricing_page() -> Html<&'static str> {
+    Html(include_str!("../web/pricing.html"))
+}
+
+async fn billing_page() -> Html<&'static str> {
+    Html(include_str!("../web/billing.html"))
+}
+
+async fn faq_page() -> Html<&'static str> {
+    Html(include_str!("../web/faq.html"))
+}
+
 async fn login_page() -> Html<&'static str> {
     Html(include_str!("../web/login.html"))
 }
@@ -232,8 +270,13 @@ async fn signup_page() -> Html<&'static str> {
 async fn app_page() -> Html<&'static str> {
     Html(include_str!("../web/app.html"))
 }
-async fn logo() -> Html<&'static str> {
-    Html(include_str!("../web/logo.svg"))
+async fn logo() -> Response {
+    let mut response = Html(include_str!("../web/logo.svg")).into_response();
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("image/svg+xml"),
+    );
+    response
 }
 
 async fn healthz(State(s): State<AppState>) -> Response {
@@ -449,14 +492,32 @@ async fn logout(State(s): State<AppState>, headers: HeaderMap) -> Response {
 
 async fn session(State(s): State<AppState>, headers: HeaderMap) -> Response {
     match authenticate(&s, &headers).await {
-        Ok(ctx) => Json(json!({
-            "authenticated": true,
-            "user_id": ctx.user_id,
-            "organization_id": ctx.organization_id,
-            "role": ctx.role,
-            "csrf_token": ctx.csrf
-        }))
-        .into_response(),
+        Ok(ctx) => {
+            let identity = sqlx::query(
+                "SELECT u.display_name, o.name AS organization_name
+                 FROM users u
+                 JOIN organizations o ON o.id=$2
+                 WHERE u.id=$1",
+            )
+            .bind(ctx.user_id)
+            .bind(ctx.organization_id)
+            .fetch_optional(&s.db)
+            .await;
+            match identity {
+                Ok(Some(row)) => Json(json!({
+                    "authenticated": true,
+                    "user_id": ctx.user_id,
+                    "display_name": row.get::<String,_>("display_name"),
+                    "organization_id": ctx.organization_id,
+                    "organization_name": row.get::<String,_>("organization_name"),
+                    "role": ctx.role,
+                    "csrf_token": ctx.csrf
+                }))
+                .into_response(),
+                Ok(None) => unauthorized(),
+                Err(e) => db_error(e),
+            }
+        }
         Err(_) => (
             StatusCode::UNAUTHORIZED,
             Json(json!({"authenticated":false})),
