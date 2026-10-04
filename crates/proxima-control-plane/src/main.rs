@@ -479,14 +479,31 @@ async fn logout(State(s): State<AppState>, headers: HeaderMap) -> Response {
 
 async fn session(State(s): State<AppState>, headers: HeaderMap) -> Response {
     match authenticate(&s, &headers).await {
-        Ok(ctx) => Json(json!({
-            "authenticated": true,
-            "user_id": ctx.user_id,
-            "organization_id": ctx.organization_id,
-            "role": ctx.role,
-            "csrf_token": ctx.csrf
-        }))
-        .into_response(),
+        Ok(ctx) => {
+            let identity = sqlx::query(
+                "SELECT u.display_name, o.name AS organization_name
+                 FROM users u
+                 JOIN organizations o ON o.id=$2
+                 WHERE u.id=$1",
+            )
+            .bind(ctx.user_id)
+            .bind(ctx.organization_id)
+            .fetch_optional(&s.db)
+            .await;
+            match identity {
+                Ok(Some(row)) => Json(json!({
+                    "authenticated": true,
+                    "user_id": ctx.user_id,
+                    "display_name": row.get::<String,_>("display_name"),
+                    "organization_id": ctx.organization_id,
+                    "organization_name": row.get::<String,_>("organization_name"),
+                    "role": ctx.role,
+                    "csrf_token": ctx.csrf
+                })).into_response(),
+                Ok(None) => unauthorized(),
+                Err(e) => db_error(e),
+            }
+        }
         Err(_) => (
             StatusCode::UNAUTHORIZED,
             Json(json!({"authenticated":false})),
