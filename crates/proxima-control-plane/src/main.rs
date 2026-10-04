@@ -214,8 +214,7 @@ async fn main() -> Result<()> {
         )
         .route(
             "/api/v1/organization/invitations",
-            get(production::team),
-            post(production::invite),
+            get(production::team).post(production::invite),
         )
         .route("/api/v1/production/readiness", get(production::readiness))
         .with_state(state)
