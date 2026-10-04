@@ -150,7 +150,9 @@ async fn main() -> Result<()> {
         .route("/platform", get(platform_page))
         .route("/security", get(security_page))
         .route("/developers", get(developers_page))
+        .route("/developer-console", get(developer_console_page))
         .route("/pricing", get(pricing_page))
+        .route("/billing", get(billing_page))
         .route("/faq", get(faq_page))
         .route("/login", get(login_page))
         .route("/signup", get(signup_page))
@@ -240,8 +242,16 @@ async fn developers_page() -> Html<&'static str> {
     Html(include_str!("../web/developers.html"))
 }
 
+async fn developer_console_page() -> Html<&'static str> {
+    Html(include_str!("../web/developer-console.html"))
+}
+
 async fn pricing_page() -> Html<&'static str> {
     Html(include_str!("../web/pricing.html"))
+}
+
+async fn billing_page() -> Html<&'static str> {
+    Html(include_str!("../web/billing.html"))
 }
 
 async fn faq_page() -> Html<&'static str> {
