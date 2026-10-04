@@ -212,7 +212,10 @@ async fn main() -> Result<()> {
             "/api/v1/auth/oidc/callback",
             get(production::entra_callback),
         )
-        .route("/api/v1/organization/invitations", get(production::team), post(production::invite))
+        .route(
+            "/api/v1/organization/invitations",
+            get(production::team).post(production::invite),
+        )
         .route("/api/v1/production/readiness", get(production::readiness))
         .with_state(state)
         .layer(TraceLayer::new_for_http());
