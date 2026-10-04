@@ -10,7 +10,7 @@ use axum::{
     extract::{Path, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{Html, IntoResponse, Response},
-    routing::{get, post},
+    routing::{delete, get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -205,7 +205,18 @@ async fn main() -> Result<()> {
             "/api/v1/auth/oidc/callback",
             get(production::entra_callback),
         )
-        .route("/api/v1/organization/invitations", post(production::invite))
+        .route(
+            "/api/v1/organization/team",
+            get(organization_team),
+        )
+        .route(
+            "/api/v1/organization/invitations",
+            get(organization_invitations).post(production::invite),
+        )
+        .route(
+            "/api/v1/organization/invitations/:id",
+            delete(revoke_organization_invitation),
+        )
         .route("/api/v1/production/readiness", get(production::readiness))
         .with_state(state)
         .layer(TraceLayer::new_for_http());
@@ -462,6 +473,112 @@ async fn session(State(s): State<AppState>, headers: HeaderMap) -> Response {
             Json(json!({"authenticated":false})),
         )
             .into_response(),
+    }
+}
+
+async fn organization_team(State(s): State<AppState>, headers: HeaderMap) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+
+    match sqlx::query(
+        "SELECT u.id,u.email,u.display_name,m.role,m.created_at
+         FROM memberships m JOIN users u ON u.id=m.user_id
+         WHERE m.organization_id=$1 ORDER BY
+           CASE m.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 WHEN 'operator' THEN 2 ELSE 3 END,
+           m.created_at",
+    )
+    .bind(ctx.organization_id)
+    .fetch_all(&s.db)
+    .await
+    {
+        Ok(rows) => Json(rows.iter().map(|r| json!({
+            "id": r.get::<Uuid,_>("id"),
+            "email": r.get::<String,_>("email"),
+            "display_name": r.get::<String,_>("display_name"),
+            "role": r.get::<String,_>("role"),
+            "created_at": r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),
+            "current": r.get::<Uuid,_>("id") == ctx.user_id
+        })).collect::<Vec<_>>()).into_response(),
+        Err(e) => db_error(e),
+    }
+}
+
+async fn organization_invitations(State(s): State<AppState>, headers: HeaderMap) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+
+    match sqlx::query(
+        "SELECT id,email,role,expires_at,accepted_at,created_at
+         FROM organization_invites
+         WHERE organization_id=$1
+         ORDER BY created_at DESC",
+    )
+    .bind(ctx.organization_id)
+    .fetch_all(&s.db)
+    .await
+    {
+        Ok(rows) => Json(rows.iter().map(|r| json!({
+            "id": r.get::<Uuid,_>("id"),
+            "email": r.get::<String,_>("email"),
+            "role": r.get::<String,_>("role"),
+            "expires_at": r.get::<chrono::DateTime<chrono::Utc>,_>("expires_at"),
+            "accepted_at": r.try_get::<chrono::DateTime<chrono::Utc>,_>("accepted_at").ok(),
+            "created_at": r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),
+            "status": if r.try_get::<chrono::DateTime<chrono::Utc>,_>("accepted_at").ok().is_some() {
+                "accepted"
+            } else {
+                "pending"
+            }
+        })).collect::<Vec<_>>()).into_response(),
+        Err(e) => db_error(e),
+    }
+}
+
+async fn revoke_organization_invitation(
+    State(s): State<AppState>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
+
+    let result = sqlx::query(
+        "DELETE FROM organization_invites
+         WHERE id=$1 AND organization_id=$2 AND accepted_at IS NULL",
+    )
+    .bind(id)
+    .bind(ctx.organization_id)
+    .execute(&s.db)
+    .await;
+
+    match result {
+        Ok(result) if result.rows_affected() == 1 => {
+            audit(
+                &s.db,
+                ctx.organization_id,
+                ctx.user_id,
+                "organization.invite.revoked",
+                "organization_invite",
+                Some(id),
+                json!({}),
+            )
+            .await;
+            Json(json!({"ok":true,"message":"Invitation revoked."})).into_response()
+        }
+        Ok(_) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"ok":false,"message":"Pending invitation not found."})),
+        ).into_response(),
+        Err(e) => db_error(e),
     }
 }
 
