@@ -250,9 +250,9 @@ pub(crate) async fn require_feature(
 pub(crate) async fn plans() -> Response {
     let catalog = [
         ("free", "Free", 0_i32, "Evaluation and small proofs of concept", "AGATA_STRIPE_FREE_PRICE_ID"),
-        ("starter", "Starter", 79_i32, "First production SaaS deployments", "AGATA_STRIPE_STARTER_PRICE_ID"),
-        ("growth", "Growth", 249_i32, "Multi-tenant production workloads", "AGATA_STRIPE_GROWTH_PRICE_ID"),
-        ("scale", "Scale", 799_i32, "Larger fleets and security operations", "AGATA_STRIPE_SCALE_PRICE_ID"),
+        ("starter", "Starter", 149_i32, "First production SaaS deployments", "AGATA_STRIPE_STARTER_PRICE_ID"),
+        ("growth", "Growth", 499_i32, "Multi-tenant production workloads", "AGATA_STRIPE_GROWTH_PRICE_ID"),
+        ("scale", "Scale", 1199_i32, "Larger fleets and security operations", "AGATA_STRIPE_SCALE_PRICE_ID"),
         ("enterprise", "Enterprise", 0_i32, "Contracted enterprise deployments", ""),
     ];
 
