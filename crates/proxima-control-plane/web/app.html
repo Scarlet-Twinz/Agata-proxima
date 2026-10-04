@@ -1,45 +1,4937 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#07090d"><title>Agata Proxima — Command Center</title><style>:root{--bg:#070a0d;--ink:#f4f7f8;--muted:#8997a1;--line:#202b32;--mint:#72e4bf;--cyan:#8bdcf5;--red:#ff8d9b}*{box-sizing:border-box}body{margin:0;background:radial-gradient(800px 500px at 72% -15%,#19434f55,transparent 62%),radial-gradient(700px 500px at 0 100%,#172b3830,transparent 65%),var(--bg);color:var(--ink);font:13px/1.55 Inter,system-ui,sans-serif}button,input,textarea,select{font:inherit}.shell{min-height:100vh;display:grid;grid-template-columns:246px minmax(0,1fr)}.side{position:sticky;top:0;height:100vh;padding:18px 13px;background:#080c10ed;border-right:1px solid #ffffff0a;display:flex;flex-direction:column;z-index:10}.brand{display:flex;gap:10px;align-items:center;padding:6px 9px 20px;color:var(--ink);text-decoration:none}.brand img{width:39px;height:39px;border-radius:13px}.brand b{display:block;font-size:12px;letter-spacing:.18em}.brand small{display:block;color:#66737d;font:700 7px ui-monospace,monospace;letter-spacing:.15em}.workspace{margin:0 3px 16px;padding:12px;border:1px solid var(--line);border-radius:17px;background:linear-gradient(135deg,#111c22,#0a1015);position:relative}.workspace:after{content:"";position:absolute;right:12px;top:14px;width:7px;height:7px;border-radius:50%;background:var(--mint);box-shadow:0 0 12px #72e4bf}.workspace span,.group,.tag,.live,.eyebrow{font:800 7px ui-monospace,monospace;letter-spacing:.16em;text-transform:uppercase}.workspace span,.group,.tag{color:#63727d}.workspace b{display:block;margin-top:5px;font-size:11px;max-width:175px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.group{padding:13px 10px 6px}.nav{display:grid;gap:3px}.nav a{display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid transparent;border-radius:12px;color:#84919b;text-decoration:none;font-size:10px;transition:.15s}.nav a:before{content:"";width:6px;height:6px;border:1px solid #52616b;border-radius:2px;transform:rotate(45deg)}.nav a:hover{background:#10171c;color:#eef3f5;transform:translateX(2px)}.nav a.active{background:linear-gradient(100deg,#11252a,#0d151a);border-color:#234149;color:#fff}.nav a.active:before{background:var(--mint);border-color:var(--mint);transform:none}.sidebottom{margin-top:auto;border-top:1px solid #ffffff0a;padding:12px 7px 0;color:#687680;font-size:8px}.identity{display:flex;gap:8px;align-items:center;margin-bottom:9px}.avatar{width:28px;height:28px;border-radius:12px 50% 50% 50%;background:linear-gradient(135deg,var(--mint),var(--cyan));display:grid;place-items:center;color:#061012;font-size:8px;font-weight:900}.sidebottom b{color:#e0e7ea;font-size:9px}.sidebottom span{display:block;color:var(--mint);font:800 7px ui-monospace,monospace;letter-spacing:.08em}.btn{border:1px solid #26343b;background:#0e161b;color:#e7edef;border-radius:10px;padding:8px 11px;cursor:pointer;font-size:9px;transition:.15s}.btn:hover{border-color:#3c5964;transform:translateY(-1px)}.btn.primary{background:var(--mint);border-color:var(--mint);color:#06100f;font-weight:900}.btn.danger{color:#ffb0b9;border-color:#4b2930}.sidebottom .btn{width:100%;margin-top:10px}.topbar{height:68px;border-bottom:1px solid #ffffff09;display:flex;align-items:center;justify-content:space-between;padding:0 32px;background:#080c10d9;backdrop-filter:blur(20px);position:sticky;top:0;z-index:8}.crumb{display:flex;gap:9px;align-items:center;color:#64727d;font-size:9px}.crumb strong{color:#e0e7ea;font-size:10px;letter-spacing:.08em}.crumb em{font-style:normal;color:#33414b}.topright{display:flex;gap:12px;align-items:center}.search{width:210px;border:1px solid #202c33;background:#0b1116;color:#9ba7af;border-radius:999px;padding:8px 12px;outline:0;font-size:9px}.live{display:flex;gap:6px;align-items:center;color:#83919b}.live i{width:6px;height:6px;border-radius:50%;background:var(--mint);box-shadow:0 0 11px var(--mint)}.content{width:min(1480px,100%);margin:auto;padding:34px 36px 55px}.hero{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:15px}.hero-main{min-height:235px;padding:31px 34px;border:1px solid #24343b;border-radius:34px 16px 34px 16px;background:radial-gradient(500px 180px at 82% 15%,#17404b55,transparent 70%),linear-gradient(135deg,#0f1a20,#0a1015);position:relative;overflow:hidden;box-shadow:0 25px 70px #0005}.hero-main:after{content:"";position:absolute;width:210px;height:210px;border:1px solid #72e4bf14;border-radius:50%;right:-75px;bottom:-105px}.eyebrow{color:var(--mint)}.hero h1{font-size:clamp(34px,4vw,52px);line-height:.98;letter-spacing:-.065em;margin:10px 0 12px;max-width:700px}.hero h1 span{color:#dce8eb}.hero p{margin:0;color:var(--muted);font-size:11px;max-width:690px}.hero-actions{display:flex;gap:7px;margin-top:22px}.profile-card{padding:22px;border:1px solid #26353c;border-radius:18px 34px 18px 34px;background:linear-gradient(160deg,#10191f,#0a1015);display:flex;flex-direction:column;justify-content:space-between}.profile-top{display:flex;justify-content:space-between;align-items:center}.big-avatar{width:47px;height:47px;border-radius:16px 22px 16px 22px;background:linear-gradient(135deg,var(--mint),#91a8ff);display:grid;place-items:center;color:#061012;font-size:13px;font-weight:950}.profile-card .role{color:#6a7882;font:800 7px ui-monospace,monospace;letter-spacing:.12em}.profile-card h3{margin:11px 0 2px;font-size:18px}.profile-card p{margin:0;color:#75838d;font-size:9px}.profile-status{border-top:1px solid #ffffff0a;margin-top:16px;padding-top:12px;display:flex;justify-content:space-between}.profile-status span{color:#75838d;font-size:8px}.profile-status b{color:var(--mint);font-size:8px}.bento{display:grid;grid-template-columns:1.2fr .9fr .9fr;gap:11px;margin-top:12px}.stat{min-height:116px;padding:18px;border:1px solid #202c33;background:linear-gradient(145deg,#0d151b,#090f14);position:relative;overflow:hidden}.stat:nth-child(1){border-radius:23px 12px 12px 23px}.stat:nth-child(2){border-radius:12px 27px 12px 12px}.stat:nth-child(3){border-radius:12px 12px 27px 12px}.stat:nth-child(4){border-radius:27px 12px 12px 12px}.stat:after{content:"";position:absolute;width:90px;height:90px;border:1px solid #ffffff07;border-radius:50%;right:-25px;bottom:-40px}.stat .label{display:block;color:#6e7c86;font:800 7px ui-monospace,monospace;letter-spacing:.13em;text-transform:uppercase}.stat strong{display:block;font-size:31px;letter-spacing:-.06em;margin-top:9px}.stat p{margin:3px 0 0;color:#71808a;font-size:8px}.stat .cyan{color:var(--cyan)}.stat .green{color:var(--mint)}.section-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(280px,.65fr);gap:12px;margin-top:12px}.panel{border:1px solid #202c33;background:linear-gradient(145deg,#0d141a,#090e13);box-shadow:0 18px 55px #0003}.round-a{border-radius:27px 12px 12px 12px}.round-b{border-radius:12px 27px 12px 12px}.round-c{border-radius:12px 12px 27px 12px}.panelhead{display:flex;justify-content:space-between;align-items:center;padding:18px 20px 13px}.panelhead h2{margin:0;font-size:12px}.panelbody{padding:0 20px 20px}.boundary{display:grid;grid-template-columns:175px 1fr;gap:18px;align-items:center}.ring{width:150px;height:150px;border-radius:50%;background:conic-gradient(var(--mint) 0 78%,#203038 78%);display:grid;place-items:center;position:relative}.ring:after{content:"";position:absolute;width:112px;height:112px;border-radius:50%;background:#0a1015;border:1px solid #25343b}.ringtext{position:absolute;z-index:1;text-align:center}.ringtext strong{display:block;font-size:25px}.ringtext span{color:#71808a;font:800 7px ui-monospace,monospace;letter-spacing:.08em}.boundary-list{display:grid;gap:8px}.check{display:flex;gap:9px;padding:9px;border:1px solid #1d2930;border-radius:11px;background:#0a1116}.check i{width:7px;height:7px;border-radius:50%;background:var(--mint);box-shadow:0 0 9px #72e4bf88;margin-top:4px}.check b{font-size:9px}.check span{display:block;color:#697782;font-size:8px;margin-top:2px}.quick{display:grid;grid-template-columns:1fr 1fr;gap:8px}.q{padding:13px;border:1px solid #1e2a31;background:#0a1116;border-radius:13px;color:#d9e2e6;text-decoration:none}.q b{display:block;font-size:9px}.q span{display:block;color:#687680;font-size:8px;margin-top:4px}.q:hover{border-color:#36515c}.activity{display:grid;gap:4px}.event{display:grid;grid-template-columns:7px 1fr auto;gap:9px;padding:10px 0;border-bottom:1px solid #ffffff08}.event:last-child{border-bottom:0}.event i{width:7px;height:7px;border-radius:2px;background:var(--cyan);margin-top:5px}.event b{font-size:9px}.event small{display:block;color:#697782;font-size:8px;margin-top:2px}.event time{color:#4e5d67;font:700 7px ui-monospace,monospace}.note{color:#74828c;font-size:9px;line-height:1.75}.footer{border-top:1px solid #ffffff09;margin-top:27px;padding-top:13px;color:#53616b;font:800 7px ui-monospace,monospace;display:flex;justify-content:space-between}.formgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;padding:0 20px 20px}.field{display:grid;gap:5px}.field label{font-size:8px;color:#8997a1}.field input,.field textarea,.field select{width:100%;border:1px solid #26333b;background:#080d12;color:#edf2f4;padding:10px;border-radius:9px;outline:0}.field textarea{min-height:105px;resize:vertical}.wide{grid-column:1/-1}table{width:100%;border-collapse:separate;border-spacing:0 5px}th{text-align:left;color:#63717c;font:800 7px ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;padding:7px 8px}td{padding:11px 8px;background:#0a1116;border-top:1px solid #18242b;border-bottom:1px solid #18242b;color:#c9d2d7;font-size:9px}td:first-child{border-left:1px solid #18242b;border-radius:9px 0 0 9px}td:last-child{border-right:1px solid #18242b;border-radius:0 9px 9px 0}.badge{display:inline-block;border:1px solid #285840;background:#091912;color:#9debd1;border-radius:999px;padding:3px 7px;font:800 7px ui-monospace,monospace}.badge.warn{color:#f0d99a;border-color:#51471f;background:#19160c}.empty{padding:30px;text-align:center;color:#687680;border:1px dashed #27343b;border-radius:13px}.mobile-nav{display:none}.side-toggle{position:absolute;right:-12px;top:24px;width:25px;height:25px;border:1px solid #26343b;border-radius:50%;background:#0c151a;color:#9cefff;cursor:pointer;display:grid;place-items:center;font-size:12px;z-index:3}.side-toggle:hover{border-color:#4b91aa}.shell.sidebar-collapsed{grid-template-columns:76px minmax(0,1fr)}.shell.sidebar-collapsed .side{padding-left:10px;padding-right:10px}.shell.sidebar-collapsed .brand{justify-content:center;padding-left:0;padding-right:0}.shell.sidebar-collapsed .brand div,.shell.sidebar-collapsed .workspace span,.shell.sidebar-collapsed .workspace b,.shell.sidebar-collapsed .group,.shell.sidebar-collapsed .nav a:not(.active)::after,.shell.sidebar-collapsed .sidebottom>div:not(.identity),.shell.sidebar-collapsed .sidebottom .btn{display:none}.shell.sidebar-collapsed .workspace{padding:9px}.shell.sidebar-collapsed .workspace:after{right:50%;transform:translateX(50%)}.shell.sidebar-collapsed .nav a{justify-content:center;padding:10px 7px;font-size:0}.shell.sidebar-collapsed .nav a:before{margin:0}.shell.sidebar-collapsed .identity{justify-content:center}.shell.sidebar-collapsed .identity>div:last-child{display:none}@media(max-width:1050px){.hero{grid-template-columns:1fr}.profile-card{min-height:190px}.section-grid{grid-template-columns:1fr}}@media(max-width:760px){.shell{display:block}.side{display:none}.topbar{padding:0 15px}.search{display:none}.content{padding:22px 14px 84px}.hero-main{padding:24px;border-radius:27px 12px}.profile-card{border-radius:12px 27px}.bento{grid-template-columns:1fr}.boundary{grid-template-columns:1fr;justify-items:center}.boundary-list{width:100%}.formgrid{grid-template-columns:1fr}.wide{grid-column:auto}.footer{display:block}.footer span{display:block;margin-bottom:5px}.mobile-nav{display:flex;position:fixed;left:10px;right:10px;bottom:10px;z-index:20;justify-content:space-around;padding:7px;border:1px solid #26333a;border-radius:18px;background:#0a1116ed;backdrop-filter:blur(18px);box-shadow:0 18px 50px #0009}.mobile-nav a{color:#77858f;text-decoration:none;font-size:8px;padding:8px}.mobile-nav a.active{color:var(--mint)}}</style></head><body><div class="shell"><aside class="side"><button class="side-toggle" id="sideToggle" aria-label="Collapse sidebar" title="Collapse sidebar">‹</button><a class="brand" href="/app"><img src="/logo.svg" alt="Agata Proxima"><div><b>AGATA</b><small>PROXIMA CLOUD</small></div></a><div class="workspace"><span>Workspace</span><b id="workspaceName">Loading…</b></div><div class="group">Operate</div><nav class="nav"><a href="#overview" data-page="overview">Overview</a><a href="#team" data-page="team">Team</a><a href="#tenants" data-page="tenants">Tenants</a><a href="#policies" data-page="policies">Policies</a><a href="#fleet" data-page="fleet">Fleet</a><a href="#deployments" data-page="deployments">Deployments</a></nav><div class="group">Trust</div><nav class="nav"><a href="#verification" data-page="verification">Verification</a><a href="#audit" data-page="audit">Audit</a><a href="#security" data-page="security">Security</a><a href="#infrastructure" data-page="infrastructure">Infrastructure</a></nav><div class="group">Workspace</div><nav class="nav"><a href="#billing" data-page="billing">Billing</a><a href="#settings" data-page="settings">Settings</a><a href="#developer" data-page="developer">Developer</a><a href="#support" data-page="support">Support</a></nav><div class="sidebottom"><div class="identity"><div class="avatar" id="sideAvatar">AM</div><div><b id="identity">Loading…</b><span id="roleLabel">PROXIMA OPERATOR</span></div></div><div>Engine remains authoritative when management services are unavailable.</div><button class="btn danger" id="logout">Sign out</button></div></aside><div class="mainwrap"><header class="topbar"><div class="crumb"><strong>AGATA PROXIMA</strong><em>/</em><span id="routeLabel">Overview</span></div><div class="topright"><input class="search" id="navSearch" placeholder="Search workspace…"><div class="live"><i></i> SYSTEM ONLINE</div></div></header><main class="content"><div id="view"></div><footer class="footer"><span>AGATA PROXIMA · PROXIMA CLOUD</span><span id="clock">LIVE</span></footer></main></div></div><nav class="mobile-nav"><a href="#overview" data-page="overview">Home</a><a href="#team" data-page="team">Team</a><a href="#tenants" data-page="tenants">Tenants</a><a href="#security" data-page="security">Security</a><a href="#fleet" data-page="fleet">Fleet</a><a href="#support" data-page="support">Support</a></nav><script>
-const state={csrf:sessionStorage.getItem('proxima_csrf')||'',session:null};
-const view=document.getElementById('view');
-const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-async function api(path,opts={}){opts.headers={...(opts.headers||{})};if(opts.body)opts.headers['content-type']='application/json';if(['POST','PUT','PATCH','DELETE'].includes(opts.method))opts.headers['x-csrf-token']=state.csrf;const r=await fetch(path,opts);if(r.status===401){location.href='/login';throw new Error('unauthorized')}const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||'Request failed');return d}
-function shell(title,sub,body){document.getElementById('routeLabel').textContent=title;return '<div class="top"><div><div class="eyebrow">Agata Proxima / Control</div><h1 class="title">'+title+'</h1><p class="subtitle">'+sub+'</p></div><div class="status">● ENFORCEMENT-AWARE</div></div>'+body}
-function initials(name){return String(name||'Agata Operator').trim().split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'AM'}
-function metric(label,value,accent){return '<article class="stat"><span class="label">'+esc(label)+'</span><strong class="'+(accent||'cyan')+'">'+esc(value)+'</strong><p>Current workspace state</p></article>'}
-function table(headers,rows){return '<table><thead><tr>'+headers.map(x=>'<th>'+x+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(x=>'<td>'+x+'</td>').join('')+'</tr>').join('')+'</tbody></table>'}
-async function overview(){const s=await api('/api/v1/platform/status');const name=state.session.display_name||'Operator';const org=state.session.organization_name||'Proxima workspace';view.innerHTML='<section class="hero"><div class="hero-main"><div class="eyebrow">Proxima Cloud · '+esc(org)+'</div><h1>Good to see you, <span>'+esc(name.split(' ')[0])+'.</span></h1><p>Your control plane is ready. Manage tenants, shape policy, operate your fleet and inspect security evidence — while the Proxima Engine keeps the data-plane boundary authoritative.</p><div class="hero-actions"><a class="btn primary" href="#tenants">Create a tenant</a><a class="btn" href="#verification">Run verification</a></div></div><aside class="profile-card"><div class="profile-top"><div class="big-avatar">'+initials(name)+'</div><span class="role">'+esc(state.session.role||'operator').toUpperCase()+'</span></div><div><h3>'+esc(name)+'</h3><p>'+esc(org)+'</p></div><div class="profile-status"><span>Control plane</span><b>Operational</b></div></aside></section><section class="bento">'+metric('Tenants',s.tenants,'cyan')+metric('Policies',s.policies,'cyan')+metric('Fleet nodes',s.nodes,'green')+metric('Active changes',s.active_deployments,s.active_deployments?'cyan':'green')+'</section><section class="section-grid"><section class="panel round-a"><div class="panelhead"><h2>Security posture</h2><span class="tag">ENGINE-FIRST</span></div><div class="panelbody"><div class="boundary"><div class="ring"><div class="ringtext"><strong>LIVE</strong><span>BOUNDARY</span></div></div><div class="boundary-list"><div class="check"><i></i><div><b>Engine enforcement</b><span>Data-plane authority remains independent.</span></div></div><div class="check"><i></i><div><b>PostgreSQL RLS</b><span>Database policy is an independent boundary.</span></div></div><div class="check"><i></i><div><b>Audit trail</b><span>Administrative actions remain observable.</span></div></div><div class="check"><i></i><div><b>Verification</b><span>Evidence is stored instead of inferred.</span></div></div></div></div></div></section><section class="panel round-b"><div class="panelhead"><h2>Get moving</h2><span class="tag">SHORTCUTS</span></div><div class="panelbody"><div class="quick"><a class="q" href="#tenants"><b>New tenant</b><span>Register an isolation boundary.</span></a><a class="q" href="#policies"><b>New policy</b><span>Define enforcement intent.</span></a><a class="q" href="#fleet"><b>Enroll node</b><span>Bring an Engine online.</span></a><a class="q" href="#billing"><b>Billing</b><span>Plans and entitlements.</span></a></div></div></section></section><section class="section-grid"><section class="panel round-c"><div class="panelhead"><h2>What Proxima is protecting</h2><span class="tag">LIVE MODEL</span></div><div class="panelbody"><div class="activity"><div class="event"><i></i><div><b>Application → Proxima Engine</b><small>Tenant context is established before database access.</small></div><time>01</time></div><div class="event"><i></i><div><b>Proxima Engine → PostgreSQL</b><small>Sessions reach the upstream with tenant-scoped enforcement.</small></div><time>02</time></div><div class="event"><i></i><div><b>Verification → Evidence</b><small>Adversarial checks become inspectable security records.</small></div><time>03</time></div></div></div></section><section class="panel round-a"><div class="panelhead"><h2>Control-plane contract</h2><span class="tag">NON-AUTHORITATIVE</span></div><div class="panelbody"><p class="note">Management coordinates policy, fleet and commercial state. It does not become the authority for tenant data access. If the control plane disappears, the Engine does not interpret that outage as permission to bypass enforcement.</p><a class="btn" href="#security">Read the security boundary →</a></div></section></section>'}async function team(){const d=await api('/api/v1/organization/invitations');const members=d.members||[], invites=d.invitations||[];view.innerHTML=shell('Team','People with access to this Proxima organization and pending invitations.', '<section class="section-grid"><section class="panel round-a"><div class="panelhead"><h2>Members</h2><span class="tag">'+members.length+' ACTIVE</span></div><div style="margin-top:10px">'+table(['Member','Email','Role','Status'],members.map(x=>[esc(x.display_name),esc(x.email),'<span class="badge">'+esc(x.role)+'</span>','<span class="badge">'+esc(x.status)+'</span>']))+'</div></section><section class="panel round-b"><div class="panelhead"><h2>Invite member</h2><span class="tag">RESEND DELIVERY</span></div><form class="formgrid" onsubmit="inviteMember(event)"><div class="field wide"><label>Email address</label><input id="inviteEmail" type="email" required placeholder="person@company.com"></div><div class="field"><label>Role</label><select id="inviteRole"><option value="viewer">Viewer</option><option value="operator">Operator</option><option value="admin">Admin</option></select></div><div class="field" style="align-content:end"><button class="btn primary">Send invitation</button></div></form><p class="note" style="padding:0 20px 20px">Invitations expire after 7 days. Delivery uses the configured Resend integration when the deployment has Resend credentials.</p></section></section><section class="panel"><div class="panelhead"><h2>Pending invitations</h2><span class="tag">'+invites.length+' PENDING</span></div><div style="margin-top:10px">'+(invites.length?table(['Email','Role','Expires'],invites.map(x=>[esc(x.email),'<span class="badge">'+esc(x.role)+'</span>',esc(new Date(x.expires_at).toLocaleString())])):'<div class="empty">No pending invitations.</div>')+'</div></section>')}
-async function inviteMember(e){e.preventDefault();try{await api('/api/v1/organization/invitations',{method:'POST',body:JSON.stringify({organization_id:state.session.organization_id,email:inviteEmail.value.trim(),role:inviteRole.value})});alert('Invitation sent.');team()}catch(err){alert(err.message)}}
-async function tenants(){const rows=await api('/api/v1/tenants');view.innerHTML=shell('Tenants','Explicit tenant inventory and isolation posture.', '<section class="panel"><div class="panelhead"><h2>Tenant inventory</h2><button class="btn primary" onclick="tenantForm()">New tenant</button></div><div id="tenanttable" style="margin-top:10px">'+table(['Name','Slug','Project','Isolation','Status'],rows.map(x=>[esc(x.name),esc(x.slug),esc(x.project),'<span class="badge">'+esc(x.isolation_mode)+'</span>', '<span class="badge">'+esc(x.status)+'</span>']))+'</div></section><div id="formslot"></div>')}
-function tenantForm(){document.getElementById('formslot').innerHTML='<section class="panel"><div class="panelhead"><h2>Create tenant</h2><span class="tag">BOUNDARY REGISTRATION</span></div><form class="formgrid" onsubmit="createTenant(event)"><div class="field"><label>Name</label><input id="tn" required></div><div class="field"><label>Slug</label><input id="ts" required></div><div class="field"><label>Isolation mode</label><select id="ti"><option>enforced-proxy</option><option>dedicated-node</option><option>shared-with-rsl</option></select></div><div class="field" style="align-content:end"><button class="btn primary">Create tenant</button></div></form></section>'}
-async function createTenant(e){e.preventDefault();await api('/api/v1/tenants',{method:'POST',body:JSON.stringify({organization_id:state.session.organization_id,name:tn.value,slug:ts.value,isolation_mode:ti.value})});location.hash='#tenants';tenants()}
-async function policies(){const rows=await api('/api/v1/policies');view.innerHTML=shell('Policy management','Versioned intent that can be distributed to enforcement nodes.', '<section class="panel"><div class="panelhead"><h2>Policy versions</h2><button class="btn primary" onclick="policyForm()">New policy</button></div><div style="margin-top:10px">'+table(['Name','Version','Status','Updated'],rows.map(x=>[esc(x.name),'v'+x.version,'<span class="badge">'+esc(x.status)+'</span>',esc(x.updated_at)]))+'</div></section><div id="formslot"></div>')}
-function policyForm(){document.getElementById('formslot').innerHTML='<section class="panel"><div class="panelhead"><h2>Create policy version</h2><span class="tag">DRAFT → REVIEW → ACTIVE</span></div><form class="formgrid" onsubmit="createPolicy(event)"><div class="field"><label>Name</label><input id="pn" required value="tenant-isolation"></div><div class="field"><label>Version</label><input id="pv" type="number" value="1" min="1" required></div><div class="field wide"><label>Policy document (JSON)</label><textarea id="pd">{\"tenant_context\":\"required\",\"cross_tenant\":\"deny\",\"upstream_tls\":\"verify-full\"}</textarea></div><div class="field wide"><button class="btn primary">Save draft</button></div></form></section>'}
-async function createPolicy(e){e.preventDefault();let doc;try{doc=JSON.parse(pd.value)}catch{alert('Policy document must be valid JSON.');return}await api('/api/v1/policies',{method:'POST',body:JSON.stringify({organization_id:state.session.organization_id,name:pn.value,version:Number(pv.value),document:doc})});location.hash='#policies';policies()}
-async function fleet(){const rows=await api('/api/v1/nodes');view.innerHTML=shell('Fleet','Every Proxima node has an explicit identity and enrollment lifecycle.', '<section class="panel"><div class="panelhead"><h2>Proxima nodes</h2><button class="btn primary" onclick="nodeForm()">Register node</button></div><div style="margin-top:10px">'+table(['Name','Environment','Region','Status','Version'],rows.map(x=>[esc(x.name),esc(x.environment),esc(x.region),'<span class="badge '+(x.status==='healthy'?'':'warn')+'">'+esc(x.status)+'</span>',esc(x.version)]))+'</div></section><div id="formslot"></div>')}
-function nodeForm(){document.getElementById('formslot').innerHTML='<section class="panel"><div class="panelhead"><h2>Register Proxima node</h2><span class="tag">TOKEN SHOWN ONCE</span></div><form class="formgrid" onsubmit="createNode(event)"><div class="field"><label>Node name</label><input id="nn" required placeholder="proxima-prod-01"></div><div class="field"><label>Environment</label><select id="ne"><option>production</option><option>staging</option><option>development</option></select></div><div class="field"><label>Region</label><input id="nr" value="auto"></div><div class="field" style="align-content:end"><button class="btn primary">Register</button></div></form></section>'}
-async function createNode(e){e.preventDefault();const d=await api('/api/v1/nodes',{method:'POST',body:JSON.stringify({organization_id:state.session.organization_id,name:nn.value,environment:ne.value,region:nr.value})});alert('Enrollment token (store it now):\\n\\n'+d.enrollment_token);fleet()}
-async function deployments(){const rows=await api('/api/v1/deployments');view.innerHTML=shell('Deployments','Desired state, observed state and lifecycle history stay explicit.', '<section class="panel"><div class="panelhead"><h2>Deployment history</h2><button class="btn primary" onclick="deploymentForm()">New deployment</button></div><div style="margin-top:10px">'+table(['Node','Version','Desired','Observed','Status'],rows.map(x=>[esc(x.node_id),esc(x.version),esc(x.desired_state),esc(x.observed_state),'<span class="badge '+(x.status==='healthy'?'':'warn')+'">'+esc(x.status)+'</span>']))+'</div></section><div id="formslot"></div>')}
-async function deploymentForm(){const nodes=await api('/api/v1/nodes');document.getElementById('formslot').innerHTML='<section class="panel"><div class="panelhead"><h2>Schedule deployment</h2><span class="tag">CONTROL PLANE INTENT</span></div><form class="formgrid" onsubmit="createDeployment(event)"><div class="field"><label>Node</label><select id="dn">'+nodes.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join('')+'</select></div><div class="field"><label>Engine version</label><input id="dv" value="0.1.0" required></div><div class="field"><label>Desired state</label><select id="ds"><option>running</option><option>draining</option><option>stopped</option></select></div><div class="field" style="align-content:end"><button class="btn primary">Queue deployment</button></div></form></section>'}
-async function createDeployment(e){e.preventDefault();await api('/api/v1/deployments',{method:'POST',body:JSON.stringify({organization_id:state.session.organization_id,node_id:dn.value,version:dv.value,desired_state:ds.value})});deployments()}
-async function verification(){const rows=await api('/api/v1/verifications');view.innerHTML=shell('Verification','Security evidence is a resource, not a badge painted onto the dashboard.', '<section class="panel"><div class="panelhead"><h2>Verification evidence</h2><span class="tag">PROXIMA VERIFY</span></div><div style="margin-top:10px">'+table(['Kind','Status','Tenant','Evidence'],rows.map(x=>[esc(x.kind),'<span class="badge '+(x.status==='pass'?'':'warn')+'">'+esc(x.status)+'</span>',esc(x.tenant_id||'fleet'),'<code>'+esc(JSON.stringify(x.evidence))+'</code>']))+'</div><p class="note">The control plane stores evidence submitted by verification jobs. It does not invent “passed” results.</p></section>')}
-async function auditPage(){const rows=await api('/api/v1/audit');view.innerHTML=shell('Audit trail','Append-only administrative and security events scoped to your organization.', '<section class="panel"><div class="panelhead"><h2>Recent events</h2><span class="tag">250 MAX · NEWEST FIRST</span></div><div class="timeline" style="margin-top:14px">'+(rows.length?rows.map(x=>'<div class="event"><b>'+esc(x.action)+'</b><small>'+esc(x.resource_type)+' · '+esc(x.created_at)+' · '+esc(JSON.stringify(x.metadata))+'</small></div>').join(''):'<div class="empty">No audit events.</div>')+'</div></section>')}
-async function security(){view.innerHTML=shell('Security boundary','The control plane can manage Proxima. It cannot redefine what the Engine enforces.', '<section class="panel"><div class="architecture"><div class="arch"><b>IDENTITY</b><span>Signed tenant context · organization RBAC · session cookies</span></div><div class="arch"><b>ENFORCEMENT</b><span>Rust engine · one tenant/session · PostgreSQL roles + RLS</span></div><div class="arch"><b>EVIDENCE</b><span>Verification results · append-only audit · deployment state</span></div></div></section><section class="panel"><h2 style="font-size:14px">Failure rule</h2><p class="note">If the control plane is unreachable, an already-running Proxima Engine remains the authority for tenant enforcement. Management availability is never treated as authorization to downgrade a data-plane security requirement.</p></section>')}
-async function infrastructure(){const s=await api('/api/v1/platform/status');view.innerHTML=shell('Infrastructure','The operational surface of the Proxima fleet.', '<section class="grid">'+metric('Nodes',s.nodes,'ok')+metric('Tenants',s.tenants,'cyan')+metric('Policies',s.policies,'cyan')+metric('Pending work',s.active_deployments,s.active_deployments?'':'ok')+'</section><section class="panel"><div class="panelhead"><h2>Deployment lifecycle</h2><span class="tag">DESIRED → OBSERVED</span></div><p class="note">Provision → enroll → healthy → update → rollback → retire. The control plane records desired state; the node reports observed state.</p></section>')}
-async function billing(){const [b,e]=await Promise.all([api('/api/v1/billing'),api('/api/v1/billing/entitlements')]);view.innerHTML=shell('Billing','Commercial lifecycle and capability entitlements, enforced server-side.','<section class="grid">'+metric('Status',esc(b.status),b.status==='active'?'ok':'cyan')+metric('Plan',esc(e.plan),'cyan')+metric('Billing state',esc(e.billing_status),e.billing_status==='active'?'ok':'cyan')+metric('Customer',b.customer_id?'LINKED':'NOT LINKED',b.customer_id?'ok':'cyan')+'</section><section class="panel"><div class="panelhead"><h2>Entitlement boundary</h2><span class="tag">SERVER-AUTHORITATIVE</span></div><p class="note">Plan limits are enforced by the Control Plane. Existing resources are preserved after downgrade; new resources are blocked at the destination plan limit.</p><div class="architecture" style="margin-top:16px"><div class="arch"><b>CAPACITY</b><span>'+esc(e.limits.nodes)+' nodes · '+esc(e.limits.tenants)+' tenants · '+esc(e.limits.environments)+' environments</span></div><div class="arch"><b>RETENTION</b><span>'+esc(e.limits.audit_retention_days)+' days audit retention</span></div><div class="arch"><b>FEATURES</b><span>'+esc(Object.entries(e.features).filter(x=>x[1]).map(x=>x[0]).join(' · ')||'Core enforcement only')+'</span></div></div></section><section class="panel"><div class="panelhead"><h2>Stripe subscription</h2><span class="tag">HOSTED CHECKOUT</span></div><p class="note">'+esc(b.message||'Billing state is synchronized from signed Stripe webhook events.')+'</p><div class="actions"><button class="btn primary" onclick="showPlans()">View Agata Proxima plans</button><button class="btn" onclick="openPortal()">Manage billing</button></div><div id="plans" style="display:none;margin-top:14px"></div></section>')}
-async function showPlans(){const c=await api('/api/v1/billing/plans');document.getElementById('plans').style.display='block';document.getElementById('plans').innerHTML=table(['Plan','Monthly','Limits','Checkout'],c.plans.map(p=>[esc(p.name),'$'+p.monthly_usd,p.limits.nodes+' nodes · '+p.limits.tenants+' tenants · '+p.limits.environments+' env',p.checkout_available?'<button class="btn primary" onclick="startCheckout(\''+esc(p.price_id||'')+'\')">Choose</button>':esc(p.key==='free'?'Included':p.key==='enterprise'?'Custom':'Price not configured')]))}
-async function startCheckout(priceId){if(!priceId){alert('This plan is not configured for checkout yet.');return}try{const d=await api('/api/v1/billing/checkout',{method:'POST',body:JSON.stringify({price_id:priceId})});if(d.checkout_url)location.href=d.checkout_url;else alert('Stripe did not return a checkout URL.')}catch(e){alert(e.message)}}
-async function openPortal(){try{const d=await api('/api/v1/billing/portal',{method:'POST'});if(d.portal_url)location.href=d.portal_url;else alert('Stripe did not return a billing portal URL.')}catch(e){alert(e.message)}}
-async function configureEntra(){const tenant=document.getElementById('entraTenant').value.trim();if(!tenant){alert('Enter the Entra tenant ID.');return}try{const d=await api('/api/v1/organization/oidc/entra',{method:'POST',body:JSON.stringify({tenant_id:tenant,jit_provisioning:document.getElementById('entraJit').checked})});alert('Entra connection saved for '+d.tenant_id)}catch(e){alert(e.message)}}
-function startEntra(){location.href='/api/v1/auth/oidc/start?organization_id='+encodeURIComponent(state.session.organization_id)}
-async function settings(){view.innerHTML=shell('Settings','Workspace identity, session posture and enterprise identity configuration.','<section class="panel"><div class="panelhead"><h2>Workspace</h2><span class="tag">ORGANIZATION</span></div><div class="formgrid"><div class="field"><label>Organization ID</label><input readonly value="'+esc(state.session.organization_id)+'"></div><div class="field"><label>Role</label><input readonly value="'+esc(state.session.role)+'"></div></div></section><section class="panel"><div class="panelhead"><h2>Microsoft Entra SSO</h2><span class="tag">GROWTH · SCALE</span></div><p class="note">The server validates issuer, tenant ID, audience, signature, expiry and nonce before creating an Agata session.</p><div class="formgrid"><div class="field"><label>Entra tenant ID</label><input id="entraTenant" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></div><div class="field"><label><input type="checkbox" id="entraJit"> Allow explicit JIT provisioning for new Entra identities</label></div><div class="field" style="align-content:end"><button class="btn primary" onclick="configureEntra()">Save Entra connection</button></div></div><div class="actions" style="margin-top:12px"><button class="btn" onclick="startEntra()">Test SSO sign-in</button></div></section><section class="panel"><div class="panelhead"><h2>Session security</h2><span class="tag">HTTPONLY · STRICT</span></div><p class="note">Session credentials are stored in an HttpOnly, SameSite=Strict cookie. State-changing API calls require the session-bound CSRF token. Production deployments should enable Secure cookies and TLS.</p></section>')}
-async function developer(){view.innerHTML=shell('Developer','The platform is designed to be installed, inspected and integrated without hiding its contracts.', '<section class="panel"><div class="panelhead"><h2>API surface</h2><span class="tag">/api/v1</span></div>'+table(['Area','Endpoints','Purpose'],[['Auth','signup · login · logout · session','Workspace identity and session lifecycle'],['Tenancy','organizations · tenants','Organization and tenant catalog'],['Policy','policies','Versioned enforcement intent'],['Fleet','nodes · enrollment','Node identity and enrollment'],['Deployments','deployments','Desired lifecycle state'],['Trust','verifications · audit','Evidence and administrative history'],['Support','support','Operational support queue']].map(x=>x.map(esc)))+'</section><section class="panel"><h2 style="font-size:14px">Integration rule</h2><p class="note">Your application talks to Proxima as an infrastructure boundary. It should not need to duplicate the full tenant-isolation implementation inside every service.</p></section>')}
-async function support(){const rows=await api('/api/v1/support');view.innerHTML=shell('Support','Create an operational request now; Gmail/Resend delivery can be attached later without changing the support contract.', '<section class="panel"><div class="panelhead"><h2>Open support request</h2><span class="tag">READY FOR EMAIL DELIVERY</span></div><form class="formgrid" onsubmit="createSupport(event)"><div class="field"><label>Subject</label><input id="ss" required></div><div class="field"><label>Priority</label><select id="sp"><option>normal</option><option>high</option><option>urgent</option><option>low</option></select></div><div class="field wide"><label>Message</label><textarea id="sm" required></textarea></div><div class="field wide"><button class="btn primary">Submit request</button></div></form></section><section class="panel"><div class="panelhead"><h2>Requests</h2><span class="tag">QUEUE</span></div><div style="margin-top:10px">'+table(['Subject','Priority','Status','Created'],rows.map(x=>[esc(x.subject),esc(x.priority),'<span class="badge">'+esc(x.status)+'</span>',esc(x.created_at)]))+'</div></section>')}
-async function createSupport(e){e.preventDefault();await api('/api/v1/support',{method:'POST',body:JSON.stringify({organization_id:state.session.organization_id,subject:ss.value,message:sm.value,priority:sp.value})});support()}
-const pages={overview,team,tenants,policies,fleet,deployments,verification,audit:auditPage,security,infrastructure,billing,settings,developer,support};
-async function route(){const name=location.hash.replace('#','')||'overview';document.querySelectorAll('.nav a').forEach(a=>a.classList.toggle('active',a.dataset.page===name));try{await (pages[name]||overview)()}catch(e){view.innerHTML='<section class="panel"><h2>Unable to load this view</h2><p class="note">'+esc(e.message)+'</p></section>'}}
-const shellEl=document.querySelector('.shell');const sideToggle=document.getElementById('sideToggle');const collapsed=localStorage.getItem('proxima_sidebar_collapsed')==='1';if(collapsed)shellEl.classList.add('sidebar-collapsed');sideToggle.textContent=collapsed?'›':'‹';sideToggle.onclick=()=>{const next=!shellEl.classList.contains('sidebar-collapsed');shellEl.classList.toggle('sidebar-collapsed',next);sideToggle.textContent=next?'›':'‹';sideToggle.title=next?'Expand sidebar':'Collapse sidebar';sideToggle.setAttribute('aria-label',sideToggle.title);localStorage.setItem('proxima_sidebar_collapsed',next?'1':'0')};
-async function boot(){try{const s=await api('/api/v1/session');state.session=s;state.csrf=s.csrf_token;sessionStorage.setItem('proxima_csrf',state.csrf);identity.textContent=s.display_name||'Operator';roleLabel.textContent=(s.role||'operator').toUpperCase()+' · PROXIMA OPERATOR';sideAvatar.textContent=initials(s.display_name);workspaceName.textContent=s.organization_name||'Proxima workspace'}catch{location.href='/login';return}route()}
-document.querySelectorAll('.nav a').forEach(a=>a.addEventListener('click',()=>setTimeout(route,0)));
-logout.onclick=async()=>{await api('/api/v1/auth/logout',{method:'POST'});sessionStorage.removeItem('proxima_csrf');location.href='/'};
-navSearch.addEventListener('keydown',e=>{if(e.key!=='Enter')return;const q=navSearch.value.trim().toLowerCase();const match=Object.keys(pages).find(x=>x.includes(q));if(match)location.hash='#'+match;});setInterval(()=>clock.textContent='LIVE · '+new Date().toLocaleTimeString(),1000);boot();
-</script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#050912">
+<title>Agata Proxima — Command Center</title>
+
+<style>
+:root{
+  --bg:#050810;
+  --bg2:#080d17;
+  --panel:#0a101c;
+  --panel2:#0d1523;
+  --panel3:#101a2b;
+  --line:#1b2a3d;
+  --line2:#243852;
+
+  --text:#f2f7ff;
+  --text2:#c7d4e5;
+  --muted:#7f91a7;
+  --muted2:#5e7189;
+
+  --blue:#2f81ff;
+  --blue2:#4aa3ff;
+  --cyan:#55e7ff;
+  --cyan2:#9af4ff;
+
+  --amber:#f4c66a;
+  --red:#ff6678;
+
+  --shadow:0 28px 90px rgba(0,0,0,.42);
+  --radius:20px;
+}
+
+*{box-sizing:border-box}
+
+html{
+  min-height:100%;
+  background:var(--bg);
+  scroll-behavior:smooth;
+}
+
+body{
+  margin:0;
+  min-height:100vh;
+  color:var(--text);
+  background:
+    radial-gradient(900px 600px at 80% -10%,rgba(47,129,255,.16),transparent 62%),
+    radial-gradient(700px 500px at 0 100%,rgba(85,231,255,.07),transparent 65%),
+    linear-gradient(135deg,#050810,#070b13 48%,#050810);
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-size:14px;
+  line-height:1.55;
+}
+
+button,input,textarea,select{
+  font:inherit;
+}
+
+button{
+  cursor:pointer;
+}
+
+a{
+  color:inherit;
+}
+
+::selection{
+  background:rgba(85,231,255,.24);
+  color:white;
+}
+
+/* =========================================================
+   APP SHELL
+   ========================================================= */
+
+.app{
+  min-height:100vh;
+  display:grid;
+  grid-template-columns:286px minmax(0,1fr);
+}
+
+/* =========================================================
+   SIDEBAR
+   ========================================================= */
+
+.sidebar{
+  position:sticky;
+  top:0;
+  height:100vh;
+  min-height:100vh;
+  overflow-y:auto;
+  overflow-x:hidden;
+  padding:18px 14px 16px;
+  background:
+    linear-gradient(180deg,rgba(7,12,21,.98),rgba(5,9,16,.98));
+  border-right:1px solid rgba(85,231,255,.08);
+  scrollbar-width:thin;
+  scrollbar-color:#1b3552 transparent;
+  z-index:50;
+}
+
+.sidebar::-webkit-scrollbar{
+  width:5px;
+}
+
+.sidebar::-webkit-scrollbar-track{
+  background:transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb{
+  background:#1b3552;
+  border-radius:99px;
+}
+
+.brand{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:8px 10px 20px;
+  text-decoration:none;
+}
+
+.brand-logo{
+  width:42px;
+  height:42px;
+  display:grid;
+  place-items:center;
+  border-radius:14px;
+  background:
+    linear-gradient(145deg,rgba(47,129,255,.24),rgba(85,231,255,.12));
+  border:1px solid rgba(85,231,255,.25);
+  box-shadow:0 0 28px rgba(47,129,255,.14);
+  overflow:hidden;
+}
+
+.brand-logo img{
+  width:31px;
+  height:31px;
+}
+
+.brand-name{
+  line-height:1.1;
+}
+
+.brand-name strong{
+  display:block;
+  font-size:13px;
+  letter-spacing:.22em;
+  font-weight:900;
+}
+
+.brand-name span{
+  display:block;
+  margin-top:4px;
+  color:var(--muted2);
+  font-size:8px;
+  letter-spacing:.18em;
+  font-weight:800;
+  text-transform:uppercase;
+}
+
+.workspace{
+  margin:0 3px 18px;
+  padding:15px;
+  border:1px solid var(--line);
+  border-radius:17px;
+  background:
+    radial-gradient(180px 80px at 90% 0,rgba(47,129,255,.12),transparent 70%),
+    linear-gradient(145deg,#0d1726,#090f1a);
+}
+
+.workspace-top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  color:var(--muted2);
+  font-size:8px;
+  font-weight:900;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+}
+
+.workspace-dot{
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:var(--cyan);
+  box-shadow:0 0 14px rgba(85,231,255,.75);
+}
+
+.workspace-name{
+  margin-top:7px;
+  font-size:13px;
+  font-weight:800;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.workspace-role{
+  margin-top:3px;
+  color:var(--muted);
+  font-size:9px;
+}
+
+.nav-section{
+  margin:20px 0 7px;
+  padding:0 10px;
+  color:#52677f;
+  font-size:8px;
+  font-weight:900;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+}
+
+.nav{
+  display:grid;
+  gap:3px;
+}
+
+.nav-link{
+  position:relative;
+  display:flex;
+  align-items:center;
+  gap:11px;
+  width:100%;
+  min-height:43px;
+  padding:9px 11px;
+  border:1px solid transparent;
+  border-radius:13px;
+  color:#8193a8;
+  background:transparent;
+  text-decoration:none;
+  font-size:11px;
+  font-weight:700;
+  transition:
+    background .16s ease,
+    color .16s ease,
+    border-color .16s ease,
+    transform .16s ease;
+}
+
+.nav-link:hover{
+  color:#e8f5ff;
+  background:rgba(47,129,255,.07);
+  border-color:rgba(47,129,255,.12);
+  transform:translateX(2px);
+}
+
+.nav-link.active{
+  color:#fff;
+  background:
+    linear-gradient(90deg,rgba(47,129,255,.16),rgba(85,231,255,.045));
+  border-color:rgba(47,129,255,.25);
+  box-shadow:
+    inset 3px 0 0 var(--blue),
+    0 10px 28px rgba(0,0,0,.18);
+}
+
+.nav-icon{
+  width:18px;
+  height:18px;
+  flex:0 0 18px;
+  display:grid;
+  place-items:center;
+  color:#617890;
+}
+
+.nav-link.active .nav-icon{
+  color:var(--cyan);
+}
+
+.nav-icon svg{
+  width:16px;
+  height:16px;
+  stroke:currentColor;
+  fill:none;
+  stroke-width:1.7;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+
+.nav-label{
+  flex:1;
+}
+
+.nav-key{
+  color:#42566e;
+  font-size:8px;
+  font-weight:800;
+}
+
+.sidebar-bottom{
+  margin-top:25px;
+  padding:14px 8px 0;
+  border-top:1px solid rgba(255,255,255,.06);
+}
+
+.identity{
+  display:flex;
+  align-items:center;
+  gap:9px;
+}
+
+.avatar{
+  width:34px;
+  height:34px;
+  flex:0 0 34px;
+  display:grid;
+  place-items:center;
+  border-radius:12px;
+  background:
+    linear-gradient(135deg,var(--blue),var(--cyan));
+  color:#04101d;
+  font-size:10px;
+  font-weight:950;
+  box-shadow:0 0 25px rgba(47,129,255,.2);
+}
+
+.identity-copy{
+  min-width:0;
+}
+
+.identity-copy strong{
+  display:block;
+  color:#eaf3fc;
+  font-size:10px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.identity-copy span{
+  display:block;
+  margin-top:2px;
+  color:var(--cyan);
+  font-size:7px;
+  font-weight:900;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+}
+
+.authority-note{
+  margin-top:12px;
+  color:#52677d;
+  font-size:8px;
+  line-height:1.55;
+}
+
+.signout{
+  width:100%;
+  margin-top:12px;
+}
+
+/* =========================================================
+   MAIN
+   ========================================================= */
+
+.main{
+  min-width:0;
+}
+
+.topbar{
+  position:sticky;
+  top:0;
+  z-index:40;
+  height:76px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  padding:0 34px;
+  border-bottom:1px solid rgba(85,231,255,.07);
+  background:rgba(5,8,16,.78);
+  backdrop-filter:blur(22px);
+}
+
+.breadcrumb{
+  min-width:0;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  color:var(--muted2);
+  font-size:10px;
+  white-space:nowrap;
+}
+
+.breadcrumb strong{
+  color:#dce8f5;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.13em;
+}
+
+.breadcrumb .slash{
+  color:#32465e;
+}
+
+.breadcrumb-current{
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.top-actions{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+.global-search{
+  width:240px;
+  height:38px;
+  padding:0 13px;
+  border:1px solid var(--line);
+  border-radius:11px;
+  outline:none;
+  color:var(--text2);
+  background:#080e18;
+  font-size:10px;
+}
+
+.global-search::placeholder{
+  color:#52677e;
+}
+
+.global-search:focus{
+  border-color:rgba(47,129,255,.55);
+  box-shadow:0 0 0 3px rgba(47,129,255,.08);
+}
+
+.system-status{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  height:38px;
+  padding:0 12px;
+  border:1px solid rgba(85,231,255,.12);
+  border-radius:11px;
+  color:#8ba2ba;
+  background:#080e18;
+  font-size:8px;
+  font-weight:900;
+  letter-spacing:.08em;
+}
+
+.system-status i{
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:var(--cyan);
+  box-shadow:0 0 12px rgba(85,231,255,.8);
+}
+
+/* =========================================================
+   CONTENT
+   ========================================================= */
+
+.content{
+  width:min(1600px,100%);
+  margin:0 auto;
+  padding:42px 38px 70px;
+}
+
+.page{
+  display:grid;
+  gap:18px;
+}
+
+.page-head{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:20px;
+  min-height:105px;
+}
+
+.page-kicker{
+  color:var(--cyan);
+  font-size:8px;
+  font-weight:900;
+  letter-spacing:.2em;
+  text-transform:uppercase;
+}
+
+.page-title{
+  margin:8px 0 0;
+  color:#f4f8ff;
+  font-size:clamp(34px,4vw,58px);
+  line-height:.98;
+  letter-spacing:-.065em;
+  font-weight:900;
+}
+
+.page-subtitle{
+  max-width:720px;
+  margin:13px 0 0;
+  color:#7f91a7;
+  font-size:12px;
+  line-height:1.75;
+}
+
+.page-actions{
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+  gap:8px;
+}
+
+/* =========================================================
+   BUTTONS
+   ========================================================= */
+
+.btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  min-height:38px;
+  padding:0 13px;
+  border:1px solid #263b55;
+  border-radius:10px;
+  color:#dbe9f7;
+  background:#0a111d;
+  font-size:10px;
+  font-weight:800;
+  text-decoration:none;
+  transition:.16s ease;
+}
+
+.btn:hover{
+  border-color:#3d638d;
+  background:#0d1725;
+  transform:translateY(-1px);
+}
+
+.btn.primary{
+  color:#04101b;
+  border-color:var(--blue);
+  background:linear-gradient(135deg,var(--blue),var(--cyan));
+  box-shadow:0 12px 30px rgba(47,129,255,.18);
+}
+
+.btn.primary:hover{
+  border-color:var(--cyan);
+  box-shadow:0 15px 38px rgba(47,129,255,.28);
+}
+
+.btn.ghost{
+  background:transparent;
+}
+
+.btn.danger{
+  color:#ff9eaa;
+  border-color:rgba(255,102,120,.28);
+  background:rgba(255,102,120,.04);
+}
+
+.btn.small{
+  min-height:30px;
+  padding:0 9px;
+  font-size:9px;
+}
+
+/* =========================================================
+   HERO / OVERVIEW
+   ========================================================= */
+
+.command-hero{
+  display:grid;
+  grid-template-columns:minmax(0,1.65fr) minmax(290px,.65fr);
+  gap:14px;
+}
+
+.hero-main{
+  position:relative;
+  min-height:300px;
+  overflow:hidden;
+  padding:34px;
+  border:1px solid #1e3450;
+  border-radius:30px 12px 30px 12px;
+  background:
+    radial-gradient(550px 260px at 85% 10%,rgba(47,129,255,.17),transparent 68%),
+    radial-gradient(300px 250px at 5% 100%,rgba(85,231,255,.08),transparent 70%),
+    linear-gradient(135deg,#0d1727,#080f1b);
+  box-shadow:var(--shadow);
+}
+
+.hero-main:before{
+  content:"";
+  position:absolute;
+  width:430px;
+  height:430px;
+  right:-190px;
+  bottom:-250px;
+  border:1px solid rgba(85,231,255,.12);
+  border-radius:50%;
+}
+
+.hero-main:after{
+  content:"";
+  position:absolute;
+  width:260px;
+  height:260px;
+  right:-105px;
+  bottom:-165px;
+  border:1px solid rgba(47,129,255,.14);
+  border-radius:50%;
+}
+
+.hero-eyebrow{
+  color:var(--cyan);
+  font-size:8px;
+  font-weight:900;
+  letter-spacing:.2em;
+  text-transform:uppercase;
+}
+
+.hero-title{
+  max-width:820px;
+  margin:14px 0 14px;
+  font-size:clamp(38px,5vw,68px);
+  line-height:.91;
+  letter-spacing:-.075em;
+  font-weight:950;
+}
+
+.hero-title span{
+  color:#6fcfff;
+}
+
+.hero-copy{
+  max-width:720px;
+  color:#8ca0b7;
+  font-size:12px;
+  line-height:1.75;
+}
+
+.hero-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:24px;
+}
+
+.hero-side{
+  display:grid;
+  gap:12px;
+}
+
+.signal-card{
+  min-height:143px;
+  padding:21px;
+  border:1px solid var(--line);
+  background:
+    linear-gradient(145deg,#0d1624,#080e18);
+}
+
+.signal-card:nth-child(1){
+  border-radius:14px 28px 14px 14px;
+}
+
+.signal-card:nth-child(2){
+  border-radius:14px 14px 28px 14px;
+}
+
+.signal-label{
+  color:#627891;
+  font-size:8px;
+  font-weight:900;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+}
+
+.signal-value{
+  margin-top:10px;
+  font-size:27px;
+  letter-spacing:-.05em;
+  font-weight:900;
+}
+
+.signal-value.blue{
+  color:var(--cyan);
+}
+
+.signal-copy{
+  margin-top:4px;
+  color:#647992;
+  font-size:9px;
+}
+
+/* =========================================================
+   BENTO METRICS
+   ========================================================= */
+
+.metric-grid{
+  display:grid;
+  grid-template-columns:1.25fr .95fr .95fr .95fr;
+  gap:11px;
+}
+
+.metric{
+  position:relative;
+  min-height:136px;
+  overflow:hidden;
+  padding:20px;
+  border:1px solid var(--line);
+  background:linear-gradient(145deg,#0b1421,#080e18);
+}
+
+.metric:nth-child(1){
+  border-radius:24px 11px 11px 11px;
+}
+
+.metric:nth-child(2){
+  border-radius:11px 26px 11px 11px;
+}
+
+.metric:nth-child(3){
+  border-radius:11px 11px 26px 11px;
+}
+
+.metric:nth-child(4){
+  border-radius:11px 11px 11px 26px;
+}
+
+.metric:after{
+  content:"";
+  position:absolute;
+  width:130px;
+  height:130px;
+  right:-65px;
+  bottom:-78px;
+  border:1px solid rgba(85,231,255,.08);
+  border-radius:50%;
+}
+
+.metric-label{
+  color:#61768f;
+  font-size:8px;
+  font-weight:900;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+}
+
+.metric-value{
+  margin-top:10px;
+  color:#edf6ff;
+  font-size:34px;
+  line-height:1;
+  letter-spacing:-.07em;
+  font-weight:950;
+}
+
+.metric-value.blue{
+  color:var(--cyan);
+}
+
+.metric-value.amber{
+  color:var(--amber);
+}
+
+.metric-foot{
+  margin-top:7px;
+  color:#637891;
+  font-size:9px;
+}
+
+/* =========================================================
+   PANELS
+   ========================================================= */
+
+.grid-2{
+  display:grid;
+  grid-template-columns:minmax(0,1.35fr) minmax(300px,.65fr);
+  gap:13px;
+}
+
+.grid-2.equal{
+  grid-template-columns:1fr 1fr;
+}
+
+.grid-3{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:13px;
+}
+
+.panel{
+  min-width:0;
+  border:1px solid var(--line);
+  border-radius:17px;
+  background:
+    linear-gradient(145deg,#0b131f,#080e17);
+  box-shadow:0 16px 55px rgba(0,0,0,.18);
+}
+
+.panel.feature{
+  border-color:#203a58;
+  background:
+    radial-gradient(400px 180px at 85% 0,rgba(47,129,255,.08),transparent 70%),
+    linear-gradient(145deg,#0c1624,#080e18);
+}
+
+.panel-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:15px;
+  padding:19px 20px 14px;
+}
+
+.panel-title{
+  margin:0;
+  color:#e8f1fb;
+  font-size:12px;
+  font-weight:900;
+}
+
+.panel-meta{
+  color:#536982;
+  font-size:7px;
+  font-weight:900;
+  letter-spacing:.15em;
+  text-transform:uppercase;
+}
+
+.panel-body{
+  padding:0 20px 20px;
+}
+
+.panel-copy{
+  color:#7b8ea5;
+  font-size:10px;
+  line-height:1.75;
+}
+
+.panel-link{
+  color:var(--cyan);
+  text-decoration:none;
+  font-size:9px;
+  font-weight:800;
+}
+
+.panel-link:hover{
+  text-decoration:underline;
+}
+
+/* =========================================================
+   SECURITY BOUNDARY
+   ========================================================= */
+
+.boundary-layout{
+  display:grid;
+  grid-template-columns:230px minmax(0,1fr);
+  gap:22px;
+  align-items:center;
+}
+
+.boundary-ring{
+  width:190px;
+  height:190px;
+  position:relative;
+  display:grid;
+  place-items:center;
+  border-radius:50%;
+  background:
+    conic-gradient(
+      var(--cyan) 0deg 280deg,
+      rgba(47,129,255,.32) 280deg 338deg,
+      #17263a 338deg 360deg
+    );
+  box-shadow:0 0 50px rgba(47,129,255,.12);
+}
+
+.boundary-ring:after{
+  content:"";
+  position:absolute;
+  width:146px;
+  height:146px;
+  border-radius:50%;
+  background:#080f1a;
+  border:1px solid #1d344e;
+}
+
+.ring-center{
+  position:relative;
+  z-index:2;
+  text-align:center;
+}
+
+.ring-center strong{
+  display:block;
+  font-size:30px;
+  letter-spacing:-.06em;
+}
+
+.ring-center span{
+  display:block;
+  margin-top:4px;
+  color:#657c96;
+  font-size:7px;
+  font-weight:900;
+  letter-spacing:.15em;
+}
+
+.boundary-list{
+  display:grid;
+  gap:8px;
+}
+
+.boundary-row{
+  display:grid;
+  grid-template-columns:9px minmax(0,1fr) auto;
+  gap:10px;
+  align-items:start;
+  padding:11px;
+  border:1px solid #172a40;
+  border-radius:11px;
+  background:#080f19;
+}
+
+.boundary-dot{
+  width:7px;
+  height:7px;
+  margin-top:5px;
+  border-radius:50%;
+  background:var(--cyan);
+  box-shadow:0 0 10px rgba(85,231,255,.65);
+}
+
+.boundary-row strong{
+  display:block;
+  font-size:9px;
+}
+
+.boundary-row span{
+  display:block;
+  margin-top:2px;
+  color:#657990;
+  font-size:8px;
+}
+
+.boundary-state{
+  color:var(--cyan);
+  font-size:7px;
+  font-weight:900;
+  letter-spacing:.1em;
+}
+
+/* =========================================================
+   ACTIVITY
+   ========================================================= */
+
+.activity{
+  display:grid;
+}
+
+.activity-row{
+  display:grid;
+  grid-template-columns:9px minmax(0,1fr) auto;
+  gap:10px;
+  padding:12px 0;
+  border-bottom:1px solid rgba(255,255,255,.055);
+}
+
+.activity-row:last-child{
+  border-bottom:0;
+}
+
+.activity-dot{
+  width:7px;
+  height:7px;
+  margin-top:5px;
+  border-radius:2px;
+  background:var(--blue2);
+  box-shadow:0 0 9px rgba(74,163,255,.45);
+}
+
+.activity-row strong{
+  display:block;
+  color:#dbe8f5;
+  font-size:9px;
+}
+
+.activity-row span{
+  display:block;
+  margin-top:2px;
+  color:#637990;
+  font-size:8px;
+}
+
+.activity-row time{
+  color:#435872;
+  font-size:7px;
+  font-weight:800;
+  white-space:nowrap;
+}
+
+/* =========================================================
+   TABLES
+   ========================================================= */
+
+.table-wrap{
+  width:100%;
+  overflow:auto;
+}
+
+table{
+  width:100%;
+  border-collapse:separate;
+  border-spacing:0 5px;
+  min-width:720px;
+}
+
+th{
+  padding:5px 9px;
+  text-align:left;
+  color:#536a84;
+  font-size:7px;
+  font-weight:900;
+  letter-spacing:.13em;
+  text-transform:uppercase;
+}
+
+td{
+  padding:12px 9px;
+  border-top:1px solid #14263a;
+  border-bottom:1px solid #14263a;
+  color:#cbd8e7;
+  background:#080f19;
+  font-size:9px;
+}
+
+td:first-child{
+  border-left:1px solid #14263a;
+  border-radius:10px 0 0 10px;
+}
+
+td:last-child{
+  border-right:1px solid #14263a;
+  border-radius:0 10px 10px 0;
+}
+
+td strong{
+  color:#edf5ff;
+}
+
+.mono{
+  font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+  font-size:8px;
+}
+
+.muted{
+  color:#637991;
+}
+
+.badge{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  min-height:22px;
+  padding:0 7px;
+  border:1px solid #21405e;
+  border-radius:999px;
+  color:#8edfff;
+  background:rgba(47,129,255,.07);
+  font-size:7px;
+  font-weight:900;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+
+.badge:before{
+  content:"";
+  width:5px;
+  height:5px;
+  border-radius:50%;
+  background:currentColor;
+}
+
+.badge.warn{
+  color:var(--amber);
+  border-color:rgba(244,198,106,.24);
+  background:rgba(244,198,106,.05);
+}
+
+.badge.red{
+  color:#ff8998;
+  border-color:rgba(255,102,120,.25);
+  background:rgba(255,102,120,.05);
+}
+
+.badge.neutral{
+  color:#7890aa;
+  border-color:#24364d;
+  background:#0b131f;
+}
+
+.empty{
+  padding:44px 20px;
+  text-align:center;
+  color:#60748c;
+  border:1px dashed #233a53;
+  border-radius:14px;
+}
+
+.empty strong{
+  display:block;
+  margin-bottom:6px;
+  color:#a6b9ce;
+  font-size:12px;
+}
+
+/* =========================================================
+   FORMS
+   ========================================================= */
+
+.form{
+  display:grid;
+  gap:13px;
+}
+
+.form-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+}
+
+.field{
+  display:grid;
+  gap:6px;
+}
+
+.field.wide{
+  grid-column:1/-1;
+}
+
+.field label{
+  color:#8195ac;
+  font-size:8px;
+  font-weight:800;
+}
+
+.field input,
+.field select,
+.field textarea{
+  width:100%;
+  border:1px solid #1e344d;
+  border-radius:10px;
+  outline:none;
+  padding:11px 12px;
+  color:#e9f3ff;
+  background:#070e18;
+  font-size:10px;
+  transition:.15s ease;
+}
+
+.field textarea{
+  min-height:130px;
+  resize:vertical;
+  font-family:"SFMono-Regular",Consolas,monospace;
+  font-size:9px;
+  line-height:1.55;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus{
+  border-color:rgba(47,129,255,.65);
+  box-shadow:0 0 0 3px rgba(47,129,255,.08);
+}
+
+.field select option{
+  background:#080f19;
+}
+
+.form-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:8px;
+  padding-top:4px;
+}
+
+/* =========================================================
+   QUICK LINKS
+   ========================================================= */
+
+.quick-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+}
+
+.quick{
+  display:block;
+  padding:14px;
+  border:1px solid #172b42;
+  border-radius:12px;
+  background:#080f19;
+  text-decoration:none;
+  transition:.15s ease;
+}
+
+.quick:hover{
+  border-color:#2b537b;
+  background:#0b1421;
+  transform:translateY(-1px);
+}
+
+.quick strong{
+  display:block;
+  font-size:9px;
+}
+
+.quick span{
+  display:block;
+  margin-top:4px;
+  color:#60758d;
+  font-size:8px;
+}
+
+/* =========================================================
+   INFRASTRUCTURE DIAGRAM
+   ========================================================= */
+
+.architecture{
+  display:grid;
+  grid-template-columns:1fr 70px 1fr 70px 1fr;
+  gap:10px;
+  align-items:center;
+}
+
+.arch-node{
+  min-height:145px;
+  padding:20px;
+  border:1px solid #1b3450;
+  border-radius:17px;
+  background:
+    radial-gradient(170px 90px at 90% 0,rgba(47,129,255,.09),transparent 70%),
+    #080f19;
+}
+
+.arch-node .node-label{
+  color:#5e7590;
+  font-size:7px;
+  font-weight:900;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+}
+
+.arch-node h3{
+  margin:9px 0 5px;
+  font-size:16px;
+  letter-spacing:-.03em;
+}
+
+.arch-node p{
+  margin:0;
+  color:#647a93;
+  font-size:9px;
+  line-height:1.65;
+}
+
+.arch-arrow{
+  text-align:center;
+  color:var(--cyan);
+  font-size:23px;
+}
+
+/* =========================================================
+   BILLING
+   ========================================================= */
+
+.billing-hero{
+  display:grid;
+  grid-template-columns:1.1fr .9fr;
+  gap:13px;
+}
+
+.plan-card{
+  padding:23px;
+  border:1px solid #1d3550;
+  border-radius:19px;
+  background:
+    radial-gradient(300px 130px at 85% 0,rgba(47,129,255,.11),transparent 70%),
+    #080f19;
+}
+
+.plan-name{
+  color:var(--cyan);
+  font-size:8px;
+  font-weight:900;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+}
+
+.plan-price{
+  margin-top:8px;
+  font-size:36px;
+  font-weight:950;
+  letter-spacing:-.07em;
+}
+
+.plan-price span{
+  color:#60758c;
+  font-size:10px;
+  letter-spacing:0;
+}
+
+.limit-list{
+  display:grid;
+  gap:7px;
+  margin-top:16px;
+}
+
+.limit-row{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  color:#70849b;
+  font-size:9px;
+}
+
+.limit-row strong{
+  color:#d7e4f2;
+}
+
+.plan-grid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:9px;
+}
+
+.plan-option{
+  padding:15px;
+  border:1px solid #1b314a;
+  border-radius:14px;
+  background:#080f19;
+}
+
+.plan-option.current{
+  border-color:rgba(85,231,255,.38);
+  box-shadow:inset 0 0 0 1px rgba(85,231,255,.08);
+}
+
+.plan-option h3{
+  margin:0;
+  font-size:12px;
+}
+
+.plan-option .price{
+  margin-top:7px;
+  font-size:20px;
+  font-weight:900;
+}
+
+.plan-option p{
+  min-height:38px;
+  color:#627890;
+  font-size:8px;
+}
+
+/* =========================================================
+   DEVELOPER
+   ========================================================= */
+
+.code-block{
+  position:relative;
+  overflow:auto;
+  padding:17px;
+  border:1px solid #172c43;
+  border-radius:13px;
+  background:#050b13;
+  color:#a9dcff;
+  font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+  font-size:9px;
+  line-height:1.7;
+}
+
+.endpoint-list{
+  display:grid;
+  gap:7px;
+}
+
+.endpoint{
+  display:grid;
+  grid-template-columns:65px minmax(0,1fr);
+  gap:10px;
+  align-items:center;
+  padding:10px 11px;
+  border:1px solid #162a41;
+  border-radius:10px;
+  background:#080f19;
+}
+
+.method{
+  display:inline-flex;
+  justify-content:center;
+  padding:4px 6px;
+  border-radius:5px;
+  color:#06111e;
+  background:var(--cyan);
+  font-size:7px;
+  font-weight:950;
+}
+
+.endpoint code{
+  color:#aac0d7;
+  font-size:8px;
+}
+
+/* =========================================================
+   SETTINGS
+   ========================================================= */
+
+.settings-layout{
+  display:grid;
+  grid-template-columns:220px minmax(0,1fr);
+  gap:13px;
+}
+
+.settings-nav{
+  display:grid;
+  align-content:start;
+  gap:4px;
+  padding:9px;
+  border:1px solid var(--line);
+  border-radius:15px;
+  background:#080f19;
+}
+
+.settings-tab{
+  padding:10px;
+  border:1px solid transparent;
+  border-radius:9px;
+  color:#71859d;
+  background:transparent;
+  text-align:left;
+  font-size:9px;
+  font-weight:800;
+}
+
+.settings-tab.active{
+  color:#dff6ff;
+  border-color:#1c3b5b;
+  background:#0b1725;
+}
+
+/* =========================================================
+   TOAST
+   ========================================================= */
+
+#toast{
+  position:fixed;
+  right:22px;
+  bottom:22px;
+  z-index:200;
+  width:min(380px,calc(100vw - 44px));
+  padding:14px 16px;
+  border:1px solid #244563;
+  border-radius:13px;
+  color:#eaf6ff;
+  background:#091321;
+  box-shadow:0 22px 60px rgba(0,0,0,.45);
+  transform:translateY(25px);
+  opacity:0;
+  pointer-events:none;
+  transition:.2s ease;
+}
+
+#toast.show{
+  transform:translateY(0);
+  opacity:1;
+}
+
+#toast.error{
+  border-color:rgba(255,102,120,.35);
+}
+
+#toast .toast-title{
+  font-size:10px;
+  font-weight:900;
+}
+
+#toast .toast-copy{
+  margin-top:3px;
+  color:#71879f;
+  font-size:8px;
+}
+
+/* =========================================================
+   LOADING
+   ========================================================= */
+
+.loading{
+  min-height:280px;
+  display:grid;
+  place-items:center;
+  color:#647991;
+  font-size:10px;
+}
+
+.spinner{
+  width:25px;
+  height:25px;
+  margin:auto;
+  border:2px solid #19314c;
+  border-top-color:var(--cyan);
+  border-radius:50%;
+  animation:spin .75s linear infinite;
+}
+
+@keyframes spin{
+  to{transform:rotate(360deg)}
+}
+
+/* =========================================================
+   FOOTER
+   ========================================================= */
+
+.footer{
+  display:flex;
+  justify-content:space-between;
+  gap:15px;
+  margin-top:35px;
+  padding-top:14px;
+  border-top:1px solid rgba(255,255,255,.055);
+  color:#42566d;
+  font-size:7px;
+  font-weight:900;
+  letter-spacing:.13em;
+  text-transform:uppercase;
+}
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+.mobile-nav{
+  display:none;
+}
+
+@media(max-width:1200px){
+  .metric-grid{
+    grid-template-columns:1fr 1fr;
+  }
+
+  .plan-grid{
+    grid-template-columns:1fr 1fr;
+  }
+
+  .architecture{
+    grid-template-columns:1fr;
+  }
+
+  .arch-arrow{
+    transform:rotate(90deg);
+  }
+}
+
+@media(max-width:1000px){
+  .app{
+    grid-template-columns:235px minmax(0,1fr);
+  }
+
+  .command-hero,
+  .billing-hero,
+  .grid-2,
+  .grid-2.equal{
+    grid-template-columns:1fr;
+  }
+
+  .grid-3{
+    grid-template-columns:1fr;
+  }
+
+  .boundary-layout{
+    grid-template-columns:1fr;
+    justify-items:center;
+  }
+
+  .boundary-list{
+    width:100%;
+  }
+
+  .topbar{
+    padding:0 22px;
+  }
+
+  .content{
+    padding:32px 24px 65px;
+  }
+}
+
+@media(max-width:760px){
+  .app{
+    display:block;
+  }
+
+  .sidebar{
+    display:none;
+  }
+
+  .topbar{
+    height:66px;
+    padding:0 14px;
+  }
+
+  .breadcrumb strong{
+    display:none;
+  }
+
+  .breadcrumb .slash{
+    display:none;
+  }
+
+  .global-search{
+    display:none;
+  }
+
+  .system-status{
+    height:34px;
+  }
+
+  .content{
+    padding:24px 14px 90px;
+  }
+
+  .page-head{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+
+  .page-title{
+    font-size:40px;
+  }
+
+  .page-actions{
+    justify-content:flex-start;
+  }
+
+  .hero-main{
+    min-height:340px;
+    padding:25px;
+  }
+
+  .hero-title{
+    font-size:44px;
+  }
+
+  .metric-grid{
+    grid-template-columns:1fr;
+  }
+
+  .form-grid{
+    grid-template-columns:1fr;
+  }
+
+  .field.wide{
+    grid-column:auto;
+  }
+
+  .settings-layout{
+    grid-template-columns:1fr;
+  }
+
+  .plan-grid{
+    grid-template-columns:1fr;
+  }
+
+  .mobile-nav{
+    position:fixed;
+    left:10px;
+    right:10px;
+    bottom:10px;
+    z-index:100;
+    display:flex;
+    justify-content:space-around;
+    padding:7px;
+    border:1px solid #20364e;
+    border-radius:17px;
+    background:rgba(7,13,22,.94);
+    backdrop-filter:blur(18px);
+    box-shadow:0 20px 55px rgba(0,0,0,.55);
+  }
+
+  .mobile-nav a{
+    padding:8px 7px;
+    color:#647a92;
+    text-decoration:none;
+    font-size:8px;
+    font-weight:800;
+  }
+
+  .mobile-nav a.active{
+    color:var(--cyan);
+  }
+
+  .footer{
+    display:block;
+  }
+
+  .footer span{
+    display:block;
+    margin-bottom:6px;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="app">
+
+  <!-- =====================================================
+       SIDEBAR
+       ===================================================== -->
+
+  <aside class="sidebar">
+
+    <a class="brand" href="#overview">
+      <div class="brand-logo">
+        <img src="/logo.svg" alt="Agata Proxima">
+      </div>
+      <div class="brand-name">
+        <strong>AGATA</strong>
+        <span>Proxima Cloud</span>
+      </div>
+    </a>
+
+    <div class="workspace">
+      <div class="workspace-top">
+        <span>Active workspace</span>
+        <i class="workspace-dot"></i>
+      </div>
+      <div class="workspace-name" id="workspaceName">Loading…</div>
+      <div class="workspace-role" id="workspaceRole">Loading role…</div>
+    </div>
+
+    <div class="nav-section">Operate</div>
+
+    <nav class="nav">
+
+      <a class="nav-link active" href="#overview" data-page="overview">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24">
+            <rect x="3" y="3" width="7" height="7"/>
+            <rect x="14" y="3" width="7" height="7"/>
+            <rect x="3" y="14" width="7" height="7"/>
+            <rect x="14" y="14" width="7" height="7"/>
+          </svg>
+        </span>
+        <span class="nav-label">Overview</span>
+        <span class="nav-key">01</span>
+      </a>
+
+      <a class="nav-link" href="#tenants" data-page="tenants">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24">
+            <circle cx="9" cy="8" r="3"/>
+            <path d="M3 20c.5-4 2.5-6 6-6s5.5 2 6 6"/>
+            <path d="M16 11c3.5 0 4.8 2 5 5"/>
+          </svg>
+        </span>
+        <span class="nav-label">Tenants</span>
+        <span class="nav-key">02</span>
+      </a>
+
+      <a class="nav-link" href="#policies" data-page="policies">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24">
+            <path d="M6 3h9l3 3v15H6z"/>
+            <path d="M9 11h6M9 15h6M9 7h3"/>
+          </svg>
+        </span>
+        <span class="nav-label">Policies</span>
+        <span class="nav-key">03</span>
+      </a>
+
+      <a class="nav-link" href="#fleet" data-page="fleet">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24">
+            <rect x="4" y="4" width="16" height="16" rx="2"/>
+            <path d="M8 8h8v8H8zM2 9h2M2 15h2M20 9h2M20 15h2"/>
+          </svg>
+        </span>
+        <span class="nav-label">Fleet</span>
+        <span class="nav-key">04</span>
+      </a>
+
+      <a class="nav-link" href="#deployments" data-page="deployments">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24">
+            <path d="M4 17h16"/>
+            <path d="M7 17V9l5-4 5 4v8"/>
+            <path d="M9 17v-4h6v4"/>
+          </svg>
+        </span>
+        <span class="nav-label">Deployments</span>
+        <span class="nav-key">05</span>
+      </a>
+
+    </nav>
+
+    <div class="nav-section">Trust</div>
+
+    <nav class="nav">
+
+      <a class="nav-link" href="#verification" data-page="verification">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/>
+            <path d="M8.5 12l2.2 2.2 4.8-5"/>
+          </svg>
+        </span>
+        <span class="nav-label">Verification</span>
+        <span class="nav-key">06</span>
+      </a>
+
+      <a class="nav-link" href="#audit" data-page="audit">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24">
+            <path d="M5 4h14v16H5z"/>
+            <path d="M8 8h8M8 12h8M8 16h5"/>
+          </svg>
+        </span>
+        <span class="nav-label">Audit</span>
+        <span class="nav-key">07</span>
+      </a>
+
+      <a class="nav-link" href="#security" data-page="security">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 3l8 4v5c0 5-3.5 7.8-8 9-4.5-1.2-8-4-8-9V7z"/>
+            <path d="M12 8v5"/>
+            <circle cx="12" cy="16" r=".8"/>
+          </svg>
+        </span>
+        <span class="nav-label">Security</span>
+        <span class="nav-key">08</span>
+      </a>
+
+      <a class="nav-link" href="#infrastructure" data-page="infrastructure">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24">
+            <rect x="3" y="4" width="18" height="6" rx="1"/>
+            <rect x="3" y="14" width="18" height="6" rx="1"/>
+            <path d="M7 7h.01M7 17h.01"/>
+          </svg>
+        </span>
+        <span class="nav-label">Infrastructure</span>
+        <span class="nav-key">09</span>
+      </a>
+
+    </nav>
+
+    <div class="nav-section">Workspace</div>
+
+    <nav class="nav">
+
+      <a class="nav-link" href="#billing" data-page="billing">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24">
+            <rect x="3" y="5" width="18" height="14" rx="2"/>
+            <path d="M3 10h18"/>
+            <path d="M7 15h4"/>
+          </svg>
+        </span>
+        <span class="nav-label">Billing</span>
+        <span class="nav-key">10</span>
+      </a>
+
+      <a class="nav-link" href="#settings" data-page="settings">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.3 1a7 7 0 0 0-1.8-1L14.5 3h-5l-.3 2.1a7 7 0 0 0-1.8 1l-2.3-1-2 3.4 2 1.5a7 7 0 0 0 0 2l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 1.8 1l.3 2.1h5l.3-2.1a7 7 0 0 0 1.8-1l2.3 1 2-3.4-2-1.5c.1-.3.1-.7.1-1z"/>
+          </svg>
+        </span>
+        <span class="nav-label">Settings</span>
+        <span class="nav-key">11</span>
+      </a>
+
+      <a class="nav-link" href="#developer" data-page="developer">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24">
+            <path d="M8 8l-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/>
+          </svg>
+        </span>
+        <span class="nav-label">Developer</span>
+        <span class="nav-key">12</span>
+      </a>
+
+      <a class="nav-link" href="#support" data-page="support">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24">
+            <path d="M4 5h16v11H8l-4 4z"/>
+            <path d="M8 9h8M8 12h5"/>
+          </svg>
+        </span>
+        <span class="nav-label">Support</span>
+        <span class="nav-key">13</span>
+      </a>
+
+    </nav>
+
+    <div class="sidebar-bottom">
+
+      <div class="identity">
+        <div class="avatar" id="sideAvatar">AP</div>
+
+        <div class="identity-copy">
+          <strong id="identityName">Agata Operator</strong>
+          <span id="identityRole">Operator</span>
+        </div>
+      </div>
+
+      <div class="authority-note">
+        Proxima Engine remains the data-plane authority. Management-plane availability never becomes permission to bypass tenant isolation.
+      </div>
+
+      <button class="btn danger signout" id="logoutButton">
+        Sign out
+      </button>
+
+    </div>
+
+  </aside>
+
+  <!-- =====================================================
+       MAIN
+       ===================================================== -->
+
+  <section class="main">
+
+    <header class="topbar">
+
+      <div class="breadcrumb">
+        <strong>AGATA PROXIMA</strong>
+        <span class="slash">/</span>
+        <span class="breadcrumb-current" id="routeLabel">Overview</span>
+      </div>
+
+      <div class="top-actions">
+
+        <input
+          class="global-search"
+          id="globalSearch"
+          type="search"
+          placeholder="Search workspace…"
+          autocomplete="off"
+        >
+
+        <div class="system-status">
+          <i></i>
+          <span>SYSTEM ONLINE</span>
+        </div>
+
+      </div>
+
+    </header>
+
+    <main class="content">
+      <div id="view"></div>
+
+      <footer class="footer">
+        <span>AGATA PROXIMA · PROXIMA CLOUD</span>
+        <span id="clock">LIVE</span>
+      </footer>
+    </main>
+
+  </section>
+
+</div>
+
+<!-- =======================================================
+     MOBILE NAV
+     ======================================================= -->
+
+<nav class="mobile-nav">
+
+  <a href="#overview" data-page="overview">Home</a>
+  <a href="#tenants" data-page="tenants">Tenants</a>
+  <a href="#security" data-page="security">Security</a>
+  <a href="#fleet" data-page="fleet">Fleet</a>
+  <a href="#support" data-page="support">Support</a>
+
+</nav>
+
+<div id="toast">
+  <div class="toast-title" id="toastTitle">Agata Proxima</div>
+  <div class="toast-copy" id="toastCopy"></div>
+</div>
+
+<script>
+"use strict";
+
+/* =========================================================
+   STATE
+   ========================================================= */
+
+const state = {
+  csrf: sessionStorage.getItem("proxima_csrf") || "",
+  session: null,
+  cache: {
+    tenants: [],
+    policies: [],
+    nodes: [],
+    deployments: [],
+    verifications: [],
+    audit: [],
+    support: [],
+    plans: [],
+    billing: null,
+    entitlements: null,
+    platform: null
+  }
+};
+
+const view = document.getElementById("view");
+const routeLabel = document.getElementById("routeLabel");
+
+/* =========================================================
+   HELPERS
+   ========================================================= */
+
+const esc = value =>
+  String(value ?? "")
+    .replace(/[&<>"']/g, char => ({
+      "&":"&amp;",
+      "<":"&lt;",
+      ">":"&gt;",
+      '"':"&quot;",
+      "'":"&#39;"
+    }[char]));
+
+function initials(name){
+  return String(name || "Agata Proxima")
+    .trim()
+    .split(/\s+/)
+    .slice(0,2)
+    .map(part => part[0] || "")
+    .join("")
+    .toUpperCase() || "AP";
+}
+
+function prettyDate(value){
+  if(!value) return "—";
+
+  const date = new Date(value);
+
+  if(Number.isNaN(date.getTime())){
+    return String(value);
+  }
+
+  return date.toLocaleString([],{
+    year:"numeric",
+    month:"short",
+    day:"numeric",
+    hour:"2-digit",
+    minute:"2-digit"
+  });
+}
+
+function badge(value, type=""){
+  return `<span class="badge ${type}">${esc(value || "unknown")}</span>`;
+}
+
+function loading(){
+  return `
+    <div class="loading">
+      <div>
+        <div class="spinner"></div>
+        <div style="margin-top:12px;text-align:center">Loading control-plane state…</div>
+      </div>
+    </div>
+  `;
+}
+
+function empty(title, copy){
+  return `
+    <div class="empty">
+      <strong>${esc(title)}</strong>
+      <div>${esc(copy)}</div>
+    </div>
+  `;
+}
+
+function pageHead(kicker,title,subtitle,actions=""){
+  return `
+    <header class="page-head">
+      <div>
+        <div class="page-kicker">${esc(kicker)}</div>
+        <h1 class="page-title">${esc(title)}</h1>
+        <p class="page-subtitle">${esc(subtitle)}</p>
+      </div>
+      <div class="page-actions">${actions}</div>
+    </header>
+  `;
+}
+
+function panel(title,meta,body,extra=""){
+  return `
+    <section class="panel ${extra}">
+      <div class="panel-head">
+        <h2 class="panel-title">${esc(title)}</h2>
+        ${meta ? `<span class="panel-meta">${esc(meta)}</span>` : ""}
+      </div>
+      <div class="panel-body">${body}</div>
+    </section>
+  `;
+}
+
+function metric(label,value,copy,accent="blue"){
+  return `
+    <article class="metric">
+      <div class="metric-label">${esc(label)}</div>
+      <div class="metric-value ${accent}">${esc(value)}</div>
+      <div class="metric-foot">${esc(copy)}</div>
+    </article>
+  `;
+}
+
+function table(headers,rows){
+  if(!rows.length){
+    return empty("Nothing here yet","This workspace has no records for this area.");
+  }
+
+  return `
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            ${headers.map(header => `<th>${esc(header)}</th>`).join("")}
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(row => `
+            <tr>
+              ${row.map(cell => `<td>${cell}</td>`).join("")}
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function jsonPretty(value){
+  try{
+    return JSON.stringify(value ?? {},null,2);
+  }catch{
+    return "{}";
+  }
+}
+
+function showToast(title,copy,isError=false){
+  const toast = document.getElementById("toast");
+  document.getElementById("toastTitle").textContent = title;
+  document.getElementById("toastCopy").textContent = copy || "";
+  toast.classList.toggle("error",!!isError);
+  toast.classList.add("show");
+
+  clearTimeout(showToast.timer);
+
+  showToast.timer = setTimeout(() => {
+    toast.classList.remove("show");
+  },4200);
+}
+
+function navigate(page){
+  location.hash = page;
+}
+
+function setActive(page){
+  document.querySelectorAll("[data-page]").forEach(link => {
+    link.classList.toggle(
+      "active",
+      link.dataset.page === page
+    );
+  });
+}
+
+function currentPage(){
+  const raw = location.hash.replace("#","");
+  return raw || "overview";
+}
+
+/* =========================================================
+   API
+   ========================================================= */
+
+async function api(path,options={}){
+  const opts = {
+    ...options,
+    headers:{
+      ...(options.headers || {})
+    }
+  };
+
+  if(opts.body){
+    opts.headers["content-type"] = "application/json";
+  }
+
+  if(["POST","PUT","PATCH","DELETE"].includes(
+    String(opts.method || "GET").toUpperCase()
+  )){
+    opts.headers["x-csrf-token"] = state.csrf;
+  }
+
+  const response = await fetch(path,opts);
+
+  if(response.status === 401){
+    location.href = "/login";
+    throw new Error("Your session has expired.");
+  }
+
+  const data = await response.json().catch(() => ({}));
+
+  if(!response.ok){
+    throw new Error(
+      data.message ||
+      data.error ||
+      `Request failed (${response.status})`
+    );
+  }
+
+  return data;
+}
+
+async function loadSession(){
+  const session = await api("/api/v1/session");
+
+  if(!session.authenticated){
+    location.href = "/login";
+    throw new Error("Not authenticated.");
+  }
+
+  state.session = session;
+
+  if(session.csrf_token){
+    state.csrf = session.csrf_token;
+    sessionStorage.setItem("proxima_csrf",session.csrf_token);
+  }
+
+  document.getElementById("workspaceName").textContent =
+    session.organization_name || "Proxima workspace";
+
+  document.getElementById("workspaceRole").textContent =
+    String(session.role || "operator").toUpperCase();
+
+  document.getElementById("identityName").textContent =
+    session.display_name || "Agata Operator";
+
+  document.getElementById("identityRole").textContent =
+    String(session.role || "operator").toUpperCase();
+
+  document.getElementById("sideAvatar").textContent =
+    initials(session.display_name);
+}
+
+/* =========================================================
+   OVERVIEW
+   ========================================================= */
+
+async function renderOverview(){
+  routeLabel.textContent = "Overview";
+  setActive("overview");
+
+  view.innerHTML = loading();
+
+  try{
+    const [platform,audit] = await Promise.all([
+      api("/api/v1/platform/status"),
+      api("/api/v1/audit")
+    ]);
+
+    state.cache.platform = platform;
+    state.cache.audit = audit;
+
+    const name = state.session.display_name || "Operator";
+    const firstName = name.split(/\s+/)[0];
+    const org = state.session.organization_name || "Proxima workspace";
+
+    const recent = audit.slice(0,5);
+
+    view.innerHTML = `
+      <div class="page">
+
+        <section class="command-hero">
+
+          <div class="hero-main">
+
+            <div class="hero-eyebrow">
+              Proxima Cloud · ${esc(org)}
+            </div>
+
+            <h1 class="hero-title">
+              Control the system.
+              <span>Never surrender the boundary.</span>
+            </h1>
+
+            <p class="hero-copy">
+              Welcome back, ${esc(firstName)}.
+              Agata Proxima coordinates tenants, policies, fleet,
+              verification, deployments and commercial state while
+              the Proxima Engine remains authoritative over the
+              actual data-plane isolation boundary.
+            </p>
+
+            <div class="hero-actions">
+              <a class="btn primary" href="#tenants">
+                Create tenant
+              </a>
+
+              <a class="btn" href="#verification">
+                Run verification
+              </a>
+
+              <a class="btn" href="#fleet">
+                Manage fleet
+              </a>
+            </div>
+
+          </div>
+
+          <div class="hero-side">
+
+            <article class="signal-card">
+              <div class="signal-label">
+                Control plane
+              </div>
+
+              <div class="signal-value blue">
+                Operational
+              </div>
+
+              <div class="signal-copy">
+                PostgreSQL-backed management services are available.
+              </div>
+            </article>
+
+            <article class="signal-card">
+              <div class="signal-label">
+                Enforcement authority
+              </div>
+
+              <div class="signal-value blue">
+                Engine
+              </div>
+
+              <div class="signal-copy">
+                Control-plane failure does not become a data-plane bypass.
+              </div>
+            </article>
+
+          </div>
+
+        </section>
+
+        <section class="metric-grid">
+
+          ${metric(
+            "Tenants",
+            platform.tenants,
+            "Organization tenant boundaries"
+          )}
+
+          ${metric(
+            "Policies",
+            platform.policies,
+            "Policy definitions"
+          )}
+
+          ${metric(
+            "Fleet nodes",
+            platform.nodes,
+            "Registered Proxima nodes"
+          )}
+
+          ${metric(
+            "Active changes",
+            platform.active_deployments,
+            "Deployments outside healthy/rolled-back state",
+            platform.active_deployments ? "amber" : "blue"
+          )}
+
+        </section>
+
+        <section class="grid-2">
+
+          ${panel(
+            "Security boundary",
+            "ENGINE-FIRST",
+            `
+              <div class="boundary-layout">
+
+                <div class="boundary-ring">
+                  <div class="ring-center">
+                    <strong>LIVE</strong>
+                    <span>BOUNDARY</span>
+                  </div>
+                </div>
+
+                <div class="boundary-list">
+
+                  <div class="boundary-row">
+                    <i class="boundary-dot"></i>
+                    <div>
+                      <strong>Proxima Engine enforcement</strong>
+                      <span>
+                        The data plane remains independently authoritative.
+                      </span>
+                    </div>
+                    <span class="boundary-state">ACTIVE</span>
+                  </div>
+
+                  <div class="boundary-row">
+                    <i class="boundary-dot"></i>
+                    <div>
+                      <strong>PostgreSQL RLS</strong>
+                      <span>
+                        Database-side tenant isolation provides an independent boundary.
+                      </span>
+                    </div>
+                    <span class="boundary-state">ACTIVE</span>
+                  </div>
+
+                  <div class="boundary-row">
+                    <i class="boundary-dot"></i>
+                    <div>
+                      <strong>Session identity</strong>
+                      <span>
+                        Authenticated workspace operations remain organization-scoped.
+                      </span>
+                    </div>
+                    <span class="boundary-state">ACTIVE</span>
+                  </div>
+
+                  <div class="boundary-row">
+                    <i class="boundary-dot"></i>
+                    <div>
+                      <strong>Audit evidence</strong>
+                      <span>
+                        Administrative operations are recorded in the control plane.
+                      </span>
+                    </div>
+                    <span class="boundary-state">ACTIVE</span>
+                  </div>
+
+                </div>
+
+              </div>
+            `,
+            "feature"
+          )}
+
+          ${panel(
+            "Command shortcuts",
+            "OPERATE",
+            `
+              <div class="quick-grid">
+
+                <a class="quick" href="#tenants">
+                  <strong>New tenant</strong>
+                  <span>Register an explicit isolation boundary.</span>
+                </a>
+
+                <a class="quick" href="#policies">
+                  <strong>New policy</strong>
+                  <span>Author an enforcement document.</span>
+                </a>
+
+                <a class="quick" href="#fleet">
+                  <strong>Enroll node</strong>
+                  <span>Register an Engine in your fleet.</span>
+                </a>
+
+                <a class="quick" href="#deployments">
+                  <strong>Deployment</strong>
+                  <span>Queue a desired Engine state.</span>
+                </a>
+
+                <a class="quick" href="#verification">
+                  <strong>Verification</strong>
+                  <span>Record security verification evidence.</span>
+                </a>
+
+                <a class="quick" href="#billing">
+                  <strong>Billing</strong>
+                  <span>Review plan and entitlement state.</span>
+                </a>
+
+              </div>
+            `
+          )}
+
+        </section>
+
+        <section class="grid-2">
+
+          ${panel(
+            "Recent control-plane activity",
+            "AUDIT",
+            `
+              ${
+                recent.length
+                ? `
+                  <div class="activity">
+                    ${recent.map(event => `
+                      <div class="activity-row">
+                        <i class="activity-dot"></i>
+                        <div>
+                          <strong>${esc(event.action)}</strong>
+                          <span>
+                            ${esc(event.resource_type)}
+                            ${event.resource_id ? " · " + esc(event.resource_id) : ""}
+                          </span>
+                        </div>
+                        <time>${esc(prettyDate(event.created_at))}</time>
+                      </div>
+                    `).join("")}
+                  </div>
+                `
+                : empty(
+                    "No audit activity",
+                    "Administrative events will appear here."
+                  )
+              }
+            `
+          )}
+
+          ${panel(
+            "Control-plane contract",
+            "NON-AUTHORITATIVE",
+            `
+              <p class="panel-copy">
+                Agata Proxima's control plane manages configuration,
+                organization state, policy intent, fleet operations,
+                verification evidence and commercial entitlements.
+              </p>
+
+              <p class="panel-copy">
+                It does not become the authority for tenant data access.
+                The Proxima Engine continues enforcing the data-plane
+                boundary when management services are unavailable.
+              </p>
+
+              <a class="panel-link" href="#security">
+                Inspect the security boundary →
+              </a>
+            `
+          )}
+
+        </section>
+
+        <section class="grid-3">
+
+          ${panel(
+            "Tenancy model",
+            "ISOLATION",
+            `
+              <p class="panel-copy">
+                Every tenant is represented explicitly in the control plane
+                and associated with an organization project.
+              </p>
+              <a class="panel-link" href="#tenants">Open tenant inventory →</a>
+            `
+          )}
+
+          ${panel(
+            "Verification model",
+            "EVIDENCE",
+            `
+              <p class="panel-copy">
+                Verification results are persisted as inspectable records
+                rather than inferred from UI state.
+              </p>
+              <a class="panel-link" href="#verification">Open verification →</a>
+            `
+          )}
+
+          ${panel(
+            "Fleet model",
+            "INFRASTRUCTURE",
+            `
+              <p class="panel-copy">
+                Nodes represent the operational Engine fleet and can be
+                enrolled and targeted by deployment intent.
+              </p>
+              <a class="panel-link" href="#fleet">Open fleet →</a>
+            `
+          )}
+
+        </section>
+
+      </div>
+    `;
+
+  }catch(error){
+    renderError("Overview unavailable",error);
+  }
+}
+
+/* =========================================================
+   TENANTS
+   ========================================================= */
+
+async function renderTenants(){
+  routeLabel.textContent = "Tenants";
+  setActive("tenants");
+
+  view.innerHTML = loading();
+
+  try{
+    const rows = await api("/api/v1/tenants");
+    state.cache.tenants = rows;
+
+    view.innerHTML = `
+      <div class="page">
+
+        ${pageHead(
+          "Operate / Tenancy",
+          "Tenants",
+          "Manage explicit tenant identities and their isolation mode.",
+          `<button class="btn primary" onclick="showTenantForm()">New tenant</button>`
+        )}
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2 class="panel-title">Tenant inventory</h2>
+            <span class="panel-meta">${rows.length} RECORDS</span>
+          </div>
+
+          <div class="panel-body">
+            ${table(
+              ["Tenant","Slug","Project","Isolation","Status"],
+              rows.map(row => [
+                `<strong>${esc(row.name)}</strong>`,
+                `<span class="mono">${esc(row.slug)}</span>`,
+                esc(row.project),
+                badge(row.isolation_mode || "enforced-proxy"),
+                badge(row.status || "active")
+              ])
+            )}
+          </div>
+        </section>
+
+        <div id="tenantFormSlot"></div>
+
+      </div>
+    `;
+
+  }catch(error){
+    renderError("Tenant inventory unavailable",error);
+  }
+}
+
+function showTenantForm(){
+  document.getElementById("tenantFormSlot").innerHTML = `
+    ${panel(
+      "Create tenant",
+      "BOUNDARY REGISTRATION",
+      `
+        <form class="form" onsubmit="createTenant(event)">
+
+          <div class="form-grid">
+
+            <div class="field">
+              <label>Tenant name</label>
+              <input
+                id="tenantName"
+                required
+                maxlength="120"
+                placeholder="Acme Production"
+              >
+            </div>
+
+            <div class="field">
+              <label>Slug</label>
+              <input
+                id="tenantSlug"
+                required
+                maxlength="80"
+                placeholder="acme-production"
+              >
+            </div>
+
+            <div class="field wide">
+              <label>Isolation mode</label>
+              <select id="tenantIsolation">
+                <option value="enforced-proxy">Enforced proxy</option>
+                <option value="rls">PostgreSQL RLS</option>
+              </select>
+            </div>
+
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn" onclick="closeForm('tenantFormSlot')">
+              Cancel
+            </button>
+
+            <button class="btn primary" type="submit">
+              Create tenant
+            </button>
+          </div>
+
+        </form>
+      `
+    )}
+  `;
+
+  const name = document.getElementById("tenantName");
+  const slug = document.getElementById("tenantSlug");
+
+  name.addEventListener("input",() => {
+    if(!slug.dataset.manual){
+      slug.value = slugify(name.value);
+    }
+  });
+
+  slug.addEventListener("input",() => {
+    slug.dataset.manual = "true";
+  });
+}
+
+async function createTenant(event){
+  event.preventDefault();
+
+  try{
+    const name = document.getElementById("tenantName").value.trim();
+    const slug = document.getElementById("tenantSlug").value.trim();
+
+    await api("/api/v1/tenants",{
+      method:"POST",
+      body:JSON.stringify({
+        organization_id:state.session.organization_id,
+        name,
+        slug,
+        isolation_mode:document.getElementById("tenantIsolation").value
+      })
+    });
+
+    showToast("Tenant created","The tenant boundary was registered.");
+    await renderTenants();
+
+  }catch(error){
+    showToast("Tenant creation failed",error.message,true);
+  }
+}
+
+/* =========================================================
+   POLICIES
+   ========================================================= */
+
+async function renderPolicies(){
+  routeLabel.textContent = "Policies";
+  setActive("policies");
+
+  view.innerHTML = loading();
+
+  try{
+    const rows = await api("/api/v1/policies");
+    state.cache.policies = rows;
+
+    view.innerHTML = `
+      <div class="page">
+
+        ${pageHead(
+          "Operate / Policy",
+          "Policies",
+          "Define the policy documents that describe enforcement intent.",
+          `<button class="btn primary" onclick="showPolicyForm()">New policy</button>`
+        )}
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2 class="panel-title">Policy registry</h2>
+            <span class="panel-meta">${rows.length} RECORDS</span>
+          </div>
+
+          <div class="panel-body">
+
+            ${table(
+              ["Name","Version","Status","Updated"],
+              rows.map(row => [
+                `<strong>${esc(row.name)}</strong>`,
+                `<span class="mono">v${esc(row.version)}</span>`,
+                badge(
+                  row.status,
+                  row.status === "draft" ? "warn" : ""
+                ),
+                esc(prettyDate(row.updated_at))
+              ])
+            )}
+
+          </div>
+        </section>
+
+        <div id="policyFormSlot"></div>
+
+      </div>
+    `;
+
+  }catch(error){
+    renderError("Policy registry unavailable",error);
+  }
+}
+
+function showPolicyForm(){
+  document.getElementById("policyFormSlot").innerHTML = `
+    ${panel(
+      "Create policy",
+      "POLICY DOCUMENT",
+      `
+        <form class="form" onsubmit="createPolicy(event)">
+
+          <div class="form-grid">
+
+            <div class="field">
+              <label>Policy name</label>
+              <input
+                id="policyName"
+                required
+                placeholder="Tenant Isolation Baseline"
+              >
+            </div>
+
+            <div class="field">
+              <label>Version</label>
+              <input
+                id="policyVersion"
+                type="number"
+                min="1"
+                value="1"
+                required
+              >
+            </div>
+
+            <div class="field wide">
+              <label>Policy document — JSON</label>
+
+              <textarea id="policyDocument">{
+  "name": "tenant-isolation-baseline",
+  "enforcement": {
+    "tenant_context_required": true,
+    "cross_tenant_access": false
+  }
+}</textarea>
+
+            </div>
+
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn" onclick="closeForm('policyFormSlot')">
+              Cancel
+            </button>
+
+            <button class="btn primary" type="submit">
+              Create policy
+            </button>
+          </div>
+
+        </form>
+      `
+    )}
+  `;
+}
+
+async function createPolicy(event){
+  event.preventDefault();
+
+  try{
+    const documentValue = JSON.parse(
+      document.getElementById("policyDocument").value
+    );
+
+    await api("/api/v1/policies",{
+      method:"POST",
+      body:JSON.stringify({
+        organization_id:state.session.organization_id,
+        name:document.getElementById("policyName").value.trim(),
+        version:Number(document.getElementById("policyVersion").value),
+        document:documentValue
+      })
+    });
+
+    showToast("Policy created","The policy document is now registered.");
+    await renderPolicies();
+
+  }catch(error){
+    showToast(
+      "Policy creation failed",
+      error instanceof SyntaxError
+        ? "The policy document is not valid JSON."
+        : error.message,
+      true
+    );
+  }
+}
+
+/* =========================================================
+   FLEET
+   ========================================================= */
+
+async function renderFleet(){
+  routeLabel.textContent = "Fleet";
+  setActive("fleet");
+
+  view.innerHTML = loading();
+
+  try{
+    const rows = await api("/api/v1/nodes");
+    state.cache.nodes = rows;
+
+    view.innerHTML = `
+      <div class="page">
+
+        ${pageHead(
+          "Operate / Infrastructure",
+          "Fleet",
+          "Manage Proxima Engine nodes, environments, regions and enrollment state.",
+          `<button class="btn primary" onclick="showNodeForm()">Register node</button>`
+        )}
+
+        <section class="grid-3">
+
+          ${metric(
+            "Registered nodes",
+            rows.length,
+            "Organization fleet"
+          )}
+
+          ${metric(
+            "Pending",
+            rows.filter(x => x.status === "pending").length,
+            "Awaiting enrollment",
+            "amber"
+          )}
+
+          ${metric(
+            "Enrolling",
+            rows.filter(x => x.status === "enrolling").length,
+            "Enrollment in progress"
+          )}
+
+        </section>
+
+        <section class="panel">
+
+          <div class="panel-head">
+            <h2 class="panel-title">Engine fleet</h2>
+            <span class="panel-meta">${rows.length} NODES</span>
+          </div>
+
+          <div class="panel-body">
+
+            ${table(
+              ["Node","Environment","Region","Status","Version","Last seen","Action"],
+              rows.map(row => [
+                `<strong>${esc(row.name)}</strong>`,
+                badge(row.environment || "production"),
+                esc(row.region || "auto"),
+                badge(
+                  row.status,
+                  row.status === "pending" ? "warn" : ""
+                ),
+                `<span class="mono">${esc(row.version || "unknown")}</span>`,
+                esc(prettyDate(row.last_seen_at)),
+                `
+                  ${
+                    row.status === "pending"
+                    ? `<button class="btn small" onclick="enrollNode('${esc(row.id)}')">Start enrollment</button>`
+                    : `<span class="muted">—</span>`
+                  }
+                `
+              ])
+            )}
+
+          </div>
+
+        </section>
+
+        <div id="nodeFormSlot"></div>
+
+      </div>
+    `;
+
+  }catch(error){
+    renderError("Fleet unavailable",error);
+  }
+}
+
+function showNodeForm(){
+  document.getElementById("nodeFormSlot").innerHTML = `
+    ${panel(
+      "Register Engine node",
+      "FLEET REGISTRATION",
+      `
+        <form class="form" onsubmit="createNode(event)">
+
+          <div class="form-grid">
+
+            <div class="field">
+              <label>Node name</label>
+              <input id="nodeName" required placeholder="proxima-prod-01">
+            </div>
+
+            <div class="field">
+              <label>Environment</label>
+              <select id="nodeEnvironment">
+                <option value="production">Production</option>
+                <option value="staging">Staging</option>
+                <option value="development">Development</option>
+                <option value="private">Private</option>
+              </select>
+            </div>
+
+            <div class="field wide">
+              <label>Region</label>
+              <input id="nodeRegion" placeholder="auto">
+            </div>
+
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn" onclick="closeForm('nodeFormSlot')">
+              Cancel
+            </button>
+
+            <button class="btn primary" type="submit">
+              Register node
+            </button>
+          </div>
+
+        </form>
+      `
+    )}
+  `;
+}
+
+async function createNode(event){
+  event.preventDefault();
+
+  try{
+    const result = await api("/api/v1/nodes",{
+      method:"POST",
+      body:JSON.stringify({
+        organization_id:state.session.organization_id,
+        name:document.getElementById("nodeName").value.trim(),
+        environment:document.getElementById("nodeEnvironment").value,
+        region:document.getElementById("nodeRegion").value.trim() || "auto"
+      })
+    });
+
+    showToast(
+      "Node registered",
+      `Enrollment token: ${result.enrollment_token || "generated"}`
+    );
+
+    await renderFleet();
+
+  }catch(error){
+    showToast("Node registration failed",error.message,true);
+  }
+}
+
+async function enrollNode(id){
+  try{
+    await api(`/api/v1/nodes/${encodeURIComponent(id)}/enrollment`,{
+      method:"POST",
+      body:"{}"
+    });
+
+    showToast("Enrollment started","The node has entered enrollment state.");
+    await renderFleet();
+
+  }catch(error){
+    showToast("Enrollment failed",error.message,true);
+  }
+}
+
+/* =========================================================
+   DEPLOYMENTS
+   ========================================================= */
+
+async function renderDeployments(){
+  routeLabel.textContent = "Deployments";
+  setActive("deployments");
+
+  view.innerHTML = loading();
+
+  try{
+    const [rows,nodes] = await Promise.all([
+      api("/api/v1/deployments"),
+      api("/api/v1/nodes")
+    ]);
+
+    state.cache.deployments = rows;
+    state.cache.nodes = nodes;
+
+    view.innerHTML = `
+      <div class="page">
+
+        ${pageHead(
+          "Operate / Release",
+          "Deployments",
+          "Declare desired Engine state and inspect observed deployment state.",
+          `<button class="btn primary" onclick="showDeploymentForm()">New deployment</button>`
+        )}
+
+        <section class="grid-3">
+
+          ${metric(
+            "Total deployments",
+            rows.length,
+            "Recorded deployment intents"
+          )}
+
+          ${metric(
+            "Queued",
+            rows.filter(x => x.status === "queued").length,
+            "Waiting for execution",
+            "amber"
+          )}
+
+          ${metric(
+            "Healthy",
+            rows.filter(x => x.status === "healthy").length,
+            "Observed healthy state"
+          )}
+
+        </section>
+
+        <section class="panel">
+
+          <div class="panel-head">
+            <h2 class="panel-title">Deployment ledger</h2>
+            <span class="panel-meta">DESIRED VS OBSERVED</span>
+          </div>
+
+          <div class="panel-body">
+
+            ${table(
+              ["Node","Version","Desired","Observed","Status"],
+              rows.map(row => {
+                const node = nodes.find(n => n.id === row.node_id);
+
+                return [
+                  `<strong>${esc(node ? node.name : row.node_id)}</strong>`,
+                  `<span class="mono">${esc(row.version)}</span>`,
+                  badge(row.desired_state || "unknown"),
+                  badge(row.observed_state || "unknown"),
+                  badge(
+                    row.status,
+                    row.status === "queued" ? "warn" : ""
+                  )
+                ];
+              })
+            )}
+
+          </div>
+
+        </section>
+
+        <div id="deploymentFormSlot"></div>
+
+      </div>
+    `;
+
+  }catch(error){
+    renderError("Deployment ledger unavailable",error);
+  }
+}
+
+function showDeploymentForm(){
+  const nodes = state.cache.nodes || [];
+
+  document.getElementById("deploymentFormSlot").innerHTML = `
+    ${panel(
+      "Create deployment",
+      "DESIRED STATE",
+      `
+        <form class="form" onsubmit="createDeployment(event)">
+
+          <div class="form-grid">
+
+            <div class="field">
+              <label>Engine node</label>
+
+              <select id="deploymentNode" required>
+                <option value="">Select node</option>
+
+                ${nodes.map(node => `
+                  <option value="${esc(node.id)}">
+                    ${esc(node.name)}
+                  </option>
+                `).join("")}
+
+              </select>
+
+            </div>
+
+            <div class="field">
+              <label>Version</label>
+              <input
+                id="deploymentVersion"
+                required
+                placeholder="0.1.0"
+              >
+            </div>
+
+            <div class="field wide">
+              <label>Desired state</label>
+
+              <select id="deploymentDesired">
+                <option value="running">Running</option>
+                <option value="stopped">Stopped</option>
+                <option value="paused">Paused</option>
+              </select>
+
+            </div>
+
+          </div>
+
+          <div class="form-actions">
+
+            <button
+              type="button"
+              class="btn"
+              onclick="closeForm('deploymentFormSlot')"
+            >
+              Cancel
+            </button>
+
+            <button class="btn primary" type="submit">
+              Queue deployment
+            </button>
+
+          </div>
+
+        </form>
+      `
+    )}
+  `;
+}
+
+async function createDeployment(event){
+  event.preventDefault();
+
+  try{
+    await api("/api/v1/deployments",{
+      method:"POST",
+      body:JSON.stringify({
+        organization_id:state.session.organization_id,
+        node_id:document.getElementById("deploymentNode").value,
+        version:document.getElementById("deploymentVersion").value.trim(),
+        desired_state:document.getElementById("deploymentDesired").value
+      })
+    });
+
+    showToast("Deployment queued","The desired Engine state has been recorded.");
+    await renderDeployments();
+
+  }catch(error){
+    showToast("Deployment failed",error.message,true);
+  }
+}
+
+/* =========================================================
+   VERIFICATION
+   ========================================================= */
+
+async function renderVerification(){
+  routeLabel.textContent = "Verification";
+  setActive("verification");
+
+  view.innerHTML = loading();
+
+  try{
+    const [rows,tenants] = await Promise.all([
+      api("/api/v1/verifications"),
+      api("/api/v1/tenants")
+    ]);
+
+    state.cache.verifications = rows;
+    state.cache.tenants = tenants;
+
+    view.innerHTML = `
+      <div class="page">
+
+        ${pageHead(
+          "Trust / Evidence",
+          "Verification",
+          "Record security verification outcomes and preserve their evidence.",
+          `<button class="btn primary" onclick="showVerificationForm()">Record verification</button>`
+        )}
+
+        <section class="grid-3">
+
+          ${metric(
+            "Total checks",
+            rows.length,
+            "Persisted verification records"
+          )}
+
+          ${metric(
+            "Passed",
+            rows.filter(x => x.status === "pass" || x.status === "passed").length,
+            "Positive evidence"
+          )}
+
+          ${metric(
+            "Review",
+            rows.filter(x => x.status === "review").length,
+            "Requires inspection",
+            "amber"
+          )}
+
+        </section>
+
+        <section class="panel">
+
+          <div class="panel-head">
+            <h2 class="panel-title">Verification evidence</h2>
+            <span class="panel-meta">PERSISTED RESULTS</span>
+          </div>
+
+          <div class="panel-body">
+
+            ${table(
+              ["Kind","Tenant","Status","Evidence","ID"],
+              rows.map(row => {
+
+                const tenant = tenants.find(t => t.id === row.tenant_id);
+
+                return [
+                  `<strong>${esc(row.kind)}</strong>`,
+                  esc(tenant ? tenant.name : "Organization-wide"),
+                  badge(
+                    row.status,
+                    row.status === "review" ? "warn" : ""
+                  ),
+                  `<span class="mono">${esc(JSON.stringify(row.evidence || {})).slice(0,90)}${JSON.stringify(row.evidence || {}).length > 90 ? "…" : ""}</span>`,
+                  `<span class="mono">${esc(row.id)}</span>`
+                ];
+              })
+            )}
+
+          </div>
+
+        </section>
+
+        <div id="verificationFormSlot"></div>
+
+      </div>
+    `;
+
+  }catch(error){
+    renderError("Verification unavailable",error);
+  }
+}
+
+function showVerificationForm(){
+  const tenants = state.cache.tenants || [];
+
+  document.getElementById("verificationFormSlot").innerHTML = `
+    ${panel(
+      "Record verification",
+      "SECURITY EVIDENCE",
+      `
+        <form class="form" onsubmit="createVerification(event)">
+
+          <div class="form-grid">
+
+            <div class="field">
+              <label>Verification kind</label>
+              <select id="verificationKind">
+                <option value="tenant-isolation">Tenant isolation</option>
+                <option value="database-rls">Database RLS</option>
+                <option value="engine-boundary">Engine boundary</option>
+                <option value="session-security">Session security</option>
+                <option value="advanced-adversarial">Advanced adversarial</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label>Status</label>
+              <select id="verificationStatus">
+                <option value="pass">Pass</option>
+                <option value="review">Review</option>
+                <option value="fail">Fail</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label>Tenant</label>
+              <select id="verificationTenant">
+                <option value="">Organization-wide</option>
+
+                ${tenants.map(tenant => `
+                  <option value="${esc(tenant.id)}">
+                    ${esc(tenant.name)}
+                  </option>
+                `).join("")}
+
+              </select>
+            </div>
+
+            <div class="field">
+              <label>Evidence JSON</label>
+
+              <input
+                id="verificationEvidence"
+                value='{"source":"manual-control-plane-record"}'
+              >
+
+            </div>
+
+          </div>
+
+          <div class="form-actions">
+
+            <button
+              type="button"
+              class="btn"
+              onclick="closeForm('verificationFormSlot')"
+            >
+              Cancel
+            </button>
+
+            <button class="btn primary" type="submit">
+              Record evidence
+            </button>
+
+          </div>
+
+        </form>
+      `
+    )}
+  `;
+}
+
+async function createVerification(event){
+  event.preventDefault();
+
+  try{
+    const raw = document.getElementById("verificationEvidence").value;
+
+    const evidence = JSON.parse(raw);
+
+    await api("/api/v1/verifications",{
+      method:"POST",
+      body:JSON.stringify({
+        organization_id:state.session.organization_id,
+        tenant_id:
+          document.getElementById("verificationTenant").value || null,
+        kind:document.getElementById("verificationKind").value,
+        status:document.getElementById("verificationStatus").value,
+        evidence
+      })
+    });
+
+    showToast("Verification recorded","Security evidence has been persisted.");
+    await renderVerification();
+
+  }catch(error){
+    showToast(
+      "Verification failed",
+      error instanceof SyntaxError
+        ? "Evidence must be valid JSON."
+        : error.message,
+      true
+    );
+  }
+}
+
+/* =========================================================
+   AUDIT
+   ========================================================= */
+
+async function renderAudit(){
+  routeLabel.textContent = "Audit";
+  setActive("audit");
+
+  view.innerHTML = loading();
+
+  try{
+    const rows = await api("/api/v1/audit");
+    state.cache.audit = rows;
+
+    view.innerHTML = `
+      <div class="page">
+
+        ${pageHead(
+          "Trust / Evidence",
+          "Audit",
+          "Organization-scoped administrative events and security-relevant control-plane activity.",
+          `<button class="btn" onclick="renderAudit()">Refresh</button>`
+        )}
+
+        <section class="panel">
+
+          <div class="panel-head">
+            <h2 class="panel-title">Audit ledger</h2>
+            <span class="panel-meta">${rows.length} EVENTS · MAX 250</span>
+          </div>
+
+          <div class="panel-body">
+
+            ${table(
+              ["Action","Resource","Resource ID","Metadata","Created"],
+              rows.map(row => [
+                `<strong>${esc(row.action)}</strong>`,
+                esc(row.resource_type),
+                `<span class="mono">${esc(row.resource_id || "—")}</span>`,
+                `<span class="mono">${esc(JSON.stringify(row.metadata || {})).slice(0,120)}${JSON.stringify(row.metadata || {}).length > 120 ? "…" : ""}</span>`,
+                esc(prettyDate(row.created_at))
+              ])
+            )}
+
+          </div>
+
+        </section>
+
+      </div>
+    `;
+
+  }catch(error){
+    renderError("Audit unavailable",error);
+  }
+}
+
+/* =========================================================
+   SECURITY
+   ========================================================= */
+
+async function renderSecurity(){
+  routeLabel.textContent = "Security";
+  setActive("security");
+
+  view.innerHTML = loading();
+
+  try{
+    const platform = state.cache.platform ||
+      await api("/api/v1/platform/status");
+
+    state.cache.platform = platform;
+
+    view.innerHTML = `
+      <div class="page">
+
+        ${pageHead(
+          "Trust / Architecture",
+          "Security boundaries",
+          "Understand which component is authoritative for each security boundary.",
+          `<a class="btn primary" href="#verification">Open verification</a>`
+        )}
+
+        <section class="grid-2">
+
+          ${panel(
+            "Authority model",
+            "CORE CONTRACT",
+            `
+              <div class="architecture">
+
+                <div class="arch-node">
+                  <div class="node-label">Application</div>
+                  <h3>Workload</h3>
+                  <p>
+                    Creates tenant-aware database sessions through
+                    the Proxima Engine boundary.
+                  </p>
+                </div>
+
+                <div class="arch-arrow">→</div>
+
+                <div class="arch-node">
+                  <div class="node-label">Data plane</div>
+                  <h3>Proxima Engine</h3>
+                  <p>
+                    Authoritative enforcement layer for tenant context
+                    and upstream database access.
+                  </p>
+                </div>
+
+                <div class="arch-arrow">→</div>
+
+                <div class="arch-node">
+                  <div class="node-label">Database</div>
+                  <h3>PostgreSQL</h3>
+                  <p>
+                    Independent RLS boundary reinforces tenant isolation
+                    at the database layer.
+                  </p>
+                </div>
+
+              </div>
+            `
+          )}
+
+          ${panel(
+            "Current enforcement contract",
+            "LIVE",
+            `
+              <div class="boundary-list">
+
+                <div class="boundary-row">
+                  <i class="boundary-dot"></i>
+                  <div>
+                    <strong>Proxima enforcement</strong>
+                    <span>Independent of management availability.</span>
+                  </div>
+                  <span class="boundary-state">
+                    ${esc(platform.proxima_enforcement || "independent").toUpperCase()}
+                  </span>
+                </div>
+
+                <div class="boundary-row">
+                  <i class="boundary-dot"></i>
+                  <div>
+                    <strong>Offline behavior</strong>
+                    <span>Engine continues enforcement when control plane disappears.</span>
+                  </div>
+                  <span class="boundary-state">FAIL-CLOSED</span>
+                </div>
+
+                <div class="boundary-row">
+                  <i class="boundary-dot"></i>
+                  <div>
+                    <strong>Control-plane status</strong>
+                    <span>Management database and API are currently reachable.</span>
+                  </div>
+                  <span class="boundary-state">HEALTHY</span>
+                </div>
+
+              </div>
+            `
+          )}
+
+        </section>
+
+        <section class="grid-3">
+
+          ${panel(
+            "Identity boundary",
+            "AUTH",
+            `
+              <p class="panel-copy">
+                Sessions are backed by an HttpOnly cookie and an
+                organization membership. Write operations additionally
+                require the server-issued CSRF token.
+              </p>
+            `
+          )}
+
+          ${panel(
+            "Database boundary",
+            "RLS",
+            `
+              <p class="panel-copy">
+                PostgreSQL row-level security provides an independent
+                database-side isolation boundary beneath the proxy.
+              </p>
+            `
+          )}
+
+          ${panel(
+            "Management boundary",
+            "CONTROL PLANE",
+            `
+              <p class="panel-copy">
+                The control plane coordinates state but does not become
+                the authority for tenant data access.
+              </p>
+            `
+          )}
+
+        </section>
+
+      </div>
+    `;
+
+  }catch(error){
+    renderError("Security view unavailable",error);
+  }
+}
+
+/* =========================================================
+   INFRASTRUCTURE
+   ========================================================= */
+
+async function renderInfrastructure(){
+  routeLabel.textContent = "Infrastructure";
+  setActive("infrastructure");
+
+  view.innerHTML = loading();
+
+  try{
+    const platform = await api("/api/v1/platform/status");
+
+    state.cache.platform = platform;
+
+    view.innerHTML = `
+      <div class="page">
+
+        ${pageHead(
+          "Trust / Runtime",
+          "Infrastructure",
+          "A live view of the management/data-plane relationship and current fleet state.",
+          `<button class="btn" onclick="renderInfrastructure()">Refresh</button>`
+        )}
+
+        <section class="panel feature">
+
+          <div class="panel-head">
+            <h2 class="panel-title">Agata Proxima architecture</h2>
+            <span class="panel-meta">LIVE MODEL</span>
+          </div>
+
+          <div class="panel-body">
+
+            <div class="architecture">
+
+              <div class="arch-node">
+                <div class="node-label">01 · Workload</div>
+                <h3>Application</h3>
+                <p>
+                  SaaS workloads and services initiate tenant-aware
+                  database sessions.
+                </p>
+              </div>
+
+              <div class="arch-arrow">→</div>
+
+              <div class="arch-node">
+                <div class="node-label">02 · Enforcement</div>
+                <h3>Proxima Engine</h3>
+                <p>
+                  Data-plane proxy establishes and preserves tenant
+                  context while forwarding PostgreSQL traffic.
+                </p>
+              </div>
+
+              <div class="arch-arrow">→</div>
+
+              <div class="arch-node">
+                <div class="node-label">03 · Persistence</div>
+                <h3>PostgreSQL</h3>
+                <p>
+                  Upstream database access remains protected by
+                  database-side tenant policies.
+                </p>
+              </div>
+
+            </div>
+
+          </div>
+
+        </section>
+
+        <section class="grid-3">
+
+          ${metric(
+            "Tenants",
+            platform.tenants,
+            "Organization inventory"
+          )}
+
+          ${metric(
+            "Nodes",
+            platform.nodes,
+            "Registered Engine fleet"
+          )}
+
+          ${metric(
+            "Policies",
+            platform.policies,
+            "Control-plane policy definitions"
+          )}
+
+        </section>
+
+        <section class="grid-2">
+
+          ${panel(
+            "Runtime status",
+            "CONTROL PLANE",
+            `
+              <div class="boundary-list">
+
+                <div class="boundary-row">
+                  <i class="boundary-dot"></i>
+                  <div>
+                    <strong>Control plane</strong>
+                    <span>Management API is responding.</span>
+                  </div>
+                  ${badge("healthy")}
+                </div>
+
+                <div class="boundary-row">
+                  <i class="boundary-dot"></i>
+                  <div>
+                    <strong>Data-plane authority</strong>
+                    <span>Enforcement remains owned by the Proxima Engine.</span>
+                  </div>
+                  ${badge(platform.proxima_enforcement || "independent")}
+                </div>
+
+                <div class="boundary-row">
+                  <i class="boundary-dot"></i>
+                  <div>
+                    <strong>Offline behavior</strong>
+                    <span>${esc(platform.offline_behavior || "engine_continues_enforcement")}</span>
+                  </div>
+                  ${badge("protected")}
+                </div>
+
+              </div>
+            `
+          )}
+
+          ${panel(
+            "Operational model",
+            "NO MAGIC",
+            `
+              <p class="panel-copy">
+                Management state and enforcement state are intentionally
+                separated. The dashboard can report configuration,
+                deployment and verification information without pretending
+                that the UI itself enforces database isolation.
+              </p>
+
+              <p class="panel-copy">
+                The strongest boundary remains below the control plane:
+                Engine enforcement plus PostgreSQL RLS.
+              </p>
+            `
+          )}
+
+        </section>
+
+      </div>
+    `;
+
+  }catch(error){
+    renderError("Infrastructure unavailable",error);
+  }
+}
+
+/* =========================================================
+   BILLING
+   ========================================================= */
+
+async function renderBilling(){
+  routeLabel.textContent = "Billing";
+  setActive("billing");
+
+  view.innerHTML = loading();
+
+  try{
+    const [billing,entitlements,plansResponse] = await Promise.all([
+      api("/api/v1/billing"),
+      api("/api/v1/billing/entitlements"),
+      api("/api/v1/billing/plans")
+    ]);
+
+    state.cache.billing = billing;
+    state.cache.entitlements = entitlements;
+    state.cache.plans = plansResponse.plans || [];
+
+    const currentPlan = state.cache.plans.find(
+      plan => plan.key === entitlements.plan
+    );
+
+    view.innerHTML = `
+      <div class="page">
+
+        ${pageHead(
+          "Workspace / Commercial",
+          "Billing",
+          "Plans, subscription state, capacity and commercial entitlements.",
+          `
+            <button class="btn" onclick="openBillingPortal()">
+              Manage subscription
+            </button>
+          `
+        )}
+
+        <section class="billing-hero">
+
+          ${panel(
+            "Current plan",
+            String(entitlements.plan || "free").toUpperCase(),
+            `
+              <div class="plan-card">
+
+                <div class="plan-name">
+                  ${esc(currentPlan ? currentPlan.name : entitlements.plan)}
+                </div>
+
+                <div class="plan-price">
+                  ${
+                    currentPlan
+                    ? `$${currentPlan.monthly_usd}`
+                    : "—"
+                  }
+                  <span>/ month</span>
+                </div>
+
+                <div style="margin-top:7px">
+                  ${badge(
+                    entitlements.billing_status || "active",
+                    entitlements.billing_status === "active"
+                      ? ""
+                      : "warn"
+                  )}
+                </div>
+
+                <div class="limit-list">
+
+                  <div class="limit-row">
+                    <span>Nodes</span>
+                    <strong>${esc(entitlements.limits?.nodes)}</strong>
+                  </div>
+
+                  <div class="limit-row">
+                    <span>Tenants</span>
+                    <strong>${esc(entitlements.limits?.tenants)}</strong>
+                  </div>
+
+                  <div class="limit-row">
+                    <span>Environments</span>
+                    <strong>${esc(entitlements.limits?.environments)}</strong>
+                  </div>
+
+                  <div class="limit-row">
+                    <span>Audit retention</span>
+                    <strong>${esc(entitlements.limits?.audit_retention_days)} days</strong>
+                  </div>
+
+                </div>
+
+              </div>
+            `
+          )}
+
+          ${panel(
+            "Stripe status",
+            "BILLING ACCOUNT",
+            `
+              <div class="boundary-list">
+
+                <div class="boundary-row">
+                  <i class="boundary-dot"></i>
+                  <div>
+                    <strong>Billing configuration</strong>
+                    <span>
+                      ${billing.configured
+                        ? "Stripe customer/account state exists."
+                        : "No Stripe customer is configured yet."}
+                    </span>
+                  </div>
+                  ${badge(billing.configured ? "configured" : "unconfigured")}
+                </div>
+
+                <div class="boundary-row">
+                  <i class="boundary-dot"></i>
+                  <div>
+                    <strong>Subscription</strong>
+                    <span>${esc(billing.status || "inactive")}</span>
+                  </div>
+                  ${badge(billing.status || "inactive")}
+                </div>
+
+                <div class="boundary-row">
+                  <i class="boundary-dot"></i>
+                  <div>
+                    <strong>Cancellation</strong>
+                    <span>
+                      ${billing.cancel_at_period_end
+                        ? "Subscription is scheduled to cancel."
+                        : "No scheduled cancellation."}
+                    </span>
+                  </div>
+                  ${badge(
+                    billing.cancel_at_period_end
+                      ? "scheduled"
+                      : "none",
+                    billing.cancel_at_period_end ? "warn" : ""
+                  )}
+                </div>
+
+              </div>
+            `
+          )}
+
+        </section>
+
+        <section class="panel">
+
+          <div class="panel-head">
+            <h2 class="panel-title">Agata Proxima plans</h2>
+            <span class="panel-meta">USD · MONTHLY</span>
+          </div>
+
+          <div class="panel-body">
+
+            <div class="plan-grid">
+
+              ${state.cache.plans.map(plan => `
+                <article class="plan-option ${
+                  plan.key === entitlements.plan ? "current" : ""
+                }">
+
+                  <h3>${esc(plan.name)}</h3>
+
+                  <div class="price">
+                    ${
+                      plan.key === "enterprise"
+                      ? "Custom"
+                      : `$${esc(plan.monthly_usd)}`
+                    }
+                  </div>
+
+                  <p>${esc(plan.description)}</p>
+
+                  <div class="limit-list">
+
+                    <div class="limit-row">
+                      <span>Nodes</span>
+                      <strong>${esc(plan.limits.nodes)}</strong>
+                    </div>
+
+                    <div class="limit-row">
+                      <span>Tenants</span>
+                      <strong>${esc(plan.limits.tenants)}</strong>
+                    </div>
+
+                    <div class="limit-row">
+                      <span>Environments</span>
+                      <strong>${esc(plan.limits.environments)}</strong>
+                    </div>
+
+                  </div>
+
+                  <div style="margin-top:14px">
+
+                    ${
+                      plan.key === entitlements.plan
+                      ? `<span class="badge">Current plan</span>`
+                      : plan.checkout_available
+                        ? `
+                          <button
+                            class="btn small primary"
+                            onclick="startCheckout('${esc(plan.price_id)}')"
+                          >
+                            Choose ${esc(plan.name)}
+                          </button>
+                        `
+                        : `<span class="badge neutral">Not checkout-enabled</span>`
+                    }
+
+                  </div>
+
+                </article>
+              `).join("")}
+
+            </div>
+
+          </div>
+
+        </section>
+
+        <section class="grid-2">
+
+          ${panel(
+            "Feature entitlements",
+            "CURRENT PLAN",
+            `
+              <div class="boundary-list">
+
+                ${Object.entries(
+                  entitlements.features || {}
+                ).map(([key,value]) => `
+                  <div class="boundary-row">
+                    <i class="boundary-dot"></i>
+                    <div>
+                      <strong>${esc(key.replaceAll("_"," "))}</strong>
+                      <span>Plan entitlement</span>
+                    </div>
+                    ${badge(
+                      value ? "enabled" : "disabled",
+                      value ? "" : "neutral"
+                    )}
+                  </div>
+                `).join("")}
+
+              </div>
+            `
+          )}
+
+          ${panel(
+            "Subscription actions",
+            "STRIPE",
+            `
+              <p class="panel-copy">
+                Checkout is only available when the corresponding
+                Agata Stripe Price ID and Stripe secret are configured.
+              </p>
+
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+
+                <button class="btn primary" onclick="openBillingPortal()">
+                  Open billing portal
+                </button>
+
+                <a class="btn" href="/pricing">
+                  View public pricing
+                </a>
+
+              </div>
+            `
+          )}
+
+        </section>
+
+      </div>
+    `;
+
+  }catch(error){
+    renderError("Billing unavailable",error);
+  }
+}
+
+async function startCheckout(priceId){
+  try{
+    const result = await api("/api/v1/billing/checkout",{
+      method:"POST",
+      body:JSON.stringify({
+        price_id:priceId
+      })
+    });
+
+    if(result.checkout_url){
+      location.href = result.checkout_url;
+      return;
+    }
+
+    showToast("Checkout unavailable","Stripe did not return a checkout URL.",true);
+
+  }catch(error){
+    showToast("Checkout failed",error.message,true);
+  }
+}
+
+async function openBillingPortal(){
+  try{
+    const result = await api("/api/v1/billing/portal",{
+      method:"POST",
+      body:"{}"
+    });
+
+    if(result.portal_url){
+      location.href = result.portal_url;
+      return;
+    }
+
+    showToast("Billing portal unavailable","Stripe did not return a portal URL.",true);
+
+  }catch(error){
+    showToast("Billing portal failed",error.message,true);
+  }
+}
+
+/* =========================================================
+   SETTINGS
+   ========================================================= */
+
+async function renderSettings(){
+  routeLabel.textContent = "Settings";
+  setActive("settings");
+
+  view.innerHTML = loading();
+
+  try{
+    const organizations = await api("/api/v1/organizations");
+
+    view.innerHTML = `
+      <div class="page">
+
+        ${pageHead(
+          "Workspace / Configuration",
+          "Settings",
+          "Organization identity, access and enterprise identity configuration."
+        )}
+
+        <section class="settings-layout">
+
+          <aside class="settings-nav">
+
+            <button class="settings-tab active">
+              Organization
+            </button>
+
+            <button class="settings-tab">
+              Identity
+            </button>
+
+            <button class="settings-tab">
+              Security
+            </button>
+
+            <button class="settings-tab">
+              Integrations
+            </button>
+
+          </aside>
+
+          <div style="display:grid;gap:13px">
+
+            ${panel(
+              "Current identity",
+              "SESSION",
+              `
+                <div class="form-grid">
+
+                  <div class="field">
+                    <label>Display name</label>
+                    <input
+                      readonly
+                      value="${esc(state.session.display_name || "")}"
+                    >
+                  </div>
+
+                  <div class="field">
+                    <label>Role</label>
+                    <input
+                      readonly
+                      value="${esc(state.session.role || "")}"
+                    >
+                  </div>
+
+                  <div class="field wide">
+                    <label>Organization ID</label>
+                    <input
+                      readonly
+                      class="mono"
+                      value="${esc(state.session.organization_id || "")}"
+                    >
+                  </div>
+
+                </div>
+              `
+            )}
+
+            ${panel(
+              "Organizations",
+              "MEMBERSHIPS",
+              `
+                ${table(
+                  ["Organization","Slug","Role"],
+                  organizations.map(org => [
+                    `<strong>${esc(org.name)}</strong>`,
+                    `<span class="mono">${esc(org.slug)}</span>`,
+                    badge(org.role)
+                  ])
+                )}
+              `
+            )}
+
+            ${panel(
+              "Microsoft Entra",
+              "OIDC / ENTERPRISE IDENTITY",
+              `
+                <form class="form" onsubmit="configureEntra(event)">
+
+                  <div class="form-grid">
+
+                    <div class="field">
+                      <label>Microsoft Entra tenant ID</label>
+                      <input
+                        id="entraTenantId"
+                        placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                      >
+                    </div>
+
+                    <div class="field">
+                      <label>Just-in-time provisioning</label>
+
+                      <select id="entraJit">
+                        <option value="false">Disabled</option>
+                        <option value="true">Enabled</option>
+                      </select>
+
+                    </div>
+
+                  </div>
+
+                  <div class="form-actions">
+                    <button class="btn primary" type="submit">
+                      Configure Entra
+                    </button>
+                  </div>
+
+                </form>
+              `
+            )}
+
+          </div>
+
+        </section>
+
+      </div>
+    `;
+
+  }catch(error){
+    renderError("Settings unavailable",error);
+  }
+}
+
+async function configureEntra(event){
+  event.preventDefault();
+
+  try{
+    const tenantId = document.getElementById("entraTenantId").value.trim();
+
+    const result = await api("/api/v1/organization/oidc/entra",{
+      method:"POST",
+      body:JSON.stringify({
+        tenant_id:tenantId,
+        jit_provisioning:
+          document.getElementById("entraJit").value === "true"
+      })
+    });
+
+    showToast(
+      "Microsoft Entra configured",
+      result.issuer || "OIDC configuration saved."
+    );
+
+  }catch(error){
+    showToast("Entra configuration failed",error.message,true);
+  }
+}
+
+/* =========================================================
+   DEVELOPER
+   ========================================================= */
+
+async function renderDeveloper(){
+  routeLabel.textContent = "Developer";
+  setActive("developer");
+
+  view.innerHTML = `
+    <div class="page">
+
+      ${pageHead(
+        "Workspace / Engineering",
+        "Developer",
+        "Build against the Agata Proxima control-plane surface and understand the data-plane boundary."
+      )}
+
+      <section class="grid-2">
+
+        ${panel(
+          "Authenticated API surface",
+          "CONTROL PLANE",
+          `
+            <div class="endpoint-list">
+
+              <div class="endpoint">
+                <span class="method">GET</span>
+                <code>/api/v1/session</code>
+              </div>
+
+              <div class="endpoint">
+                <span class="method">GET</span>
+                <code>/api/v1/platform/status</code>
+              </div>
+
+              <div class="endpoint">
+                <span class="method">GET</span>
+                <code>/api/v1/tenants</code>
+              </div>
+
+              <div class="endpoint">
+                <span class="method">POST</span>
+                <code>/api/v1/tenants</code>
+              </div>
+
+              <div class="endpoint">
+                <span class="method">GET</span>
+                <code>/api/v1/policies</code>
+              </div>
+
+              <div class="endpoint">
+                <span class="method">POST</span>
+                <code>/api/v1/policies</code>
+              </div>
+
+              <div class="endpoint">
+                <span class="method">GET</span>
+                <code>/api/v1/nodes</code>
+              </div>
+
+              <div class="endpoint">
+                <span class="method">POST</span>
+                <code>/api/v1/nodes</code>
+              </div>
+
+              <div class="endpoint">
+                <span class="method">GET</span>
+                <code>/api/v1/deployments</code>
+              </div>
+
+              <div class="endpoint">
+                <span class="method">POST</span>
+                <code>/api/v1/deployments</code>
+              </div>
+
+              <div class="endpoint">
+                <span class="method">GET</span>
+                <code>/api/v1/verifications</code>
+              </div>
+
+              <div class="endpoint">
+                <span class="method">GET</span>
+                <code>/api/v1/audit</code>
+              </div>
+
+              <div class="endpoint">
+                <span class="method">GET</span>
+                <code>/api/v1/billing</code>
+              </div>
+
+            </div>
+          `
+        )}
+
+        ${panel(
+          "Session contract",
+          "CSRF + COOKIE",
+          `
+            <p class="panel-copy">
+              The browser session is authenticated using the
+              <span class="mono">proxima_session</span> HttpOnly cookie.
+            </p>
+
+            <p class="panel-copy">
+              Write requests require the session's
+              <span class="mono">csrf_token</span> as
+              <span class="mono">x-csrf-token</span>.
+            </p>
+
+            <div class="code-block">
+GET /api/v1/session
+
+{
+  "authenticated": true,
+  "user_id": "...",
+  "organization_id": "...",
+  "organization_name": "...",
+  "role": "owner",
+  "csrf_token": "..."
+}
+            </div>
+          `
+        )}
+
+      </section>
+
+      ${panel(
+        "Example authenticated request",
+        "BROWSER SESSION",
+        `
+          <div class="code-block">fetch("/api/v1/tenants", {
+  credentials: "same-origin"
+}).then(r => r.json());</div>
+        `
+      )}
+
+      ${panel(
+        "Architecture reminder",
+        "IMPORTANT",
+        `
+          <p class="panel-copy">
+            The control-plane APIs configure and observe the system.
+            They are not a replacement for Proxima Engine enforcement.
+            Applications that require tenant isolation still traverse
+            the Engine/data-plane boundary.
+          </p>
+
+          <a class="btn primary" href="/developer-console">
+            Open developer console
+          </a>
+        `
+      )}
+
+    </div>
+  `;
+}
+
+/* =========================================================
+   SUPPORT
+   ========================================================= */
+
+async function renderSupport(){
+  routeLabel.textContent = "Support";
+  setActive("support");
+
+  view.innerHTML = loading();
+
+  try{
+    const rows = await api("/api/v1/support");
+    state.cache.support = rows;
+
+    view.innerHTML = `
+      <div class="page">
+
+        ${pageHead(
+          "Workspace / Assistance",
+          "Support",
+          "Open organization-scoped support requests and inspect their status.",
+          `<button class="btn primary" onclick="showSupportForm()">New request</button>`
+        )}
+
+        <section class="grid-3">
+
+          ${metric(
+            "Open requests",
+            rows.filter(x => x.status === "open").length,
+            "Awaiting resolution",
+            "amber"
+          )}
+
+          ${metric(
+            "Total requests",
+            rows.length,
+            "Organization support history"
+          )}
+
+          ${metric(
+            "Urgent",
+            rows.filter(x => x.priority === "urgent").length,
+            "High-priority requests",
+            "amber"
+          )}
+
+        </section>
+
+        <section class="panel">
+
+          <div class="panel-head">
+            <h2 class="panel-title">Support requests</h2>
+            <span class="panel-meta">${rows.length} REQUESTS</span>
+          </div>
+
+          <div class="panel-body">
+
+            ${table(
+              ["Subject","Priority","Status","Message","Created"],
+              rows.map(row => [
+                `<strong>${esc(row.subject)}</strong>`,
+                badge(
+                  row.priority || "normal",
+                  ["high","urgent"].includes(row.priority) ? "warn" : ""
+                ),
+                badge(row.status),
+                esc(row.message).slice(0,120) +
+                  (String(row.message).length > 120 ? "…" : ""),
+                esc(prettyDate(row.created_at))
+              ])
+            )}
+
+          </div>
+
+        </section>
+
+        <div id="supportFormSlot"></div>
+
+      </div>
+    `;
+
+  }catch(error){
+    renderError("Support unavailable",error);
+  }
+}
+
+function showSupportForm(){
+  document.getElementById("supportFormSlot").innerHTML = `
+    ${panel(
+      "New support request",
+      "ORGANIZATION SUPPORT",
+      `
+        <form class="form" onsubmit="createSupport(event)">
+
+          <div class="form-grid">
+
+            <div class="field">
+              <label>Subject</label>
+              <input
+                id="supportSubject"
+                required
+                maxlength="200"
+                placeholder="Production deployment issue"
+              >
+            </div>
+
+            <div class="field">
+              <label>Priority</label>
+              <select id="supportPriority">
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </div>
+
+            <div class="field wide">
+              <label>Message</label>
+              <textarea
+                id="supportMessage"
+                required
+                placeholder="Describe the issue, impact and relevant context…"
+              ></textarea>
+            </div>
+
+          </div>
+
+          <div class="form-actions">
+
+            <button
+              type="button"
+              class="btn"
+              onclick="closeForm('supportFormSlot')"
+            >
+              Cancel
+            </button>
+
+            <button class="btn primary" type="submit">
+              Open request
+            </button>
+
+          </div>
+
+        </form>
+      `
+    )}
+  `;
+}
+
+async function createSupport(event){
+  event.preventDefault();
+
+  try{
+    await api("/api/v1/support",{
+      method:"POST",
+      body:JSON.stringify({
+        organization_id:state.session.organization_id,
+        subject:document.getElementById("supportSubject").value.trim(),
+        message:document.getElementById("supportMessage").value.trim(),
+        priority:document.getElementById("supportPriority").value
+      })
+    });
+
+    showToast("Support request opened","Your request has been recorded.");
+    await renderSupport();
+
+  }catch(error){
+    showToast("Support request failed",error.message,true);
+  }
+}
+
+/* =========================================================
+   UTILITIES
+   ========================================================= */
+
+function closeForm(id){
+  const element = document.getElementById(id);
+
+  if(element){
+    element.innerHTML = "";
+  }
+}
+
+function slugify(value){
+  return String(value || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g,"-")
+    .replace(/^-+|-+$/g,"");
+}
+
+function renderError(title,error){
+  view.innerHTML = `
+    <div class="page">
+
+      ${pageHead(
+        "Control Plane / Error",
+        title,
+        "The dashboard could not retrieve this area."
+      )}
+
+      ${panel(
+        "Request failed",
+        "ERROR",
+        `
+          <div class="empty">
+            <strong>${esc(error?.message || "Unknown error")}</strong>
+            <div>
+              Check the control-plane terminal and try again.
+            </div>
+          </div>
+        `,
+        "feature"
+      )}
+
+    </div>
+  `;
+}
+
+/* =========================================================
+   SEARCH
+   ========================================================= */
+
+function performSearch(query){
+  const value = query.trim().toLowerCase();
+
+  if(!value){
+    return;
+  }
+
+  const pageNames = {
+    overview:"overview",
+    tenants:"tenants",
+    policies:"policies",
+    fleet:"fleet",
+    deployments:"deployments",
+    verification:"verification",
+    audit:"audit",
+    security:"security",
+    infrastructure:"infrastructure",
+    billing:"billing",
+    settings:"settings",
+    developer:"developer",
+    support:"support"
+  };
+
+  if(pageNames[value]){
+    navigate(pageNames[value]);
+    return;
+  }
+
+  const resources = [
+    ...state.cache.tenants.map(x => ({
+      type:"tenant",
+      page:"tenants",
+      name:x.name,
+      slug:x.slug
+    })),
+
+    ...state.cache.policies.map(x => ({
+      type:"policy",
+      page:"policies",
+      name:x.name,
+      slug:x.name
+    })),
+
+    ...state.cache.nodes.map(x => ({
+      type:"node",
+      page:"fleet",
+      name:x.name,
+      slug:x.environment
+    })),
+
+    ...state.cache.deployments.map(x => ({
+      type:"deployment",
+      page:"deployments",
+      name:x.version,
+      slug:x.status
+    }))
+  ];
+
+  const result = resources.find(item =>
+    `${item.name} ${item.slug}`.toLowerCase().includes(value)
+  );
+
+  if(result){
+    navigate(result.page);
+
+    setTimeout(() => {
+      showToast(
+        "Search result",
+        `${result.type}: ${result.name}`
+      );
+    },100);
+
+    return;
+  }
+
+  showToast(
+    "No result",
+    `Nothing in the loaded workspace matched "${query}".`
+  );
+}
+
+/* =========================================================
+   ROUTER
+   ========================================================= */
+
+async function renderPage(){
+  const page = currentPage();
+
+  const renderers = {
+    overview:renderOverview,
+    tenants:renderTenants,
+    policies:renderPolicies,
+    fleet:renderFleet,
+    deployments:renderDeployments,
+    verification:renderVerification,
+    audit:renderAudit,
+    security:renderSecurity,
+    infrastructure:renderInfrastructure,
+    billing:renderBilling,
+    settings:renderSettings,
+    developer:renderDeveloper,
+    support:renderSupport
+  };
+
+  const renderer = renderers[page] || renderOverview;
+
+  try{
+    await renderer();
+  }catch(error){
+    renderError("Dashboard error",error);
+  }
+
+  window.scrollTo({
+    top:0,
+    behavior:"smooth"
+  });
+}
+
+/* =========================================================
+   EVENTS
+   ========================================================= */
+
+document.querySelectorAll("[data-page]").forEach(link => {
+  link.addEventListener("click",() => {
+    const page = link.dataset.page;
+
+    if(page){
+      location.hash = page;
+    }
+  });
+});
+
+window.addEventListener("hashchange",renderPage);
+
+document.getElementById("globalSearch")
+  .addEventListener("keydown",event => {
+    if(event.key === "Enter"){
+      performSearch(event.currentTarget.value);
+      event.currentTarget.value = "";
+    }
+  });
+
+document.getElementById("logoutButton")
+  .addEventListener("click",async () => {
+
+    try{
+      await api("/api/v1/auth/logout",{
+        method:"POST",
+        body:"{}"
+      });
+    }catch{
+      /* Logout locally even if the request fails. */
+    }
+
+    sessionStorage.removeItem("proxima_csrf");
+    location.href = "/login";
+  });
+
+/* =========================================================
+   CLOCK
+   ========================================================= */
+
+function updateClock(){
+  const clock = document.getElementById("clock");
+
+  clock.textContent =
+    new Date().toLocaleString([],{
+      year:"numeric",
+      month:"short",
+      day:"numeric",
+      hour:"2-digit",
+      minute:"2-digit",
+      second:"2-digit"
+    }).toUpperCase();
+}
+
+setInterval(updateClock,1000);
+updateClock();
+
+/* =========================================================
+   BOOT
+   ========================================================= */
+
+(async function boot(){
+
+  try{
+
+    await loadSession();
+
+    await renderPage();
+
+  }catch(error){
+
+    if(error.message !== "Not authenticated."){
+      renderError(
+        "Dashboard boot failed",
+        error
+      );
+    }
+
+  }
+
+})();
+</script>
+
+</body>
+</html>
