@@ -1221,10 +1221,7 @@ pub(crate) async fn reset_password(
     }
 }
 
-pub(crate) async fn team(
-    State(s): State<AppState>,
-    headers: HeaderMap,
-) -> Response {
+pub(crate) async fn team(State(s): State<AppState>, headers: HeaderMap) -> Response {
     let ctx = match authenticate(&s, &headers).await {
         Ok(v) => v,
         Err(c) => return c.into_response(),
@@ -1232,37 +1229,49 @@ pub(crate) async fn team(
     let members = match sqlx::query(
         "SELECT u.id, u.email, u.display_name, u.status, m.role, m.created_at
          FROM memberships m JOIN users u ON u.id=m.user_id
-         WHERE m.organization_id=$1 ORDER BY m.created_at ASC"
+         WHERE m.organization_id=$1 ORDER BY m.created_at ASC",
     )
     .bind(ctx.organization_id)
     .fetch_all(&s.db)
-    .await {
-        Ok(rows) => rows.into_iter().map(|r| json!({
-            "id": r.get::<Uuid,_>("id"),
-            "email": r.get::<String,_>("email"),
-            "display_name": r.get::<String,_>("display_name"),
-            "status": r.get::<String,_>("status"),
-            "role": r.get::<String,_>("role"),
-            "created_at": r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),
-        })).collect::<Vec<_>>(),
+    .await
+    {
+        Ok(rows) => rows
+            .into_iter()
+            .map(|r| {
+                json!({
+                    "id": r.get::<Uuid, _>("id"),
+                    "email": r.get::<String, _>("email"),
+                    "display_name": r.get::<String, _>("display_name"),
+                    "status": r.get::<String, _>("status"),
+                    "role": r.get::<String, _>("role"),
+                    "created_at": r.get::<chrono::DateTime<chrono::Utc>, _>("created_at"),
+                })
+            })
+            .collect::<Vec<_>>(),
         Err(e) => return db_error(e),
     };
     let invitations = match sqlx::query(
         "SELECT id, email, role, expires_at, created_at
          FROM organization_invites
          WHERE organization_id=$1 AND accepted_at IS NULL AND expires_at>now()
-         ORDER BY created_at DESC"
+         ORDER BY created_at DESC",
     )
     .bind(ctx.organization_id)
     .fetch_all(&s.db)
-    .await {
-        Ok(rows) => rows.into_iter().map(|r| json!({
-            "id": r.get::<Uuid,_>("id"),
-            "email": r.get::<String,_>("email"),
-            "role": r.get::<String,_>("role"),
-            "expires_at": r.get::<chrono::DateTime<chrono::Utc>,_>("expires_at"),
-            "created_at": r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),
-        })).collect::<Vec<_>>(),
+    .await
+    {
+        Ok(rows) => rows
+            .into_iter()
+            .map(|r| {
+                json!({
+                    "id": r.get::<Uuid, _>("id"),
+                    "email": r.get::<String, _>("email"),
+                    "role": r.get::<String, _>("role"),
+                    "expires_at": r.get::<chrono::DateTime<chrono::Utc>, _>("expires_at"),
+                    "created_at": r.get::<chrono::DateTime<chrono::Utc>, _>("created_at"),
+                })
+            })
+            .collect::<Vec<_>>(),
         Err(e) => return db_error(e),
     };
     Json(json!({"members": members, "invitations": invitations})).into_response()
