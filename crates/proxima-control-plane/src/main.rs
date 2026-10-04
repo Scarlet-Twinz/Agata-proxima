@@ -153,6 +153,7 @@ async fn main() -> Result<()> {
         .route("/trust", get(public_page))
         .route("/pricing", get(public_page))
         .route("/developer", get(public_page))
+        .route("/changelog", get(public_page))
         .route("/docs", get(public_page))
         .route("/company", get(public_page))
         .route("/support", get(public_page))
