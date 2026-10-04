@@ -38,5 +38,5 @@ async function route(){const name=location.hash.replace('#','')||'overview';docu
 async function boot(){try{const s=await api('/api/v1/session');state.session=s;state.csrf=s.csrf_token;sessionStorage.setItem('proxima_csrf',state.csrf);identity.textContent=s.display_name||'Operator';roleLabel.textContent=(s.role||'operator').toUpperCase()+' · PROXIMA OPERATOR';sideAvatar.textContent=initials(s.display_name);workspaceName.textContent=s.organization_name||'Proxima workspace'}catch{location.href='/login';return}route()}
 document.querySelectorAll('.nav a').forEach(a=>a.addEventListener('click',()=>setTimeout(route,0)));
 logout.onclick=async()=>{await api('/api/v1/auth/logout',{method:'POST'});sessionStorage.removeItem('proxima_csrf');location.href='/'};
-setInterval(()=>clock.textContent='LIVE · '+new Date().toLocaleTimeString(),1000);boot();
+navSearch.addEventListener('keydown',e=>{if(e.key!=='Enter')return;const q=navSearch.value.trim().toLowerCase();const match=Object.keys(pages).find(x=>x.includes(q));if(match)location.hash='#'+match;});setInterval(()=>clock.textContent='LIVE · '+new Date().toLocaleTimeString(),1000);boot();
 </script></body></html>
