@@ -20,7 +20,7 @@ function json(res, status, body) {
   res.end(payload);
 }
 
-function tokenFrom(req) {
+// HTTP header contract: X-Proxima-Tenant-Token (Node exposes incoming headers in lowercase).\nfunction tokenFrom(req) {
   const value = req.headers["x-proxima-tenant-token"];
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
