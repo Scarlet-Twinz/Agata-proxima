@@ -147,6 +147,11 @@ async fn main() -> Result<()> {
 
     let app = Router::new()
         .route("/", get(home))
+        .route("/platform", get(platform_page))
+        .route("/security", get(security_page))
+        .route("/developers", get(developers_page))
+        .route("/pricing", get(pricing_page))
+        .route("/faq", get(faq_page))
         .route("/login", get(login_page))
         .route("/signup", get(signup_page))
         .route("/app", get(app_page))
@@ -175,7 +180,7 @@ async fn main() -> Result<()> {
         )
         .route("/api/v1/audit", get(audit_events))
         .route("/api/v1/support", get(support).post(create_support))
-        .route("/api/v1/nodes/:id/enrollment", post(start_enrollment))
+        .route("/api/v1/nodes/{id}/enrollment", post(start_enrollment))
         .route("/verify-email", get(production::verify_email))
         .route("/reset-password", get(production::reset_password_page))
         .route("/accept-invite", get(production::accept_invite))
@@ -223,6 +228,26 @@ async fn main() -> Result<()> {
 async fn home() -> Html<&'static str> {
     Html(include_str!("../web/home.html"))
 }
+async fn platform_page() -> Html<&'static str> {
+    Html(include_str!("../web/platform.html"))
+}
+
+async fn security_page() -> Html<&'static str> {
+    Html(include_str!("../web/security.html"))
+}
+
+async fn developers_page() -> Html<&'static str> {
+    Html(include_str!("../web/developers.html"))
+}
+
+async fn pricing_page() -> Html<&'static str> {
+    Html(include_str!("../web/pricing.html"))
+}
+
+async fn faq_page() -> Html<&'static str> {
+    Html(include_str!("../web/faq.html"))
+}
+
 async fn login_page() -> Html<&'static str> {
     Html(include_str!("../web/login.html"))
 }
@@ -232,8 +257,13 @@ async fn signup_page() -> Html<&'static str> {
 async fn app_page() -> Html<&'static str> {
     Html(include_str!("../web/app.html"))
 }
-async fn logo() -> Html<&'static str> {
-    Html(include_str!("../web/logo.svg"))
+async fn logo() -> Response {
+    let mut response = Html(include_str!("../web/logo.svg")).into_response();
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("image/svg+xml"),
+    );
+    response
 }
 
 async fn healthz(State(s): State<AppState>) -> Response {
