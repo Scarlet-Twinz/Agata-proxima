@@ -44,6 +44,25 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+      - name: Browser JavaScript syntax
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          for path in [
+              "crates/proxima-control-plane/web/app.html",
+              "crates/proxima-control-plane/web/login.html",
+              "crates/proxima-control-plane/web/signup.html",
+          ]:
+              text = Path(path).read_text()
+              scripts = re.findall(r"<script>(.*?)</script>", text, re.S)
+              if not scripts:
+                  raise SystemExit(f"No inline script found in {path}")
+              Path("/tmp/proxima-check.js").write_text(scripts[-1])
+              import subprocess
+              subprocess.run(["node", "--check", "/tmp/proxima-check.js"], check=True)
+          PY
+
       - name: Verification harness syntax
         run: bash -n tools/proxima-verify.sh tools/proxima-verify-3tenant.sh
 
