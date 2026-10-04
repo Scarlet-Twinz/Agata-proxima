@@ -147,6 +147,21 @@ async fn main() -> Result<()> {
 
     let app = Router::new()
         .route("/", get(home))
+        .route("/product", get(public_page))
+        .route("/solutions", get(public_page))
+        .route("/security", get(public_page))
+        .route("/trust", get(public_page))
+        .route("/pricing", get(public_page))
+        .route("/developer", get(public_page))
+        .route("/docs", get(public_page))
+        .route("/company", get(public_page))
+        .route("/support", get(public_page))
+        .route("/status", get(public_page))
+        .route("/faq", get(public_page))
+        .route("/contact", get(public_page))
+        .route("/legal/privacy", get(public_page))
+        .route("/legal/terms", get(public_page))
+        .route("/legal/subprocessors", get(public_page))
         .route("/login", get(login_page))
         .route("/signup", get(signup_page))
         .route("/app", get(app_page))
@@ -234,6 +249,9 @@ async fn main() -> Result<()> {
 
 async fn home() -> Html<&'static str> {
     Html(include_str!("../web/home.html"))
+}
+async fn public_page() -> Html<&'static str> {
+    Html(include_str!("../web/public.html"))
 }
 async fn login_page() -> Html<&'static str> {
     Html(include_str!("../web/login.html"))
