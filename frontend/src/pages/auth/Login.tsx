@@ -89,7 +89,7 @@ export default function Login() {
       </div>
 
       <p className="auth-note">
-        By signing in, you access your organization�s Proxima control plane.
+        By signing in, you access your organization's Proxima control plane.
       </p>
     </div>
   );
