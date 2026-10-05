@@ -1,7 +1,8 @@
 import { Link, useParams } from "react-router-dom";
+import type { ReactNode } from "react-dom/client";
 import { ArrowRight, CheckCircle2, CircleDashed, ExternalLink } from "lucide-react";
 
-function Frame({ eyebrow, title, description, children, links=[] }: { eyebrow:string; title:string; description:string; children?:React.ReactNode; links?:{label:string;href:string}[] }) {
+function Frame({ eyebrow, title, description, children, links=[] }: { eyebrow:string; title:string; description:string; children?:ReactNode; links?:{label:string;href:string}[] }) {
   return <div className="resource-page">
     <div className="page-heading"><div><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{description}</p></div></div>
     <div className="detail-layout">
