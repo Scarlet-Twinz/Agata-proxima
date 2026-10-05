@@ -212,6 +212,7 @@ async fn main() -> Result<()> {
             "/api/v1/auth/oidc/callback",
             get(production::entra_callback),
         )
+        .route("/api/v1/organization/team", get(production::team))
         .route(
             "/api/v1/organization/invitations",
             get(production::team).post(production::invite),
