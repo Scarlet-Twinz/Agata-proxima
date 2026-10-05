@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { PublicLayout } from "./layouts/PublicLayout";
 import AuthLayout from "./layouts/auth/AuthLayout";
+import { RequireAuth } from "./layouts/auth/RequireAuth";
 import Login from "./pages/auth/Login";
 import Signup from "./pages/auth/Signup";
 import Recovery from "./pages/auth/Recovery";
@@ -20,6 +21,7 @@ import { Support } from "./pages/public/Support";
 import { Contact } from "./pages/public/Contact";
 import { Terms } from "./pages/public/Terms";
 import { Privacy } from "./pages/public/Privacy";
+import { PublicResourceRoute } from "./pages/public/PublicResourceRoutes";
 import { ConsoleLayout } from "./layouts/console/ConsoleLayout";
 import { Overview } from "./pages/console/Overview";
 import {
@@ -78,13 +80,17 @@ export function App() {
         <Route index element={<Home />} />
         <Route path="product" element={<Product />} />
         <Route path="solutions" element={<Solutions />} />
+        <Route path="solutions/*" element={<PublicResourceRoute />} />
         <Route path="developers" element={<Developers />} />
+        <Route path="developers/*" element={<PublicResourceRoute />} />
         <Route path="pricing" element={<Pricing />} />
         <Route path="security" element={<Security />} />
         <Route path="trust" element={<Trust />} />
         <Route path="company" element={<Company />} />
         <Route path="docs" element={<Docs />} />
+        <Route path="docs/*" element={<PublicResourceRoute />} />
         <Route path="changelog" element={<Changelog />} />
+        <Route path="changelog/*" element={<PublicResourceRoute />} />
         <Route path="status" element={<Status />} />
         <Route path="faq" element={<FAQ />} />
         <Route path="support" element={<Support />} />
@@ -99,66 +105,56 @@ export function App() {
         <Route path="recovery" element={<Recovery />} />
       </Route>
 
-      <Route path="app" element={<ConsoleLayout />}>
-        <Route index element={<Overview />} />
-
-        <Route path="security" element={<ConsoleSecurity />} />
-        <Route path="security/tenant-isolation" element={<SecurityTenantIsolation />} />
-        <Route path="security/events" element={<SecurityEvents />} />
-        <Route path="security/events/:eventId" element={<AuditEvent />} />
-
-        <Route path="tenants" element={<Tenants />} />
-        <Route path="tenants/:tenantId" element={<TenantDetail />} />
-
-        <Route path="policies" element={<Policies />} />
-        <Route path="policies/:policyId" element={<PolicyDetail />} />
-
-        <Route path="nodes" element={<Nodes />} />
-        <Route path="nodes/:nodeId" element={<NodeDetail />} />
-
-        <Route path="deployments" element={<Deployments />} />
-        <Route path="deployments/:deploymentId" element={<DeploymentDetail />} />
-
-        <Route path="verification" element={<Verification />} />
-        <Route path="verification/:runId" element={<VerificationDetail />} />
-
-        <Route path="audit" element={<Audit />} />
-        <Route path="audit/:eventId" element={<AuditEvent />} />
-
-        <Route path="team" element={<Team />} />
-        <Route path="team/members/:memberId" element={<TeamMember />} />
-        <Route path="team/invitations" element={<TeamInvitations />} />
-        <Route path="team/roles" element={<TeamRoles />} />
-
-        <Route path="billing" element={<Billing />} />
-        <Route path="billing/usage" element={<BillingUsage />} />
-        <Route path="billing/plans" element={<BillingPlans />} />
-        <Route path="billing/invoices" element={<BillingInvoices />} />
-
-        <Route path="developer" element={<DeveloperArea />} />
-        <Route path="developer/api-keys" element={<DeveloperApiKeys />} />
-        <Route path="developer/service-accounts" element={<DeveloperServiceAccounts />} />
-        <Route path="developer/authentication" element={<DeveloperAuthentication />} />
-        <Route path="developer/tenant-context" element={<DeveloperTenantContext />} />
-        <Route path="developer/webhooks" element={<DeveloperWebhooks />} />
-        <Route path="developer/events" element={<DeveloperEvents />} />
-        <Route path="developer/environments" element={<DeveloperEnvironments />} />
-        <Route path="developer/sdks" element={<DeveloperSdks />} />
-        <Route path="developer/cli" element={<DeveloperCli />} />
-        <Route path="developer/terraform" element={<DeveloperTerraform />} />
-        <Route path="developer/api-reference" element={<DeveloperApiReference />} />
-
-        <Route path="settings" element={<SettingsArea />} />
-        <Route path="settings/members" element={<SettingsMembers />} />
-        <Route path="settings/authentication" element={<SettingsAuthentication />} />
-        <Route path="settings/identity" element={<SettingsIdentity />} />
-        <Route path="settings/api" element={<SettingsArea />} />
-        <Route path="settings/security" element={<SettingsSecurity />} />
-        <Route path="settings/environments" element={<SettingsEnvironments />} />
-        <Route path="settings/notifications" element={<SettingsNotifications />} />
-        <Route path="settings/danger" element={<SettingsDanger />} />
-
-        <Route path="support" element={<ConsoleSupport />} />
+      <Route element={<RequireAuth />}>
+        <Route path="app" element={<ConsoleLayout />}>
+          <Route index element={<Overview />} />
+          <Route path="security" element={<ConsoleSecurity />} />
+          <Route path="security/tenant-isolation" element={<SecurityTenantIsolation />} />
+          <Route path="security/events" element={<SecurityEvents />} />
+          <Route path="security/events/:eventId" element={<AuditEvent />} />
+          <Route path="tenants" element={<Tenants />} />
+          <Route path="tenants/:tenantId" element={<TenantDetail />} />
+          <Route path="policies" element={<Policies />} />
+          <Route path="policies/:policyId" element={<PolicyDetail />} />
+          <Route path="nodes" element={<Nodes />} />
+          <Route path="nodes/:nodeId" element={<NodeDetail />} />
+          <Route path="deployments" element={<Deployments />} />
+          <Route path="deployments/:deploymentId" element={<DeploymentDetail />} />
+          <Route path="verification" element={<Verification />} />
+          <Route path="verification/:runId" element={<VerificationDetail />} />
+          <Route path="audit" element={<Audit />} />
+          <Route path="audit/:eventId" element={<AuditEvent />} />
+          <Route path="team" element={<Team />} />
+          <Route path="team/members/:memberId" element={<TeamMember />} />
+          <Route path="team/invitations" element={<TeamInvitations />} />
+          <Route path="team/roles" element={<TeamRoles />} />
+          <Route path="billing" element={<Billing />} />
+          <Route path="billing/usage" element={<BillingUsage />} />
+          <Route path="billing/plans" element={<BillingPlans />} />
+          <Route path="billing/invoices" element={<BillingInvoices />} />
+          <Route path="developer" element={<DeveloperArea />} />
+          <Route path="developer/api-keys" element={<DeveloperApiKeys />} />
+          <Route path="developer/service-accounts" element={<DeveloperServiceAccounts />} />
+          <Route path="developer/authentication" element={<DeveloperAuthentication />} />
+          <Route path="developer/tenant-context" element={<DeveloperTenantContext />} />
+          <Route path="developer/webhooks" element={<DeveloperWebhooks />} />
+          <Route path="developer/events" element={<DeveloperEvents />} />
+          <Route path="developer/environments" element={<DeveloperEnvironments />} />
+          <Route path="developer/sdks" element={<DeveloperSdks />} />
+          <Route path="developer/cli" element={<DeveloperCli />} />
+          <Route path="developer/terraform" element={<DeveloperTerraform />} />
+          <Route path="developer/api-reference" element={<DeveloperApiReference />} />
+          <Route path="settings" element={<SettingsArea />} />
+          <Route path="settings/members" element={<SettingsMembers />} />
+          <Route path="settings/authentication" element={<SettingsAuthentication />} />
+          <Route path="settings/identity" element={<SettingsIdentity />} />
+          <Route path="settings/api" element={<SettingsArea />} />
+          <Route path="settings/security" element={<SettingsSecurity />} />
+          <Route path="settings/environments" element={<SettingsEnvironments />} />
+          <Route path="settings/notifications" element={<SettingsNotifications />} />
+          <Route path="settings/danger" element={<SettingsDanger />} />
+          <Route path="support" element={<ConsoleSupport />} />
+        </Route>
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
