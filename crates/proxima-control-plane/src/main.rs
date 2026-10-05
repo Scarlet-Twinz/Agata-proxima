@@ -231,7 +231,7 @@ async fn main() -> Result<()> {
             get(organization_invitations).post(production::invite),
         )
         .route(
-            "/api/v1/organization/invitations/:id",
+            "/api/v1/organization/invitations/{id}",
             delete(revoke_organization_invitation),
         )
         .route("/api/v1/production/readiness", get(production::readiness))
