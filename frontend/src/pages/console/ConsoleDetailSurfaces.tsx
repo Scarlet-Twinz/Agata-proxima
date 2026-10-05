@@ -1,5 +1,5 @@
 import { Link, useParams } from "react-router-dom";
-import type { ReactNode } from "react-dom/client";
+import type { ReactNode } from "react";
 import { ArrowRight, CheckCircle2, CircleDashed, ExternalLink } from "lucide-react";
 
 function Frame({ eyebrow, title, description, children, links=[] }: { eyebrow:string; title:string; description:string; children?:ReactNode; links?:{label:string;href:string}[] }) {
