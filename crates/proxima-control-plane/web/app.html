@@ -1860,6 +1860,19 @@ td strong{
 
     <nav class="nav">
 
+      <a class="nav-link" href="#team" data-page="team">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24">
+            <circle cx="9" cy="8" r="3"/>
+            <circle cx="17" cy="9" r="2.5"/>
+            <path d="M3 20c.5-4 2.5-6 6-6s5.5 2 6 6"/>
+            <path d="M14 15c3.2 0 5.5 1.7 6 5"/>
+          </svg>
+        </span>
+        <span class="nav-label">Team</span>
+        <span class="nav-key">10</span>
+      </a>
+
       <a class="nav-link" href="#billing" data-page="billing">
         <span class="nav-icon">
           <svg viewBox="0 0 24 24">
@@ -1869,7 +1882,7 @@ td strong{
           </svg>
         </span>
         <span class="nav-label">Billing</span>
-        <span class="nav-key">10</span>
+        <span class="nav-key">11</span>
       </a>
 
       <a class="nav-link" href="#settings" data-page="settings">
@@ -1880,7 +1893,7 @@ td strong{
           </svg>
         </span>
         <span class="nav-label">Settings</span>
-        <span class="nav-key">11</span>
+        <span class="nav-key">12</span>
       </a>
 
       <a class="nav-link" href="#developer" data-page="developer">
@@ -1890,7 +1903,7 @@ td strong{
           </svg>
         </span>
         <span class="nav-label">Developer</span>
-        <span class="nav-key">12</span>
+        <span class="nav-key">13</span>
       </a>
 
       <a class="nav-link" href="#support" data-page="support">
@@ -1901,7 +1914,7 @@ td strong{
           </svg>
         </span>
         <span class="nav-label">Support</span>
-        <span class="nav-key">13</span>
+        <span class="nav-key">14</span>
       </a>
 
     </nav>
@@ -2015,7 +2028,11 @@ const state = {
     plans: [],
     billing: null,
     entitlements: null,
-    platform: null
+    platform: null,
+    team: {
+      members: [],
+      invitations: []
+    }
   }
 };
 
@@ -3857,6 +3874,126 @@ async function renderInfrastructure(){
    BILLING
    ========================================================= */
 
+async function renderTeam(){
+  routeLabel.textContent = "Team";
+  setActive("team");
+  view.innerHTML = loading();
+
+  try{
+    const data = await api("/api/v1/organization/invitations");
+    state.cache.team = data || {members:[],invitations:[]};
+    const members = state.cache.team.members || [];
+    const invitations = state.cache.team.invitations || [];
+    const role = state.session?.role || "member";
+
+    view.innerHTML = `
+      <div class="page">
+        ${pageHead(
+          "Workspace / Access",
+          "Team",
+          "Manage organization members, roles and pending invitations.",
+          `<button class="btn primary" onclick="focusInviteForm()">Invite member</button>`
+        )}
+
+        <section class="grid-3">
+          ${metric("Members",members.length,"Active organization membership","blue")}
+          ${metric("Pending invites",invitations.length,"Awaiting acceptance","cyan")}
+          ${metric("Your role",role,"Current workspace access","violet")}
+        </section>
+
+        <section class="grid-2">
+          ${panel("Invite a member","ORGANIZATION ACCESS",`
+            <form class="form" onsubmit="inviteTeamMember(event)">
+              <div class="form-grid">
+                <div class="field wide">
+                  <label for="teamInviteEmail">Email address</label>
+                  <input id="teamInviteEmail" type="email" required maxlength="254" placeholder="teammate@company.com">
+                </div>
+                <div class="field">
+                  <label for="teamInviteRole">Role</label>
+                  <select id="teamInviteRole">
+                    <option value="viewer">Viewer — read-only access</option>
+                    <option value="operator">Operator — day-to-day operations</option>
+                    <option value="admin">Admin — workspace administration</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Invitation lifetime</label>
+                  <div class="field-note">Invitations expire after 7 days. Re-inviting the same address refreshes the existing invitation.</div>
+                </div>
+              </div>
+              <div class="page-actions">
+                <button class="btn primary" type="submit">Send invitation</button>
+              </div>
+            </form>
+          `)}
+          ${panel("Access model","ROLE GUIDE",`
+            <div class="stack">
+              <div class="list-row"><div><strong>Admin</strong><div class="muted">Workspace administration and operational changes.</div></div><span class="badge">ADMIN</span></div>
+              <div class="list-row"><div><strong>Operator</strong><div class="muted">Day-to-day platform operations.</div></div><span class="badge">OPERATOR</span></div>
+              <div class="list-row"><div><strong>Viewer</strong><div class="muted">Read-only visibility into the workspace.</div></div><span class="badge">VIEWER</span></div>
+            </div>
+          `)}
+        </section>
+
+        ${panel("Organization members",`${members.length} member${members.length === 1 ? "" : "s"}`,
+          table(["Member","Role","Status","Joined"],members.map(member => [
+            `<div><strong>${esc(member.display_name)}</strong><div class="muted">${esc(member.email)}</div></div>`,
+            `<span class="badge">${esc(member.role)}</span>`,
+            `<span class="badge">${esc(member.status)}</span>`,
+            esc(formatDate(member.created_at))
+          ]))
+        )}
+
+        ${panel("Pending invitations",invitations.length ? "Awaiting acceptance" : "No pending invitations",
+          invitations.length ? table(["Invitee","Role","Expires","Action"],invitations.map(invite => [
+            `<div><strong>${esc(invite.email)}</strong><div class="muted">Created ${esc(formatDate(invite.created_at))}</div></div>`,
+            `<span class="badge">${esc(invite.role)}</span>`,
+            esc(formatDate(invite.expires_at)),
+            `<button class="btn ghost" onclick="useInvite(${JSON.stringify(invite.email)},${JSON.stringify(invite.role)})">Refresh</button>`
+          ])) : empty("No pending invitations","Invite a teammate above to give them organization access.")
+        )}
+      </div>
+    `;
+
+    if(role === "viewer"){
+      document.querySelectorAll("#teamInviteEmail,#teamInviteRole").forEach(el => el.disabled = true);
+      document.querySelector("#teamInviteEmail")?.closest("form")?.querySelector("button[type=submit]")?.setAttribute("disabled","disabled");
+    }
+  }catch(error){
+    renderError("Team access unavailable",error);
+  }
+}
+
+function focusInviteForm(){
+  const input = document.getElementById("teamInviteEmail");
+  if(input){ input.focus(); input.scrollIntoView({behavior:"smooth",block:"center"}); }
+}
+
+function useInvite(email,role){
+  const emailInput = document.getElementById("teamInviteEmail");
+  const roleInput = document.getElementById("teamInviteRole");
+  if(emailInput) emailInput.value = email;
+  if(roleInput) roleInput.value = role;
+  focusInviteForm();
+}
+
+async function inviteTeamMember(event){
+  event.preventDefault();
+  const email = document.getElementById("teamInviteEmail").value.trim();
+  const role = document.getElementById("teamInviteRole").value;
+  try{
+    await api("/api/v1/organization/invitations",{
+      method:"POST",
+      body:JSON.stringify({organization_id:state.session.organization_id,email,role})
+    });
+    showToast("Invitation sent","The teammate invitation is active for 7 days.");
+    await renderTeam();
+  }catch(error){
+    showToast("Invitation failed",error.message,true);
+  }
+}
+
 async function renderBilling(){
   routeLabel.textContent = "Billing";
   setActive("billing");
@@ -4827,6 +4964,7 @@ async function renderPage(){
     security:renderSecurity,
     infrastructure:renderInfrastructure,
     billing:renderBilling,
+    team:renderTeam,
     settings:renderSettings,
     developer:renderDeveloper,
     support:renderSupport
