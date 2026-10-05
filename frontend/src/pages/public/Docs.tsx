@@ -1,72 +1,33 @@
 import { Link } from "react-router-dom";
 import { PublicPage } from "../../components/layout/PublicPage";
 
+const docs = [
+  ["Getting started", "Set up a workspace, connect a development application and follow the first protected request.", "/docs/getting-started"],
+  ["Core concepts", "Understand organizations, projects, tenants, policies, nodes, verification and audit evidence.", "/docs/core-concepts"],
+  ["API reference", "Read the control-plane operations, request shapes, responses, authentication and failure behavior.", "/docs/api-reference"],
+  ["Security", "Understand the enforcement boundary, tenant context, database controls and verification model.", "/docs/security"],
+  ["Operations", "Learn how deployments, nodes, environments, verification runs and audit workflows fit together.", "/docs/operations"],
+  ["Troubleshooting", "Diagnose authentication, tenant-context, policy, database and verification failures.", "/docs/troubleshooting"],
+];
+
 export function Docs() {
   return (
     <PublicPage
       eyebrow="Documentation"
-      title="Everything your engineering team needs to understand Proxima."
-      description="Learn the architecture, integration model, API contracts, tenant context, verification workflow and operational model."
+      title="Documentation for engineers building on an enforceable tenant boundary."
+      description="Use the documentation to understand the architecture first, then move into integration, API contracts, security behavior and operations."
     >
       <section className="public-content">
         <div className="agata-container">
           <div className="public-feature-grid">
-            <article className="public-feature">
-              <h3>Getting started</h3>
-              <p>
-                Connect a development application and understand the
-                Proxima request path.
-              </p>
-            </article>
-
-            <article className="public-feature">
-              <h3>Core concepts</h3>
-              <p>
-                Organizations, tenants, policies, nodes, verification
-                and evidence.
-              </p>
-            </article>
-
-            <article className="public-feature">
-              <h3>API reference</h3>
-              <p>
-                Understand the control-plane API and its operational
-                contracts.
-              </p>
-            </article>
-
-            <article className="public-feature">
-              <h3>Security</h3>
-              <p>
-                Learn how identity and tenant context interact with
-                the enforcement boundary.
-              </p>
-            </article>
-
-            <article className="public-feature">
-              <h3>Operations</h3>
-              <p>
-                Deployments, fleet operations, verification and
-                audit workflows.
-              </p>
-            </article>
-
-            <article className="public-feature">
-              <h3>Troubleshooting</h3>
-              <p>
-                Diagnose authentication, policy, database and
-                verification failures.
-              </p>
-            </article>
-          </div>
-
-          <div style={{ marginTop: 44 }}>
-            <Link
-              to="/developers"
-              className="agata-button agata-button-primary"
-            >
-              Developer platform
-            </Link>
+            {docs.map(([title, text, to]) => (
+              <Link key={to} to={to} className="public-feature public-feature-link">
+                <span className="public-feature-kicker">Guide</span>
+                <h3>{title}</h3>
+                <p>{text}</p>
+                <strong>Read guide →</strong>
+              </Link>
+            ))}
           </div>
         </div>
       </section>
