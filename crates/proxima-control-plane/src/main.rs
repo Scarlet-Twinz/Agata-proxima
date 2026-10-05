@@ -192,7 +192,7 @@ async fn main() -> Result<()> {
         )
         .route("/api/v1/audit", get(audit_events))
         .route("/api/v1/support", get(support).post(create_support))
-        .route("/api/v1/nodes/:id/enrollment", post(start_enrollment))
+        .route("/api/v1/nodes/{id}/enrollment", post(start_enrollment))
         .route("/verify-email", get(production::verify_email))
         .route("/reset-password", get(production::reset_password_page))
         .route("/accept-invite", get(production::accept_invite))
