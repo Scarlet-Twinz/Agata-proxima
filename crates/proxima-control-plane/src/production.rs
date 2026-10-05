@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{Html, IntoResponse, Response},
     Json,
@@ -1330,6 +1330,52 @@ pub(crate) async fn invite(
 
     audit(&s.db, ctx.organization_id, ctx.user_id, "organization.invite.created", "organization_invite", Some(id), json!({"email":email,"role":role})).await;
     Json(json!({"ok":true,"id":id,"expires_in":"7 days"})).into_response()
+}
+
+pub(crate) async fn revoke_invite(
+    State(s): State<AppState>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
+
+    let result = sqlx::query(
+        "UPDATE organization_invites
+         SET accepted_at=now()
+         WHERE id=$1 AND organization_id=$2 AND accepted_at IS NULL AND expires_at>now()",
+    )
+    .bind(id)
+    .bind(ctx.organization_id)
+    .execute(&s.db)
+    .await;
+
+    match result {
+        Ok(result) if result.rows_affected() == 1 => {
+            audit(
+                &s.db,
+                ctx.organization_id,
+                ctx.user_id,
+                "organization.invite.revoked",
+                "organization_invite",
+                Some(id),
+                json!({}),
+            )
+            .await;
+            Json(json!({"ok":true,"id":id,"message":"Invitation revoked."})).into_response()
+        }
+        Ok(_) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"ok":false,"message":"Pending invitation not found."})),
+        )
+            .into_response(),
+        Err(e) => db_error(e),
+    }
 }
 
 pub(crate) async fn accept_invite(
