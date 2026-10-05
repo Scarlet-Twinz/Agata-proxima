@@ -1,6 +1,7 @@
 import { ArrowRight, Eye, EyeOff, ShieldCheck, KeyRound } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { FormEvent, useState } from "react";
+import { useState } from "react";
+import type { FormEvent } from "react";
 import { login as loginRequest } from "../../api/auth";
 
 export default function Login() {
