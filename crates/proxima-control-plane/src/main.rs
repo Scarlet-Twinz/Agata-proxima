@@ -10,7 +10,7 @@ use axum::{
     extract::{Path, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{Html, IntoResponse, Response},
-    routing::{get, post},
+    routing::{delete, get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -215,6 +215,10 @@ async fn main() -> Result<()> {
         .route(
             "/api/v1/organization/invitations",
             get(production::team).post(production::invite),
+        )
+        .route(
+            "/api/v1/organization/invitations/{id}",
+            delete(production::revoke_invite),
         )
         .route("/api/v1/production/readiness", get(production::readiness))
         .with_state(state)
