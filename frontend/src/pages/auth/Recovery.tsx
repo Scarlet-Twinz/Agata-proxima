@@ -1,5 +1,6 @@
 import { ArrowRight, Mail, ShieldCheck } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { useState } from "react";
+import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 
 export default function Recovery() {
