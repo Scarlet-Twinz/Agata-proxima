@@ -267,6 +267,11 @@ async fn logo() -> Html<&'static str> {
     Html(include_str!("../web/logo.svg"))
 }
 
+async fn openapi() -> Json<Value> {
+    Json(serde_json::from_str(include_str!("../../../control-plane/openapi.json"))
+        .expect("control-plane OpenAPI contract must be valid JSON"))
+}
+
 async fn healthz(State(s): State<AppState>) -> Response {
     match sqlx::query("SELECT 1").execute(&s.db).await {
         Ok(_) => Json(json!({
