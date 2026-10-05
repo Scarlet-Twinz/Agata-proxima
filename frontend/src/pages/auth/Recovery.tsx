@@ -14,7 +14,7 @@ export default function Recovery() {
         <h2>Reset your password.</h2>
 
         <p>
-          Enter the email associated with your Proxima workspace. We�ll send
+          Enter the email associated with your Proxima workspace. We'll send
           the next recovery step there.
         </p>
       </div>
