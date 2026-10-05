@@ -3950,7 +3950,10 @@ async function renderTeam(){
             `<div><strong>${esc(invite.email)}</strong><div class="muted">Created ${esc(formatDate(invite.created_at))}</div></div>`,
             `<span class="badge">${esc(invite.role)}</span>`,
             esc(formatDate(invite.expires_at)),
-            `<button class="btn ghost" onclick="useInvite(${JSON.stringify(invite.email)},${JSON.stringify(invite.role)})">Refresh</button>`
+            `<div class="page-actions-inline">
+              <button class="btn ghost" onclick="useInvite(${JSON.stringify(invite.email)},${JSON.stringify(invite.role)})">Refresh</button>
+              <button class="btn ghost danger" onclick="revokeInvite(${JSON.stringify(invite.id)})">Revoke</button>
+            </div>`
           ])) : empty("No pending invitations","Invite a teammate above to give them organization access.")
         )}
       </div>
@@ -3976,6 +3979,20 @@ function useInvite(email,role){
   if(emailInput) emailInput.value = email;
   if(roleInput) roleInput.value = role;
   focusInviteForm();
+}
+
+async function revokeInvite(id){
+  if(!id || !confirm("Revoke this pending invitation?")) return;
+
+  try{
+    await api(`/api/v1/organization/invitations/${encodeURIComponent(id)}`,{
+      method:"DELETE"
+    });
+    showToast("Invitation revoked","The pending invitation is no longer active.");
+    await renderTeam();
+  }catch(error){
+    showToast("Revocation failed",error.message,true);
+  }
 }
 
 async function inviteTeamMember(event){
