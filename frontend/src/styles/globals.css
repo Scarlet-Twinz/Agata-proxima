@@ -1,0 +1,174 @@
+@import "./tokens.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  margin: 0;
+  padding: 0;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+
+  background: var(--agata-paper);
+  color: var(--agata-text);
+
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* ==========================================================
+   ACCESSIBILITY
+   ========================================================== */
+
+:focus-visible {
+  outline: 3px solid rgba(23, 107, 255, 0.35);
+  outline-offset: 3px;
+}
+
+/* ==========================================================
+   APPLICATION
+   ========================================================== */
+
+.agata-app {
+  min-height: 100vh;
+  background: var(--agata-paper);
+}
+
+.agata-public {
+  min-height: 100vh;
+}
+
+/* ==========================================================
+   CONTAINER
+   ========================================================== */
+
+.agata-container {
+  width: min(
+    calc(100% - 48px),
+    var(--container)
+  );
+
+  margin-inline: auto;
+}
+
+.agata-container-wide {
+  width: min(
+    calc(100% - 48px),
+    var(--container-wide)
+  );
+
+  margin-inline: auto;
+}
+
+/* ==========================================================
+   BUTTONS
+   ========================================================== */
+
+.agata-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  min-height: 44px;
+  padding: 0 18px;
+
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+
+  font-size: 14px;
+  font-weight: 650;
+
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.agata-button:hover {
+  transform: translateY(-1px);
+}
+
+.agata-button-primary {
+  background: var(--agata-blue);
+  color: var(--agata-white);
+  box-shadow: 0 4px 12px rgba(23, 107, 255, 0.22);
+}
+
+.agata-button-primary:hover {
+  background: var(--agata-blue-hover);
+}
+
+.agata-button-secondary {
+  background: var(--agata-white);
+  color: var(--agata-text);
+  border-color: var(--agata-border);
+}
+
+.agata-button-secondary:hover {
+  border-color: #b7c3d4;
+  background: var(--agata-paper);
+}
+
+.agata-button-dark {
+  background: var(--agata-midnight);
+  color: var(--agata-white);
+}
+
+.agata-button-dark:hover {
+  background: var(--agata-midnight-2);
+}
+
+/* ==========================================================
+   RESPONSIVE
+   ========================================================== */
+
+@media (max-width: 760px) {
+  .agata-container,
+  .agata-container-wide {
+    width: min(
+      calc(100% - 32px),
+      var(--container)
+    );
+  }
+}

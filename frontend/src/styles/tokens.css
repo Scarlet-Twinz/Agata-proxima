@@ -1,0 +1,62 @@
+:root {
+  /* ========================================================
+     AGATA PROXIMA BRAND
+     Midnight + White + Agata Blue
+     ======================================================== */
+
+  --agata-midnight: #07111f;
+  --agata-midnight-2: #0b1626;
+  --agata-midnight-3: #101d31;
+
+  --agata-white: #ffffff;
+  --agata-paper: #f7f8fa;
+  --agata-paper-2: #eef2f7;
+
+  --agata-blue: #176bff;
+  --agata-blue-hover: #0f5be0;
+  --agata-blue-light: #4d8dff;
+  --agata-blue-soft: #e8f0ff;
+
+  --agata-text: #101828;
+  --agata-text-secondary: #475467;
+  --agata-text-muted: #667085;
+
+  --agata-border: #d9e0ea;
+  --agata-border-dark: #22324a;
+
+  --agata-success: #12b76a;
+  --agata-warning: #f79009;
+  --agata-danger: #f04438;
+
+  /* Typography */
+
+  --font-sans:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+
+  /* Layout */
+
+  --container: 1240px;
+  --container-wide: 1440px;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  /* Shadows */
+
+  --shadow-sm:
+    0 1px 2px rgba(16, 24, 40, 0.04);
+
+  --shadow-md:
+    0 8px 24px rgba(16, 24, 40, 0.08);
+
+  --shadow-lg:
+    0 20px 50px rgba(7, 17, 31, 0.12);
+}

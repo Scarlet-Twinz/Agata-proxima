@@ -1,0 +1,29 @@
+.agata-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.agata-logo__mark {
+  display: block;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  object-fit: contain;
+}
+
+.agata-logo__wordmark {
+  color: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.agata-logo--compact .agata-logo__mark {
+  width: 32px;
+  height: 32px;
+  flex-basis: 32px;
+}
