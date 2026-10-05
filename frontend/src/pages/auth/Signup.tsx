@@ -87,8 +87,8 @@ export default function Signup() {
         <label className="auth-check">
           <input type="checkbox" />
           <span>
-            I agree to the Agata Proxima terms and acknowledge the privacy
-            policy.
+            I agree to the Agata Proxima <Link to="/terms">terms</Link> and
+            acknowledge the <Link to="/privacy">privacy policy</Link>.
           </span>
         </label>
 
