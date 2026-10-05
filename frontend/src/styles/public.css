@@ -84,7 +84,7 @@
     minmax(420px, 0.85fr);
 
   align-items: center;
-  gap: 80px;
+  gap: 56px;
 }
 
 .public-eyebrow {
@@ -120,7 +120,7 @@
 
   color: var(--agata-midnight);
 
-  font-size: clamp(48px, 6vw, 78px);
+  font-size: clamp(44px, 5vw, 64px);
   line-height: 0.98;
   letter-spacing: -0.055em;
   font-weight: 760;
@@ -136,7 +136,7 @@
 
   color: var(--agata-text-secondary);
 
-  font-size: 19px;
+  font-size: 17px;
   line-height: 1.65;
 }
 
@@ -153,7 +153,7 @@
 .platform-visual {
   position: relative;
 
-  min-height: 430px;
+  min-height: 380px;
 
   padding: 32px;
 
@@ -280,7 +280,7 @@
    ========================================================== */
 
 .public-section {
-  padding: 112px 0;
+  padding: 88px 0;
 }
 
 .public-section-dark {
