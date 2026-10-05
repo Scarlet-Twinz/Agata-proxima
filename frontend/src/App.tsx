@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { PublicLayout } from "./layouts/PublicLayout";
-import { AuthLayout } from "./layouts/auth/AuthLayout";
+import AuthLayout from "./layouts/auth/AuthLayout";
 import Login from "./pages/auth/Login";
 import Signup from "./pages/auth/Signup";
 import Recovery from "./pages/auth/Recovery";
@@ -26,11 +26,9 @@ import {
   Audit,
   Billing,
   Deployments,
-  Developer,
   Nodes,
   Policies,
   Security as ConsoleSecurity,
-  Settings,
   Support as ConsoleSupport,
   Team,
   Tenants,
