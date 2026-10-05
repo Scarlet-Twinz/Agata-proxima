@@ -24,8 +24,12 @@ async function overview(){const s=await api('/api/v1/platform/status');view.inne
 function tenantForm(){document.getElementById('formslot').innerHTML='<section class="panel"><div class="panelhead"><h2>Create tenant</h2><span class="tag">BOUNDARY REGISTRATION</span></div><form class="formgrid" onsubmit="createTenant(event)"><div class="field"><label>Name</label><input id="tn" required></div><div class="field"><label>Slug</label><input id="ts" required></div><div class="field"><label>Isolation mode</label><select id="ti"><option>enforced-proxy</option><option>dedicated-node</option><option>shared-with-rsl</option></select></div><div class="field" style="align-content:end"><button class="btn primary">Create tenant</button></div></form></section>'}
 async function createTenant(e){e.preventDefault();await api('/api/v1/tenants',{method:'POST',body:JSON.stringify({organization_id:state.session.organization_id,name:tn.value,slug:ts.value,isolation_mode:ti.value})});location.hash='#tenants';tenants()}
 async function team(){
-  const [members,invites]=await Promise.all([api('/api/v1/organization/team'),api('/api/v1/organization/invitations')]);
-  view.innerHTML=shell('Team','Manage who can operate this Proxima organization and which access invitations are still pending.',
+  let members=[],invites=[],inviteError='';
+  try{members=await api('/api/v1/organization/team')}catch(e){throw new Error('Unable to load organization members: '+e.message)}
+  try{invites=await api('/api/v1/organization/invitations')}catch(e){inviteError=e.message}
+  const inviteNotice=inviteError?'<div class="notice" style="margin-top:12px"><b>Invitation service unavailable.</b> '+esc(inviteError)+' Restart the control plane so its current migrations are applied, then retry.</div>':'';
+  view.innerHTML=shell('Team','Manage organization membership, roles and invitations without leaving the Command Center.',
+    '<section class="grid">'+metric('Members',members.length,'cyan')+metric('Owners',members.filter(x=>x.role==='owner').length,'ok')+metric('Admins',members.filter(x=>x.role==='admin').length,'cyan')+metric('Invites',invites.filter(x=>x.status==='pending').length,invites.length?'':'ok')+'</section>'+
     '<section class="panel"><div class="panelhead"><h2>Members</h2><span class="tag">'+members.length+' ACTIVE</span></div><div style="margin-top:10px">'+
     table(['Member','Role','Joined','Status'],members.map(x=>[
       '<strong>'+esc(x.display_name)+'</strong><br><span class="value">'+esc(x.email)+'</span>',
@@ -33,14 +37,13 @@ async function team(){
       esc(new Date(x.created_at).toLocaleDateString()),
       x.current?'<span class="badge">YOU</span>':'<span class="badge">ACTIVE</span>'
     ]))+'</div></section>'+
-    '<section class="panel"><div class="panelhead"><h2>Invite teammate</h2><span class="tag">EMAIL INVITATION</span></div><form class="formgrid" onsubmit="inviteTeamMember(event)"><div class="field"><label>Email address</label><input id="ie" type="email" required placeholder="teammate@company.com"></div><div class="field"><label>Role</label><select id="ir"><option value="viewer">Viewer</option><option value="operator">Operator</option><option value="admin">Admin</option></select></div><div class="field wide"><button class="btn primary">Send invitation</button></div></form><p class="note">Invitations expire after 7 days. The recipient must sign in with the invited address before accepting.</p></section>'+
+    '<section class="panel"><div class="panelhead"><h2>Invite teammate</h2><span class="tag">ACCESS LIFECYCLE</span></div><form class="formgrid" onsubmit="inviteTeamMember(event)"><div class="field"><label>Email address</label><input id="ie" type="email" required placeholder="teammate@company.com"></div><div class="field"><label>Role</label><select id="ir"><option value="viewer">Viewer</option><option value="operator">Operator</option><option value="admin">Admin</option></select></div><div class="field wide"><button class="btn primary">Send invitation</button></div></form><p class="note">Invitations expire after 7 days. The recipient must sign in with the invited address before accepting.</p>'+inviteNotice+'</section>'+
     '<section class="panel"><div class="panelhead"><h2>Pending invitations</h2><span class="tag">ACCESS LIFECYCLE</span></div><div style="margin-top:10px">'+
     table(['Email','Role','Status','Expires','Action'],invites.map(x=>[
       esc(x.email),'<span class="badge">'+esc(x.role)+'</span>','<span class="badge '+(x.status==='pending'?'warn':'')+'">'+esc(x.status)+'</span>',
       esc(new Date(x.expires_at).toLocaleDateString()),x.status==='pending'?'<button class="btn danger" onclick="revokeInvite(\''+x.id+'\')">Revoke</button>':'—'
     ]))+'</div></section>');
-}
-async function inviteTeamMember(e){
+}async function inviteTeamMember(e){
   e.preventDefault();
   await api('/api/v1/organization/invitations',{method:'POST',body:JSON.stringify({organization_id:state.session.organization_id,email:ie.value,role:ir.value})});
   team();
