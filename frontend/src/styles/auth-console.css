@@ -86,7 +86,7 @@
 }
 
 .auth-heading {
-  margin-bottom: 30px;
+  margin-bottom: 24px;
 }
 
 .auth-icon {
@@ -210,8 +210,8 @@
 }
 
 .console-sidebar {
-  width: 248px;
-  flex: 0 0 248px;
+  width: 224px;
+  flex: 0 0 224px;
   background: var(--color-dark);
   color: #fff;
   display: flex;
@@ -336,12 +336,12 @@
 }
 
 .console-header {
-  height: 72px;
+  height: 64px;
   background: #fff;
   border-bottom: 1px solid var(--color-border);
   display: flex;
   align-items: center;
-  padding: 0 28px;
+  padding: 0 22px;
   gap: 18px;
   position: sticky;
   top: 0;
@@ -396,7 +396,7 @@
 }
 
 .console-content {
-  padding: 38px;
+  padding: 28px;
   max-width: 1600px;
   margin: 0 auto;
 }
@@ -411,7 +411,7 @@
 
 .console-page-heading h1 {
   margin: 8px 0;
-  font-size: clamp(30px, 4vw, 44px);
+  font-size: clamp(28px, 3.4vw, 38px);
   letter-spacing: -0.045em;
 }
 
@@ -486,8 +486,8 @@
 .console-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(320px, .8fr);
-  gap: 24px;
-  margin-bottom: 24px;
+  gap: 18px;
+  margin-bottom: 18px;
 }
 
 .console-panel {
@@ -758,5 +758,46 @@
 
   .table-header {
     display: none;
+  }
+}
+
+
+/* Console density correction: preserve the existing design, reduce viewport scale. */
+.console-sidebar .console-nav a,
+.console-sidebar .console-sidebar-bottom a,
+.console-sidebar .console-sidebar-bottom button {
+  min-height: 35px;
+  font-size: 12px;
+}
+
+.workspace-switcher {
+  margin: 14px 12px;
+  padding: 9px;
+}
+
+.console-brand {
+  height: 64px;
+  padding: 0 16px;
+}
+
+.console-header {
+  height: 64px;
+}
+
+.console-content {
+  padding: 26px 28px;
+}
+
+.console-panel {
+  border-radius: 8px;
+}
+
+.console-empty {
+  padding: 44px;
+}
+
+@media (max-width: 700px) {
+  .console-content {
+    padding: 22px 16px;
   }
 }
