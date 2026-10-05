@@ -50,7 +50,7 @@ export function PublicFooter() {
             <Link to="/company">Company</Link>
             <Link to="/trust">Trust</Link>
             <Link to="/status">Status</Link>
-            <Link to="/contact">Contact</Link>
+            <Link to="/contact">Contact</Link>\n            <Link to="/terms">Terms</Link>\n            <Link to="/privacy">Privacy</Link>
           </div>
 
           <div>
