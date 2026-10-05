@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { AgataLogo } from "../../components/brand/AgataLogo";
+import { logout } from "../../api/auth";
 
 const primaryNavigation = [
   { label: "Overview", href: "/app", icon: Gauge },
@@ -82,10 +83,13 @@ export function ConsoleLayout() {
     return searchableRoutes.filter((item) => item.label.toLowerCase().includes(query)).slice(0, 8);
   }, [search]);
 
-  function signOut() {
-    localStorage.removeItem("agata.console.sidebar");
-    localStorage.removeItem("agata.session");
-    navigate("/login", { replace: true });
+  async function signOut() {
+    try {
+      await logout();
+    } finally {
+      localStorage.removeItem("agata.session");
+      navigate("/login", { replace: true });
+    }
   }
 
   return (
