@@ -1,54 +1,40 @@
+import { Link } from "react-router-dom";
 import { PublicPage } from "../../components/layout/PublicPage";
 
 const entries = [
-  [
-    "Current",
-    "Frontend reconstruction",
-    "Agata's public product experience is being rebuilt around a real application architecture.",
-  ],
-  [
-    "Previous",
-    "Control plane foundation",
-    "Rust control-plane services, tenant isolation and operational contracts continue to provide the backend foundation.",
-  ],
+  {
+    slug: "frontend-reconstruction",
+    date: "October 2026",
+    title: "Frontend reconstruction",
+    summary: "The public experience was rebuilt around a real React application architecture with dedicated product, developer, documentation, company and trust surfaces.",
+  },
+  {
+    slug: "control-plane-foundation",
+    date: "Earlier",
+    title: "Control plane foundation",
+    summary: "The Rust control plane established authenticated sessions, organization membership, tenant operations, policy workflows, verification, audit and production billing foundations.",
+  },
 ];
 
 export function Changelog() {
   return (
     <PublicPage
       eyebrow="Changelog"
-      title="See how Agata evolves."
-      description="Product and platform changes should be visible to the people building on top of Agata."
+      title="See what changed, why it changed and what the change means."
+      description="Each release note is written as a product record: scope, reason, user impact and implementation direction."
     >
       <section className="public-content">
         <div className="agata-container">
-          <div className="public-prose">
-            {entries.map(([date, title, text]) => (
-              <div
-                key={title}
-                style={{
-                  padding: "30px 0",
-                  borderBottom:
-                    "1px solid var(--agata-border)",
-                }}
-              >
-                <div
-                  style={{
-                    color: "var(--agata-blue)",
-                    fontSize: 13,
-                    fontWeight: 700,
-                    marginBottom: 8,
-                  }}
-                >
-                  {date}
+          <div className="public-changelog-list">
+            {entries.map((entry) => (
+              <Link key={entry.slug} to={`/changelog/${entry.slug}`} className="public-changelog-entry">
+                <span>{entry.date}</span>
+                <div>
+                  <h2>{entry.title}</h2>
+                  <p>{entry.summary}</p>
+                  <strong>Read release details →</strong>
                 </div>
-
-                <h2 style={{ marginBottom: 10 }}>
-                  {title}
-                </h2>
-
-                <p>{text}</p>
-              </div>
+              </Link>
             ))}
           </div>
         </div>
