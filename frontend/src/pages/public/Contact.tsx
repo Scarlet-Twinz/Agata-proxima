@@ -1,46 +1,27 @@
+import { ArrowRight } from "lucide-react";
+import { Link } from "react-router-dom";
 import { PublicPage } from "../../components/layout/PublicPage";
+
+const destinations = [
+  ["Customers","Discuss architecture, adoption, plans and operating requirements.","/pricing"],
+  ["Developers","Ask integration questions or get help understanding the API and tenant context model.","/developers"],
+  ["Security","Review the security model and trust workflow before reporting a concern.","/trust"],
+  ["Partnerships","Explore infrastructure, platform and technology partnerships with Agata.","/company"],
+];
 
 export function Contact() {
   return (
-    <PublicPage
-      eyebrow="Contact"
-      title="Talk to the people building Agata."
-      description="Whether you are evaluating Proxima, integrating it into a product or investigating a security concern, start here."
-    >
+    <PublicPage eyebrow="Contact" title="Talk to the people building Agata." description="Whether you are evaluating Proxima, integrating it into a product or investigating a security concern, start here.">
       <section className="public-content">
         <div className="agata-container">
           <div className="public-feature-grid">
-            <article className="public-feature">
-              <h3>Customers</h3>
-              <p>
-                Discuss architecture, adoption, plans and operating
-                requirements.
-              </p>
-            </article>
-
-            <article className="public-feature">
-              <h3>Developers</h3>
-              <p>
-                Ask integration questions or get help understanding
-                the API and tenant context model.
-              </p>
-            </article>
-
-            <article className="public-feature">
-              <h3>Security</h3>
-              <p>
-                Report a security concern through the appropriate
-                security communication path.
-              </p>
-            </article>
-
-            <article className="public-feature">
-              <h3>Partnerships</h3>
-              <p>
-                Explore infrastructure, platform and technology
-                partnerships with Agata.
-              </p>
-            </article>
+            {destinations.map(([title,text,to]) => (
+              <article className="public-feature" key={title}>
+                <h3>{title}</h3>
+                <p>{text}</p>
+                <Link to={to} className="public-inline-link">Continue <ArrowRight size={15} /></Link>
+              </article>
+            ))}
           </div>
         </div>
       </section>
