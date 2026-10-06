@@ -1,9 +1,10 @@
 import { ArrowRight, Eye, EyeOff, ShieldCheck, KeyRound } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
 
 export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
+  const navigate = useNavigate();
 
   return (
     <div className="agata-auth-form">
@@ -24,7 +25,10 @@ export default function Login() {
 
       <form
         className="agata-form"
-        onSubmit={(event) => event.preventDefault()}
+        onSubmit={(event) => {
+          event.preventDefault();
+          navigate("/app");
+        }}
       >
         <div className="agata-field">
           <label htmlFor="login-email">Work email</label>
@@ -78,7 +82,7 @@ export default function Login() {
         <span>OR</span>
       </div>
 
-      <button className="auth-sso" type="button">
+      <button className="auth-sso" type="button" disabled title="SSO is not connected yet">
         <KeyRound size={17} />
         <span>Continue with SSO</span>
       </button>
