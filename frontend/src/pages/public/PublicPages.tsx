@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 
 const Pill = ({ children }: { children: ReactNode }) => <span className="public-pill">{children}</span>;
 
+const controlPlaneBase = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+
 function PageHeader({ eyebrow, title, intro }: { eyebrow: string; title: string; intro: string }) {
   return (
     <header className="public-page-header">
@@ -150,7 +152,7 @@ export function Status(){
   const check=useCallback(async()=>{
     setState("loading");
     try{
-      const response=await fetch("/api/v1/health",{headers:{Accept:"application/json"}});
+      const response=await fetch(`${controlPlaneBase}/api/v1/health`,{headers:{Accept:"application/json"}});
       const data=await response.json().catch(()=>({}));
       setState(response.ok && data.status==="ok" ? "operational" : "degraded");
       setCheckedAt(new Date().toISOString());
