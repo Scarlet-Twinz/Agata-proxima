@@ -1,4 +1,5 @@
 import { Link, useParams } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
 const Pill = ({ children }: { children: ReactNode }) => <span className="public-pill">{children}</span>;
@@ -143,7 +144,34 @@ export function Company(){return <><PageHeader eyebrow="COMPANY" title="Building
 
 export function Trust(){return <><PageHeader eyebrow="TRUST CENTER" title="Understand the controls behind the platform." intro="Trust is about knowing how the system is designed, what controls exist and what can actually be demonstrated."/><Section title="Trust areas"><div className="link-grid">{[["Security architecture","/security","Tenant isolation, identity and defense in depth."],["Verification","/product/verification","How expected allow and block behavior is tested."],["Evidence","/product/evidence","How operational results become inspectable evidence."],["Documentation","/docs/security","Technical security model and troubleshooting."],["Status","/status","Current service and incident information."],["Contact","/contact","Security and operational contact paths."]].map(([a,b,c])=><Link to={b} key={a}><strong>{a}</strong><span>{c}</span></Link>)}</div></Section><Section title="What we will not claim"><div className="prose-wide"><p>We will not use the trust center to imply certifications, compliance programs, uptime guarantees or security controls that have not been established and documented.</p></div></Section></>}
 
-export function Status(){return <><PageHeader eyebrow="STATUS" title="Agata Proxima service status." intro="A clear place to understand the operational state of the platform and review incidents."/><Section title="Current services"><div className="status-list">{["Control Plane","Proxima Engine","Verification","API","Documentation"].map(s=><div key={s}><span className="status-dot"/><strong>{s}</strong><span>Status feed pending</span></div>)}</div></Section><Section title="Incident history"><div className="empty-state"><strong>Live service telemetry is not connected to this public surface yet.</strong><p>This page is deliberately not presenting simulated uptime data. When the operational status feed is connected, this section will show current service state, incident timelines, impact, resolution and follow-up actions.</p></div></Section></>}
+export function Status(){
+  const [state,setState]=useState<"loading"|"operational"|"degraded">("loading");
+  const [checkedAt,setCheckedAt]=useState("");
+  const check=useCallback(async()=>{
+    setState("loading");
+    try{
+      const response=await fetch("/api/v1/health",{headers:{Accept:"application/json"}});
+      const data=await response.json().catch(()=>({}));
+      setState(response.ok && data.status==="ok" ? "operational" : "degraded");
+      setCheckedAt(new Date().toISOString());
+    }catch{
+      setState("degraded");
+      setCheckedAt(new Date().toISOString());
+    }
+  },[]);
+  useEffect(()=>{void check();},[check]);
+  const liveLabel=state==="loading"?"Checking…":state==="operational"?"Operational":"Degraded";
+  return <><PageHeader eyebrow="STATUS" title="Agata Proxima service status." intro="A clear place to understand the operational state of the platform and distinguish live signals from components that are not yet independently monitored."/>
+    <Section title="Current services">
+      <div className="status-list">
+        <div><span className={state==="operational"?"status-dot":"status-dot status-dot-degraded"}/><strong>Control Plane</strong><span>{liveLabel}</span></div>
+        {["Proxima Engine","Verification","API","Documentation"].map(s=><div key={s}><span className="status-dot status-dot-unmonitored"/><strong>{s}</strong><span>Telemetry not connected</span></div>)}
+      </div>
+      <div className="status-live-meta"><span>Control-plane health is checked from the public API.</span>{checkedAt&&<span>Last checked {new Date(checkedAt).toLocaleString()}</span>}<button type="button" onClick={()=>void check()}>Refresh status</button></div>
+    </Section>
+    <Section title="Incident history"><div className="empty-state"><strong>Incident history is not yet connected to a public incident feed.</strong><p>This page does not fabricate uptime percentages or historical incidents. When an operational status feed is introduced, this section can expose incident timelines, impact, resolution and follow-up actions.</p><Link to="/contact">Report an operational issue →</Link></div></Section>
+  </>;
+}
 
 export function Contact(){return <><PageHeader eyebrow="CONTACT" title="Talk to the right Agata Proxima team." intro="Choose the reason for contacting us so your request reaches the right workflow."/><Section title="Contact paths"><div className="contact-grid">{[["Sales","Questions about plans, deployment and enterprise requirements.","/pricing"],["Technical","Integration and architecture questions.","/developers"],["Security","Security reports and responsible disclosure.","/security"],["Support","Troubleshooting and product guidance.","/support"],["General","Company, partnerships and other inquiries.","/company"]].map(([a,b,c])=><Link to={c} key={a}><strong>{a}</strong><p>{b}</p><span>Open related resource →</span></Link>)}</div></Section><Section title="Before contacting support"><div className="prose-wide"><p>Include the environment, operation, error message and the steps that reproduce the problem. Never send API keys, passwords or other secrets in a support request.</p></div></Section></>}
 
