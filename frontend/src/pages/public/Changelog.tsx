@@ -1,16 +1,10 @@
+import { ArrowRight } from "lucide-react";
+import { Link } from "react-router-dom";
 import { PublicPage } from "../../components/layout/PublicPage";
 
 const entries = [
-  [
-    "Current",
-    "Frontend reconstruction",
-    "Agata's public product experience is being rebuilt around a real application architecture.",
-  ],
-  [
-    "Previous",
-    "Control plane foundation",
-    "Rust control-plane services, tenant isolation and operational contracts continue to provide the backend foundation.",
-  ],
+  ["October 2026","Frontend reconstruction","The public product experience is being rebuilt around a real application architecture.","/changelog/frontend-reconstruction"],
+  ["Platform foundation","Control plane foundation","Rust control-plane services, tenant isolation and operational contracts provide the backend foundation.","/changelog/control-plane-foundation"],
 ];
 
 export function Changelog() {
@@ -23,32 +17,13 @@ export function Changelog() {
       <section className="public-content">
         <div className="agata-container">
           <div className="public-prose">
-            {entries.map(([date, title, text]) => (
-              <div
-                key={title}
-                style={{
-                  padding: "30px 0",
-                  borderBottom:
-                    "1px solid var(--agata-border)",
-                }}
-              >
-                <div
-                  style={{
-                    color: "var(--agata-blue)",
-                    fontSize: 13,
-                    fontWeight: 700,
-                    marginBottom: 8,
-                  }}
-                >
-                  {date}
-                </div>
-
-                <h2 style={{ marginBottom: 10 }}>
-                  {title}
-                </h2>
-
+            {entries.map(([date,title,text,to]) => (
+              <article key={title} className="public-changelog-entry">
+                <div className="public-changelog-date">{date}</div>
+                <h2>{title}</h2>
                 <p>{text}</p>
-              </div>
+                <Link to={to} className="public-inline-link">Read release details <ArrowRight size={15} /></Link>
+              </article>
             ))}
           </div>
         </div>
