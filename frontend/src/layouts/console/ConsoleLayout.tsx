@@ -1,5 +1,5 @@
-﻿import { useEffect, useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   ChevronDown,
   CircleHelp,
@@ -19,6 +19,8 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { getSession, logout, type Session } from "../../api/auth";
+import { AgataLogo } from "../../components/brand/AgataLogo";
 
 const primaryNavigation = [
   { label: "Overview", href: "/app", icon: Gauge },
@@ -40,11 +42,13 @@ const platformNavigation = [
 ];
 
 export function ConsoleLayout() {
+  const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(() => {
     return localStorage.getItem("agata.console.sidebar") === "collapsed";
   });
-
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
     localStorage.setItem(
@@ -52,6 +56,30 @@ export function ConsoleLayout() {
       collapsed ? "collapsed" : "expanded",
     );
   }, [collapsed]);
+
+  useEffect(() => {
+    let active = true;
+    getSession()
+      .then((current) => {
+        if (active) setSession(current);
+      })
+      .catch(() => {
+        if (active) setSession(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function handleLogout() {
+    await logout();
+    setAccountOpen(false);
+    navigate("/login", { replace: true });
+  }
+
+  const accountLabel = session?.user_id || "Account";
+  const accountInitial = accountLabel.slice(0, 1).toUpperCase();
 
   return (
     <div
@@ -75,14 +103,27 @@ export function ConsoleLayout() {
         ].join(" ")}
       >
         <div className="console-brand">
-          <div className="console-brand-mark">A</div>
+          <AgataLogo compact />
 
           {!collapsed && (
-            <div>
+            <div className="console-brand-copy">
               <strong>AGATA PROXIMA</strong>
               <span>Control Plane</span>
             </div>
           )}
+
+          <button
+            className="console-icon-button console-sidebar-collapse"
+            onClick={() => setCollapsed((value) => !value)}
+            title={collapsed ? "Expand navigation" : "Collapse navigation"}
+            aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+          >
+            {collapsed ? (
+              <PanelLeftOpen size={17} />
+            ) : (
+              <PanelLeftClose size={17} />
+            )}
+          </button>
 
           <button
             className="console-icon-button console-mobile-close"
@@ -93,7 +134,7 @@ export function ConsoleLayout() {
           </button>
         </div>
 
-        <button className="workspace-switcher">
+        <button className="workspace-switcher" type="button">
           <span className="workspace-symbol">A</span>
 
           {!collapsed && (
@@ -154,22 +195,6 @@ export function ConsoleLayout() {
             })}
           </div>
         </nav>
-
-        <div className="console-sidebar-footer">
-          <button
-            className="sidebar-collapse-button"
-            onClick={() => setCollapsed((value) => !value)}
-            title={collapsed ? "Expand navigation" : "Collapse navigation"}
-          >
-            {collapsed ? (
-              <PanelLeftOpen size={18} />
-            ) : (
-              <PanelLeftClose size={18} />
-            )}
-
-            {!collapsed && <span>Collapse</span>}
-          </button>
-        </div>
       </aside>
 
       <main className="console-main">
@@ -191,23 +216,42 @@ export function ConsoleLayout() {
           </div>
 
           <div className="console-topbar-actions">
-            <button className="environment-button">
+            <button className="environment-button" type="button">
               <span className="environment-dot" />
               Production
               <ChevronDown size={15} />
             </button>
 
-            <button className="command-button">
+            <button className="command-button" type="button">
               <Search size={17} />
               <span>Search</span>
               <kbd>⌘K</kbd>
             </button>
 
-            <button className="console-account">
-              <span className="account-avatar">A</span>
-              <span>Anthony</span>
-              <ChevronDown size={15} />
-            </button>
+            <div className="console-account-wrap">
+              <button
+                className="console-account"
+                type="button"
+                aria-expanded={accountOpen}
+                onClick={() => setAccountOpen((value) => !value)}
+              >
+                <span className="account-avatar">{accountInitial}</span>
+                <span>{accountLabel}</span>
+                <ChevronDown size={15} />
+              </button>
+
+              {accountOpen && (
+                <div className="console-account-menu">
+                  <div className="console-account-meta">
+                    <strong>{accountLabel}</strong>
+                    <span>{session?.role || "Account"}</span>
+                  </div>
+                  <button type="button" onClick={handleLogout}>
+                    Sign out
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
@@ -218,4 +262,3 @@ export function ConsoleLayout() {
     </div>
   );
 }
-
