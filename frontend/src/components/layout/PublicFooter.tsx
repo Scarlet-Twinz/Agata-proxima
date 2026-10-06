@@ -1,18 +1,18 @@
-import { Github, Instagram, Linkedin, Twitter } from "lucide-react";
+import { Globe2, Instagram, Linkedin, Twitter } from "lucide-react";
 import { Link } from "react-router-dom";
 import { AgataLogo } from "../brand/AgataLogo";
 
 type SocialProfile = {
   label: string;
   href?: string;
-  icon: typeof Github;
+  icon: typeof Globe2;
 };
 
 const socialProfiles: SocialProfile[] = [
   { label: "LinkedIn", icon: Linkedin },
   { label: "Twitter / X", icon: Twitter },
   { label: "Instagram", icon: Instagram },
-  { label: "GitHub", href: "https://github.com/Scarlet-Twinz/Agata-proxima", icon: Github },
+  { label: "GitHub", href: "https://github.com/Scarlet-Twinz/Agata-proxima", icon: Globe2 },
 ];
 
 export function PublicFooter() {
