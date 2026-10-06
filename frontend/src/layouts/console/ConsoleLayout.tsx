@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { getSession, logout, type Session } from "../../api/auth";
+import { api } from "../../api/client";
 import { AgataLogo } from "../../components/brand/AgataLogo";
 
 const primaryNavigation = [
@@ -66,6 +67,8 @@ export function ConsoleLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [environmentOpen, setEnvironmentOpen] = useState(false);
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [organizations, setOrganizations] = useState<Array<{id:string;name:string;slug:string;role:string}>>([]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [session, setSession] = useState<Session | null>(null);
@@ -87,6 +90,7 @@ export function ConsoleLayout() {
         if (active) setSession(null);
       });
 
+    api.get<Array<{id:string;name:string;slug:string;role:string}>>("/api/v1/organizations").then(setOrganizations).catch(()=>{});
     return () => {
       active = false;
     };
@@ -191,7 +195,7 @@ export function ConsoleLayout() {
           </button>
         </div>
 
-        <button className="workspace-switcher" type="button">
+        <button className="workspace-switcher" type="button" aria-expanded={workspaceOpen} onClick={() => { setWorkspaceOpen(v => !v); setAccountOpen(false); setEnvironmentOpen(false); }}>
           <span className="workspace-symbol">A</span>
 
           {!collapsed && (
@@ -203,6 +207,23 @@ export function ConsoleLayout() {
 
           {!collapsed && <ChevronDown size={16} />}
         </button>
+
+        {!collapsed && workspaceOpen && (
+          <div className="console-workspace-menu">
+            {organizations.map((org) => (
+              <button key={org.id} type="button" onClick={async () => {
+                const csrf = sessionStorage.getItem("proxima_csrf") ?? "";
+                const switched = await api.post<{csrf_token:string}>("/api/v1/organization/switch", { organization_id: org.id });
+                sessionStorage.setItem("proxima_csrf", switched.csrf_token);
+                setWorkspaceOpen(false);
+                window.location.reload();
+              }}>
+                <strong>{org.name}</strong><small>{org.role}</small>
+              </button>
+            ))}
+            <button type="button" onClick={() => { setWorkspaceOpen(false); navigate("/app/projects"); }}>Manage projects</button>
+          </div>
+        )}
 
         <nav className="console-nav">
           <div className="console-nav-group">
