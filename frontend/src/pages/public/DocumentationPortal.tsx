@@ -46,9 +46,31 @@ const docs:Record<string,DocPage>={
 
 const nav=[["getting-started","Getting Started"],["core-concepts","Core Concepts"],["api-reference","API Reference"],["security","Security"],["operations","Operations"],["troubleshooting","Troubleshooting"]] as const;
 
+function DocumentationLanding() {
+ return <main className="documentation-portal documentation-landing">
+  <header className="documentation-hero"><div className="documentation-hero-inner">
+   <span className="public-eyebrow">DOCUMENTATION</span>
+   <h1>Everything you need to understand, integrate and operate Proxima.</h1>
+   <p>Start with the architecture, move into implementation, then use the operational and troubleshooting guides when you need them.</p>
+   <div className="documentation-actions"><Link className="button button-primary" to="/docs/getting-started">Open Getting Started</Link><Link className="button button-secondary" to="/developers">Developer Platform</Link></div>
+  </div></header>
+  <section className="documentation-landing-shell public-container">
+   <div className="documentation-landing-intro"><span className="public-eyebrow">DOCUMENTATION LIBRARY</span><h2>Choose a guide.</h2><p>Each guide is a separate destination so documentation can grow without turning into one long page.</p></div>
+   <div className="documentation-landing-grid">
+    {nav.map(([path,label],index)=><Link key={path} to={"/docs/"+path}><span>{String(index+1).padStart(2,"0")}</span><div><strong>{label}</strong><p>{docs[path].intro}</p></div><span>Open →</span></Link>)}
+   </div>
+  </section>
+  <section className="documentation-landing-footer public-container">
+   <div><span className="public-eyebrow">MACHINE-READABLE</span><h2>The API contract is available separately.</h2><p>Use the human guide for concepts and workflows, or open the machine-readable contract when you are integrating against the control plane.</p></div>
+   <div><a href="/docs/openapi.json" target="_blank" rel="noreferrer">Open OpenAPI JSON →</a><a href="https://github.com/Scarlet-Twinz/Agata-proxima" target="_blank" rel="noreferrer">View GitHub source →</a></div>
+  </section>
+ </main>;
+}
+
 export default function DocumentationPortal(){
  const {kind}=useParams();
- const key=kind===undefined?"getting-started":kind;
+ if (kind === undefined) return <DocumentationLanding />;
+ const key=kind;
  if (!docs[key]) {
   return <main className="documentation-portal"><header className="documentation-hero"><div className="documentation-hero-inner"><span className="public-eyebrow">DOCUMENTATION / 404</span><h1>Documentation page not found.</h1><p>The requested documentation resource does not exist. Choose a published guide instead.</p><Link className="button button-primary" to="/docs">Back to Documentation</Link></div></header></main>;
  }
