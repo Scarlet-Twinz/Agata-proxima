@@ -105,9 +105,41 @@ const nav = [
 
 const repoUrl = "https://github.com/Scarlet-Twinz/Agata-proxima";
 
+function DeveloperLanding() {
+  return <main className="developer-portal developer-landing">
+    <header className="developer-hero"><div className="developer-hero-inner">
+      <span className="public-eyebrow">DEVELOPER PLATFORM</span>
+      <h1>Build against the Proxima boundary with a developer surface that follows the real system.</h1>
+      <p>Start with the integration path, then move into authentication, tenant context, verification, API reference and the operational tooling that is actually published.</p>
+      <div className="developer-hero-actions">
+        <Link className="button button-primary" to="/developers/quickstart">Open Quickstart</Link>
+        <a className="developer-source-link" href="https://github.com/Scarlet-Twinz/Agata-proxima" target="_blank" rel="noreferrer"><Github size={17}/>View source<ExternalLink size={14}/></a>
+      </div>
+    </div></header>
+    <section className="developer-landing-shell public-container">
+      <div className="developer-landing-intro"><span className="public-eyebrow">EXPLORE</span><h2>Choose the integration surface.</h2><p>Each destination has its own job. Unsupported artifacts are identified honestly rather than presented as installable packages.</p></div>
+      <div className="developer-landing-grid">
+        {nav.map(([key,label], index) => {
+          const item = sections[key];
+          return <Link key={key} to={"/developers/" + key}>
+            <span>{String(index + 1).padStart(2,"0")}</span>
+            <div><strong>{label}</strong><p>{item.intro}</p></div>
+            <ExternalLink size={15} aria-hidden="true"/>
+          </Link>;
+        })}
+      </div>
+    </section>
+    <section className="developer-landing-footer public-container">
+      <div><span className="public-eyebrow">AUTHORITATIVE SOURCES</span><h2>Use the repository and API contract as the source of truth.</h2><p>The developer surface follows the implementation that exists today. When SDKs, CLI or Terraform artifacts are released, their real installation and version information can be added here.</p></div>
+      <div><a href="/docs/openapi.json" target="_blank" rel="noreferrer">OpenAPI JSON <ExternalLink size={14}/></a><a href="https://github.com/Scarlet-Twinz/Agata-proxima" target="_blank" rel="noreferrer">GitHub repository <ExternalLink size={14}/></a></div>
+    </section>
+  </main>;
+}
+
 export default function DeveloperPortal() {
   const { kind } = useParams();
-  const hasRequestedKind = kind === undefined || Boolean(sections[kind]);
+  if (kind === undefined) return <DeveloperLanding />;
+  const hasRequestedKind = Boolean(sections[kind]);
   if (!hasRequestedKind) {
     return <main className="developer-portal"><header className="developer-hero"><div className="developer-hero-inner"><span className="public-eyebrow">DEVELOPER PLATFORM / 404</span><h1>Developer page not found.</h1><p>The requested developer resource does not exist. Choose a published integration guide instead.</p><Link className="button button-primary" to="/developers">Back to Developer Platform</Link></div></header></main>;
   }
