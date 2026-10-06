@@ -12,6 +12,7 @@ import {
   Company, Trust, Status, FAQ, Terms, Privacy,
 } from "./pages/public/PublicPages";
 import DeveloperPortal from "./pages/public/DeveloperPortal";
+import DocumentationPortal from "./pages/public/DocumentationPortal";
 import {
   Contact,
   Support,
@@ -89,13 +90,8 @@ export function App() {
         <Route path="security" element={<Security />} />
         <Route path="developers" element={<DeveloperPortal />} />
         <Route path="developers/:kind" element={<DeveloperPortal />} />
-        <Route path="docs" element={<Docs />} />
-        <Route path="docs/getting-started" element={<DocsDetail kind="getting-started" />} />
-        <Route path="docs/core-concepts" element={<DocsDetail kind="core-concepts" />} />
-        <Route path="docs/api-reference" element={<DocsDetail kind="api-reference" />} />
-        <Route path="docs/security" element={<DocsDetail kind="security" />} />
-        <Route path="docs/operations" element={<DocsDetail kind="operations" />} />
-        <Route path="docs/troubleshooting" element={<DocsDetail kind="troubleshooting" />} />
+        <Route path="docs" element={<DocumentationPortal />} />
+        <Route path="docs/:kind" element={<DocumentationPortal />} />
         <Route path="changelog" element={<Changelog />} />
         <Route path="changelog/frontend-reconstruction" element={<ChangelogDetail kind="frontend-reconstruction" />} />
         <Route path="changelog/control-plane-foundation" element={<ChangelogDetail kind="control-plane-foundation" />} />
