@@ -236,24 +236,46 @@
       "post": {
         "summary": "Configure Microsoft Entra OIDC for the current organization",
         "responses": {
-          "200": {"description": "OIDC connection configured"},
-          "403": {"description": "Plan or role does not permit enterprise SSO"}
+          "200": {
+            "description": "OIDC connection configured"
+          },
+          "403": {
+            "description": "Plan or role does not permit enterprise SSO"
+          }
         }
       }
     },
     "/api/v1/auth/oidc/start": {
       "get": {
         "security": [],
-        "parameters": [{"name":"organization_id","in":"query","required":true,"schema":{"type":"string","format":"uuid"}}],
-        "responses": {"200": {"description":"Authorization URL returned"}}
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorization URL returned"
+          }
+        }
       }
     },
     "/api/v1/auth/oidc/callback": {
       "get": {
         "security": [],
         "responses": {
-          "200": {"description":"SSO session established"},
-          "400": {"description":"Identity validation failed"}
+          "200": {
+            "description": "SSO session established"
+          },
+          "400": {
+            "description": "Identity validation failed"
+          }
         }
       }
     },
@@ -276,6 +298,192 @@
           },
           "401": {
             "description": "Authentication required"
+          }
+        }
+      }
+    },
+    "/api/v1/public/contact": {
+      "post": {
+        "summary": "Submit a public contact request",
+        "description": "Public contact intake. No authenticated session is required.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "email",
+                  "category",
+                  "subject",
+                  "message"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 160
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 320
+                  },
+                  "company": {
+                    "type": "string",
+                    "maxLength": 160
+                  },
+                  "category": {
+                    "type": "string",
+                    "enum": [
+                      "general",
+                      "sales",
+                      "technical",
+                      "security",
+                      "billing",
+                      "partnership",
+                      "support"
+                    ]
+                  },
+                  "subject": {
+                    "type": "string",
+                    "maxLength": 240
+                  },
+                  "message": {
+                    "type": "string",
+                    "maxLength": 12000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Request accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "request_id",
+                    "message"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "500": {
+            "description": "Request could not be stored"
+          }
+        }
+      }
+    },
+    "/api/v1/public/support": {
+      "post": {
+        "summary": "Submit a public support request",
+        "description": "Public support intake. No authenticated session is required.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "email",
+                  "category",
+                  "subject",
+                  "message"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 160
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 320
+                  },
+                  "company": {
+                    "type": "string",
+                    "maxLength": 160
+                  },
+                  "category": {
+                    "type": "string",
+                    "enum": [
+                      "general",
+                      "sales",
+                      "technical",
+                      "security",
+                      "billing",
+                      "partnership",
+                      "support"
+                    ]
+                  },
+                  "subject": {
+                    "type": "string",
+                    "maxLength": 240
+                  },
+                  "message": {
+                    "type": "string",
+                    "maxLength": 12000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Request accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "request_id",
+                    "message"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "request_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "500": {
+            "description": "Request could not be stored"
           }
         }
       }
