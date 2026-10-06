@@ -53,6 +53,9 @@ struct NameInput {
 struct ProjectInput { name: String }
 
 #[derive(Deserialize)]
+struct OrganizationSwitchInput { organization_id: Uuid }
+
+#[derive(Deserialize)]
 struct EnvironmentInput { project_id: Uuid, name: String, kind: Option<String> }
 
 #[derive(Deserialize)]
@@ -185,6 +188,7 @@ async fn main() -> Result<()> {
         .route("/api/v1/auth/signup", post(signup))
         .route("/api/v1/auth/login", post(login))
         .route("/api/v1/auth/logout", post(logout))
+        .route("/api/v1/organization/switch", post(switch_organization))
         .route("/api/v1/session", get(session))
         .route("/api/v1/platform/status", get(platform_status))
         .route(
@@ -644,6 +648,17 @@ async fn revoke_organization_invitation(
         ).into_response(),
         Err(e) => db_error(e),
     }
+}
+
+async fn switch_organization(State(s): State<AppState>, headers: HeaderMap, Json(input): Json<OrganizationSwitchInput>) -> Response {
+ let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};
+ let allowed=sqlx::query("SELECT 1 FROM memberships WHERE user_id=$1 AND organization_id=$2").bind(ctx.user_id).bind(input.organization_id).fetch_optional(&s.db).await;
+ match allowed{Ok(Some(_))=>{},Ok(None)=>return StatusCode::FORBIDDEN.into_response(),Err(e)=>return db_error(e)}
+ if let Err(c)=require_write(&ctx,&headers){return c.into_response();}
+ match create_session(&s.db,ctx.user_id,input.organization_id).await{
+  Ok((token,csrf))=>auth_response(&s,ctx.user_id,input.organization_id,csrf,token),
+  Err(e)=>db_error(e)
+ }
 }
 
 async fn platform_status(State(s): State<AppState>, headers: HeaderMap) -> Response {
