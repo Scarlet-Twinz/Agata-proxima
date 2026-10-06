@@ -811,3 +811,15 @@
     width: 100%;
   }
 }
+
+.public-feature-action {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  transition: background .18s ease;
+}
+
+.public-feature-action:hover {
+  color: inherit;
+  background: var(--agata-paper);
+}
