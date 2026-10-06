@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { Menu, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import logoUrl from "../../assets/agata-proxima-logo.svg";
 
@@ -11,15 +12,50 @@ const groups = [
 ];
 
 export default function PublicNavigation(){
-  const [open,setOpen]=useState<string|null>(null); const location=useLocation();
-  return <header className="agata-public-nav"><div className="agata-public-nav-inner">
-    <Link className="agata-public-brand" to="/" onClick={()=>setOpen(null)}><img src={logoUrl} alt="Agata Proxima"/></Link>
-    <nav className="agata-public-links" aria-label="Public navigation">
-      {groups.map(group=>{const active=group.items.some(([,href])=>location.pathname===href||location.pathname.startsWith(`${href}/`));return <div className="agata-public-group" key={group.label}>
-        <button type="button" className={active?"active":""} onClick={()=>setOpen(open===group.label?null:group.label)}>{group.label} <span aria-hidden="true">⌄</span></button>
-        {open===group.label&&<div className="agata-public-menu">{group.items.map(([label,href])=><Link key={href} to={href} onClick={()=>setOpen(null)}><strong>{label}</strong></Link>)}</div>}
-      </div>})}
-    </nav>
-    <div className="agata-public-actions"><Link className="agata-public-signin" to="/login">Sign in</Link><Link className="agata-public-start" to="/signup">Start building</Link></div>
-  </div></header>;
+  const [open,setOpen]=useState<string|null>(null);
+  const [mobileOpen,setMobileOpen]=useState(false);
+  const location=useLocation();
+
+  useEffect(()=>{setOpen(null);setMobileOpen(false);},[location.pathname]);
+
+  return <header className="agata-public-nav">
+    <div className="agata-public-nav-inner">
+      <Link className="agata-public-brand" to="/" aria-label="Agata Proxima home">
+        <img src={logoUrl} alt="Agata Proxima"/>
+      </Link>
+
+      <nav className="agata-public-links" aria-label="Public navigation">
+        {groups.map(group=>{
+          const active=group.items.some(([,href])=>location.pathname===href||location.pathname.startsWith(href+"/"));
+          return <div className="agata-public-group" key={group.label}>
+            <button type="button" className={active?"active":""} aria-expanded={open===group.label} onClick={()=>setOpen(open===group.label?null:group.label)}>
+              {group.label} <span aria-hidden="true">⌄</span>
+            </button>
+            {open===group.label&&<div className="agata-public-menu">{group.items.map(([label,href])=><Link key={href} to={href}><strong>{label}</strong></Link>)}</div>}
+          </div>;
+        })}
+      </nav>
+
+      <div className="agata-public-actions">
+        <Link className="agata-public-signin" to="/login">Sign in</Link>
+        <Link className="agata-public-start" to="/signup">Start building</Link>
+        <button className="agata-public-mobile-toggle" type="button" aria-expanded={mobileOpen} aria-label={mobileOpen?"Close navigation":"Open navigation"} onClick={()=>setMobileOpen(!mobileOpen)}>
+          {mobileOpen?<X size={20}/>:<Menu size={20}/>}
+        </button>
+      </div>
+    </div>
+
+    {mobileOpen&&<div className="agata-public-mobile-menu">
+      <div className="agata-public-mobile-inner">
+        {groups.map(group=><section key={group.label}>
+          <strong>{group.label}</strong>
+          {group.items.map(([label,href])=><Link key={href} to={href}>{label}</Link>)}
+        </section>)}
+        <div className="agata-public-mobile-bottom">
+          <Link to="/login">Sign in</Link>
+          <Link className="agata-public-start" to="/signup">Start building</Link>
+        </div>
+      </div>
+    </div>}
+  </header>;
 }
