@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { ArrowLeft, Send } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 
