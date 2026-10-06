@@ -654,7 +654,8 @@ async fn switch_organization(State(s): State<AppState>, headers: HeaderMap, Json
  let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};
  let allowed=sqlx::query("SELECT 1 FROM memberships WHERE user_id=$1 AND organization_id=$2").bind(ctx.user_id).bind(input.organization_id).fetch_optional(&s.db).await;
  match allowed{Ok(Some(_))=>{},Ok(None)=>return StatusCode::FORBIDDEN.into_response(),Err(e)=>return db_error(e)}
- if let Err(c)=require_write(&ctx,&headers){return c.into_response();}
+ let supplied=headers.get("x-csrf-token").and_then(|v|v.to_str().ok()).unwrap_or("");
+ if supplied != ctx.csrf { return StatusCode::FORBIDDEN.into_response(); }
  match create_session(&s.db,ctx.user_id,input.organization_id).await{
   Ok((token,csrf))=>auth_response(&s,ctx.user_id,input.organization_id,csrf,token),
   Err(e)=>db_error(e)
