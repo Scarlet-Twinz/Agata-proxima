@@ -3,6 +3,8 @@ import { ExternalLink, Github } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import "./developer-portal.css";
 
+const controlPlaneBase = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "http://127.0.0.1:8080" : window.location.origin);
+
 type DeveloperSection = {
   title: string;
   intro: string;
@@ -131,7 +133,7 @@ function DeveloperLanding() {
     </section>
     <section className="developer-landing-footer public-container">
       <div><span className="public-eyebrow">AUTHORITATIVE SOURCES</span><h2>Use the repository and API contract as the source of truth.</h2><p>The developer surface follows the implementation that exists today. When SDKs, CLI or Terraform artifacts are released, their real installation and version information can be added here.</p></div>
-      <div><a href="/docs/openapi.json" target="_blank" rel="noreferrer">OpenAPI JSON <ExternalLink size={14}/></a><a href="https://github.com/Scarlet-Twinz/Agata-proxima" target="_blank" rel="noreferrer">GitHub repository <ExternalLink size={14}/></a></div>
+      <div><a href={controlPlaneBase + "/docs/openapi.json"} target="_blank" rel="noreferrer">OpenAPI JSON <ExternalLink size={14}/></a><a href="https://github.com/Scarlet-Twinz/Agata-proxima" target="_blank" rel="noreferrer">GitHub repository <ExternalLink size={14}/></a></div>
     </section>
   </main>;
 }
