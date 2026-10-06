@@ -1,5 +1,16 @@
+import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PublicPage } from "../../components/layout/PublicPage";
+
+const resources = [
+  ["Getting started","Connect a development application and understand the Proxima request path.","/docs/getting-started"],
+  ["Core concepts","Organizations, tenants, policies, nodes, verification and evidence.","/docs/core-concepts"],
+  ["API reference","Understand the control-plane API and its operational contracts.","/docs/api-reference"],
+  ["Security","Learn how identity and tenant context interact with the enforcement boundary.","/docs/security"],
+  ["Operations","Deployments, fleet operations, verification and audit workflows.","/docs/operations"],
+  ["Troubleshooting","Diagnose authentication, policy, database and verification failures.","/docs/troubleshooting"],
+  ["Verification","Run explicit tests of tenant isolation behavior.","/docs/verification"],
+];
 
 export function Docs() {
   return (
@@ -11,62 +22,13 @@ export function Docs() {
       <section className="public-content">
         <div className="agata-container">
           <div className="public-feature-grid">
-            <article className="public-feature">
-              <h3>Getting started</h3>
-              <p>
-                Connect a development application and understand the
-                Proxima request path.
-              </p>
-            </article>
-
-            <article className="public-feature">
-              <h3>Core concepts</h3>
-              <p>
-                Organizations, tenants, policies, nodes, verification
-                and evidence.
-              </p>
-            </article>
-
-            <article className="public-feature">
-              <h3>API reference</h3>
-              <p>
-                Understand the control-plane API and its operational
-                contracts.
-              </p>
-            </article>
-
-            <article className="public-feature">
-              <h3>Security</h3>
-              <p>
-                Learn how identity and tenant context interact with
-                the enforcement boundary.
-              </p>
-            </article>
-
-            <article className="public-feature">
-              <h3>Operations</h3>
-              <p>
-                Deployments, fleet operations, verification and
-                audit workflows.
-              </p>
-            </article>
-
-            <article className="public-feature">
-              <h3>Troubleshooting</h3>
-              <p>
-                Diagnose authentication, policy, database and
-                verification failures.
-              </p>
-            </article>
-          </div>
-
-          <div style={{ marginTop: 44 }}>
-            <Link
-              to="/developers"
-              className="agata-button agata-button-primary"
-            >
-              Developer platform
-            </Link>
+            {resources.map(([title,text,to]) => (
+              <article className="public-feature" key={title}>
+                <h3>{title}</h3>
+                <p>{text}</p>
+                <Link to={to} className="public-inline-link">Read guide <ArrowRight size={15} /></Link>
+              </article>
+            ))}
           </div>
         </div>
       </section>
