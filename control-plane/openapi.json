@@ -424,6 +424,19 @@
           }
         }
       }
+    },
+    "/api/v1/organization/switch": {
+      "post": {
+        "summary": "Switch the authenticated session to another organization the user belongs to",
+        "responses": {
+          "200": {
+            "description": "New organization-scoped session established"
+          },
+          "403": {
+            "description": "User is not a member or CSRF validation failed"
+          }
+        }
+      }
     }
   },
   "components": {
