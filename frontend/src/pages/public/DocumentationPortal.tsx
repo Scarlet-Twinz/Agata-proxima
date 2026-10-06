@@ -59,7 +59,12 @@ export default function DocumentationPortal(){
    <aside className="documentation-sidebar"><span>DOCUMENTATION</span>{nav.map(([path,label])=><Link className={key===path?"active":""} key={path} to={"/docs/"+path}>{label}</Link>)}<div className="documentation-divider"/><Link to="/developers">Developer Platform</Link><Link to="/changelog">Changelog</Link></aside>
    <article className="documentation-content">
     {page.sections.map((section,i)=><section key={section.title}><div className="documentation-number">{String(i+1).padStart(2,"0")}</div><div><h2>{section.title}</h2><p>{section.text}</p>{section.code&&<pre><code>{section.code}</code></pre>}</div></section>)}
-    <div className="documentation-footer"><Link to="/docs">Documentation home</Link><Link to="/contact">Contact</Link></div>
+    <div className="documentation-footer">
+    <Link to="/docs">Documentation home</Link>
+    <Link to="/contact">Contact</Link>
+    <a href="/docs/openapi.json" target="_blank" rel="noreferrer">OpenAPI JSON</a>
+    <a href="https://github.com/Scarlet-Twinz/Agata-proxima" target="_blank" rel="noreferrer">GitHub source</a>
+   </div>
    </article>
   </div>
  </main>;
