@@ -1,6 +1,8 @@
 import { Link, useParams } from "react-router-dom";
 import "./documentation-portal.css";
 
+const controlPlaneBase = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "http://127.0.0.1:8080" : window.location.origin);
+
 type DocPage={title:string;intro:string;sections:Array<{title:string;text:string;code?:string}>};
 const docs:Record<string,DocPage>={
   "getting-started":{title:"Get started with Proxima",intro:"Move from tenant modeling to an observable verification result.",sections:[
@@ -62,7 +64,7 @@ function DocumentationLanding() {
   </section>
   <section className="documentation-landing-footer public-container">
    <div><span className="public-eyebrow">MACHINE-READABLE</span><h2>The API contract is available separately.</h2><p>Use the human guide for concepts and workflows, or open the machine-readable contract when you are integrating against the control plane.</p></div>
-   <div><a href="/docs/openapi.json" target="_blank" rel="noreferrer">Open OpenAPI JSON →</a><a href="https://github.com/Scarlet-Twinz/Agata-proxima" target="_blank" rel="noreferrer">View GitHub source →</a></div>
+   <div><a href={controlPlaneBase + "/docs/openapi.json"} target="_blank" rel="noreferrer">Open OpenAPI JSON →</a><a href="https://github.com/Scarlet-Twinz/Agata-proxima" target="_blank" rel="noreferrer">View GitHub source →</a></div>
   </section>
  </main>;
 }
