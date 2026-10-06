@@ -16,7 +16,7 @@ export function Contact() {
         <div className="agata-container">
           <div className="public-feature-grid">
             {destinations.map(([title,text,topic]) => (
-              <Link to={`/support/request?from=contact&topic=${topic}`} className="public-feature public-feature-action">
+              <Link to={`/support/request?from=contact&topic=${topic}`} key={title} className="public-feature public-feature-action">
                 <h3>{title}</h3>
                 <p>{text}</p>
                 <span className="public-inline-link">Start {title.toLowerCase()} request <ArrowRight size={15} /></span>
