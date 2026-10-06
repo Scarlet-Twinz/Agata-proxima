@@ -46,6 +46,19 @@ Team membership is organization-scoped.
 
 Supported invitation roles are `admin`, `operator`, and `viewer`. Invitations expire after seven days and are accepted only by the signed-in user whose email matches the invitation.
 
+## Customer lifecycle
+
+The customer-facing lifecycle is explicit rather than implicit:
+
+1. `GET/POST /api/v1/projects` — create or inspect a customer application boundary.
+2. `GET/POST /api/v1/projects/:id/environments` — manage development, staging, and production environments.
+3. `GET/POST /api/v1/integrations` — register the Engine, SDK, or Proxy integration mode for a project.
+4. `GET/POST /api/v1/tenants` — create and inspect project tenants.
+5. `GET/POST /api/v1/verifications` — record verification evidence.
+6. `GET /api/v1/audit` — inspect organization-scoped evidence and administrative history.
+
+The integration registration endpoint intentionally starts an installation in `pending` state. It does not pretend that an external database has been verified. The production promotion gate requires the actual external SaaS acceptance run described in `docs/customer-integration.md`.
+
 ## Platform resources
 
 - `GET/POST /api/v1/organizations`
