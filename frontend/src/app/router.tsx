@@ -1,4 +1,4 @@
-﻿import { createBrowserRouter, Navigate } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 import { PublicLayout } from "../layouts/PublicLayout";
 import AuthLayout from "../layouts/auth/AuthLayout";
 import { ConsoleLayout } from "../layouts/console/ConsoleLayout";
@@ -17,6 +17,9 @@ import { Status } from "../pages/public/Status";
 import { FAQ } from "../pages/public/FAQ";
 import { Support } from "../pages/public/Support";
 import { Contact } from "../pages/public/Contact";
+import { Legal } from "../pages/public/Legal";
+import { NotFound } from "../pages/public/NotFound";
+import { PublicDetail } from "../pages/public/PublicDetail";
 
 import Login from "../pages/auth/Login";
 import Signup from "../pages/auth/Signup";
@@ -40,6 +43,18 @@ const consoleRoutes = [
   { path: "support", label: "Support" },
 ];
 
+const detailRoutes = [
+  "/product/model", "/product/enforcement", "/product/verification", "/product/evidence",
+  "/solutions/b2b-saas", "/solutions/enterprise-saas", "/solutions/developer-platforms",
+  "/solutions/security-sensitive", "/solutions/startups", "/solutions/platform-engineering",
+  "/developers/quickstart", "/developers/authentication", "/developers/tenant-context",
+  "/developers/webhooks", "/developers/events", "/developers/sdks", "/developers/cli",
+  "/developers/terraform", "/developers/api-reference",
+  "/docs/getting-started", "/docs/core-concepts", "/docs/api-reference", "/docs/security",
+  "/docs/operations", "/docs/troubleshooting", "/docs/verification",
+  "/changelog/frontend-reconstruction", "/changelog/control-plane-foundation",
+];
+
 export const router = createBrowserRouter([
   {
     element: <PublicLayout />,
@@ -58,6 +73,9 @@ export const router = createBrowserRouter([
       { path: "/faq", element: <FAQ /> },
       { path: "/support", element: <Support /> },
       { path: "/contact", element: <Contact /> },
+      { path: "/terms", element: <Legal /> },
+      { path: "/privacy", element: <Legal /> },
+      ...detailRoutes.map((path) => ({ path, element: <PublicDetail /> })),
     ],
   },
   {
@@ -81,7 +99,6 @@ export const router = createBrowserRouter([
   },
   {
     path: "*",
-    element: <Navigate to="/" replace />,
+    element: <NotFound />,
   },
 ]);
-
