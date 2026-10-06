@@ -48,7 +48,10 @@ const nav=[["getting-started","Getting Started"],["core-concepts","Core Concepts
 
 export default function DocumentationPortal(){
  const {kind}=useParams();
- const key=docs[kind??"getting-started"]?kind??"getting-started":"getting-started";
+ const key=kind===undefined?"getting-started":kind;
+ if (!docs[key]) {
+  return <main className="documentation-portal"><header className="documentation-hero"><div className="documentation-hero-inner"><span className="public-eyebrow">DOCUMENTATION / 404</span><h1>Documentation page not found.</h1><p>The requested documentation resource does not exist. Choose a published guide instead.</p><Link className="button button-primary" to="/docs">Back to Documentation</Link></div></header></main>;
+ }
  const page=docs[key];
  return <main className="documentation-portal">
   <header className="documentation-hero"><div className="documentation-hero-inner">
