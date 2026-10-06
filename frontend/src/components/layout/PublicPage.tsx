@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 type PublicPageProps = {
@@ -14,6 +14,12 @@ export function PublicPage({
   description,
   children,
 }: PublicPageProps) {
+  useEffect(() => {
+    document.title = `${title} · Agata Proxima`;
+    const meta = document.querySelector('meta[name="description"]');
+    meta?.setAttribute("content", description);
+  }, [description, title]);
+
   return (
     <div className="public-page">
       <section className="public-page-hero">
@@ -30,17 +36,9 @@ export function PublicPage({
         <div className="agata-container">
           <div className="public-callout">
             <strong>Build with Agata Proxima.</strong>
-            <p>
-              Connect your application to an independently verifiable
-              tenant-isolation boundary.
-            </p>
+            <p>Connect your application to an independently verifiable tenant-isolation boundary.</p>
             <div style={{ marginTop: 20 }}>
-              <Link
-                to="/signup"
-                className="agata-button agata-button-primary"
-              >
-                Start building
-              </Link>
+              <Link to="/signup" className="agata-button agata-button-primary">Start building</Link>
             </div>
           </div>
         </div>
