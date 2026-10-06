@@ -1076,9 +1076,10 @@ pub(crate) async fn send_verification_email(
         .trim_end_matches('/')
         .to_string();
     let link = format!("{base}/verify-email?token={token}");
-    send_email(
+    send_email_from(
         email,
         "Verify your Agata Proxima email",
+        &configured_sender("RESEND_NOTIFICATIONS_FROM_EMAIL")?,
         &format!(
             "<div style=\"font-family:Inter,Arial,sans-serif;background:#05080c;color:#eef7f8;padding:40px\">
              <h1>Agata Proxima</h1><p>Hello {display_name},</p>
@@ -1175,7 +1176,12 @@ pub(crate) async fn request_password_reset(
              <p style=\"color:#8ea0ab\">This link expires in 30 minutes. If you did not request it, ignore this email.</p></div>",
             row.get::<String,_>("display_name")
         );
-        if let Err(e) = send_email(&email, "Reset your Agata Proxima password", &html).await {
+        if let Err(e) = send_email_from(
+            &email,
+            "Reset your Agata Proxima password",
+            &configured_sender("RESEND_NOTIFICATIONS_FROM_EMAIL")?,
+            &html,
+        ).await {
             tracing::error!(%e, "password reset email failed");
         }
     }
@@ -1268,7 +1274,12 @@ pub(crate) async fn invite(
          <p>Role: <strong>{role}</strong></p><p><a href=\"{link}\" style=\"display:inline-block;padding:12px 18px;background:#71dcff;color:#061015;text-decoration:none;border-radius:8px\">Accept invitation</a></p>
          <p style=\"color:#8ea0ab\">This invitation expires in 7 days.</p></div>"
     );
-    if let Err(e) = send_email(&email, "You have been invited to Agata Proxima", &html).await {
+    if let Err(e) = send_email_from(
+        &email,
+        "You have been invited to Agata Proxima",
+        &configured_sender("RESEND_NOTIFICATIONS_FROM_EMAIL")?,
+        &html,
+    ).await {
         tracing::error!(%e, "invitation email failed");
     }
 
@@ -1352,12 +1363,23 @@ pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
     })).into_response()
 }
 
+fn configured_sender(variable: &str) -> anyhow::Result<String> {
+    match env::var(variable) {
+        Ok(v) if !v.trim().is_empty() => Ok(v),
+        _ => match env::var("RESEND_FROM_EMAIL") {
+            Ok(v) if !v.trim().is_empty() => Ok(v),
+            _ => anyhow::bail!("{variable} and RESEND_FROM_EMAIL are not configured for the current deployment"),
+        },
+    }
+}
+
 async fn send_email(to: &str, subject: &str, html: &str) -> anyhow::Result<()> {
+    let from = configured_sender("RESEND_FROM_EMAIL")?;
+    send_email_from(to, subject, &from, html).await
+}
+
+async fn send_email_from(to: &str, subject: &str, from: &str, html: &str) -> anyhow::Result<()> {
     let key = env::var("RESEND_API_KEY")?;
-    let from = match env::var("RESEND_FROM_EMAIL") {
-        Ok(v) if !v.trim().is_empty() => v,
-        _ => anyhow::bail!("RESEND_FROM_EMAIL is not configured for the current deployment"),
-    };
     let response = Client::new()
         .post("https://api.resend.com/emails")
         .bearer_auth(key)
@@ -1370,6 +1392,53 @@ async fn send_email(to: &str, subject: &str, html: &str) -> anyhow::Result<()> {
         anyhow::bail!("Resend returned {status}: {body}");
     }
     Ok(())
+}
+
+pub(crate) async fn send_login_alert(
+    _db: &sqlx::PgPool,
+    to: &str,
+    display_name: &str,
+    organization: &str,
+    ip_address: &str,
+) -> anyhow::Result<()> {
+    let now = chrono::Utc::now().to_rfc3339();
+    let html = format!(
+        "<div style="font-family:Inter,Arial,sans-serif;background:#05080c;color:#eef7f8;padding:40px">
+         <h1>Agata Proxima</h1>
+         <p>Hello {display_name},</p>
+         <p>We detected a new sign-in to your Agata Proxima account.</p>
+         <p>Time: {now}<br>Organization: {organization}<br>IP: {ip_address}</p>
+         <p>If this was not you, reset your password immediately and contact the security team.</p></div>"
+    );
+    send_email_from(
+        to,
+        "New login detected on your Agata Proxima account",
+        &configured_sender("RESEND_SECURITY_FROM_EMAIL")?,
+        &html,
+    ).await
+}
+
+pub(crate) async fn send_support_confirmation(
+    to: &str,
+    display_name: &str,
+    subject: &str,
+    request_id: &str,
+    organization: &str,
+) -> anyhow::Result<()> {
+    let html = format!(
+        "<div style="font-family:Inter,Arial,sans-serif;background:#05080c;color:#eef7f8;padding:40px">
+         <h1>Agata Proxima</h1>
+         <p>Hello {display_name},</p>
+         <p>Your support request has been received by the Agata Proxima support team.</p>
+         <p>Organization: {organization}<br>Subject: {subject}<br>Request ID: {request_id}</p>
+         <p>We will use the request details to investigate and respond.</p></div>"
+    );
+    send_email_from(
+        to,
+        "We received your Agata Proxima support request",
+        &configured_sender("RESEND_SUPPORT_FROM_EMAIL")?,
+        &html,
+    ).await
 }
 
 fn verify_stripe_signature(payload: &str, signature: &str, secret: &str) -> bool {
