@@ -649,3 +649,20 @@
 .public-faq-item p {
   margin-top: 14px;
 }
+
+
+@media (max-width: 850px) {
+  .home-three-up {
+    grid-template-columns: 1fr;
+  }
+
+  .home-audience-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 650px) {
+  .public-social-note {
+    max-width: 100%;
+  }
+}
