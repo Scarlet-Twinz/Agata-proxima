@@ -7,10 +7,17 @@ import Signup from "./pages/auth/Signup";
 import Recovery from "./pages/auth/Recovery";
 import NotFound from "./pages/NotFound";
 import {
-  Home, Product, ProductDetail, Solutions, SolutionDetail, Pricing, Security,
+  Home, Security,
   Changelog, ChangelogDetail,
   Company, Trust, Status, FAQ, Terms, Privacy,
 } from "./pages/public/PublicPages";
+import {
+  Product,
+  ProductDetail,
+  Solutions,
+  SolutionDetail,
+  Pricing,
+} from "./pages/public/ProductSolutions";
 import DeveloperPortal from "./pages/public/DeveloperPortal";
 import DocumentationPortal from "./pages/public/DocumentationPortal";
 import {
