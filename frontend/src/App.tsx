@@ -7,9 +7,10 @@ import Signup from "./pages/auth/Signup";
 import Recovery from "./pages/auth/Recovery";
 import {
   Home, Product, ProductDetail, Solutions, SolutionDetail, Pricing, Security,
-  Developers, DeveloperDetail, Docs, DocsDetail, Changelog, ChangelogDetail,
+  Docs, DocsDetail, Changelog, ChangelogDetail,
   Company, Trust, Status, FAQ, Terms, Privacy,
 } from "./pages/public/PublicPages";
+import DeveloperPortal from "./pages/public/DeveloperPortal";
 import {
   Contact,
   Support,
@@ -85,16 +86,8 @@ export function App() {
         <Route path="solutions/platform-engineering" element={<SolutionDetail kind="platform-engineering" />} />
         <Route path="pricing" element={<Pricing />} />
         <Route path="security" element={<Security />} />
-        <Route path="developers" element={<Developers />} />
-        <Route path="developers/quickstart" element={<DeveloperDetail kind="quickstart" />} />
-        <Route path="developers/authentication" element={<DeveloperDetail kind="authentication" />} />
-        <Route path="developers/tenant-context" element={<DeveloperDetail kind="tenant-context" />} />
-        <Route path="developers/verification" element={<DeveloperDetail kind="verification" />} />
-        <Route path="developers/api-reference" element={<DeveloperDetail kind="api-reference" />} />
-        <Route path="developers/webhooks" element={<DeveloperDetail kind="webhooks" />} />
-        <Route path="developers/sdks" element={<DeveloperDetail kind="sdks" />} />
-        <Route path="developers/cli" element={<DeveloperDetail kind="cli" />} />
-        <Route path="developers/terraform" element={<DeveloperDetail kind="terraform" />} />
+        <Route path="developers" element={<DeveloperPortal />} />
+        <Route path="developers/:kind" element={<DeveloperPortal />} />
         <Route path="docs" element={<Docs />} />
         <Route path="docs/getting-started" element={<DocsDetail kind="getting-started" />} />
         <Route path="docs/core-concepts" element={<DocsDetail kind="core-concepts" />} />
