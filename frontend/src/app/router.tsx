@@ -1,7 +1,7 @@
 import { createBrowserRouter } from "react-router-dom";
 import { PublicLayout } from "../layouts/PublicLayout";
 import AuthLayout from "../layouts/auth/AuthLayout";
-import ConsoleLayout from "../layouts/ConsoleLayout";
+import { ConsoleLayout } from "../layouts/console/ConsoleLayout";
 
 import { Home } from "../pages/public/Home";
 import { Product } from "../pages/public/Product";
