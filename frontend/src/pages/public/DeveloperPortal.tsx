@@ -139,6 +139,16 @@ export default function DeveloperPortal() {
           {section.code && <pre className="developer-code"><code>{section.code}</code></pre>}
         </section>)}
 
+        <section className="developer-section developer-resource-links">
+          <div className="developer-section-heading"><span>RESOURCES</span><h2>Authoritative sources</h2></div>
+          <p>Use the repository and machine-readable API contract as the source of truth for implementation details. This public surface does not invent SDKs, CLI binaries or Terraform providers that are not published.</p>
+          <div className="developer-resource-actions">
+            <a href="https://github.com/Scarlet-Twinz/Agata-proxima" target="_blank" rel="noreferrer">GitHub repository <ExternalLink size={14}/></a>
+            <a href="/docs/openapi.json" target="_blank" rel="noreferrer">OpenAPI JSON <ExternalLink size={14}/></a>
+            <Link to="/docs/api-reference">Human API reference <ExternalLink size={14}/></Link>
+          </div>
+        </section>
+
         {canonicalKind==="api-reference" && <section className="developer-section developer-route-table">
           <div className="developer-section-heading"><span>REFERENCE</span><h2>Published routes</h2></div>
           {[
