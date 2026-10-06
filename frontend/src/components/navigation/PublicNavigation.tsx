@@ -7,6 +7,7 @@ const navigation = [
   { label: "Developers", path: "/developers" },
   { label: "Pricing", path: "/pricing" },
   { label: "Security", path: "/security" },
+  { label: "Docs", path: "/docs" },
 ];
 
 export function PublicNavigation() {
@@ -32,19 +33,8 @@ export function PublicNavigation() {
         </nav>
 
         <div className="public-actions">
-          <Link
-            to="/login"
-            className="agata-button agata-button-secondary"
-          >
-            Sign in
-          </Link>
-
-          <Link
-            to="/signup"
-            className="agata-button agata-button-primary"
-          >
-            Start building
-          </Link>
+          <Link to="/login" className="agata-button agata-button-secondary">Sign in</Link>
+          <Link to="/signup" className="agata-button agata-button-primary">Start building</Link>
         </div>
       </div>
     </header>
