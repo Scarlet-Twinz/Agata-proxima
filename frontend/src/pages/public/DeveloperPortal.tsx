@@ -145,7 +145,7 @@ export default function DeveloperPortal() {
             ["GET","/api/v1/health"],["POST","/api/v1/auth/signup"],["POST","/api/v1/auth/login"],["GET","/api/v1/session"],
             ["GET / POST","/api/v1/organizations"],["GET / POST","/api/v1/tenants"],["GET / POST","/api/v1/policies"],
             ["GET / POST","/api/v1/nodes"],["GET / POST","/api/v1/deployments"],["GET / POST","/api/v1/verifications"],
-            ["GET","/api/v1/audit"],["GET / POST","/api/v1/support"],["GET","/api/v1/billing/plans"],["GET","/api/v1/billing/entitlements"],
+            ["GET","/api/v1/audit"],["GET / POST","/api/v1/support"],["POST","/api/v1/public/contact"],["POST","/api/v1/public/support"],["GET","/api/v1/billing/plans"],["GET","/api/v1/billing/entitlements"],
           ].map(([method,path])=><div className="developer-route" key={method+path}><span>{method}</span><code>{path}</code></div>)}
         </section>}
       </article>
