@@ -8,7 +8,7 @@ import Recovery from "./pages/auth/Recovery";
 import NotFound from "./pages/NotFound";
 import {
   Home, Product, ProductDetail, Solutions, SolutionDetail, Pricing, Security,
-  Docs, DocsDetail, Changelog, ChangelogDetail,
+  Changelog, ChangelogDetail,
   Company, Trust, Status, FAQ, Terms, Privacy,
 } from "./pages/public/PublicPages";
 import DeveloperPortal from "./pages/public/DeveloperPortal";
