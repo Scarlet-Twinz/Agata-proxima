@@ -136,6 +136,21 @@ async fn main() -> Result<()> {
     sqlx::raw_sql(include_str!("../migrations/0004_oidc.sql"))
         .execute(&db)
         .await?;
+    sqlx::raw_sql(include_str!("../migrations/0005_public_contact_support.sql"))
+        .execute(&db)
+        .await?;
+    sqlx::raw_sql(include_str!("../migrations/0006_public_contact_support_created_index.sql"))
+        .execute(&db)
+        .await?;
+    sqlx::raw_sql(include_str!("../migrations/0007_public_contact_support_email_index.sql"))
+        .execute(&db)
+        .await?;
+    sqlx::raw_sql(include_str!("../migrations/0008_public_contact_support_drop_trigger.sql"))
+        .execute(&db)
+        .await?;
+    sqlx::raw_sql(include_str!("../migrations/0009_public_contact_support_trigger.sql"))
+        .execute(&db)
+        .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
