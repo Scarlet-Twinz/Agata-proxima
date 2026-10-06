@@ -402,10 +402,10 @@ async fn signup(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Resp
     }
 }
 
-async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Response {
+async fn login(State(s): State<AppState>, headers: HeaderMap, Json(input): Json<AuthInput>) -> Response {
     let email = input.email.trim().to_lowercase();
     let row =
-        match sqlx::query("SELECT id,password_hash FROM users WHERE email=$1 AND status='active'")
+        match sqlx::query("SELECT id,password_hash,display_name FROM users WHERE email=$1 AND status='active'")
             .bind(&email)
             .fetch_optional(&s.db)
             .await
@@ -417,6 +417,7 @@ async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Respo
 
     let user_id: Uuid = row.get("id");
     let password_hash: String = row.get("password_hash");
+    let display_name: String = row.get("display_name");
 
     if !verify_password(&input.password, &password_hash) {
         return unauthorized();
@@ -443,6 +444,19 @@ async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Respo
         Err(e) => return db_error(e),
     };
 
+    let organization_name = sqlx::query_scalar::<_, String>("SELECT name FROM organizations WHERE id=$1")
+        .bind(organization_id)
+        .fetch_one(&s.db)
+        .await
+        .unwrap_or_else(|_| "Agata Proxima".into());
+
+    let login_ip = headers.get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.split(',').next())
+        .map(str::trim)
+        .unwrap_or("unavailable")
+        .to_string();
+
     audit(
         &s.db,
         organization_id,
@@ -453,6 +467,16 @@ async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Respo
         json!({"method":"password"}),
     )
     .await;
+
+    if let Err(e) = production::send_login_alert(
+        &s.db,
+        &email,
+        &display_name,
+        &organization_name,
+        &login_ip,
+    ).await {
+        tracing::warn!(%e, "login alert email failed");
+    }
 
     match create_session(&s.db, user_id, organization_id).await {
         Ok((token, csrf)) => auth_response(&s, user_id, organization_id, csrf, token),
@@ -1224,6 +1248,30 @@ async fn create_support(
                 json!({}),
             )
             .await;
+
+            if let Ok(row) = sqlx::query(
+                "SELECT u.email,u.display_name,o.name
+                 FROM users u JOIN organizations o ON o.id=$1
+                 WHERE u.id=$2"
+            )
+            .bind(ctx.organization_id)
+            .bind(ctx.user_id)
+            .fetch_one(&s.db)
+            .await {
+                let email: String = row.get("email");
+                let display_name: String = row.get("display_name");
+                let organization_name: String = row.get("name");
+                if let Err(e) = production::send_support_confirmation(
+                    &email,
+                    &display_name,
+                    &input.subject,
+                    &id.to_string(),
+                    &organization_name,
+                ).await {
+                    tracing::warn!(%e, "support confirmation email failed");
+                }
+            }
+
             Json(json!({"id":id,"status":"open"})).into_response()
         }
         Err(e) => db_error(e),
