@@ -20,6 +20,7 @@ import { Contact } from "../pages/public/Contact";
 import { Legal } from "../pages/public/Legal";
 import { NotFound } from "../pages/public/NotFound";
 import { PublicDetail } from "../pages/public/PublicDetail";
+import { SupportRequest } from "../pages/public/SupportRequest";
 
 import Login from "../pages/auth/Login";
 import Signup from "../pages/auth/Signup";
@@ -73,6 +74,7 @@ export const router = createBrowserRouter([
       { path: "/faq", element: <FAQ /> },
       { path: "/support", element: <Support /> },
       { path: "/contact", element: <Contact /> },
+      { path: "/support/request", element: <SupportRequest /> },
       { path: "/terms", element: <Legal /> },
       { path: "/privacy", element: <Legal /> },
       ...detailRoutes.map((path) => ({ path, element: <PublicDetail /> })),
