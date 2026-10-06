@@ -5,6 +5,7 @@ import { RequireAuth } from "./layouts/auth/RequireAuth";
 import Login from "./pages/auth/Login";
 import Signup from "./pages/auth/Signup";
 import Recovery from "./pages/auth/Recovery";
+import NotFound from "./pages/NotFound";
 import {
   Home, Product, ProductDetail, Solutions, SolutionDetail, Pricing, Security,
   Docs, DocsDetail, Changelog, ChangelogDetail,
@@ -170,7 +171,7 @@ export function App() {
         </Route>
       </Route>
 
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }
