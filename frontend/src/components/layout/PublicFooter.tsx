@@ -1,8 +1,19 @@
-import { Github } from "lucide-react";
+import { Github, Instagram, Linkedin, Twitter } from "lucide-react";
 import { Link } from "react-router-dom";
 import { AgataLogo } from "../brand/AgataLogo";
 
-const githubUrl = "https://github.com/Scarlet-Twinz/Agata-proxima";
+type SocialProfile = {
+  label: string;
+  href?: string;
+  icon: typeof Github;
+};
+
+const socialProfiles: SocialProfile[] = [
+  { label: "LinkedIn", icon: Linkedin },
+  { label: "Twitter / X", icon: Twitter },
+  { label: "Instagram", icon: Instagram },
+  { label: "GitHub", href: "https://github.com/Scarlet-Twinz/Agata-proxima", icon: Github },
+];
 
 export function PublicFooter() {
   return (
@@ -15,16 +26,23 @@ export function PublicFooter() {
               Tenant isolation infrastructure designed to be enforceable,
               independently verifiable and auditable.
             </p>
-            <a
-              className="public-social-link"
-              href={githubUrl}
-              target="_blank"
-              rel="noreferrer"
-              aria-label="Agata Proxima on GitHub"
-            >
-              <Github size={17} />
-              GitHub
-            </a>
+            <div className="public-social-links" aria-label="Agata Proxima social profiles">
+              {socialProfiles.map(({ label, href, icon: Icon }) =>
+                href ? (
+                  <a key={label} className="public-social-icon" href={href} target="_blank" rel="noreferrer" aria-label={"Agata Proxima on " + label} title={label}>
+                    <Icon size={18} />
+                  </a>
+                ) : (
+                  <span key={label} className="public-social-icon public-social-icon-pending" aria-label={label + " profile URL not configured"} title={label + " profile URL not configured"} aria-disabled="true">
+                    <Icon size={18} />
+                  </span>
+                ),
+              )}
+            </div>
+            <p className="public-social-note">
+              LinkedIn, Twitter/X and Instagram are shown as reserved social
+              destinations until their official profile URLs are configured.
+            </p>
           </div>
 
           <div>
