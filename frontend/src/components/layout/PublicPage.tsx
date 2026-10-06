@@ -16,6 +16,8 @@ const ctaByPath: Record<string, { title: string; text: string; label: string; to
   "/security": { title: "Inspect the security model.", text: "Read the verification and trust surfaces behind the tenant-isolation boundary.", label: "Read verification", to: "/docs/verification" },
   "/trust": { title: "Need deeper assurance?", text: "Review the security architecture, verification model and direct contact paths.", label: "Contact security", to: "/contact" },
   "/status": { title: "Need help with service state?", text: "Use support for an operational question while live public telemetry is being connected.", label: "Get support", to: "/support" },
+  "/support": { title: "Need help with something specific?", text: "Open a support request and start with the issue category that best matches what you need.", label: "Open Support", to: "/support/request" },
+  "/contact": { title: "Have something else to discuss?", text: "Open a contact request and write the conversation in your own words.", label: "Open Contact", to: "/support/request?from=contact" },
 };
 
 export function PublicPage({ eyebrow, title, description, children }: PublicPageProps) {
