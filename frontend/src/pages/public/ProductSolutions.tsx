@@ -1,4 +1,4 @@
-import { ArrowRight, ExternalLink } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import "./product-solutions.css";
 
@@ -155,7 +155,7 @@ function BoundaryRail() {
   );
 }
 
-function DetailPage({ data, nav, base }: { data: Detail; nav: readonly (readonly [string, string])[]; base: string }) {
+function DetailPage({ data, nav, base, currentKey }: { data: Detail; nav: readonly (readonly [string, string])[]; base: string; currentKey: string }) {
   return (
     <main className="product-detail-page">
       <header className="product-detail-hero">
@@ -168,7 +168,7 @@ function DetailPage({ data, nav, base }: { data: Detail; nav: readonly (readonly
       <div className="product-detail-shell public-container">
         <aside className="product-detail-sidebar">
           <span>EXPLORE</span>
-          {nav.map(([key, label]) => <Link key={key} className={data.eyebrow.toLowerCase().includes(key) ? "active" : ""} to={base + "/" + key}>{label}</Link>)}
+          {nav.map(([key, label]) => <Link key={key} className={currentKey === key ? "active" : ""} to={base + "/" + key}>{label}</Link>)}
           <div />
           <Link to={base === "/product" ? "/developers/quickstart" : "/docs/getting-started"}>Implementation guide <ArrowRight size={14}/></Link>
         </aside>
@@ -222,7 +222,7 @@ export function Product() {
 }
 
 export function ProductDetail({ kind }: { kind: keyof typeof productDetails }) {
-  return <DetailPage data={productDetails[kind]} nav={productNav} base="/product" />;
+  return <DetailPage data={productDetails[kind]} nav={productNav} base="/product" currentKey={kind} />;
 }
 
 export function Solutions() {
@@ -249,7 +249,7 @@ export function Solutions() {
 }
 
 export function SolutionDetail({ kind }: { kind: keyof typeof solutionDetails }) {
-  return <DetailPage data={solutionDetails[kind]} nav={solutionNav} base="/solutions" />;
+  return <DetailPage data={solutionDetails[kind]} nav={solutionNav} base="/solutions" currentKey={kind} />;
 }
 
 export function Pricing() {
@@ -286,6 +286,3 @@ export function Pricing() {
   );
 }
 
-export function ProductSourceLink() {
-  return <a className="product-source-link" href="https://github.com/Scarlet-Twinz/Agata-proxima" target="_blank" rel="noreferrer">View source on GitHub <ExternalLink size={14}/></a>;
-}
