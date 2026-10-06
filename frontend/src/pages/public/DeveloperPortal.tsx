@@ -107,8 +107,12 @@ const repoUrl = "https://github.com/Scarlet-Twinz/Agata-proxima";
 
 export default function DeveloperPortal() {
   const { kind } = useParams();
-  const current = sections[kind ?? "quickstart"] ?? sections.quickstart;
-  const canonicalKind = sections[kind ?? "quickstart"] ? kind : "quickstart";
+  const hasRequestedKind = kind === undefined || Boolean(sections[kind]);
+  if (!hasRequestedKind) {
+    return <main className="developer-portal"><header className="developer-hero"><div className="developer-hero-inner"><span className="public-eyebrow">DEVELOPER PLATFORM / 404</span><h1>Developer page not found.</h1><p>The requested developer resource does not exist. Choose a published integration guide instead.</p><Link className="button button-primary" to="/developers">Back to Developer Platform</Link></div></header></main>;
+  }
+  const current = sections[kind ?? "quickstart"];
+  const canonicalKind = kind ?? "quickstart";
   const unavailable = ["sdks", "cli", "terraform"].includes(canonicalKind ?? "");
 
   return <main className="developer-portal">
