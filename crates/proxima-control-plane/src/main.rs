@@ -50,6 +50,15 @@ struct NameInput {
 }
 
 #[derive(Deserialize)]
+struct ProjectInput { name: String }
+
+#[derive(Deserialize)]
+struct EnvironmentInput { project_id: Uuid, name: String, kind: Option<String> }
+
+#[derive(Deserialize)]
+struct IntegrationInput { project_id: Uuid, environment_id: Option<Uuid>, mode: String, endpoint: Option<String> }
+
+#[derive(Deserialize)]
 struct TenantInput {
     organization_id: Uuid,
     name: String,
@@ -136,6 +145,9 @@ async fn main() -> Result<()> {
     sqlx::raw_sql(include_str!("../migrations/0004_oidc.sql"))
         .execute(&db)
         .await?;
+    sqlx::raw_sql(include_str!("../migrations/0005_customer_lifecycle.sql"))
+        .execute(&db)
+        .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
@@ -179,6 +191,9 @@ async fn main() -> Result<()> {
             "/api/v1/organizations",
             get(organizations).post(create_organization),
         )
+        .route("/api/v1/projects", get(projects).post(create_project))
+        .route("/api/v1/projects/{id}/environments", get(environments).post(create_environment))
+        .route("/api/v1/integrations", get(integrations).post(create_integration))
         .route("/api/v1/tenants", get(tenants).post(create_tenant))
         .route("/api/v1/policies", get(policies).post(create_policy))
         .route("/api/v1/nodes", get(nodes).post(create_node))
@@ -748,6 +763,46 @@ async fn create_organization(
     )
     .await;
     Json(json!({"id":id,"name":input.name,"slug":slug})).into_response()
+}
+
+async fn projects(State(s): State<AppState>, headers: HeaderMap) -> Response {
+ let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};
+ match sqlx::query("SELECT id,name,slug,created_at FROM projects WHERE organization_id=$1 ORDER BY created_at").bind(ctx.organization_id).fetch_all(&s.db).await{
+  Ok(rows)=>Json(rows.iter().map(|r|json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"slug":r.get::<String,_>("slug"),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at")})).collect::<Vec<_>>()).into_response(),
+  Err(e)=>db_error(e)
+ }
+}
+async fn create_project(State(s):State<AppState>,headers:HeaderMap,Json(input):Json<ProjectInput>)->Response{
+ let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()}; if let Err(c)=require_write(&ctx,&headers){return c.into_response();}
+ let id=Uuid::new_v4(); let slug=slugify(&input.name);
+ match sqlx::query("INSERT INTO projects(id,organization_id,name,slug) VALUES($1,$2,$3,$4)").bind(id).bind(ctx.organization_id).bind(&input.name).bind(&slug).execute(&s.db).await{
+  Ok(_)=>{if let Err(e)=sqlx::query("INSERT INTO environments(project_id,name,slug,kind) VALUES($1,'Production','production','production') ON CONFLICT DO NOTHING").bind(id).execute(&s.db).await{return db_error(e)}; audit(&s.db,ctx.organization_id,ctx.user_id,"project.created","project",Some(id),json!({})).await; Json(json!({"id":id,"name":input.name,"slug":slug})).into_response()},
+  Err(e)=>unique_error(e)
+ }
+}
+async fn environments(State(s):State<AppState>,Path(project_id):Path<Uuid>,headers:HeaderMap)->Response{
+ let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};
+ match sqlx::query("SELECT e.id,e.name,e.slug,e.kind,e.status,e.created_at,e.updated_at FROM environments e JOIN projects p ON p.id=e.project_id WHERE e.project_id=$1 AND p.organization_id=$2 ORDER BY e.created_at").bind(project_id).bind(ctx.organization_id).fetch_all(&s.db).await{
+  Ok(rows)=>Json(rows.iter().map(|r|json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"slug":r.get::<String,_>("slug"),"kind":r.get::<String,_>("kind"),"status":r.get::<String,_>("status"),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),"updated_at":r.get::<chrono::DateTime<chrono::Utc>,_>("updated_at")})).collect::<Vec<_>>()).into_response(),Err(e)=>db_error(e)
+ }
+}
+async fn create_environment(State(s):State<AppState>,Path(project_id):Path<Uuid>,headers:HeaderMap,Json(input):Json<EnvironmentInput>)->Response{
+ let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()}; if input.project_id!=project_id{return bad("project_id does not match the route.")}; if let Err(c)=require_write(&ctx,&headers){return c.into_response();}
+ let ok=sqlx::query("SELECT 1 FROM projects WHERE id=$1 AND organization_id=$2").bind(project_id).bind(ctx.organization_id).fetch_optional(&s.db).await; match ok{Ok(Some(_))=>{},Ok(None)=>return StatusCode::NOT_FOUND.into_response(),Err(e)=>return db_error(e)}
+ let kind=input.kind.unwrap_or_else(||"development".into()); if !matches!(kind.as_str(),"development"|"staging"|"production"){return bad("Environment kind must be development, staging, or production.")}; let id=Uuid::new_v4(); let slug=slugify(&input.name);
+ match sqlx::query("INSERT INTO environments(id,project_id,name,slug,kind) VALUES($1,$2,$3,$4,$5)").bind(id).bind(project_id).bind(&input.name).bind(&slug).bind(&kind).execute(&s.db).await{Ok(_)=>{audit(&s.db,ctx.organization_id,ctx.user_id,"environment.created","environment",Some(id),json!({"project_id":project_id,"kind":kind})).await;Json(json!({"id":id,"name":input.name,"slug":slug,"kind":kind,"status":"active"})).into_response()},Err(e)=>unique_error(e)}
+}
+async fn integrations(State(s):State<AppState>,headers:HeaderMap)->Response{
+ let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};
+ match sqlx::query("SELECT i.id,i.project_id,i.environment_id,i.mode,i.status,i.endpoint,i.verification_status,i.last_verified_at,i.created_at FROM integration_installations i JOIN projects p ON p.id=i.project_id WHERE p.organization_id=$1 ORDER BY i.created_at DESC").bind(ctx.organization_id).fetch_all(&s.db).await{
+  Ok(rows)=>Json(rows.iter().map(|r|json!({"id":r.get::<Uuid,_>("id"),"project_id":r.get::<Uuid,_>("project_id"),"environment_id":r.try_get::<Uuid,_>("environment_id").ok(),"mode":r.get::<String,_>("mode"),"status":r.get::<String,_>("status"),"endpoint":r.try_get::<String,_>("endpoint").ok(),"verification_status":r.get::<String,_>("verification_status"),"last_verified_at":r.try_get::<chrono::DateTime<chrono::Utc>,_>("last_verified_at").ok(),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at")})).collect::<Vec<_>>()).into_response(),Err(e)=>db_error(e)}
+}
+async fn create_integration(State(s):State<AppState>,headers:HeaderMap,Json(input):Json<IntegrationInput>)->Response{
+ let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()}; if let Err(c)=require_write(&ctx,&headers){return c.into_response()}; if !matches!(input.mode.as_str(),"engine"|"sdk"|"proxy"){return bad("Integration mode must be engine, sdk, or proxy.")}
+ let ok=sqlx::query("SELECT 1 FROM projects WHERE id=$1 AND organization_id=$2").bind(input.project_id).bind(ctx.organization_id).fetch_optional(&s.db).await; match ok{Ok(Some(_))=>{},Ok(None)=>return StatusCode::NOT_FOUND.into_response(),Err(e)=>return db_error(e)}
+ if let Some(eid)=input.environment_id{let ok=sqlx::query("SELECT 1 FROM environments WHERE id=$1 AND project_id=$2").bind(eid).bind(input.project_id).fetch_optional(&s.db).await;match ok{Ok(Some(_))=>{},Ok(None)=>return bad("environment_id does not belong to the selected project."),Err(e)=>return db_error(e)}}
+ let id=Uuid::new_v4();
+ match sqlx::query("INSERT INTO integration_installations(id,project_id,environment_id,mode,endpoint) VALUES($1,$2,$3,$4,$5)").bind(id).bind(input.project_id).bind(input.environment_id).bind(&input.mode).bind(&input.endpoint).execute(&s.db).await{Ok(_)=>{audit(&s.db,ctx.organization_id,ctx.user_id,"integration.created","integration",Some(id),json!({"mode":input.mode})).await;Json(json!({"id":id,"status":"pending","verification_status":"not_run","next_step":"configure_endpoint_and_run_external_verification"})).into_response()},Err(e)=>db_error(e)}
 }
 
 async fn tenants(State(s): State<AppState>, headers: HeaderMap) -> Response {
