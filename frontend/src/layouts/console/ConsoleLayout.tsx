@@ -212,7 +212,6 @@ export function ConsoleLayout() {
           <div className="console-workspace-menu">
             {organizations.map((org) => (
               <button key={org.id} type="button" onClick={async () => {
-                const csrf = sessionStorage.getItem("proxima_csrf") ?? "";
                 const switched = await api.post<{csrf_token:string}>("/api/v1/organization/switch", { organization_id: org.id });
                 sessionStorage.setItem("proxima_csrf", switched.csrf_token);
                 setWorkspaceOpen(false);
