@@ -16,7 +16,7 @@ export function Support() {
         <div className="agata-container">
           <div className="public-feature-grid">
             {resources.map(([title,text,topic]) => (
-              <Link to={`/support/request?topic=${topic}`} className="public-feature public-feature-action">
+              <Link to={`/support/request?topic=${topic}`} key={title} className="public-feature public-feature-action">
                 <h3>{title}</h3>
                 <p>{text}</p>
                 <span className="public-inline-link">Open {title.toLowerCase()} <ArrowRight size={15} /></span>
