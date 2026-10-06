@@ -5,6 +5,8 @@ import "./public-contact-support.css";
 
 type RequestKind = "contact" | "support";
 
+const controlPlaneBase = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+
 type SupportCategory = {
   title: string;
   slug: string;
@@ -154,8 +156,8 @@ function articleSlug(value: string) {
 async function submitRequest(kind: RequestKind, payload: Record<string, string>) {
   const response = await fetch(
     kind === "contact"
-      ? "/api/v1/public/contact"
-      : "/api/v1/public/support",
+      ? `${controlPlaneBase}/api/v1/public/contact`
+      : `${controlPlaneBase}/api/v1/public/support`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
