@@ -9,6 +9,7 @@ type HmacSha256 = Hmac<Sha256>;
 
 const SECRET: &[u8] = b"01234567890123456789012345678901";
 const PROXIMA_PORT: u16 = 16432;
+const POSTGRES_PORT: u16 = 15432;
 
 fn token(tenant_id: &str) -> String {
     let expires_at = SystemTime::now()
@@ -33,7 +34,7 @@ fn token(tenant_id: &str) -> String {
 async fn setup_database() -> Result<(), Box<dyn Error>> {
     let (client, connection) = tokio_postgres::Config::new()
         .host("127.0.0.1")
-        .port(5432)
+        .port(POSTGRES_PORT)
         .user("proxima")
         .password("proxima-dev-only")
         .dbname("proxima_dev")
@@ -124,7 +125,7 @@ fn start_proxima() -> Result<Child, Box<dyn Error>> {
     let binary = env!("CARGO_BIN_EXE_proxima-engine");
     let child = Command::new(binary)
         .env("PROXIMA_LISTEN_ADDR", format!("127.0.0.1:{PROXIMA_PORT}"))
-        .env("PROXIMA_UPSTREAM_ADDR", "127.0.0.1:5432")
+        .env("PROXIMA_UPSTREAM_ADDR", format!("127.0.0.1:{POSTGRES_PORT}"))
         .env("PROXIMA_TENANT_SIGNING_KEY", std::str::from_utf8(SECRET)?)
         .env("RUST_LOG", "proxima_engine=warn")
         .spawn()?;

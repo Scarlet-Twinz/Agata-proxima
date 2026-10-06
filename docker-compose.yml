@@ -5,6 +5,8 @@ services:
       POSTGRES_USER: proxima
       POSTGRES_PASSWORD: proxima-dev-only
       POSTGRES_DB: proxima_dev
+    ports:
+      - "15432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U proxima -d proxima_dev"]
       interval: 2s
@@ -49,7 +51,7 @@ services:
       POSTGRES_PASSWORD: proxima-control-dev
       POSTGRES_DB: proxima_control
     ports:
-      - "55432:5432"
+      - "55900:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U proxima_control -d proxima_control"]
       interval: 2s

@@ -1,27 +1,20 @@
 import { Navigate, Route, Routes } from "react-router-dom";
-import { PublicLayout } from "./layouts/PublicLayout";
+import PublicLayout from "./layouts/PublicLayout";
 import AuthLayout from "./layouts/auth/AuthLayout";
 import { RequireAuth } from "./layouts/auth/RequireAuth";
 import Login from "./pages/auth/Login";
 import Signup from "./pages/auth/Signup";
 import Recovery from "./pages/auth/Recovery";
-import { Home } from "./pages/public/Home";
-import { Product } from "./pages/public/Product";
-import { Solutions } from "./pages/public/Solutions";
-import { Developers } from "./pages/public/Developers";
-import { Pricing } from "./pages/public/Pricing";
-import { Security } from "./pages/public/Security";
-import { Trust } from "./pages/public/Trust";
-import { Company } from "./pages/public/Company";
-import { Docs } from "./pages/public/Docs";
-import { Changelog } from "./pages/public/Changelog";
-import { Status } from "./pages/public/Status";
-import { FAQ } from "./pages/public/FAQ";
-import { Support } from "./pages/public/Support";
-import { Contact } from "./pages/public/Contact";
-import { Terms } from "./pages/public/Terms";
-import { Privacy } from "./pages/public/Privacy";
-import { PublicResourceRoute } from "./pages/public/PublicResourceRoutes";
+import {
+  Home, Product, ProductDetail, Solutions, SolutionDetail, Pricing, Security,
+  Developers, DeveloperDetail, Docs, DocsDetail, Changelog, ChangelogDetail,
+  Company, Trust, Status, FAQ, Terms, Privacy,
+} from "./pages/public/PublicPages";
+import {
+  Contact,
+  Support,
+  SupportArticle,
+} from "./pages/public/PublicContactSupport";
 import { ConsoleLayout } from "./layouts/console/ConsoleLayout";
 import { Overview } from "./pages/console/Overview";
 import {
@@ -79,22 +72,49 @@ export function App() {
       <Route element={<PublicLayout />}>
         <Route index element={<Home />} />
         <Route path="product" element={<Product />} />
+        <Route path="product/operating-model" element={<ProductDetail kind="operating" />} />
+        <Route path="product/enforcement" element={<ProductDetail kind="enforcement" />} />
+        <Route path="product/verification" element={<ProductDetail kind="verification" />} />
+        <Route path="product/evidence" element={<ProductDetail kind="evidence" />} />
         <Route path="solutions" element={<Solutions />} />
-        <Route path="solutions/*" element={<PublicResourceRoute />} />
-        <Route path="developers" element={<Developers />} />
-        <Route path="developers/*" element={<PublicResourceRoute />} />
+        <Route path="solutions/b2b-saas" element={<SolutionDetail kind="b2b-saas" />} />
+        <Route path="solutions/enterprise-saas" element={<SolutionDetail kind="enterprise-saas" />} />
+        <Route path="solutions/developer-platforms" element={<SolutionDetail kind="developer-platforms" />} />
+        <Route path="solutions/security-sensitive-systems" element={<SolutionDetail kind="security-sensitive-systems" />} />
+        <Route path="solutions/startups" element={<SolutionDetail kind="startups" />} />
+        <Route path="solutions/platform-engineering" element={<SolutionDetail kind="platform-engineering" />} />
         <Route path="pricing" element={<Pricing />} />
         <Route path="security" element={<Security />} />
-        <Route path="trust" element={<Trust />} />
-        <Route path="company" element={<Company />} />
+        <Route path="developers" element={<Developers />} />
+        <Route path="developers/quickstart" element={<DeveloperDetail kind="quickstart" />} />
+        <Route path="developers/authentication" element={<DeveloperDetail kind="authentication" />} />
+        <Route path="developers/tenant-context" element={<DeveloperDetail kind="tenant-context" />} />
+        <Route path="developers/verification" element={<DeveloperDetail kind="verification" />} />
+        <Route path="developers/api-reference" element={<DeveloperDetail kind="api-reference" />} />
+        <Route path="developers/webhooks" element={<DeveloperDetail kind="webhooks" />} />
+        <Route path="developers/sdks" element={<DeveloperDetail kind="sdks" />} />
+        <Route path="developers/cli" element={<DeveloperDetail kind="cli" />} />
+        <Route path="developers/terraform" element={<DeveloperDetail kind="terraform" />} />
         <Route path="docs" element={<Docs />} />
-        <Route path="docs/*" element={<PublicResourceRoute />} />
+        <Route path="docs/getting-started" element={<DocsDetail kind="getting-started" />} />
+        <Route path="docs/core-concepts" element={<DocsDetail kind="core-concepts" />} />
+        <Route path="docs/api-reference" element={<DocsDetail kind="api-reference" />} />
+        <Route path="docs/security" element={<DocsDetail kind="security" />} />
+        <Route path="docs/operations" element={<DocsDetail kind="operations" />} />
+        <Route path="docs/troubleshooting" element={<DocsDetail kind="troubleshooting" />} />
         <Route path="changelog" element={<Changelog />} />
-        <Route path="changelog/*" element={<PublicResourceRoute />} />
+        <Route path="changelog/frontend-reconstruction" element={<ChangelogDetail kind="frontend-reconstruction" />} />
+        <Route path="changelog/control-plane-foundation" element={<ChangelogDetail kind="control-plane-foundation" />} />
+        <Route path="changelog/authentication-boundary" element={<ChangelogDetail kind="authentication-boundary" />} />
+        <Route path="changelog/verification-model" element={<ChangelogDetail kind="verification-model" />} />
+        <Route path="changelog/api-foundation" element={<ChangelogDetail kind="api-foundation" />} />
+        <Route path="company" element={<Company />} />
+        <Route path="trust" element={<Trust />} />
         <Route path="status" element={<Status />} />
-        <Route path="faq" element={<FAQ />} />
-        <Route path="support" element={<Support />} />
         <Route path="contact" element={<Contact />} />
+        <Route path="support" element={<Support />} />
+        <Route path="support/:category/:article" element={<SupportArticle />} />
+        <Route path="faq" element={<FAQ />} />
         <Route path="terms" element={<Terms />} />
         <Route path="privacy" element={<Privacy />} />
       </Route>

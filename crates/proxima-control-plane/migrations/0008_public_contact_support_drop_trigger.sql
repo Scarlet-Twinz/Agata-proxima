@@ -1,0 +1,1 @@
+DROP TRIGGER IF EXISTS public_contact_touch ON public_contact_requests

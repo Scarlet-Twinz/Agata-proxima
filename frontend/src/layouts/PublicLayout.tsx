@@ -1,17 +1,5 @@
-import { Outlet } from "react-router-dom";
-import { PublicNavigation } from "../components/navigation/PublicNavigation";
-import { PublicFooter } from "../components/layout/PublicFooter";
+import { Link, Outlet } from "react-router-dom";
+import PublicNavigation from "../components/navigation/PublicNavigation";
+import "../styles/public-site.css";
 
-export function PublicLayout() {
-  return (
-    <div className="public-shell">
-      <PublicNavigation />
-
-      <main>
-        <Outlet />
-      </main>
-
-      <PublicFooter />
-    </div>
-  );
-}
+export default function PublicLayout(){return <div className="agata-public-site"><PublicNavigation/><Outlet/><footer className="agata-public-footer"><div className="agata-public-footer-inner"><div className="agata-public-footer-brand"><strong>AGATA PROXIMA</strong><p>Tenant isolation infrastructure for systems that need a boundary they can enforce and verify.</p><Link className="text-link" to="/trust">Visit Trust Center →</Link></div><div className="agata-public-footer-links"><div><span>PRODUCT</span><Link to="/product">Product</Link><Link to="/solutions">Solutions</Link><Link to="/pricing">Pricing</Link><Link to="/security">Security</Link><Link to="/trust">Trust</Link></div><div><span>DEVELOPERS</span><Link to="/developers">Developer Platform</Link><Link to="/docs">Documentation</Link><Link to="/changelog">Changelog</Link><Link to="/status">Status</Link></div><div><span>COMPANY</span><Link to="/company">Company</Link><Link to="/contact">Contact</Link><Link to="/support">Support</Link><Link to="/faq">FAQ</Link></div><div><span>LEGAL</span><Link to="/terms">Terms</Link><Link to="/privacy">Privacy</Link></div></div></div><div className="agata-public-footer-bottom"><span>© {new Date().getFullYear()} Agata Proxima</span><span>Tenant isolation infrastructure</span></div></footer></div>}
