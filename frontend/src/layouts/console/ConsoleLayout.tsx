@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   ChevronDown,
@@ -41,6 +41,23 @@ const platformNavigation = [
   { label: "Support", href: "/app/support", icon: CircleHelp },
 ];
 
+const searchNavigation = [
+  ...primaryNavigation,
+  ...platformNavigation,
+  { label: "Billing usage", href: "/app/billing/usage", icon: CreditCard },
+  { label: "Billing plans", href: "/app/billing/plans", icon: CreditCard },
+  { label: "Billing invoices", href: "/app/billing/invoices", icon: CreditCard },
+  { label: "Tenant isolation", href: "/app/security/tenant-isolation", icon: ShieldCheck },
+  { label: "Security events", href: "/app/security/events", icon: FileSearch },
+  { label: "Developer API keys", href: "/app/developer/api-keys", icon: KeyRound },
+  { label: "Developer tenant context", href: "/app/developer/tenant-context", icon: KeyRound },
+  { label: "Developer webhooks", href: "/app/developer/webhooks", icon: KeyRound },
+  { label: "Developer API reference", href: "/app/developer/api-reference", icon: KeyRound },
+  { label: "Settings authentication", href: "/app/settings/authentication", icon: Settings },
+  { label: "Settings identity", href: "/app/settings/identity", icon: Settings },
+  { label: "Settings security", href: "/app/settings/security", icon: Settings },
+];
+
 export function ConsoleLayout() {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(() => {
@@ -48,6 +65,9 @@ export function ConsoleLayout() {
   });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [environmentOpen, setEnvironmentOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
@@ -80,6 +100,45 @@ export function ConsoleLayout() {
 
   const accountLabel = session?.user_id || "Account";
   const accountInitial = accountLabel.slice(0, 1).toUpperCase();
+
+  const searchResults = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    if (!query) return searchNavigation.slice(0, 8);
+
+    return searchNavigation.filter((item) =>
+      item.label.toLowerCase().includes(query),
+    );
+  }, [searchQuery]);
+
+  function openSearch() {
+    setSearchOpen(true);
+    setSearchQuery("");
+    setEnvironmentOpen(false);
+  }
+
+  function closeSearch() {
+    setSearchOpen(false);
+    setSearchQuery("");
+  }
+
+  useEffect(() => {
+    if (!searchOpen) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        openSearch();
+      }
+
+      if (event.key === "Escape") {
+        closeSearch();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [searchOpen]);
 
   return (
     <div
@@ -197,6 +256,56 @@ export function ConsoleLayout() {
         </nav>
       </aside>
 
+      {searchOpen && (
+        <div className="console-search-backdrop" onMouseDown={closeSearch}>
+          <div
+            className="console-search-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Search console"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="console-search-input-wrap">
+              <Search size={18} />
+              <input
+                autoFocus
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search the control plane..."
+                aria-label="Search the control plane"
+              />
+              <kbd>Esc</kbd>
+            </div>
+
+            <div className="console-search-results">
+              {searchResults.length ? (
+                searchResults.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      className="console-search-result"
+                      type="button"
+                      key={item.href}
+                      onClick={() => {
+                        closeSearch();
+                        navigate(item.href);
+                      }}
+                    >
+                      <Icon size={17} />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="console-search-empty">
+                  No console surface matches “{searchQuery}”.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className="console-main">
         <header className="console-topbar">
           <div className="console-topbar-left">
@@ -216,13 +325,55 @@ export function ConsoleLayout() {
           </div>
 
           <div className="console-topbar-actions">
-            <button className="environment-button" type="button">
-              <span className="environment-dot" />
-              Production
-              <ChevronDown size={15} />
-            </button>
+            <div className="console-environment-wrap">
+              <button
+                className="environment-button"
+                type="button"
+                aria-expanded={environmentOpen}
+                onClick={() => {
+                  setEnvironmentOpen((value) => !value);
+                  setAccountOpen(false);
+                }}
+              >
+                <span className="environment-dot" />
+                Production
+                <ChevronDown size={15} />
+              </button>
 
-            <button className="command-button" type="button">
+              {environmentOpen && (
+                <div className="console-environment-menu">
+                  <button
+                    className="console-environment-option is-selected"
+                    type="button"
+                    onClick={() => setEnvironmentOpen(false)}
+                  >
+                    <span>
+                      <strong>Production</strong>
+                      <small>Active environment</small>
+                    </span>
+                    <span className="environment-check">✓</span>
+                  </button>
+                  <button
+                    className="console-environment-settings"
+                    type="button"
+                    onClick={() => {
+                      setEnvironmentOpen(false);
+                      navigate("/app/settings");
+                    }}
+                  >
+                    Manage environments
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <button
+              className="command-button"
+              type="button"
+              onClick={openSearch}
+              aria-haspopup="dialog"
+              aria-expanded={searchOpen}
+            >
               <Search size={17} />
               <span>Search</span>
               <kbd>⌘K</kbd>
