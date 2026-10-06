@@ -27,22 +27,21 @@ import Signup from "../pages/auth/Signup";
 import Recovery from "../pages/auth/Recovery";
 
 import { Overview } from "../pages/console/Overview";
-import PlaceholderPage from "../pages/console/PlaceholderPage";
-
-const consoleRoutes = [
-  { path: "tenants", label: "Tenants" },
-  { path: "policies", label: "Policies" },
-  { path: "nodes", label: "Nodes" },
-  { path: "deployments", label: "Deployments" },
-  { path: "verification", label: "Verification" },
-  { path: "audit", label: "Audit" },
-  { path: "security", label: "Security" },
-  { path: "team", label: "Team" },
-  { path: "billing", label: "Billing" },
-  { path: "settings", label: "Settings" },
-  { path: "developer", label: "Developer" },
-  { path: "support", label: "Support" },
-];
+import {
+  Audit,
+  Billing,
+  Deployments,
+  Developer,
+  Nodes,
+  Policies,
+  Security as ConsoleSecurity,
+  Settings,
+  Support as ConsoleSupport,
+  Team,
+  Tenants,
+  Verification,
+} from "../pages/console/ConsoleSurfaces";
+import { NestedResource } from "../pages/console/NestedResource";
 
 const detailRoutes = [
   "/product/model", "/product/enforcement", "/product/verification", "/product/evidence",
@@ -55,6 +54,44 @@ const detailRoutes = [
   "/docs/operations", "/docs/troubleshooting", "/docs/verification",
   "/changelog/frontend-reconstruction", "/changelog/control-plane-foundation",
 ];
+
+const consoleResourceRoutes = [
+  { path: "tenants", element: <Tenants /> },
+  { path: "policies", element: <Policies /> },
+  { path: "nodes", element: <Nodes /> },
+  { path: "deployments", element: <Deployments /> },
+  { path: "verification", element: <Verification /> },
+  { path: "audit", element: <Audit /> },
+  { path: "security", element: <ConsoleSecurity /> },
+  { path: "team", element: <Team /> },
+  { path: "billing", element: <Billing /> },
+  { path: "settings", element: <Settings /> },
+  { path: "developer", element: <Developer /> },
+  { path: "support", element: <ConsoleSupport /> },
+];
+
+const nestedConsoleRoutes = [
+  "tenants/:tenantId",
+  "policies/:policyId",
+  "nodes/:nodeId",
+  "deployments/:deploymentId",
+  "audit/:eventId",
+  "security/tenant-isolation",
+  "security/events",
+  "billing/usage",
+  "billing/plans",
+  "billing/invoices",
+  "developer/api-keys",
+  "developer/tenant-context",
+  "developer/webhooks",
+  "developer/api-reference",
+  "settings/authentication",
+  "settings/identity",
+  "settings/security",
+].map((path) => ({
+  path,
+  element: <NestedResource />,
+}));
 
 export const router = createBrowserRouter([
   {
@@ -93,10 +130,8 @@ export const router = createBrowserRouter([
     element: <ConsoleLayout />,
     children: [
       { index: true, element: <Overview /> },
-      ...consoleRoutes.map(({ path, label }) => ({
-        path,
-        element: <PlaceholderPage title={label} />,
-      })),
+      ...consoleResourceRoutes,
+      ...nestedConsoleRoutes,
     ],
   },
   {
