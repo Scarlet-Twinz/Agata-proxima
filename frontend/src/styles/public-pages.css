@@ -526,3 +526,9 @@
     width: 100%;
   }
 }
+
+.public-status-pending {
+  color: var(--agata-warning);
+  font-size: 13px;
+  font-weight: 700;
+}
