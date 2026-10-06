@@ -89,7 +89,7 @@ export default function DocumentationPortal(){
     <div className="documentation-footer">
     <Link to="/docs">Documentation home</Link>
     <Link to="/contact">Contact</Link>
-    <a href="/docs/openapi.json" target="_blank" rel="noreferrer">OpenAPI JSON</a>
+    <a href={controlPlaneBase + "/docs/openapi.json"} target="_blank" rel="noreferrer">OpenAPI JSON</a>
     <a href="https://github.com/Scarlet-Twinz/Agata-proxima" target="_blank" rel="noreferrer">GitHub source</a>
    </div>
    </article>
