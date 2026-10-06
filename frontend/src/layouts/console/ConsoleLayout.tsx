@@ -123,15 +123,13 @@ export function ConsoleLayout() {
   }
 
   useEffect(() => {
-    if (!searchOpen) return;
-
     function handleKeyDown(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         openSearch();
       }
 
-      if (event.key === "Escape") {
+      if (searchOpen && event.key === "Escape") {
         closeSearch();
       }
     }
