@@ -195,7 +195,10 @@ async fn main() -> Result<()> {
         .route("/api/v1/auth/logout", post(logout))
         .route("/api/v1/session", get(session))
         .route("/api/v1/platform/status", get(platform_status))
-        .route("/api/v1/control-plane/overview", get(control_plane_overview))
+        .route(
+            "/api/v1/control-plane/overview",
+            get(control_plane_overview),
+        )
         .route(
             "/api/v1/organizations",
             get(organizations).post(create_organization),
@@ -213,11 +216,23 @@ async fn main() -> Result<()> {
         )
         .route("/api/v1/audit", get(audit_events))
         .route("/api/v1/support", get(support).post(create_support))
-        .route("/api/v1/developer/api-keys", get(api_keys).post(create_api_key))
+        .route(
+            "/api/v1/developer/api-keys",
+            get(api_keys).post(create_api_key),
+        )
         .route("/api/v1/developer/api-keys/{id}", delete(revoke_api_key))
-        .route("/api/v1/developer/webhooks", get(webhooks).post(create_webhook))
-        .route("/api/v1/developer/webhooks/{id}", get(webhook_detail).delete(delete_webhook))
-        .route("/api/v1/developer/webhooks/{id}/deliveries", get(webhook_deliveries))
+        .route(
+            "/api/v1/developer/webhooks",
+            get(webhooks).post(create_webhook),
+        )
+        .route(
+            "/api/v1/developer/webhooks/{id}",
+            get(webhook_detail).delete(delete_webhook),
+        )
+        .route(
+            "/api/v1/developer/webhooks/{id}/deliveries",
+            get(webhook_deliveries),
+        )
         .route("/api/v1/nodes/{id}/enrollment", post(start_enrollment))
         .route("/verify-email", get(production::verify_email))
         .route("/reset-password", get(production::reset_password_page))
