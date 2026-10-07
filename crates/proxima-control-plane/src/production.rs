@@ -1175,17 +1175,8 @@ fn email_logo_url() -> String {
 }
 
 fn email_shell(content: &str) -> String {
-    let logo = html_escape(&email_logo_url());
     format!(
-        "<div style=\"font-family:Inter,Arial,sans-serif;background:#05080c;color:#eef7f8;padding:40px\">
-          <div style=\"max-width:640px;margin:0 auto\">
-            <div style=\"padding:0 0 28px\">
-              <img src=\"{logo}\" alt=\"Agata Proxima\" width=\"190\" style=\"display:block;width:190px;max-width:100%;height:auto\" />
-            </div>
-            <div style=\"background:#0b1420;border:1px solid #1d2b3a;border-radius:14px;padding:32px\">{content}</div>
-            <p style=\"color:#8ea0ab;font-size:12px;margin-top:22px\">Agata Proxima · Tenant isolation infrastructure</p>
-          </div>
-        </div>"
+        "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\"></head><body style=\"margin:0;background-color:#05080c;font-family:Arial,Helvetica,sans-serif;color:#eef7f8;\"><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" bgcolor=\"#05080c\"><tr><td align=\"center\" style=\"padding:32px 16px;\"><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:600px;background-color:#071019;border:1px solid #20303b;\"><tr><td align=\"center\" style=\"padding:28px 28px 10px;\"><table cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td width=\"56\" height=\"56\" align=\"center\" bgcolor=\"#70d8ff\" style=\"width:56px;height:56px;background-color:#70d8ff;color:#071019;font-family:Arial,Helvetica,sans-serif;font-size:28px;line-height:56px;font-weight:700;\">A</td></tr></table></td></tr><tr><td align=\"center\" style=\"padding:0 28px 18px;font-family:Arial,Helvetica,sans-serif;font-size:22px;line-height:28px;font-weight:700;color:#eef7f8;\">Agata Proxima</td></tr><tr><td style=\"padding:8px 28px 28px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:25px;color:#dce9ee;\">{content}</td></tr><tr><td style=\"padding:18px 28px 24px;border-top:1px solid #20303b;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#8ea0ab;\">Agata Proxima · Tenant isolation infrastructure<br><a href=\"https://agataproxima.com\" style=\"color:#70d8ff;text-decoration:none;\">Visit agataproxima.com</a> · <a href=\"https://agataproxima.com/support\" style=\"color:#70d8ff;text-decoration:none;\">Support</a><br><span style=\"color:#71828c;\">This is an automated message from Agata Proxima.</span></td></tr></table></td></tr></table></body></html>"
     )
 }
 
@@ -1217,7 +1208,7 @@ pub(crate) async fn send_verification_email(
     let base = env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:8080".into()).trim_end_matches('/').to_string();
     let link = format!("{base}/verify-email?token={token}");
     let name = html_escape(display_name);
-    let html = email_shell(&format!("<p>Hello {name},</p><p>Confirm this address to activate verified email status for your Proxima workspace.</p><p><a href=\"{link}\" style=\"display:inline-block;padding:12px 18px;background:#71dcff;color:#061015;text-decoration:none;border-radius:8px\">Verify email</a></p><p style=\"color:#8ea0ab\">This link expires in 24 hours.</p>"));
+    let html = email_shell(&format!("<p style=\"font-size:16px;line-height:25px;color:#dce9ee;\">Hello {name},</p><p style=\"font-size:16px;line-height:25px;color:#dce9ee;\">Welcome to Agata Proxima. Confirm this address to activate verified email status for your workspace.</p><p style=\"font-size:14px;line-height:22px;color:#b7c8cf;\">Verification helps keep account recovery, organization invitations, and security notifications tied to the correct address.</p><p><a href=\"{link}\" style=\"display:inline-block;padding:13px 22px;background:#70d8ff;color:#071019;text-decoration:none;font-weight:700\">Verify my email</a></p><p style=\"font-size:13px;line-height:20px;color:#91a5af;\">This verification link expires in 24 hours. If you did not create this workspace, you can ignore this message.</p>"));
     send_email_from(email,"Verify your Agata Proxima email",&configured_sender("RESEND_NOTIFICATIONS_FROM_EMAIL")?,&html).await
 }
 
@@ -1230,7 +1221,7 @@ pub(crate) async fn send_login_alert(
 ) -> anyhow::Result<()> {
     let name=html_escape(display_name); let org=html_escape(organization); let ip=html_escape(ip_address);
     let now=html_escape(&chrono::Utc::now().to_rfc3339());
-    let html=email_shell(&format!("<p>Hello {name},</p><p>We detected a new sign-in to your Agata Proxima account.</p><p>Time: {now}<br>Organization: {org}<br>IP: {ip}</p><p>If this was not you, reset your password immediately and contact the security team.</p>"));
+    let html=email_shell(&format!("<p style=\"font-size:16px;line-height:25px;color:#dce9ee;\">Hello {name},</p><p style=\"font-size:16px;line-height:25px;color:#dce9ee;\">We detected a new sign-in to your Agata Proxima account.</p><p style=\"font-size:14px;line-height:23px;color:#b7c8cf;\">Time: {now}<br>Organization: {org}<br>IP address: {ip}</p><p style=\"font-size:14px;line-height:22px;color:#b7c8cf;\">If you recognize this activity, no action is required. If you do not recognize it, reset your password and contact support as soon as possible.</p><p style=\"font-size:14px;line-height:22px;\"><a href=\"https://agataproxima.com\" style=\"color:#70d8ff;text-decoration:none;\">Open Agata Proxima</a> · <a href=\"https://agataproxima.com/support\" style=\"color:#70d8ff;text-decoration:none;\">Get support</a></p>"));
     send_email_from(to,"New login detected on your Agata Proxima account",&configured_sender("RESEND_SECURITY_FROM_EMAIL")?,&html).await
 }
 
@@ -1242,7 +1233,7 @@ pub(crate) async fn send_support_confirmation(
     organization: &str,
 ) -> anyhow::Result<()> {
     let name=html_escape(display_name); let org=html_escape(organization); let subj=html_escape(subject); let req=html_escape(request_id);
-    let html=email_shell(&format!("<p>Hello {name},</p><p>Your support request has been received by the Agata Proxima support team.</p><p>Organization: {org}<br>Subject: {subj}<br>Request ID: {req}</p><p>We will use the request details to investigate and respond.</p>"));
+    let html=email_shell(&format!("<p style=\"font-size:16px;line-height:25px;color:#dce9ee;\">Hello {name},</p><p style=\"font-size:16px;line-height:25px;color:#dce9ee;\">Your support request has been received by the Agata Proxima support team.</p><p style=\"font-size:14px;line-height:23px;color:#b7c8cf;\">Organization: {org}<br>Subject: {subj}<br>Request ID: {req}</p><p style=\"font-size:14px;line-height:22px;color:#b7c8cf;\">Keep this message for your records. The request ID can be used to reference the conversation while the request is being handled.</p><p style=\"font-size:14px;line-height:22px;\"><a href=\"https://agataproxima.com/support\" style=\"color:#70d8ff;text-decoration:none;\">Open the support page</a> for additional product guidance.</p>"));
     send_email_from(to,"We received your Agata Proxima support request",&configured_sender("RESEND_SUPPORT_FROM_EMAIL")?,&html).await
 }
 
