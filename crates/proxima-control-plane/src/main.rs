@@ -1,3 +1,17 @@
+async fn delete_account(State(s: State<AppState>, headers: HeaderMap) -> Response {{
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
+    if ctx.role != "owner" {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"ok":false,"message":"Only the organization owner can delete this account."})),
+        ).into_response();
+    }
 #[rustfmt::skip]
 mod production;
 
@@ -1753,6 +1767,18 @@ async fn authenticate(s: &AppState, headers: &HeaderMap) -> Result<AuthContext, 
         csrf: row.get("csrf_token"),
         role: row.get("role"),
     })
+}
+
+fn require_csrf(ctx: &AuthContext, headers: &HeaderMap) -> Result<(), StatusCode> {
+    let supplied = headers
+        .get("x-csrf-token")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    if supplied == ctx.csrf {
+        Ok(())
+    } else {
+        Err(StatusCode::FORBIDDEN)
+    }
 }
 
 fn require_write(ctx: &AuthContext, headers: &HeaderMap) -> Result<(), StatusCode> {
