@@ -179,6 +179,22 @@ const details: Record<string, Detail> = {
   },
 };
 
+
+const publicSidebars = {
+  product: [
+    ["Overview","/product"],["Operating model","/product/model"],["Enforcement","/product/enforcement"],["Verification","/product/verification"],["Evidence","/product/evidence"],
+  ],
+  developers: [
+    ["Developer home","/developers"],["Quickstart","/developers/quickstart"],["Authentication","/developers/authentication"],["Organizations","/developers/organizations"],["Tenant context","/developers/tenant-context"],["Policies","/developers/policies"],["Fleet","/developers/fleet"],["Deployments","/developers/deployments"],["Verification","/developers/verification"],["Audit","/developers/audit"],["Webhooks","/developers/webhooks"],["Events","/developers/events"],["SDKs","/developers/sdks"],["CLI","/developers/cli"],["Terraform","/developers/terraform"],["API reference","/developers/api-reference"],
+  ],
+  docs: [
+    ["Documentation home","/docs"],["Getting started","/docs/getting-started"],["Core concepts","/docs/core-concepts"],["API reference","/docs/api-reference"],["Security","/docs/security"],["Operations","/docs/operations"],["Troubleshooting","/docs/troubleshooting"],["Verification","/docs/verification"],
+  ],
+  security: [
+    ["Security overview","/security"],["Security architecture","/docs/security"],["Verification model","/docs/verification"],["Trust center","/trust"],["Status","/status"],["Contact security","/contact"],
+  ],
+};
+
 export function PublicDetail() {
   const { pathname } = useLocation();
   const detail = details[pathname] ?? {
@@ -193,28 +209,39 @@ export function PublicDetail() {
     <PublicPage eyebrow={detail.eyebrow} title={detail.title} description={detail.description}>
       <section className="public-content">
         <div className="agata-container">
-          <article className="public-prose">
-            {detail.sections.map((section) => (
-              <section key={section.title} className="public-detail-section">
-                <h2>{section.title}</h2>
-                {section.paragraphs?.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
-                {section.bullets && <ul>{section.bullets.map((bullet) => <li key={bullet}>{bullet}</li>)}</ul>}
-              </section>
-            ))}
-            {detail.links && (
-              <div className="public-detail-links">
-                {detail.links.map((item) =>
-                  item.external ? (
-                    <a key={item.label} href={item.to} target="_blank" rel="noreferrer" className="agata-button agata-button-secondary">
-                      {item.label}<ExternalLink size={15} />
-                    </a>
-                  ) : (
-                    <Link key={item.label} to={item.to} className="agata-button agata-button-secondary">{item.label}</Link>
-                  ),
-                )}
-              </div>
-            )}
-          </article>
+          <div className="public-detail-layout">
+            <aside className="public-detail-sidebar">
+              <div className="public-detail-sidebar-title">Explore this area</div>
+              {(pathname.startsWith("/developers") ? publicSidebars.developers :
+                pathname.startsWith("/docs") ? publicSidebars.docs :
+                pathname.startsWith("/security") ? publicSidebars.security :
+                publicSidebars.product).map(([label,to]) => (
+                <Link key={to} to={to} className={pathname===to?"is-active":""}>{label}</Link>
+              ))}
+            </aside>
+            <article className="public-prose">
+              {detail.sections.map((section) => (
+                <section key={section.title} className="public-detail-section">
+                  <h2>{section.title}</h2>
+                  {section.paragraphs?.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+                  {section.bullets && <ul>{section.bullets.map((bullet) => <li key={bullet}>{bullet}</li>)}</ul>}
+                </section>
+              ))}
+              {detail.links && (
+                <div className="public-detail-links">
+                  {detail.links.map((item) =>
+                    item.external ? (
+                      <a key={item.label} href={item.to} target="_blank" rel="noreferrer" className="agata-button agata-button-secondary">
+                        {item.label}<ExternalLink size={15} />
+                      </a>
+                    ) : (
+                      <Link key={item.label} to={item.to} className="agata-button agata-button-secondary">{item.label}</Link>
+                    ),
+                  )}
+                </div>
+              )}
+            </article>
+          </div>
         </div>
       </section>
     </PublicPage>
