@@ -16,7 +16,7 @@ use std::env;
 use uuid::Uuid;
 
 use super::{
-    audit, authenticate, bad, create_session, db_error, hash_password, internal, require_write, token_hash,
+    audit, authenticate, bad, create_session, db_error, hash_password, internal, require_admin, require_write, token_hash,
     AppState,
 };
 
@@ -1430,7 +1430,7 @@ pub(crate) async fn invite(
     if ctx.organization_id != input.organization_id {
         return StatusCode::FORBIDDEN.into_response();
     }
-    if let Err(c) = require_write(&ctx, &headers) {
+    if let Err(c) = require_admin(&ctx, &headers) {
         return c.into_response();
     }
 
