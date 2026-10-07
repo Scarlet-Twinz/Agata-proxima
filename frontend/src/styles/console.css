@@ -1167,3 +1167,5 @@ a {
 .documentation-section ul{padding-left:24px}
 .documentation-section li{margin:6px 0}
 .resource-documentation{min-height:70vh}
+
+.console-loading{min-height:100vh;display:grid;place-items:center;color:#667085;font:14px/1.5 system-ui,sans-serif;background:#f7f9fc}.customer-form textarea{min-width:320px;padding:10px 12px;border:1px solid var(--console-border);border-radius:9px;background:#fff;color:var(--text);font:inherit}.resource-records{overflow:auto}.resource-records .customer-row{min-width:760px}.resource-records .customer-row span{display:flex;gap:5px;align-items:baseline}.resource-records .customer-row strong{text-transform:capitalize;color:var(--text);font-size:11px}.resource-records .customer-row span{max-width:260px;overflow-wrap:anywhere}
