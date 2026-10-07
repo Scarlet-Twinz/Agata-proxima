@@ -1,4 +1,5 @@
 import { Link, useParams } from "react-router-dom";
+import { ArrowUpRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 
@@ -27,6 +28,16 @@ export function ProjectDetailPage(){
   <div className="page-heading"><div><span className="eyebrow">PROJECT</span><h1>Project workspace</h1><p>Environments make development, staging and production promotion explicit instead of mixing lifecycle state.</p></div><Link className="agata-button agata-button-secondary" to="/app/docs/overview">Read lifecycle documentation</Link></div>
   <div className="surface"><h2>Environment inventory</h2>{loading?<p>Loading environments…</p>:envs.length===0?<p>No environments are currently returned.</p>:envs.map(e=><div className="customer-row" key={e.id}><strong>{e.name}</strong><span>{e.kind}</span><span>{e.status}</span></div>)}<div className="customer-form"><input aria-label="Environment name" value={name} onChange={e=>setName(e.target.value)} placeholder="Environment name"/><select aria-label="Environment kind" value={kind} onChange={e=>setKind(e.target.value)}><option value="development">Development</option><option value="staging">Staging</option><option value="production">Production</option></select><button onClick={create} disabled={!name.trim()||creating}>{creating?"Creating…":"Add environment"}</button></div><ErrorMessage message={error}/></div>
   <div className="surface"><h2>Next: integration</h2><p>Register the integration mode for this project and environment. Registration intentionally starts in <strong>pending</strong> until the external system is actually configured and verified.</p><Link className="public-inline-link" to="/app/integrations">Continue to integration</Link></div>
+ </section>;
+}
+
+export function EnvironmentDetailPage(){
+ const {projectId,environmentId}=useParams(); const [environment,setEnvironment]=useState<Environment|null>(null); const [error,setError]=useState(""); const [loading,setLoading]=useState(true);
+ useEffect(()=>{if(!projectId||!environmentId)return;api.get<Environment[]>(`/api/v1/projects/${projectId}/environments`).then(items=>setEnvironment(items.find(item=>item.id===environmentId)??null)).catch(e=>setError(e.message)).finally(()=>setLoading(false));},[projectId,environmentId]);
+ return <section className="resource-page">
+  <div className="page-heading"><div><span className="eyebrow">ENVIRONMENT</span><h1>{environment?.name ?? "Environment"}</h1><p>This environment is a first-class project lifecycle boundary. Runtime state is only considered authoritative when returned by the backend and verified against the deployed system.</p></div><Link className="agata-button agata-button-secondary" to={`/app/projects/${projectId}`}>Project environments</Link></div>
+  <div className="surface">{loading?<p>Loading environment…</p>:error?<p role="alert">{error}</p>:!environment?<p>No environment with this identifier was returned by the active project.</p>:<><div className="customer-row"><strong>{environment.name}</strong><span>{environment.kind}</span><span>{environment.status}</span></div><h2>Lifecycle role</h2><p>{environment.kind==="production"?"Production is the canonical live environment and must be the final promotion target after external verification.":environment.kind==="staging"?"Staging is the pre-production verification boundary for integration and release checks.":"Development is the safe place to establish configuration and prove the integration contract before staging."}</p><Link className="public-inline-link" to="/app/integrations">Manage integrations <ArrowUpRight size={15}/></Link></>}</div>
+  <div className="surface"><h2>Environment documentation</h2><p>Promotion should follow development → staging → canary → production. Environment registration alone does not prove that a deployed application is secure or healthy.</p><Link className="public-inline-link" to="/app/docs/overview">Read the full lifecycle documentation <ArrowUpRight size={15}/></Link></div>
  </section>;
 }
 
