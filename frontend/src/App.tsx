@@ -9,13 +9,14 @@ import {
   Nodes,
   Policies,
   Security,
-  Settings,
   Support,
   Team,
   Tenants,
   Verification,
 } from "./pages/console/ConsoleSurfaces";
 import { NestedResource } from "./pages/console/NestedResource";
+import { SettingsHub } from "./pages/console/SettingsHub";
+import { Notifications } from "./pages/console/Notifications";
 
 export function App() {
   return (
@@ -87,7 +88,8 @@ export function App() {
           element={<NestedResource />}
         />
 
-        <Route path="settings" element={<Settings />} />
+        <Route path="settings" element={<SettingsHub />} />
+        <Route path="notifications" element={<Notifications />} />
         <Route
           path="settings/members"
           element={<NestedResource />}

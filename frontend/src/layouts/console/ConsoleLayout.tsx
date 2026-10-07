@@ -18,8 +18,10 @@ import {
   SlidersHorizontal,
   Users,
   X,
+  Bell,
 } from "lucide-react";
 import { getSession, logout, type Session } from "../../api/auth";
+import { api } from "../../api/client";
 import { AgataLogo } from "../../components/brand/AgataLogo";
 
 const primaryNavigation = [
@@ -69,6 +71,9 @@ export function ConsoleLayout() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [session, setSession] = useState<Session | null>(null);
+  const [organizationName, setOrganizationName] = useState("Workspace");
+  const [organizationSlug, setOrganizationSlug] = useState("");
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("agata.theme");
@@ -93,7 +98,18 @@ export function ConsoleLayout() {
       .catch(() => {
         if (active) setSession(null);
       });
-
+    api.get<{organization:{name:string;slug:string};organizations:unknown[];user:unknown}>("/api/v1/settings")
+      .then((settings) => {
+        if (!active) return;
+        setOrganizationName(settings.organization.name || "Workspace");
+        setOrganizationSlug(settings.organization.slug || "");
+      })
+      .catch(() => undefined);
+    api.get<{notifications:{read:boolean}[]}>("/api/v1/notifications")
+      .then((result) => {
+        if (active) setUnreadNotifications(result.notifications.filter((item) => !item.read).length);
+      })
+      .catch(() => undefined);
     return () => {
       active = false;
     };
@@ -107,6 +123,7 @@ export function ConsoleLayout() {
 
   const accountLabel = session?.user_id || "Account";
   const accountInitial = accountLabel.slice(0, 1).toUpperCase();
+  const organizationInitial = organizationName.trim().slice(0, 1).toUpperCase() || "W";
 
   const searchResults = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -208,12 +225,12 @@ export function ConsoleLayout() {
         </div>
 
         <button className="workspace-switcher" type="button" onClick={() => navigate("/app/settings")}>
-          <span className="workspace-symbol">A</span>
+          <span className="workspace-symbol">{organizationInitial}</span>
 
           {!collapsed && (
             <span className="workspace-copy">
-              <strong>Workspace</strong>
-              <small>Production</small>
+              <strong>{organizationName}</strong>
+              <small>Production{organizationSlug ? ` · ${organizationSlug}` : ""}</small>
             </span>
           )}
 
@@ -334,7 +351,9 @@ export function ConsoleLayout() {
             <div className="console-breadcrumb">
               <span>Agata Proxima</span>
               <span>/</span>
-              <strong>Control Plane</strong>
+              <strong>{organizationName}</strong>
+              <span>/</span>
+              <span>Production</span>
             </div>
           </div>
 
@@ -391,6 +410,10 @@ export function ConsoleLayout() {
               <Search size={17} />
               <span>Search</span>
               <kbd>⌘K</kbd>
+            </button>
+            <button className="console-icon-button notification-button" type="button" onClick={() => navigate("/app/notifications")} aria-label="Open notifications" title="Notifications">
+              <Bell size={18} />
+              {unreadNotifications > 0 && <span className="notification-badge">{unreadNotifications > 99 ? "99+" : unreadNotifications}</span>}
             </button>
 
             <div className="console-account-wrap">
