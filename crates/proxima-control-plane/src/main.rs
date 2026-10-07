@@ -397,7 +397,14 @@ async fn signup(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Resp
     if let Err(e) = production::send_verification_email(&s.db, user_id, &email, &display_name).await
     {
         tracing::error!(%e, "verification email delivery failed");
-        return service_unavailable("Workspace created, but the verification email could not be sent. Check the Resend configuration and try again.");
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(Message {
+                ok: false,
+                message: "Workspace created, but the verification email could not be sent. Check the Resend configuration and try again.".into(),
+            }),
+        )
+            .into_response();
     }
 
     Json(json!({
@@ -432,7 +439,7 @@ async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Respo
     }
 
     if row
-        .get::<Option<chrono::DateTime<chrono::Utc>, _>>("email_verified_at")
+        .get::<Option<chrono::DateTime<chrono::Utc>>, _>("email_verified_at")
         .is_none()
     {
         return (
