@@ -431,14 +431,21 @@ async fn signup(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Resp
         return db_error(e);
     }
 
-    if let Err(e) = production::send_verification_email(&s.db, user_id, &email, &display_name).await
-    {
+    if let Err(e) = production::send_verification_email(&s.db, user_id, &email, &display_name).await {
         tracing::error!(%e, "verification email delivery failed");
+        let _ = sqlx::query("DELETE FROM organizations WHERE id=$1")
+            .bind(organization_id)
+            .execute(&s.db)
+            .await;
+        let _ = sqlx::query("DELETE FROM users WHERE id=$1")
+            .bind(user_id)
+            .execute(&s.db)
+            .await;
         return (
             StatusCode::SERVICE_UNAVAILABLE,
             Json(Message {
                 ok: false,
-                message: "Workspace created, but the verification email could not be sent. Check the Resend configuration and try again.".into(),
+                message: "Workspace creation was rolled back because the verification email could not be sent. Check the Resend configuration and try again.".into(),
             }),
         )
             .into_response();
