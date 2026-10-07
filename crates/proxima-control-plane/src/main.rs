@@ -1,6 +1,8 @@
 #[rustfmt::skip]
 mod production;
 
+use crate::production::service_unavailable;
+
 use anyhow::Result;
 use argon2::{
     password_hash::{phc::PasswordHash, PasswordHasher, PasswordVerifier},
