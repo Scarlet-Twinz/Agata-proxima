@@ -1368,11 +1368,6 @@ fn email_shell(content: &str) -> String {
     )
 }
 
-async fn send_email(to: &str, subject: &str, html: &str) -> anyhow::Result<()> {
-    let from = configured_sender("RESEND_FROM_EMAIL")?;
-    send_email_from(to, subject, &from, html).await
-}
-
 async fn send_email_from(to: &str, subject: &str, from: &str, html: &str) -> anyhow::Result<()> {
     let key = env::var("RESEND_API_KEY")?;
     let response = Client::new()
