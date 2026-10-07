@@ -26,6 +26,9 @@ export function SettingsHub(){
   const [busy,setBusy]=useState(true);
   const [saving,setSaving]=useState(false);
   const [switching,setSwitching]=useState(false);
+  const [currentPassword,setCurrentPassword]=useState("");
+  const [newPassword,setNewPassword]=useState("");
+  const [passwordBusy,setPasswordBusy]=useState(false);
 
   async function load(){
     setBusy(true); setError("");
@@ -67,6 +70,13 @@ export function SettingsHub(){
       await load(); setMessage("Organization switched.");
     }catch(err){setError(err instanceof Error?err.message:"Unable to switch organization.");}
     finally{setSwitching(false);}
+  }
+
+  async function changePassword(){
+    setPasswordBusy(true); setError(""); setMessage("");
+    try{const result=await api.post<{ok:boolean;message:string}>("/api/v1/auth/password/change",{current_password:currentPassword,new_password:newPassword});setCurrentPassword("");setNewPassword("");setMessage(result.message);}
+    catch(err){setError(err instanceof Error?err.message:"Unable to change the password.");}
+    finally{setPasswordBusy(false);}
   }
 
   async function signOut(){
@@ -127,6 +137,15 @@ export function SettingsHub(){
       <div className="settings-toggle-list">
         {([["security","Security alerts","Sign-in, verification and security events."],["product","Product updates","Important product and platform updates."],["billing","Billing notifications","Billing, plan and entitlement changes."]] as const).map(([key,label,description])=><label className="settings-toggle" key={key}><span><strong>{label}</strong><small>{description}</small></span><input type="checkbox" checked={notifications[key]} onChange={e=>setNotifications(v=>({...v,[key]:e.target.checked}))}/></label>)}
       </div>
+    </section>
+
+    <section className="settings-section">
+      <div className="settings-section-heading"><div><h2>Password</h2><p>Change your password while keeping the current browser session active.</p></div><ShieldCheck size={19}/></div>
+      <div className="settings-grid">
+        <label className="settings-field"><span>Current password</span><input type="password" autoComplete="current-password" value={currentPassword} onChange={e=>setCurrentPassword(e.target.value)} placeholder="Current password"/></label>
+        <label className="settings-field"><span>New password</span><input type="password" autoComplete="new-password" minLength={12} value={newPassword} onChange={e=>setNewPassword(e.target.value)} placeholder="At least 12 characters"/></label>
+      </div>
+      <div style={{marginTop:14}}><button className="secondary-action" type="button" disabled={passwordBusy||currentPassword.length===0||newPassword.length<12} onClick={changePassword}>{passwordBusy?"Changing password…":"Change password"}</button></div>
     </section>
 
     <section className="settings-section">
