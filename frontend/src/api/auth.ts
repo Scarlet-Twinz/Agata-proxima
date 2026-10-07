@@ -54,6 +54,15 @@ export async function signup(input: {name:string;organization:string;email:strin
   return readResponse<SignupResponse>(response);
 }
 
+export async function verifyEmailCode(email: string, code: string): Promise<{ok:boolean;verified:boolean;message:string}> {
+  const response = await fetch("/api/v1/auth/verification/confirm", {
+    method:"POST", credentials:"include",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({email,code}),
+  });
+  return readResponse<{ok:boolean;verified:boolean;message:string}>(response);
+}
+
 export async function resendVerification(email: string): Promise<{ok:boolean;message:string}> {
   const response = await fetch("/api/v1/auth/verification/resend", {
     method:"POST", credentials:"include",
