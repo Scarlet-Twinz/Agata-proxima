@@ -232,7 +232,6 @@ async fn main() -> Result<()> {
         )
         .route("/api/v1/billing/checkout", post(production::checkout))
         .route("/api/v1/billing/portal", post(production::portal))
-        .route("/api/v1/webhooks/stripe", post(production::stripe_webhook))
         .route(
             "/api/v1/organization/oidc/entra",
             post(production::configure_entra),
@@ -774,6 +773,27 @@ async fn create_organization(
         "INSERT INTO organization_entitlements(organization_id) VALUES($1) ON CONFLICT DO NOTHING",
     )
     .bind(id)
+    .execute(&s.db)
+    .await
+    {
+        return db_error(e);
+    }
+
+    let project_id = Uuid::new_v4();
+    if let Err(e) = sqlx::query(
+        "INSERT INTO projects(id,organization_id,name,slug) VALUES($1,$2,'Production','production')",
+    )
+    .bind(project_id)
+    .bind(id)
+    .execute(&s.db)
+    .await
+    {
+        return db_error(e);
+    }
+    if let Err(e) = sqlx::query(
+        "INSERT INTO environments(project_id,name,slug,kind) VALUES($1,'Production','production','production')",
+    )
+    .bind(project_id)
     .execute(&s.db)
     .await
     {
