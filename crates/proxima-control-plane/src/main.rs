@@ -164,6 +164,9 @@ async fn main() -> Result<()> {
     sqlx::raw_sql(include_str!("../migrations/0005_developer.sql"))
         .execute(&db)
         .await?;
+    sqlx::raw_sql(include_str!("../migrations/0006_account_settings.sql"))
+        .execute(&db)
+        .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
@@ -1168,6 +1171,16 @@ async fn create_organization(
             .bind(id)
             .execute(&s.db)
             .await
+    {
+        return db_error(e);
+    }
+
+    if let Err(e) = sqlx::query(
+        "INSERT INTO projects(organization_id,name,slug) VALUES($1,'Production','production')",
+    )
+    .bind(id)
+    .execute(&s.db)
+    .await
     {
         return db_error(e);
     }
