@@ -184,6 +184,9 @@ async fn main() -> Result<()> {
     sqlx::raw_sql(include_str!("../migrations/0006_account_settings.sql"))
         .execute(&db)
         .await?;
+    sqlx::raw_sql(include_str!("../migrations/0007_notifications_email.sql"))
+        .execute(&db)
+        .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
