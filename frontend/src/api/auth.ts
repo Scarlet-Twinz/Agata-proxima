@@ -87,6 +87,15 @@ export async function signup(input: {
   return data;
 }
 
+export async function requestPasswordReset(email: string): Promise<void> {
+  const response = await fetch("/api/v1/auth/password-reset/request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  await readResponse<{ ok: boolean; message: string }>(response);
+}
+
 export async function logout(): Promise<void> {
   const csrf = sessionStorage.getItem("proxima_csrf") ?? "";
 
