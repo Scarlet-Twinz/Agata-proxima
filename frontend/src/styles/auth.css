@@ -636,3 +636,5 @@
 }
 .auth-inline-action:disabled { opacity: .55; cursor: wait; }
 .auth-security-callout small { display:block; margin-top:8px; color:var(--muted); line-height:1.5; }
+
+.auth-code-row{display:flex;gap:8px;align-items:center;margin-top:10px}.auth-code-row input{width:130px;padding:9px 11px;border:1px solid var(--console-border);border-radius:8px;background:#fff;color:var(--text);font-size:15px;letter-spacing:.16em;font-weight:700}.auth-code-row .auth-inline-action{margin-top:0;padding:9px 12px;background:var(--agata-blue);color:#fff;border-radius:8px}
