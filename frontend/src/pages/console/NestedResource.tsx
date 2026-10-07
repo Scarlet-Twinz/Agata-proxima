@@ -72,7 +72,7 @@ export function NestedResource() {
     description: "Inspect the selected control-plane resource.",
   };
 
-  const topicByPath: Record<string,string> = { "/app/billing/usage":"billing-usage", "/app/billing/plans":"billing-plans", "/app/billing/invoices":"billing-invoices", "/app/developer/api-keys":"developer-api-keys", "/app/developer/tenant-context":"developer-tenant-context", "/app/developer/webhooks":"developer-webhooks", "/app/developer/api-reference":"developer-api-reference", "/app/settings/authentication":"settings-authentication", "/app/settings/identity":"settings-identity", "/app/settings/security":"settings-security", "/app/security/tenant-isolation":"tenant-isolation" };
+  const topicByPath: Record<string,string> = { "/app/billing/usage":"billing-usage", "/app/billing/plans":"billing-plans", "/app/billing/invoices":"billing-invoices", "/app/developer/api-keys":"developer-api-keys", "/app/developer/tenant-context":"developer-tenant-context", "/app/developer/webhooks":"developer-webhooks", "/app/developer/api-reference":"developer-api-reference", "/app/settings/authentication":"settings-authentication", "/app/settings/identity":"settings-identity", "/app/settings/security":"settings-security", "/app/security/tenant-isolation":"tenant-isolation", "/app/security/events":"security-events" };
   const docsHref = `/app/docs/${topicByPath[location.pathname] ?? "overview"}`;
 
   return (
