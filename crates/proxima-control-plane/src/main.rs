@@ -838,7 +838,7 @@ async fn webhook_deliveries(
     Path(id): Path<Uuid>,
     headers: HeaderMap,
 ) -> Response {
-    let ctx = match authenticate(&s, &headers).await {
+    let _ctx = match authenticate(&s, &headers).await {
         Ok(v) => v,
         Err(c) => return c.into_response(),
     };
