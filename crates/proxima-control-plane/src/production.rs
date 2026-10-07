@@ -1278,6 +1278,4 @@ mod tests {
     fn unknown_plan_defaults_to_free_entitlements() {
         assert_eq!(super::plan_limits("unknown"), super::plan_limits("free"));
     }
-
-
-
+}
