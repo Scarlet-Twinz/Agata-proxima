@@ -1469,41 +1469,95 @@ async fn change_email(
     if input.new_email.trim().is_empty() || !input.new_email.contains('@') {
         return bad("Enter a valid email address.");
     }
-    if !verify_password(
-        &input.current_password,
-        &match sqlx::query_scalar::<_, String>("SELECT password_hash FROM users WHERE id=$1")
-            .bind(ctx.user_id).fetch_one(&s.db).await {
-                Ok(v) => v,
-                Err(e) => return db_error(e),
-            },
-    ) {
-        return (StatusCode::UNAUTHORIZED, Json(json!({"ok":false,"message":"Current password is incorrect."}))).into_response();
+
+    let password_hash = match sqlx::query_scalar::<_, String>(
+        "SELECT password_hash FROM users WHERE id=$1",
+    )
+    .bind(ctx.user_id)
+    .fetch_one(&s.db)
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => return db_error(e),
+    };
+    if !verify_password(&input.current_password, &password_hash) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({"ok":false,"message":"Current password is incorrect."})),
+        )
+            .into_response();
     }
+
     let email = input.new_email.trim().to_lowercase();
-    if let Ok(Some(_)) = sqlx::query("SELECT id FROM users WHERE lower(email)=lower($1) AND id<>$2")
-        .bind(&email).bind(ctx.user_id).fetch_optional(&s.db).await {
-        return (StatusCode::CONFLICT, Json(json!({"ok":false,"message":"That email address is already in use."}))).into_response();
+    if let Ok(Some(_)) = sqlx::query(
+        "SELECT id FROM users WHERE lower(email)=lower($1) AND id<>$2",
+    )
+    .bind(&email)
+    .bind(ctx.user_id)
+    .fetch_optional(&s.db)
+    .await
+    {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({"ok":false,"message":"That email address is already in use."})),
+        )
+            .into_response();
     }
+
     let code = format!("{:06}", Uuid::new_v4().as_u128() % 1_000_000);
-    let display_name = match sqlx::query_scalar::<_, String>("SELECT display_name FROM users WHERE id=$1")
-        .bind(ctx.user_id).fetch_one(&s.db).await {
-            Ok(v) => v, Err(e) => return db_error(e),
-        };
+    let display_name = match sqlx::query_scalar::<_, String>(
+        "SELECT display_name FROM users WHERE id=$1",
+    )
+    .bind(ctx.user_id)
+    .fetch_one(&s.db)
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => return db_error(e),
+    };
+
     if let Err(e) = sqlx::query(
-        "UPDATE users SET pending_email=$1,pending_email_token_hash=$2,pending_email_expires_at=now()+interval '15 minutes' WHERE id=$3",
-    ).bind(&email).bind(token_hash(&code)).bind(ctx.user_id).execute(&s.db).await {
+        "UPDATE users SET pending_email=$1,pending_email_token_hash=$2,
+         pending_email_expires_at=now()+interval '15 minutes' WHERE id=$3",
+    )
+    .bind(&email)
+    .bind(token_hash(&code))
+    .bind(ctx.user_id)
+    .execute(&s.db)
+    .await
+    {
         return db_error(e);
     }
+
     if let Err(e) = production::send_template_email(
         &email,
         "091dbdb2-21ed-444f-a209-6f44e55d192d",
         json!({"DISPLAY_NAME":display_name,"CODE":code}),
-    ).await {
+    )
+    .await
+    {
         tracing::error!(%e, "email change verification delivery failed");
-        return service_unavailable("The verification email could not be sent. Check the Resend configuration.");
+        return service_unavailable(
+            "The verification email could not be sent. Check the Resend configuration.",
+        );
     }
-    audit(&s.db, ctx.organization_id, ctx.user_id, "auth.email_change.requested", "user", Some(ctx.user_id), json!({"email_changed":true})).await;
-    Json(json!({"ok":true,"message":format!("A verification code was sent to {}.", email)})).into_response()
+
+    audit(
+        &s.db,
+        ctx.organization_id,
+        ctx.user_id,
+        "auth.email_change.requested",
+        "user",
+        Some(ctx.user_id),
+        json!({"email_changed":true}),
+    )
+    .await;
+
+    Json(json!({
+        "ok":true,
+        "message":format!("A verification code was sent to {}.", email)
+    }))
+    .into_response()
 }
 
 async fn confirm_email_change(
@@ -1518,35 +1572,81 @@ async fn confirm_email_change(
     if let Err(c) = require_csrf(&ctx, &headers) {
         return c.into_response();
     }
+
     let code = input.code.trim();
     if code.len() != 6 || !code.chars().all(|c| c.is_ascii_digit()) {
         return bad("Enter the 6-digit verification code.");
     }
+
     let row = match sqlx::query(
-        "SELECT pending_email,pending_email_token_hash,pending_email_expires_at FROM users WHERE id=$1",
-    ).bind(ctx.user_id).fetch_optional(&s.db).await {
-        Ok(Some(v)) => v, Ok(None) => return unauthorized(), Err(e) => return db_error(e),
+        "SELECT pending_email,pending_email_token_hash,pending_email_expires_at
+         FROM users WHERE id=$1",
+    )
+    .bind(ctx.user_id)
+    .fetch_optional(&s.db)
+    .await
+    {
+        Ok(Some(v)) => v,
+        Ok(None) => return unauthorized(),
+        Err(e) => return db_error(e),
     };
+
     let email: Option<String> = row.get("pending_email");
     let expected: Option<Vec<u8>> = row.get("pending_email_token_hash");
     let expires: Option<chrono::DateTime<chrono::Utc>> = row.get("pending_email_expires_at");
     let (Some(email), Some(expected), Some(expires)) = (email, expected, expires) else {
         return bad("There is no pending email change.");
     };
+
     if expires <= chrono::Utc::now() || token_hash(code) != expected {
         return bad("The verification code is invalid or expired.");
     }
-    if let Ok(Some(_)) = sqlx::query("SELECT id FROM users WHERE lower(email)=lower($1) AND id<>$2")
-        .bind(&email).bind(ctx.user_id).fetch_optional(&s.db).await {
-        return (StatusCode::CONFLICT, Json(json!({"ok":false,"message":"That email address is already in use."}))).into_response();
+
+    if let Ok(Some(_)) = sqlx::query(
+        "SELECT id FROM users WHERE lower(email)=lower($1) AND id<>$2",
+    )
+    .bind(&email)
+    .bind(ctx.user_id)
+    .fetch_optional(&s.db)
+    .await
+    {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({"ok":false,"message":"That email address is already in use."})),
+        )
+            .into_response();
     }
+
     if let Err(e) = sqlx::query(
-        "UPDATE users SET email=$1,email_verified_at=now(),pending_email=NULL,pending_email_token_hash=NULL,pending_email_expires_at=NULL WHERE id=$2",
-    ).bind(&email).bind(ctx.user_id).execute(&s.db).await {
+        "UPDATE users SET email=$1,email_verified_at=now(),
+         pending_email=NULL,pending_email_token_hash=NULL,pending_email_expires_at=NULL
+         WHERE id=$2",
+    )
+    .bind(&email)
+    .bind(ctx.user_id)
+    .execute(&s.db)
+    .await
+    {
         return db_error(e);
     }
-    audit(&s.db, ctx.organization_id, ctx.user_id, "auth.email_changed", "user", Some(ctx.user_id), json!({})).await;
-    Json(json!({"ok":true,"email":email,"message":"Email address updated and verified."})).into_response()
+
+    audit(
+        &s.db,
+        ctx.organization_id,
+        ctx.user_id,
+        "auth.email_changed",
+        "user",
+        Some(ctx.user_id),
+        json!({}),
+    )
+    .await;
+
+    Json(json!({
+        "ok":true,
+        "email":email,
+        "message":"Email address updated and verified."
+    }))
+    .into_response()
 }
 
 async fn notifications(State(s): State<AppState>, headers: HeaderMap) -> Response {
@@ -1554,36 +1654,81 @@ async fn notifications(State(s): State<AppState>, headers: HeaderMap) -> Respons
         Ok(v) => v,
         Err(c) => return c.into_response(),
     };
+
     match sqlx::query(
         "SELECT id,type,title,message,href,read_at,created_at FROM notifications
          WHERE user_id=$1 AND (organization_id IS NULL OR organization_id=$2)
          ORDER BY created_at DESC LIMIT 100",
-    ).bind(ctx.user_id).bind(ctx.organization_id).fetch_all(&s.db).await {
+    )
+    .bind(ctx.user_id)
+    .bind(ctx.organization_id)
+    .fetch_all(&s.db)
+    .await
+    {
         Ok(rows) => Json(json!({
             "notifications": rows.iter().map(|r| json!({
-                "id":r.get::<Uuid,_>("id"), "type":r.get::<String,_>("type"),
-                "title":r.get::<String,_>("title"), "message":r.get::<String,_>("message"),
-                "href":r.get::<Option<String>,_>("href"), "read":r.get::<Option<chrono::DateTime<chrono::Utc>,_>("read_at").is_some(),
+                "id":r.get::<Uuid,_>("id"),
+                "type":r.get::<String,_>("type"),
+                "title":r.get::<String,_>("title"),
+                "message":r.get::<String,_>("message"),
+                "href":r.get::<Option<String>,_>("href"),
+                "read":r.get::<Option<chrono::DateTime<chrono::Utc>,_>("read_at").is_some(),
                 "created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at")
             })).collect::<Vec<_>>()
-        })).into_response(),
+        }))
+        .into_response(),
         Err(e) => db_error(e),
     }
 }
 
-async fn mark_notification_read(State(s): State<AppState>, Path(id): Path<Uuid>, headers: HeaderMap) -> Response {
-    let ctx = match authenticate(&s, &headers).await { Ok(v)=>v, Err(c)=>return c.into_response() };
-    if let Err(c)=require_csrf(&ctx,&headers){return c.into_response();}
-    match sqlx::query("UPDATE notifications SET read_at=COALESCE(read_at,now()) WHERE id=$1 AND user_id=$2").bind(id).bind(ctx.user_id).execute(&s.db).await {
-        Ok(_)=>Json(json!({"ok":true})).into_response(), Err(e)=>db_error(e)
+async fn mark_notification_read(
+    State(s): State<AppState>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if let Err(c) = require_csrf(&ctx, &headers) {
+        return c.into_response();
+    }
+
+    match sqlx::query(
+        "UPDATE notifications SET read_at=COALESCE(read_at,now())
+         WHERE id=$1 AND user_id=$2",
+    )
+    .bind(id)
+    .bind(ctx.user_id)
+    .execute(&s.db)
+    .await
+    {
+        Ok(_) => Json(json!({"ok":true})).into_response(),
+        Err(e) => db_error(e),
     }
 }
 
-async fn mark_all_notifications_read(State(s): State<AppState>, headers: HeaderMap) -> Response {
-    let ctx = match authenticate(&s, &headers) { Ok(v)=>v, Err(c)=>return c.into_response() };
-    if let Err(c)=require_csrf(&ctx,&headers){return c.into_response();}
-    match sqlx::query("UPDATE notifications SET read_at=now() WHERE user_id=$1 AND read_at IS NULL").bind(ctx.user_id).execute(&s.db).await {
-        Ok(_)=>Json(json!({"ok":true})).into_response(), Err(e)=>db_error(e)
+async fn mark_all_notifications_read(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if let Err(c) = require_csrf(&ctx, &headers) {
+        return c.into_response();
+    }
+
+    match sqlx::query(
+        "UPDATE notifications SET read_at=now() WHERE user_id=$1 AND read_at IS NULL",
+    )
+    .bind(ctx.user_id)
+    .execute(&s.db)
+    .await
+    {
+        Ok(_) => Json(json!({"ok":true})).into_response(),
+        Err(e) => db_error(e),
     }
 }
 
@@ -1789,7 +1934,16 @@ async fn create_organization(
         json!({}),
     )
     .await;
-    create_notification(&s.db, ctx.user_id, Some(id), "workspace", "Organization created", &format!("“{}” is ready with its own Production project.", name), Some("/app")).await;
+    create_notification(
+        &s.db,
+        ctx.user_id,
+        Some(id),
+        "workspace",
+        "Organization created",
+        &format!("“{}” is ready with its own Production project.", name),
+        Some("/app"),
+    )
+    .await;
     Json(json!({"id":id,"name":name,"slug":slug})).into_response()
 }
 
@@ -2458,9 +2612,16 @@ pub(crate) async fn create_notification(
     let _ = sqlx::query(
         "INSERT INTO notifications(id,user_id,organization_id,type,title,message,href)
          VALUES($1,$2,$3,$4,$5,$6,$7)",
-    ).bind(Uuid::new_v4()).bind(user_id).bind(organization_id)
-     .bind(notification_type).bind(title).bind(message).bind(href)
-     .execute(db).await;
+    )
+    .bind(Uuid::new_v4())
+    .bind(user_id)
+    .bind(organization_id)
+    .bind(notification_type)
+    .bind(title)
+    .bind(message)
+    .bind(href)
+    .execute(db)
+    .await;
 }
 
 async fn scalar_count(db: &PgPool, sql: &str, organization_id: Uuid) -> i64 {
