@@ -84,6 +84,12 @@ export function ResourceSurface({
         ? transformCreate(values, organizationId)
         : { ...values, organization_id: organizationId };
       const created = await api.post<Record<string, unknown>>(createEndpoint, payload);
+      if (createEndpoint === "/api/v1/organizations" && typeof created.id === "string") {
+        const switched = await api.post<{ csrf_token: string }>("/api/v1/organization/switch", { organization_id: created.id });
+        sessionStorage.setItem("proxima_csrf", switched.csrf_token);
+        window.location.reload();
+        return;
+      }
       setRecords((current) => [created, ...current]);
       setValues(createDefaults);
     } catch (e) {
