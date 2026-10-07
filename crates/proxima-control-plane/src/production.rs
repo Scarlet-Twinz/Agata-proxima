@@ -1515,7 +1515,7 @@ pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
     })).into_response()
 }
 
-async fn send_template_email(
+pub(crate) async fn send_template_email(
     to: &str,
     template_id: &str,
     variables: Value,
