@@ -50,6 +50,18 @@ struct NameInput {
 }
 
 #[derive(Deserialize)]
+struct SwitchOrganizationInput {
+    organization_id: Uuid,
+}
+
+#[derive(Deserialize)]
+struct SettingsPatchInput {
+    display_name: Option<String>,
+    organization_name: Option<String>,
+    preferences: Option<Value>,
+}
+
+#[derive(Deserialize)]
 struct TenantInput {
     organization_id: Uuid,
     name: String,
@@ -192,8 +204,21 @@ async fn main() -> Result<()> {
             "/api/v1/auth/verification/resend",
             post(production::resend_verification_email),
         )
+        .route(
+            "/api/v1/auth/verification/confirm",
+            post(production::verify_email_code),
+        )
+        .route(
+            "/api/v1/auth/switch-organization",
+            post(switch_organization),
+        )
         .route("/api/v1/auth/logout", post(logout))
         .route("/api/v1/session", get(session))
+        .route(
+            "/api/v1/settings",
+            get(settings).patch(update_settings),
+        )
+        .route("/api/v1/account", delete(delete_account))
         .route("/api/v1/platform/status", get(platform_status))
         .route(
             "/api/v1/control-plane/overview",
