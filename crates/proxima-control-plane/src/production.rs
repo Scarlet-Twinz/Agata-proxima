@@ -1439,27 +1439,6 @@ pub(crate) async fn send_verification_email(
     send_email_from(email,"Verify your Agata Proxima email",&configured_sender("RESEND_NOTIFICATIONS_FROM_EMAIL")?,&html).await
 }
 
-pub(crate) async fn request_password_reset(
-    State(s): State<AppState>,
-    Json(input): Json<PasswordResetRequest>,
-) -> Response {
-    let email = input.email.trim().to_lowercase();
-    let user = match sqlx::query("SELECT id,display_name FROM users WHERE email=$1 AND status='active'").bind(&email).fetch_optional(&s.db).await {
-        Ok(v) => v, Err(e) => return db_error(e),
-    };
-    if let Some(row) = user {
-        let token = format!("{}-{}", Uuid::new_v4(), Uuid::new_v4());
-        if let Err(e) = sqlx::query("UPDATE users SET password_reset_token_hash=$1,password_reset_expires_at=now()+interval '30 minutes' WHERE id=$2")
-            .bind(token_hash(&token)).bind(row.get::<Uuid,_>("id")).execute(&s.db).await { return db_error(e); }
-        let base = env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:8080".into()).trim_end_matches('/').to_string();
-        let link = format!("{base}/reset-password?token={token}");
-        let name = html_escape(&row.get::<String,_>("display_name"));
-        let html = email_shell(&format!("<p>Hello {name},</p><p>A password reset was requested for your workspace.</p><p><a href=\"{link}\" style=\"display:inline-block;padding:12px 18px;background:#71dcff;color:#061015;text-decoration:none;border-radius:8px\">Reset password</a></p><p style=\"color:#8ea0ab\">This link expires in 30 minutes. If you did not request it, ignore this email.</p>"));
-        if let Err(e)=send_email_from(&email,"Reset your Agata Proxima password",&configured_sender("RESEND_NOTIFICATIONS_FROM_EMAIL")?,&html).await { tracing::error!(%e,"password reset email failed"); }
-    }
-    Json(json!({"ok":true,"message":"If that address exists, a reset email has been sent."})).into_response()
-}
-
 pub(crate) async fn send_login_alert(
     _db: &sqlx::PgPool,
     to: &str,
