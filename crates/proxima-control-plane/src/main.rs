@@ -431,7 +431,8 @@ async fn signup(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Resp
         return db_error(e);
     }
 
-    if let Err(e) = production::send_verification_email(&s.db, user_id, &email, &display_name).await {
+    if let Err(e) = production::send_verification_email(&s.db, user_id, &email, &display_name).await
+    {
         tracing::error!(%e, "verification email delivery failed");
         let _ = sqlx::query("DELETE FROM organizations WHERE id=$1")
             .bind(organization_id)
