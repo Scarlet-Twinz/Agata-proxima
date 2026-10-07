@@ -670,7 +670,7 @@ async fn platform_status(State(s): State<AppState>, headers: HeaderMap) -> Respo
         "proxima_enforcement": "independent",
         "offline_behavior": "engine_continues_enforcement"
     }))
-    .into_response()
+        .into_response()
 }
 
 async fn organizations(State(s): State<AppState>, headers: HeaderMap) -> Response {
