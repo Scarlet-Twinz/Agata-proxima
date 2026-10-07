@@ -62,6 +62,12 @@ struct SettingsPatchInput {
 }
 
 #[derive(Deserialize)]
+struct PasswordChangeInput {
+    current_password: String,
+    new_password: String,
+}
+
+#[derive(Deserialize)]
 struct TenantInput {
     organization_id: Uuid,
     name: String,
@@ -222,6 +228,7 @@ async fn main() -> Result<()> {
             get(settings).patch(update_settings),
         )
         .route("/api/v1/account", delete(delete_account))
+        .route("/api/v1/auth/password/change", post(change_password))
         .route("/api/v1/platform/status", get(platform_status))
         .route(
             "/api/v1/control-plane/overview",
@@ -1111,6 +1118,24 @@ async fn control_plane_overview(State(s): State<AppState>, headers: HeaderMap) -
         "nodes": node_rows.iter().map(|r| json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"region":r.get::<String,_>("region"),"environment":r.get::<String,_>("environment"),"status":r.get::<String,_>("status"),"version":r.get::<String,_>("version")})).collect::<Vec<_>>(),
         "recentActivity": audit_rows.iter().map(|r| json!({"id":r.get::<Uuid,_>("id"),"type":r.get::<String,_>("action"),"message":format!("{} {}",r.get::<String,_>("resource_type"),r.get::<Option<Uuid>,_>("resource_id").map(|v|v.to_string()).unwrap_or_default()),"timestamp":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),"href":"/app/audit"})).collect::<Vec<_>>()
     })).into_response()
+}
+
+async fn change_password(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<PasswordChangeInput>,
+) -> Response {
+    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};
+    if let Err(c)=require_csrf(&ctx,&headers){return c.into_response();}
+    if input.new_password.len()<12{return bad("New password must be at least 12 characters.");}
+    let hash:String=match sqlx::query_scalar("SELECT password_hash FROM users WHERE id=$1").bind(ctx.user_id).fetch_one(&s.db).await{Ok(v)=>v,Err(e)=>return db_error(e)};
+    if !verify_password(&input.current_password,&hash){return (StatusCode::UNAUTHORIZED,Json(json!({"ok":false,"message":"Current password is incorrect."}))).into_response();}
+    let new_hash=match hash_password(&input.new_password){Ok(v)=>v,Err(_)=>return internal("Password hashing failed.")};
+    let token=match cookie(&headers,"proxima_session"){Some(v)=>v,None=>return unauthorized()};
+    if let Err(e)=sqlx::query("UPDATE users SET password_hash=$1 WHERE id=$2").bind(&new_hash).bind(ctx.user_id).execute(&s.db).await{return db_error(e);}
+    if let Err(e)=sqlx::query("DELETE FROM sessions WHERE user_id=$1 AND token_hash<>$2").bind(ctx.user_id).bind(token_hash(&token)).execute(&s.db).await{return db_error(e);}
+    audit(&s.db,ctx.organization_id,ctx.user_id,"auth.password.changed","user",Some(ctx.user_id),json!({})).await;
+    Json(json!({"ok":true,"message":"Password changed. Other active sessions have been signed out."})).into_response()
 }
 
 async fn settings(State(s): State<AppState>, headers: HeaderMap) -> Response {
