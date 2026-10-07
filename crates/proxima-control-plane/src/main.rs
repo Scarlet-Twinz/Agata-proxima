@@ -412,16 +412,17 @@ async fn signup(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Resp
 
 async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Response {
     let email = input.email.trim().to_lowercase();
-    let row =
-        match sqlx::query("SELECT id,password_hash,email_verified_at FROM users WHERE email=$1 AND status='active'")
-            .bind(&email)
-            .fetch_optional(&s.db)
-            .await
-        {
-            Ok(Some(row)) => row,
-            Ok(None) => return unauthorized(),
-            Err(e) => return db_error(e),
-        };
+    let row = match sqlx::query(
+        "SELECT id,password_hash,email_verified_at FROM users WHERE email=$1 AND status='active'",
+    )
+    .bind(&email)
+    .fetch_optional(&s.db)
+    .await
+    {
+        Ok(Some(row)) => row,
+        Ok(None) => return unauthorized(),
+        Err(e) => return db_error(e),
+    };
 
     let user_id: Uuid = row.get("id");
     let password_hash: String = row.get("password_hash");
@@ -430,7 +431,10 @@ async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Respo
         return unauthorized();
     }
 
-    if row.get::<Option<chrono::DateTime<chrono::Utc>, _>>("email_verified_at").is_none() {
+    if row
+        .get::<Option<chrono::DateTime<chrono::Utc>, _>>("email_verified_at")
+        .is_none()
+    {
         return (
             StatusCode::FORBIDDEN,
             Json(json!({
