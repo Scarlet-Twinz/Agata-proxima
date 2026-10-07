@@ -1,10 +1,9 @@
 import { ArrowRight, Building2, Eye, EyeOff, ShieldCheck } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useState } from "react";
 import { signup } from "../../api/auth";
 
 export default function Signup() {
-  const navigate=useNavigate();
   const [showPassword,setShowPassword]=useState(false);
   const [name,setName]=useState("");
   const [organization,setOrganization]=useState("");

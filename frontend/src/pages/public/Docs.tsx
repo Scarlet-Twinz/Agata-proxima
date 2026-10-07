@@ -38,6 +38,6 @@ Audit evidence`}</pre></div>
 <div className="public-feature-grid">{resources.map(([title,text,to])=><article className="public-feature" key={title}><h3>{title}</h3><p>{text}</p><Link to={to} className="public-inline-link">Read the guide <ArrowRight size={15}/></Link></article>)}</div>
 <section className="public-detail-section"><h2>Documentation principles</h2><div className="public-feature-grid">{principles.map(([n,t,d])=><article className="public-feature" key={n}><div className="public-changelog-date">{n}</div><h3>{t}</h3><p>{d}</p></article>)}</div></section>
 <section className="public-detail-section"><h2>Integration sequence</h2><p>1. Create or join an organization. 2. Authenticate and establish the session contract. 3. Define projects and tenant boundaries. 4. Author versioned policy intent. 5. Enroll enforcement nodes and environments. 6. Create desired deployments. 7. Run verification against expected isolation behavior. 8. Inspect audit evidence.</p><p>For machine-readable integration, use the developer API reference and OpenAPI surface. For security-sensitive changes, treat the backend contract and verification evidence as authoritative over UI presentation.</p></section>
-</div></div></section>
+</div></section>
 </PublicPage>;
 }
