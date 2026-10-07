@@ -1055,6 +1055,340 @@ pub(crate) async fn stripe_webhook(State(s): State<AppState>, headers: HeaderMap
     Json(json!({"received":true})).into_response()
 }
 
+pub(crate) async fn verify_email(
+    State(s): State<AppState>,
+    Query(q): Query<VerifyInput>,
+) -> Response {
+    let result = sqlx::query(
+        "UPDATE users SET email_verified_at=now(),email_verification_token_hash=NULL,
+         email_verification_expires_at=NULL
+         WHERE email_verification_token_hash=$1
+           AND email_verification_expires_at>now()
+         RETURNING email",
+    )
+    .bind(token_hash(&q.token))
+    .fetch_optional(&s.db)
+    .await;
+
+    match result {
+        Ok(Some(row)) => Html(format!(
+            "<html><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\">
+             <h1>Email verified.</h1><p>{}</p><p><a href=\"/app\">Open Agata Proxima</a></p></body></html>",
+            row.get::<String,_>("email")
+        ))
+        .into_response(),
+        Ok(None) => (
+            StatusCode::BAD_REQUEST,
+            Html("<html><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\"><h1>Verification link expired or invalid.</h1></body></html>"),
+        )
+            .into_response(),
+        Err(e) => db_error(e),
+    }
+}
+
+pub(crate) async fn reset_password_page(Query(q): Query<VerifyInput>) -> Response {
+    let token = q.token.replace('"', "");
+    Html(format!(
+        "<!doctype html><html><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\">
+        <h1>Reset your Agata Proxima password</h1>
+        <form id=\"f\"><input id=\"p\" type=\"password\" minlength=\"12\" placeholder=\"New password\" required style=\"padding:12px;width:320px\">
+        <button style=\"margin-left:8px;padding:12px\">Reset password</button></form>
+        <p id=\"m\"></p>
+        <script>
+        const token={token:?};
+        document.getElementById('f').onsubmit=async(e)=>{{e.preventDefault();const r=await fetch('/api/v1/auth/password-reset/confirm',{{method:'POST',headers:{{'content-type':'application/json'}},body:JSON.stringify({{token,password:document.getElementById('p').value}})}});const j=await r.json();document.getElementById('m').textContent=j.message||'Done';}};
+        </script></body></html>"
+    ))
+    .into_response()
+}
+
+pub(crate) async fn request_password_reset(
+    State(s): State<AppState>,
+    Json(input): Json<PasswordResetRequest>,
+) -> Response {
+    let email = input.email.trim().to_lowercase();
+    let user = match sqlx::query("SELECT id,display_name FROM users WHERE email=$1 AND status='active'")
+        .bind(&email)
+        .fetch_optional(&s.db)
+        .await
+    {
+        Ok(v) => v,
+        Err(e) => return db_error(e),
+    };
+    if let Some(row) = user {
+        let token = format!("{}-{}", Uuid::new_v4(), Uuid::new_v4());
+        if let Err(e) = sqlx::query(
+            "UPDATE users SET password_reset_token_hash=$1,password_reset_expires_at=now()+interval '30 minutes' WHERE id=$2"
+        )
+        .bind(token_hash(&token))
+        .bind(row.get::<Uuid,_>("id"))
+        .execute(&s.db)
+        .await {
+            return db_error(e);
+        }
+        let base = env::var("AGATA_PUBLIC_BASE_URL")
+            .unwrap_or_else(|_| "http://127.0.0.1:8080".into())
+            .trim_end_matches('/')
+            .to_string();
+        let link = format!("{base}/reset-password?token={token}");
+        let name = html_escape(&row.get::<String,_>("display_name"));
+        let html = email_shell(&format!(
+            "<p>Hello {name},</p><p>A password reset was requested for your workspace.</p><p><a href=\"{link}\" style=\"display:inline-block;padding:12px 18px;background:#71dcff;color:#061015;text-decoration:none;border-radius:8px\">Reset password</a></p><p style=\"color:#8ea0ab\">This link expires in 30 minutes. If you did not request it, ignore this email.</p>"
+        ));
+        match configured_sender("RESEND_NOTIFICATIONS_FROM_EMAIL") {
+            Ok(sender) => {
+                if let Err(e) = send_email_from(
+                    &email,
+                    "Reset your Agata Proxima password",
+                    &sender,
+                    &html,
+                ).await {
+                    tracing::error!(%e, "password reset email failed");
+                }
+            }
+            Err(e) => tracing::error!(%e, "password reset sender is not configured"),
+        }
+    }
+    Json(json!({"ok":true,"message":"If that address exists, a reset email has been sent."})).into_response()
+}
+
+pub(crate) async fn reset_password(
+    State(s): State<AppState>,
+    Json(input): Json<PasswordResetConfirm>,
+) -> Response {
+    if input.password.len() < 12 {
+        return bad("Password must be at least 12 characters.");
+    }
+    let hash = match hash_password(&input.password) {
+        Ok(v) => v,
+        Err(_) => return internal("Password hashing failed."),
+    };
+    let result = match sqlx::query(
+        "UPDATE users SET password_hash=$1,password_reset_token_hash=NULL,password_reset_expires_at=NULL
+         WHERE password_reset_token_hash=$2 AND password_reset_expires_at>now()
+         RETURNING id",
+    )
+    .bind(hash)
+    .bind(token_hash(&input.token))
+    .fetch_optional(&s.db)
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => return db_error(e),
+    };
+
+    match result {
+        Some(row) => {
+            let user_id: Uuid = row.get("id");
+            let _ = sqlx::query("DELETE FROM sessions WHERE user_id=$1")
+                .bind(user_id)
+                .execute(&s.db)
+                .await;
+            Json(json!({"ok":true,"message":"Password changed. Sign in again."})).into_response()
+        }
+        None => bad("Reset link expired or invalid."),
+    }
+}
+
+pub(crate) async fn invite(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<InviteInput>,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if ctx.organization_id != input.organization_id {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
+
+    let role = input.role.unwrap_or_else(|| "viewer".into());
+    if !matches!(role.as_str(), "admin" | "operator" | "viewer") {
+        return bad("Invalid invitation role.");
+    }
+    let email = input.email.trim().to_lowercase();
+    if !email.contains('@') {
+        return bad("A valid email is required.");
+    }
+
+    let token = format!("{}-{}", Uuid::new_v4(), Uuid::new_v4());
+    let id = Uuid::new_v4();
+    if let Err(e) = sqlx::query(
+        "INSERT INTO organization_invites(id,organization_id,invited_by,email,role,token_hash,expires_at)
+         VALUES($1,$2,$3,$4,$5,$6,now()+interval '7 days')
+         ON CONFLICT (organization_id,email) DO UPDATE SET
+           invited_by=EXCLUDED.invited_by,role=EXCLUDED.role,token_hash=EXCLUDED.token_hash,
+           expires_at=EXCLUDED.expires_at,accepted_at=NULL",
+    )
+    .bind(id).bind(ctx.organization_id).bind(ctx.user_id).bind(&email).bind(&role).bind(token_hash(&token))
+    .execute(&s.db).await {
+        return db_error(e);
+    }
+
+    let base = env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:8080".into()).trim_end_matches('/').to_string();
+    let link = format!("{base}/accept-invite?token={token}");
+    let escaped_role = html_escape(&role);
+    let html = email_shell(&format!(
+        "<p>You have been invited to a Proxima organization.</p><p>Role: <strong>{escaped_role}</strong></p><p><a href=\"{link}\" style=\"display:inline-block;padding:12px 18px;background:#71dcff;color:#061015;text-decoration:none;border-radius:8px\">Accept invitation</a></p><p style=\"color:#8ea0ab\">This invitation expires in 7 days.</p>"
+    ));
+    match configured_sender("RESEND_NOTIFICATIONS_FROM_EMAIL") {
+        Ok(sender) => {
+            if let Err(e) = send_email_from(
+                &email,
+                "You have been invited to Agata Proxima",
+                &sender,
+                &html,
+            ).await {
+                tracing::error!(%e, "invitation email failed");
+            }
+        }
+        Err(e) => tracing::error!(%e, "invitation sender is not configured"),
+    }
+
+    audit(&s.db, ctx.organization_id, ctx.user_id, "organization.invite.created", "organization_invite", Some(id), json!({"email":email,"role":role})).await;
+    Json(json!({"ok":true,"id":id,"expires_in":"7 days"})).into_response()
+}
+
+pub(crate) async fn accept_invite(
+    State(s): State<AppState>,
+    Query(q): Query<VerifyInput>,
+    headers: HeaderMap,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(_) => return (
+            StatusCode::UNAUTHORIZED,
+            Html("<html><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\"><h1>Sign in first.</h1><p>Open the invitation link again after signing in.</p><a href=\"/login\">Sign in</a></body></html>")
+        ).into_response(),
+    };
+
+    let row = match sqlx::query(
+        "SELECT id,organization_id,role FROM organization_invites
+         WHERE token_hash=$1 AND expires_at>now() AND accepted_at IS NULL
+           AND lower(email)=(SELECT lower(email) FROM users WHERE id=$2)",
+    )
+    .bind(token_hash(&q.token))
+    .bind(ctx.user_id)
+    .fetch_optional(&s.db)
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => return db_error(e),
+    };
+
+    match row {
+        Some(row) => {
+            let invite_id: Uuid = row.get("id");
+            let org: Uuid = row.get("organization_id");
+            let role: String = row.get("role");
+            if let Err(e) = sqlx::query(
+                "INSERT INTO memberships(user_id,organization_id,role) VALUES($1,$2,$3)
+                 ON CONFLICT (user_id,organization_id) DO UPDATE SET role=EXCLUDED.role",
+            )
+            .bind(ctx.user_id).bind(org).bind(&role).execute(&s.db).await {
+                return db_error(e);
+            }
+            let _ = sqlx::query("UPDATE organization_invites SET accepted_at=now() WHERE id=$1")
+                .bind(invite_id).execute(&s.db).await;
+            audit(&s.db, org, ctx.user_id, "organization.invite.accepted", "organization_invite", Some(invite_id), json!({})).await;
+            Html("<html><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\"><h1>Invitation accepted.</h1><p>Your organization access is active.</p><a href=\"/app\">Open Command Center</a></body></html>").into_response()
+        }
+        None => bad("Invitation expired, invalid, or not addressed to the signed-in user."),
+    }
+}
+
+pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
+    let db_ok = sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
+    let stripe = env::var("STRIPE_SECRET_KEY").map(|v| !v.is_empty()).unwrap_or(false);
+    let stripe_price = ["AGATA_STRIPE_STARTER_PRICE_ID","AGATA_STRIPE_GROWTH_PRICE_ID","AGATA_STRIPE_SCALE_PRICE_ID"]
+        .iter().all(|key| env::var(key).map(|v| !v.trim().is_empty()).unwrap_or(false));
+    let stripe_webhook = env::var("STRIPE_WEBHOOK_SECRET").map(|v| !v.is_empty()).unwrap_or(false);
+    let resend = env::var("RESEND_API_KEY").map(|v| !v.is_empty()).unwrap_or(false);
+    let from = env::var("RESEND_FROM_EMAIL").map(|v| !v.is_empty()).unwrap_or(false);
+    let base = env::var("AGATA_PUBLIC_BASE_URL").map(|v| !v.is_empty()).unwrap_or(false);
+    let oidc = env::var("PROXIMA_OIDC_CLIENT_ID").map(|v| !v.is_empty()).unwrap_or(false)
+        && env::var("PROXIMA_OIDC_CLIENT_SECRET").map(|v| !v.is_empty()).unwrap_or(false);
+    let all = db_ok && stripe && stripe_price && stripe_webhook && resend && from && base && oidc;
+    Json(json!({
+        "status": if all {"ready"} else {"needs_configuration"},
+        "checks":{
+            "database":db_ok,
+            "stripe_secret":stripe,
+            "stripe_price":stripe_price,
+            "stripe_webhook":stripe_webhook,
+            "resend_api_key":resend,
+            "resend_from":from,
+            "public_base_url":base,
+            "oidc":oidc,
+            "engine_remains_authoritative":true
+        }
+    })).into_response()
+}
+
+fn configured_sender(variable: &str) -> anyhow::Result<String> {
+    match env::var(variable) {
+        Ok(v) if !v.trim().is_empty() => Ok(v),
+        _ => match env::var("RESEND_FROM_EMAIL") {
+            Ok(v) if !v.trim().is_empty() => Ok(v),
+            _ => anyhow::bail!("{variable} and RESEND_FROM_EMAIL are not configured for the current deployment"),
+        },
+    }
+}
+
+fn html_escape(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+fn email_logo_url() -> String {
+    env::var("AGATA_EMAIL_LOGO_URL")
+        .unwrap_or_else(|_| "https://agataproxima.com/logo.svg".into())
+}
+
+fn email_shell(content: &str) -> String {
+    let logo = html_escape(&email_logo_url());
+    format!(
+        "<div style=\"font-family:Inter,Arial,sans-serif;background:#05080c;color:#eef7f8;padding:40px\">
+          <div style=\"max-width:640px;margin:0 auto\">
+            <div style=\"padding:0 0 28px\">
+              <img src=\"{logo}\" alt=\"Agata Proxima\" width=\"190\" style=\"display:block;width:190px;max-width:100%;height:auto\" />
+            </div>
+            <div style=\"background:#0b1420;border:1px solid #1d2b3a;border-radius:14px;padding:32px\">{content}</div>
+            <p style=\"color:#8ea0ab;font-size:12px;margin-top:22px\">Agata Proxima · Tenant isolation infrastructure</p>
+          </div>
+        </div>"
+    )
+}
+
+async fn send_email(to: &str, subject: &str, html: &str) -> anyhow::Result<()> {
+    let from = configured_sender("RESEND_FROM_EMAIL")?;
+    send_email_from(to, subject, &from, html).await
+}
+
+async fn send_email_from(to: &str, subject: &str, from: &str, html: &str) -> anyhow::Result<()> {
+    let key = env::var("RESEND_API_KEY")?;
+    let response = Client::new()
+        .post("https://api.resend.com/emails")
+        .bearer_auth(key)
+        .json(&json!({"from":from,"to":[to],"subject":subject,"html":html}))
+        .send()
+        .await?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        anyhow::bail!("Resend returned {status}: {body}");
+    }
+    Ok(())
+}
+
 pub(crate) async fn send_verification_email(
     db: &sqlx::PgPool,
     user_id: Uuid,
