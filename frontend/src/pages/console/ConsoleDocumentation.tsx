@@ -180,7 +180,7 @@ export function ConsoleDocumentation() {
       <article className="surface resource-documentation">
         {page.sections.map(section => <section key={section.title} className="documentation-section">
           <h2>{section.title}</h2>
-          {section.paragraphs.map(p => <p key={p}>{p}</p>)}
+          {section.paragraphs?.map(p => <p key={p}>{p}</p>)}
           {section.bullets && <ul>{section.bullets.map(b => <li key={b}>{b}</li>)}</ul>}
         </section>)}
       </article>
