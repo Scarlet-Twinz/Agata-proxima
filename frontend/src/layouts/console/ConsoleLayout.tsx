@@ -69,6 +69,7 @@ export function ConsoleLayout() {
   const [environmentOpen, setEnvironmentOpen] = useState(false);
   const [environments, setEnvironments] = useState<Array<{id:string;name:string;slug:string;kind:string;status:string}>>([]);
   const [activeProjectId, setActiveProjectId] = useState(() => localStorage.getItem("agata.active.project") || "");
+  const [activeEnvironmentId, setActiveEnvironmentId] = useState(() => localStorage.getItem("agata.active.environment") || "");
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [organizations, setOrganizations] = useState<Array<{id:string;name:string;slug:string;role:string}>>([]);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -108,7 +109,12 @@ export function ConsoleLayout() {
 
   useEffect(() => {
     if (!activeProjectId) { setEnvironments([]); return; }
-    api.get<Array<{id:string;name:string;slug:string;kind:string;status:string}>>(`/api/v1/projects/${activeProjectId}/environments`).then(setEnvironments).catch(() => setEnvironments([]));
+    api.get<Array<{id:string;name:string;slug:string;kind:string;status:string}>>(`/api/v1/projects/${activeProjectId}/environments`).then((items) => {
+      setEnvironments(items);
+      const saved = localStorage.getItem("agata.active.environment");
+      const selected = items.find((item) => item.id === saved) ?? items.find((item) => item.kind === "production") ?? items[0];
+      if (selected) { setActiveEnvironmentId(selected.id); localStorage.setItem("agata.active.environment", selected.id); }
+    }).catch(() => setEnvironments([]));
   }, [activeProjectId]);
 
   async function handleLogout() {
@@ -369,7 +375,7 @@ export function ConsoleLayout() {
                 }}
               >
                 <span className="environment-dot" />
-                {environments.find((environment) => environment.kind === "production")?.name ?? "Environment"}
+                {environments.find((environment) => environment.id === activeEnvironmentId)?.name ?? "Environment"}
                 <ChevronDown size={15} />
               </button>
 
@@ -389,7 +395,7 @@ export function ConsoleLayout() {
                         <strong>{environment.name}</strong>
                         <small>{environment.kind} · {environment.status}</small>
                       </span>
-                      {environment.kind === "production" && <span className="environment-check">●</span>}
+                      {environment.id === activeEnvironmentId && <span className="environment-check">✓</span>}
                     </button>
                   )) : (
                     <div className="console-search-empty">No environments are available for the active project.</div>
