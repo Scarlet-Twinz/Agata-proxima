@@ -1127,6 +1127,37 @@ async fn control_plane_overview(State(s): State<AppState>, headers: HeaderMap) -
     })).into_response()
 }
 
+async fn settings(State(s): State<AppState>, headers: HeaderMap) -> Response {
+    let ctx = match authenticate(&s, &headers).await { Ok(v)=>v, Err(c)=>return c.into_response() };
+    let user=match sqlx::query("SELECT id,email,display_name,preferences FROM users WHERE id=$1").bind(ctx.user_id).fetch_optional(&s.db).await{Ok(Some(r))=>r,Ok(None)=>return unauthorized(),Err(e)=>return db_error(e)};
+    let organization=match sqlx::query("SELECT o.id,o.name,o.slug,m.role FROM organizations o JOIN memberships m ON m.organization_id=o.id WHERE o.id=$1 AND m.user_id=$2").bind(ctx.organization_id).bind(ctx.user_id).fetch_optional(&s.db).await{Ok(Some(r))=>r,Ok(None)=>return unauthorized(),Err(e)=>return db_error(e)};
+    let organizations=match sqlx::query("SELECT o.id,o.name,o.slug,m.role FROM organizations o JOIN memberships m ON m.organization_id=o.id WHERE m.user_id=$1 ORDER BY o.created_at").bind(ctx.user_id).fetch_all(&s.db).await{Ok(r)=>r,Err(e)=>return db_error(e)};
+    Json(json!({"user":{"id":user.get::<Uuid,_>("id"),"email":user.get::<String,_>("email"),"display_name":user.get::<String,_>("display_name")},"organization":{"id":organization.get::<Uuid,_>("id"),"name":organization.get::<String,_>("name"),"slug":organization.get::<String,_>("slug"),"role":organization.get::<String,_>("role")},"organizations":organizations.iter().map(|r|json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"slug":r.get::<String,_>("slug"),"role":r.get::<String,_>("role")})).collect::<Vec<_>>(),"preferences":user.get::<Value,_>("preferences")})).into_response()
+}
+
+async fn update_settings(State(s): State<AppState>, headers: HeaderMap, Json(input): Json<SettingsPatchInput>) -> Response {
+    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};
+    if let Err(c)=require_csrf(&ctx,&headers){return c.into_response();}
+    if let Some(display_name)=input.display_name.as_deref(){let display_name=display_name.trim();if display_name.is_empty()||display_name.len()>120{return bad("Display name must be between 1 and 120 characters.");}if let Err(e)=sqlx::query("UPDATE users SET display_name=$1 WHERE id=$2").bind(display_name).bind(ctx.user_id).execute(&s.db).await{return db_error(e);}}
+    if let Some(org_name)=input.organization_name.as_deref(){let org_name=org_name.trim();if org_name.is_empty()||org_name.len()>120{return bad("Organization name must be between 1 and 120 characters.");}let current:String=match sqlx::query_scalar("SELECT name FROM organizations WHERE id=$1").bind(ctx.organization_id).fetch_one(&s.db).await{Ok(v)=>v,Err(e)=>return db_error(e)};if org_name!=current{if !matches!(ctx.role.as_str(),"owner"|"admin"){return (StatusCode::FORBIDDEN,Json(json!({"ok":false,"message":"Only organization owners and admins can change the organization name."}))).into_response();}let slug=slugify(org_name);if let Err(e)=sqlx::query("UPDATE organizations SET name=$1,slug=$2 WHERE id=$3").bind(org_name).bind(&slug).bind(ctx.organization_id).execute(&s.db).await{return unique_error(e);}audit(&s.db,ctx.organization_id,ctx.user_id,"organization.updated","organization",Some(ctx.organization_id),json!({"field":"name"})).await;}}
+    if let Some(preferences)=input.preferences{let theme=preferences.get("theme").and_then(Value::as_str).unwrap_or("light");if !matches!(theme,"light"|"dark"){return bad("Theme must be light or dark.");}let n=preferences.get("notifications").cloned().unwrap_or_else(||json!({}));for key in ["security","product","billing"]{if let Some(v)=n.get(key){if !v.is_boolean(){return bad("Notification preferences must be boolean values.");}}}let normalized=json!({"theme":theme,"notifications":{"security":n.get("security").and_then(Value::as_bool).unwrap_or(true),"product":n.get("product").and_then(Value::as_bool).unwrap_or(true),"billing":n.get("billing").and_then(Value::as_bool).unwrap_or(true)}});if let Err(e)=sqlx::query("UPDATE users SET preferences=$1 WHERE id=$2").bind(normalized).bind(ctx.user_id).execute(&s.db).await{return db_error(e);}}
+    audit(&s.db,ctx.organization_id,ctx.user_id,"settings.updated","settings",None,json!({})).await;
+    settings(State(s),headers).await
+}
+
+async fn switch_organization(State(s): State<AppState>, headers: HeaderMap, Json(input): Json<SwitchOrganizationInput>) -> Response {
+    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};if let Err(c)=require_csrf(&ctx,&headers){return c.into_response();}
+    let membership=match sqlx::query("SELECT role FROM memberships WHERE user_id=$1 AND organization_id=$2").bind(ctx.user_id).bind(input.organization_id).fetch_optional(&s.db).await{Ok(Some(r))=>r,Ok(None)=>return (StatusCode::FORBIDDEN,Json(json!({"ok":false,"message":"You do not belong to that organization."}))).into_response(),Err(e)=>return db_error(e)};
+    let token=match cookie(&headers,"proxima_session"){Some(v)=>v,None=>return unauthorized()};if let Err(e)=sqlx::query("UPDATE sessions SET organization_id=$1 WHERE token_hash=$2 AND user_id=$3").bind(input.organization_id).bind(token_hash(&token)).bind(ctx.user_id).execute(&s.db).await{return db_error(e);}
+    audit(&s.db,input.organization_id,ctx.user_id,"organization.switched","organization",Some(input.organization_id),json!({"role":membership.get::<String,_>("role")})).await;Json(json!({"ok":true,"organization_id":input.organization_id})).into_response()
+}
+
+async fn delete_account(State(s: State<AppState>, headers: HeaderMap) -> Response {
+    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};if let Err(c)=require_write(&ctx,&headers){return c.into_response();}if ctx.role!="owner"{return (StatusCode::FORBIDDEN,Json(json!({"ok":false,"message":"Only the organization owner can delete this account."}))).into_response();}
+    let org_count:i64=match sqlx::query_scalar("SELECT count(*) FROM memberships WHERE user_id=$1").bind(ctx.user_id).fetch_one(&s.db).await{Ok(v)=>v,Err(e)=>return db_error(e)};let shared_orgs:i64=match sqlx::query_scalar("SELECT count(*) FROM memberships m WHERE m.organization_id IN (SELECT organization_id FROM memberships WHERE user_id=$1) AND m.user_id<>$1").bind(ctx.user_id).fetch_one(&s.db).await{Ok(v)=>v,Err(e)=>return db_error(e)};if org_count>0&&shared_orgs>0{return (StatusCode::CONFLICT,Json(json!({"ok":false,"message":"Account deletion is blocked while another member still depends on one of your organizations. Transfer ownership or remove other members first."}))).into_response();}
+    if let Err(e)=sqlx::query("DELETE FROM users WHERE id=$1").bind(ctx.user_id).execute(&s.db).await{return db_error(e);}let mut response_headers=HeaderMap::new();response_headers.insert(header::SET_COOKIE,HeaderValue::from_static("proxima_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict"));(response_headers,Json(json!({"ok":true,"message":"Account deleted."}))).into_response()
+}
+
 async fn organizations(State(s): State<AppState>, headers: HeaderMap) -> Response {
     let ctx = match authenticate(&s, &headers).await {
         Ok(v) => v,
