@@ -1,6 +1,7 @@
 import { ArrowLeft, ArrowRight, KeyRound } from "lucide-react";
 import { Link } from "react-router-dom";
-import { FormEvent, useState } from "react";
+import { useState } from "react";
+import type { FormEvent } from "react";
 import { requestPasswordReset } from "../../api/auth";
 
 export default function Recovery() {
