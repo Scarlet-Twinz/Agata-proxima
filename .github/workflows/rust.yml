@@ -85,6 +85,8 @@ jobs:
           grep -q "STRIPE_SECRET_KEY" .env.example
           grep -q "RESEND_API_KEY" .env.example
           grep -q "PROXIMA_OIDC_ISSUER" .env.example
+          grep -q "^RESEND_FROM_EMAIL=$" .env.example
+          ! grep -q "^AGATA_STRIPE_PRICE_ID=" .env.example
 
       - name: Control plane operational scripts
         run: |
