@@ -225,6 +225,7 @@ const publicSidebars = {
   ],
 };
 
+// Every destination in the public navigation resolves to a documented detail surface.
 export function PublicDetail() {
   const { pathname } = useLocation();
   const detail = details[pathname] ?? {
