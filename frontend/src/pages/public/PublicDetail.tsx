@@ -217,6 +217,48 @@ const details: Record<string, Detail> = {
   },
 };
 
+const longGuideSections: Record<string, Section[]> = {
+  "/docs/getting-started": [
+    { title: "Who this is for", paragraphs: ["This guide is for an engineer integrating an existing multi-tenant SaaS with Agata Proxima. Your application keeps authentication, business authorization and tenant identity; Proxima provides the protected database boundary."] },
+    { title: "Before you begin", bullets: ["A working multi-tenant application.", "A PostgreSQL database.", "A stable tenant identifier.", "A development environment where positive and negative isolation tests can be executed.", "A secure place for integration credentials and tenant-signing secrets."] },
+    { title: "The complete journey", bullets: ["Create the organization and project.", "Confirm the Production environment.", "Create Development or Staging as needed.", "Choose Engine, SDK or Proxy.", "Configure tenant context.", "Connect the protected database path.", "Run verification.", "Complete external SaaS acceptance before production."] },
+    { title: "Architecture example", paragraphs: ["The application remains the system that knows who the user is and which customer they belong to. Proxima receives the authenticated tenant context and protects the database boundary before PostgreSQL operations continue."] },
+  ],
+  "/docs/core-concepts": [
+    { title: "Organization", paragraphs: ["The organization is the administrative boundary for members, roles, projects and commercial state. Organization-scoped authorization is enforced by the Control Plane API."] },
+    { title: "Project", paragraphs: ["A project represents an application or logical customer workload. Its environments and integration registrations belong to that project."] },
+    { title: "Environment", paragraphs: ["Development, Staging and Production separate lifecycle state. A project receives a canonical Production environment when it is created, and only one active Production environment is allowed."] },
+    { title: "Tenant", paragraphs: ["A tenant represents a customer boundary inside a project. A tenant record is inventory; it is not proof that the external application actually enforces isolation."] },
+    { title: "Evidence", paragraphs: ["Verification demonstrates observed security behavior. Audit records explain administrative activity. Both are needed when investigating a production security decision."] },
+  ],
+  "/docs/api-reference": [
+    { title: "Authentication and CSRF", paragraphs: ["Start with GET /api/v1/session. An authenticated session returns the organization context and CSRF token. State-changing requests send that token in x-csrf-token. The server still performs authorization; the browser cannot grant itself access."] },
+    { title: "Resource lifecycle", bullets: ["GET /api/v1/projects lists organization projects.", "POST /api/v1/projects creates a project and its canonical Production environment.", "GET /api/v1/projects/{id}/environments lists project environments.", "POST /api/v1/projects/{id}/environments creates a lifecycle environment.", "GET /api/v1/integrations lists registered integrations.", "POST /api/v1/integrations registers an integration in pending state."] },
+    { title: "Contract rule", paragraphs: ["Treat the documented /api/v1 contract as authoritative. Non-2xx responses are failures, and resource identifiers must always be resolved inside the authenticated organization scope."] },
+  ],
+  "/docs/security": [
+    { title: "Layered model", bullets: ["Application authentication identifies the user.", "Application authorization establishes business permission.", "Signed tenant context identifies the requested customer boundary.", "Proxima verifies and enforces the protected database path.", "PostgreSQL roles and row-level security add database-side controls.", "Verification and audit preserve evidence."] },
+    { title: "Negative cases", bullets: ["Missing tenant context.", "Malformed context.", "Expired context.", "Tampered context.", "Cross-tenant reads.", "Cross-tenant writes.", "Cross-organization administrative access."] },
+    { title: "What a security page cannot prove", paragraphs: ["A documentation page, a saved policy, a registered integration or a green visual badge is not an independent security assessment. Production claims must be tied to actual runtime evidence."] },
+  ],
+  "/docs/operations": [
+    { title: "Promotion model", bullets: ["Development validation.", "Staging validation.", "Canary validation.", "Production promotion.", "Post-deployment verification.", "Evidence and audit review."] },
+    { title: "Desired versus observed state", paragraphs: ["A deployment request expresses intent. Runtime telemetry expresses what actually happened. These states must remain distinct so a requested deployment cannot be displayed as healthy before the runtime confirms it."] },
+    { title: "Failure handling", paragraphs: ["When an operation fails, preserve the environment, resource identifier, timestamp and error. Troubleshooting should lead to a concrete next action instead of hiding the failure behind a generic status badge."] },
+  ],
+  "/docs/troubleshooting": [
+    { title: "Authentication problems", bullets: ["Confirm the session exists.", "Confirm the request uses /api/v1.", "Confirm x-csrf-token is present for mutations.", "Confirm the active organization is correct.", "Confirm the server returned the expected authorization result."] },
+    { title: "Tenant verification problems", bullets: ["Check tenant identifier.", "Check token expiry.", "Check signature generation.", "Check PostgreSQL startup options.", "Repeat positive and negative tests.", "Compare verification evidence with audit history."] },
+    { title: "Database problems", paragraphs: ["Separate connectivity failure from authorization failure. If the database path cannot be exercised, the result is not evidence that isolation passed or failed; it is evidence that the test could not be completed."] },
+    { title: "Support escalation", paragraphs: ["Include organization, project, environment, timestamp, request ID and safe diagnostic information. Never include passwords, API keys or tenant-signing secrets."] },
+  ],
+  "/docs/verification": [
+    { title: "Verification matrix", bullets: ["Tenant-local read succeeds.", "Tenant-local write succeeds.", "Cross-tenant read is rejected.", "Cross-tenant write is rejected.", "Missing context is rejected.", "Expired context is rejected.", "Tampered context is rejected.", "Transactions behave correctly.", "Prepared statements behave correctly.", "Connection reuse preserves the tenant boundary.", "Engine restart preserves enforcement.", "Control Plane outage does not disable runtime enforcement."] },
+    { title: "Result meanings", paragraphs: ["PASS means the expected behavior was observed. REVIEW means evidence requires human inspection. NOT_RUN means no test has established the property. A project or integration record must never be upgraded into a verification pass simply because it exists."] },
+    { title: "External acceptance", paragraphs: ["The repository can test implementation contracts, but final production acceptance requires a real customer-like application and PostgreSQL deployment. The external procedure compares application behavior with verification and audit evidence."] },
+  ],
+};
+
 export function PublicDetail() {
   const { pathname } = useLocation();
   const detail = details[pathname] ?? {
