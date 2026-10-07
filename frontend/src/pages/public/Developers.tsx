@@ -30,6 +30,6 @@ POST /api/v1/verifications
 GET  /api/v1/audit`}</pre></div>
 <div className="public-feature-grid">{resources.map(([title,text,to])=><article className="public-feature" key={title}><h3>{title}</h3><p>{text}</p><Link to={to} className="public-inline-link">Open resource <ArrowRight size={15}/></Link></article>)}</div>
 <section className="public-detail-section"><h2>Engineering contract</h2><p>Authentication identifies the caller. Organization context identifies the administrative boundary. Tenant context identifies the protected customer boundary. Policies describe intended enforcement behavior. The Engine enforces the runtime boundary. Verification and audit make the result inspectable.</p><p>Do not treat a control-plane response as proof that the data plane is healthy. Desired state, observed state and verified state are distinct concepts and should remain distinct in integrations.</p></section>
-</div></div></section>
+</div></section>
 </PublicPage>;
 }
