@@ -42,7 +42,7 @@ import {
   Verification,
 } from "../pages/console/ConsoleSurfaces";
 import { NestedResource } from "../pages/console/NestedResource";
-import { ProjectsPage, ProjectDetailPage, IntegrationsPage, DeveloperQuickstartPage } from "../pages/console/CustomerIntegration";
+import { ProjectsPage, ProjectDetailPage, EnvironmentDetailPage, IntegrationsPage, DeveloperQuickstartPage } from "../pages/console/CustomerIntegration";
 import { ConsoleDocumentation } from "../pages/console/ConsoleDocumentation";
 
 const detailRoutes = [
@@ -135,6 +135,7 @@ export const router = createBrowserRouter([
       { index: true, element: <Overview /> },
       { path: "projects", element: <ProjectsPage /> },
       { path: "projects/:projectId", element: <ProjectDetailPage /> },
+      { path: "projects/:projectId/environments/:environmentId", element: <EnvironmentDetailPage /> },
       { path: "integrations", element: <IntegrationsPage /> },
       { path: "developer/quickstart", element: <DeveloperQuickstartPage /> },
       { path: "docs/:topic", element: <ConsoleDocumentation /> },
