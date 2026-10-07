@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS environments (
   UNIQUE (project_id, slug)
 );
 CREATE INDEX IF NOT EXISTS idx_environments_project ON environments(project_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_environments_one_active_production ON environments(project_id) WHERE kind='production' AND status <> 'retired';
 
 CREATE TABLE IF NOT EXISTS integration_installations (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
