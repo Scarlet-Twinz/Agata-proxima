@@ -634,57 +634,240 @@ async fn webhooks(State(s): State<AppState>, headers: HeaderMap) -> Response {
         Ok(v) => v,
         Err(c) => return c.into_response(),
     };
-    match sqlx::query("SELECT id,name,endpoint_url,events,enabled,created_at,updated_at FROM webhooks WHERE organization_id=$1 ORDER BY created_at DESC").bind(ctx.organization_id).fetch_all(&s.db).await{
-      Ok(rows)=>Json(rows.iter().map(|r|json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"endpoint_url":r.get::<String,_>("endpoint_url"),"events":r.get::<Value,_>("events"),"enabled":r.get::<bool,_>("enabled"),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),"updated_at":r.get::<chrono::DateTime<chrono::Utc>,_>("updated_at")})).collect::<Vec<_>>()).into_response(),
-      Err(e)=>db_error(e)
+
+    match sqlx::query(
+        "SELECT id,name,endpoint_url,events,enabled,created_at,updated_at
+         FROM webhooks WHERE organization_id=$1 ORDER BY created_at DESC",
+    )
+    .bind(ctx.organization_id)
+    .fetch_all(&s.db)
+    .await
+    {
+        Ok(rows) => Json(
+            rows.iter()
+                .map(|r| {
+                    json!({
+                        "id": r.get::<Uuid,_>("id"),
+                        "name": r.get::<String,_>("name"),
+                        "endpoint_url": r.get::<String,_>("endpoint_url"),
+                        "events": r.get::<Value,_>("events"),
+                        "enabled": r.get::<bool,_>("enabled"),
+                        "created_at": r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),
+                        "updated_at": r.get::<chrono::DateTime<chrono::Utc>,_>("updated_at")
+                    })
+                })
+                .collect::<Vec<_>>(),
+        )
+        .into_response(),
+        Err(e) => db_error(e),
     }
 }
 
-async fn create_webhook(State(s): State<AppState>, headers: HeaderMap, Json(input): Json<WebhookInput>) -> Response {
-    let ctx = match authenticate(&s, &headers).await {
-        Ok(v) => v,
-        Err(c) => return c.into_response(),
-    }; if let Err(c)=require_write(&ctx,&headers){return c.into_response();}
-    let name=input.name.trim(); let endpoint=input.endpoint_url.trim(); if name.is_empty()||endpoint.is_empty(){return bad("Webhook name and endpoint URL are required.");}
-    if !(endpoint.starts_with("https://")||endpoint.starts_with("http://127.0.0.1")||endpoint.starts_with("http://localhost")){return bad("Webhook endpoint must use HTTPS outside local development.");}
-    let id=Uuid::new_v4(); let secret=format!("whsec_{}_{}",id.simple(),Uuid::new_v4().simple()); let hint=secret.chars().rev().take(6).collect::<String>().chars().rev().collect::<String>();
-    if let Err(e)=sqlx::query("INSERT INTO webhooks(id,organization_id,name,endpoint_url,signing_secret_hash,signing_secret_hint,events) VALUES($1,$2,$3,$4,$5,$6,$7)").bind(id).bind(ctx.organization_id).bind(name).bind(endpoint).bind(token_hash(&secret)).bind(&hint).bind(json!(input.events)).execute(&s.db).await{return db_error(e);}
-    audit(&s.db,ctx.organization_id,ctx.user_id,"developer.webhook.created","webhook",Some(id),json!({"name":name})).await;
-    Json(json!({"id":id,"name":name,"endpoint_url":endpoint,"events":input.events,"signing_secret":secret,"message":"Copy the signing secret now. It will not be shown again."})).into_response()
-}
-
-async fn webhook_detail(State(s): State<AppState>, Path(id): Path<Uuid>, headers: HeaderMap) -> Response {
+async fn create_webhook(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<WebhookInput>,
+) -> Response {
     let ctx = match authenticate(&s, &headers).await {
         Ok(v) => v,
         Err(c) => return c.into_response(),
     };
-    match sqlx::query("SELECT id,name,endpoint_url,events,enabled,signing_secret_hint,created_at,updated_at FROM webhooks WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id).fetch_optional(&s.db).await{
-      Ok(Some(r))=>Json(json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"endpoint_url":r.get::<String,_>("endpoint_url"),"events":r.get::<Value,_>("events"),"enabled":r.get::<bool,_>("enabled"),"signing_secret_hint":r.get::<String,_>("signing_secret_hint"),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),"updated_at":r.get::<chrono::DateTime<chrono::Utc>,_>("updated_at")})).into_response(),
-      Ok(None)=>(StatusCode::NOT_FOUND,Json(json!({"message":"Webhook not found."}))).into_response(), Err(e)=>db_error(e)
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
     }
+
+    let name = input.name.trim();
+    let endpoint = input.endpoint_url.trim();
+    if name.is_empty() || endpoint.is_empty() {
+        return bad("Webhook name and endpoint URL are required.");
+    }
+
+    if !(endpoint.starts_with("https://")
+        || endpoint.starts_with("http://127.0.0.1")
+        || endpoint.starts_with("http://localhost"))
+    {
+        return bad("Webhook endpoint must use HTTPS outside local development.");
+    }
+
+    let id = Uuid::new_v4();
+    let secret = format!("whsec_{}_{}", id.simple(), Uuid::new_v4().simple());
+    let hint = secret
+        .chars()
+        .rev()
+        .take(6)
+        .collect::<String>()
+        .chars()
+        .rev()
+        .collect::<String>();
+
+    if let Err(e) = sqlx::query(
+        "INSERT INTO webhooks(id,organization_id,name,endpoint_url,signing_secret_hash,
+         signing_secret_hint,events) VALUES($1,$2,$3,$4,$5,$6,$7)",
+    )
+    .bind(id)
+    .bind(ctx.organization_id)
+    .bind(name)
+    .bind(endpoint)
+    .bind(token_hash(&secret))
+    .bind(&hint)
+    .bind(json!(input.events))
+    .execute(&s.db)
+    .await
+    {
+        return db_error(e);
+    }
+
+    audit(
+        &s.db,
+        ctx.organization_id,
+        ctx.user_id,
+        "developer.webhook.created",
+        "webhook",
+        Some(id),
+        json!({"name":name}),
+    )
+    .await;
+
+    Json(json!({
+        "id":id,
+        "name":name,
+        "endpoint_url":endpoint,
+        "events":input.events,
+        "signing_secret":secret,
+        "message":"Copy the signing secret now. It will not be shown again."
+    }))
+    .into_response()
 }
 
-async fn delete_webhook(State(s): State<AppState>, Path(id): Path<Uuid>, headers: HeaderMap) -> Response {
-    let ctx = match authenticate(&s, &headers).await {
-        Ok(v) => v,
-        Err(c) => return c.into_response(),
-    }; if let Err(c)=require_write(&ctx,&headers){return c.into_response();}
-    match sqlx::query("DELETE FROM webhooks WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id).execute(&s.db).await{
-      Ok(r) if r.rows_affected()==1=>{audit(&s.db,ctx.organization_id,ctx.user_id,"developer.webhook.deleted","webhook",Some(id),json!({})).await;Json(json!({"ok":true})).into_response()},
-      Ok(_)=>(StatusCode::NOT_FOUND,Json(json!({"message":"Webhook not found."}))).into_response(), Err(e)=>db_error(e)
-    }
-}
-
-async fn webhook_deliveries(State(s): State<AppState>, Path(id): Path<Uuid>, headers: HeaderMap) -> Response {
+async fn webhook_detail(
+    State(s): State<AppState>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+) -> Response {
     let ctx = match authenticate(&s, &headers).await {
         Ok(v) => v,
         Err(c) => return c.into_response(),
     };
-    let exists=sqlx::query("SELECT 1 FROM webhooks WHERE id=$1 AND organization_id=$2").bind(id).fetch_optional(&s.db).await;
-    if !matches!(exists,Ok(Some(_))){return (StatusCode::NOT_FOUND,Json(json!({"message":"Webhook not found."}))).into_response();}
-    match sqlx::query("SELECT id,event_type,event_id,status,status_code,response_ms,created_at FROM webhook_deliveries WHERE webhook_id=$1 ORDER BY created_at DESC LIMIT 100").bind(id).fetch_all(&s.db).await{
-      Ok(rows)=>Json(rows.iter().map(|r|json!({"id":r.get::<Uuid,_>("id"),"event_type":r.get::<String,_>("event_type"),"event_id":r.get::<String,_>("event_id"),"status":r.get::<String,_>("status"),"status_code":r.get::<Option<i32>,_>("status_code"),"response_ms":r.get::<Option<i32>,_>("response_ms"),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at")})).collect::<Vec<_>>()).into_response(),
-      Err(e)=>db_error(e)
+
+    match sqlx::query(
+        "SELECT id,name,endpoint_url,events,enabled,signing_secret_hint,created_at,updated_at
+         FROM webhooks WHERE id=$1 AND organization_id=$2",
+    )
+    .bind(id)
+    .bind(ctx.organization_id)
+    .fetch_optional(&s.db)
+    .await
+    {
+        Ok(Some(r)) => Json(json!({
+            "id":r.get::<Uuid,_>("id"),
+            "name":r.get::<String,_>("name"),
+            "endpoint_url":r.get::<String,_>("endpoint_url"),
+            "events":r.get::<Value,_>("events"),
+            "enabled":r.get::<bool,_>("enabled"),
+            "signing_secret_hint":r.get::<String,_>("signing_secret_hint"),
+            "created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),
+            "updated_at":r.get::<chrono::DateTime<chrono::Utc>,_>("updated_at")
+        })).into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"message":"Webhook not found."})),
+        )
+            .into_response(),
+        Err(e) => db_error(e),
+    }
+}
+
+async fn delete_webhook(
+    State(s): State<AppState>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
+
+    match sqlx::query("DELETE FROM webhooks WHERE id=$1 AND organization_id=$2")
+        .bind(id)
+        .bind(ctx.organization_id)
+        .execute(&s.db)
+        .await
+    {
+        Ok(r) if r.rows_affected() == 1 => {
+            audit(
+                &s.db,
+                ctx.organization_id,
+                ctx.user_id,
+                "developer.webhook.deleted",
+                "webhook",
+                Some(id),
+                json!({}),
+            )
+            .await;
+            Json(json!({"ok":true})).into_response()
+        }
+        Ok(_) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"message":"Webhook not found."})),
+        )
+            .into_response(),
+        Err(e) => db_error(e),
+    }
+}
+
+async fn webhook_deliveries(
+    State(s): State<AppState>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+
+    let exists = sqlx::query(
+        "SELECT 1 FROM webhooks WHERE id=$1 AND organization_id=$2",
+    )
+    .bind(id)
+    .fetch_optional(&s.db)
+    .await;
+
+    if !matches!(exists, Ok(Some(_))) {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({"message":"Webhook not found."})),
+        )
+            .into_response();
+    }
+
+    match sqlx::query(
+        "SELECT id,event_type,event_id,status,status_code,response_ms,created_at
+         FROM webhook_deliveries WHERE webhook_id=$1 ORDER BY created_at DESC LIMIT 100",
+    )
+    .bind(id)
+    .fetch_all(&s.db)
+    .await
+    {
+        Ok(rows) => Json(
+            rows.iter()
+                .map(|r| {
+                    json!({
+                        "id":r.get::<Uuid,_>("id"),
+                        "event_type":r.get::<String,_>("event_type"),
+                        "event_id":r.get::<String,_>("event_id"),
+                        "status":r.get::<String,_>("status"),
+                        "status_code":r.get::<Option<i32>,_>("status_code"),
+                        "response_ms":r.get::<Option<i32>,_>("response_ms"),
+                        "created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at")
+                    })
+                })
+                .collect::<Vec<_>>(),
+        )
+        .into_response(),
+        Err(e) => db_error(e),
     }
 }
 
