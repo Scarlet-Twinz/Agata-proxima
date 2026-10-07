@@ -225,7 +225,7 @@ const publicSidebars = {
   ],
 };
 
-export function PublicDetail() {
+// Every destination in the public navigation resolves to a documented detail surface.\nexport function PublicDetail() {
   const { pathname } = useLocation();
   const detail = details[pathname] ?? {
     eyebrow:"Agata Proxima",
