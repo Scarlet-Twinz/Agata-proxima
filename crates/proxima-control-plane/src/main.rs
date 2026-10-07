@@ -242,8 +242,14 @@ async fn main() -> Result<()> {
         .route("/api/v1/settings/email/change", post(change_email))
         .route("/api/v1/settings/email/confirm", post(confirm_email_change))
         .route("/api/v1/notifications", get(notifications))
-        .route("/api/v1/notifications/read-all", post(mark_all_notifications_read))
-        .route("/api/v1/notifications/:id/read", post(mark_notification_read))
+        .route(
+            "/api/v1/notifications/read-all",
+            post(mark_all_notifications_read),
+        )
+        .route(
+            "/api/v1/notifications/:id/read",
+            post(mark_notification_read),
+        )
         .route("/api/v1/account", delete(delete_account))
         .route("/api/v1/auth/password/change", post(change_password))
         .route("/api/v1/platform/status", get(platform_status))
@@ -582,7 +588,16 @@ async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Respo
     )
     .await;
 
-    create_notification(&s.db, user_id, Some(organization_id), "security", "New sign-in", "Your Agata Proxima account was signed in successfully.", Some("/app/security")).await;
+    create_notification(
+        &s.db,
+        user_id,
+        Some(organization_id),
+        "security",
+        "New sign-in",
+        "Your Agata Proxima account was signed in successfully.",
+        Some("/app/security"),
+    )
+    .await;
 
     match create_session(&s.db, user_id, organization_id).await {
         Ok((token, csrf)) => auth_response(&s, user_id, organization_id, csrf, token),
@@ -1207,7 +1222,16 @@ async fn change_password(
         json!({}),
     )
     .await;
-    create_notification(&s.db, ctx.user_id, Some(ctx.organization_id), "security", "Password changed", "Your password was changed successfully.", Some("/app/settings")).await;
+    create_notification(
+        &s.db,
+        ctx.user_id,
+        Some(ctx.organization_id),
+        "security",
+        "Password changed",
+        "Your password was changed successfully.",
+        Some("/app/settings"),
+    )
+    .await;
     Json(json!({"ok":true,"message":"Password changed. Other active sessions have been signed out."}))
         .into_response()
 }
@@ -1217,7 +1241,9 @@ async fn settings(State(s): State<AppState>, headers: HeaderMap) -> Response {
         Ok(v) => v,
         Err(c) => return c.into_response(),
     };
-    let user = match sqlx::query("SELECT id,email,display_name,preferences,pending_email FROM users WHERE id=$1")
+    let user = match sqlx::query(
+        "SELECT id,email,display_name,preferences,pending_email FROM users WHERE id=$1",
+    )
         .bind(ctx.user_id)
         .fetch_optional(&s.db)
         .await
@@ -1450,7 +1476,16 @@ async fn switch_organization(
         json!({"role":membership.get::<String,_>("role")}),
     )
     .await;
-    create_notification(&s.db, ctx.user_id, Some(input.organization_id), "workspace", "Organization switched", "You are now working in a different organization.", Some("/app")).await;
+    create_notification(
+        &s.db,
+        ctx.user_id,
+        Some(input.organization_id),
+        "workspace",
+        "Organization switched",
+        "You are now working in a different organization.",
+        Some("/app"),
+    )
+    .await;
     Json(json!({"ok":true,"organization_id":input.organization_id})).into_response()
 }
 
@@ -1489,13 +1524,11 @@ async fn change_email(
     }
 
     let email = input.new_email.trim().to_lowercase();
-    if let Ok(Some(_)) = sqlx::query(
-        "SELECT id FROM users WHERE lower(email)=lower($1) AND id<>$2",
-    )
-    .bind(&email)
-    .bind(ctx.user_id)
-    .fetch_optional(&s.db)
-    .await
+    if let Ok(Some(_)) = sqlx::query("SELECT id FROM users WHERE lower(email)=lower($1) AND id<>$2")
+        .bind(&email)
+        .bind(ctx.user_id)
+        .fetch_optional(&s.db)
+        .await
     {
         return (
             StatusCode::CONFLICT,
@@ -1505,13 +1538,12 @@ async fn change_email(
     }
 
     let code = format!("{:06}", Uuid::new_v4().as_u128() % 1_000_000);
-    let display_name = match sqlx::query_scalar::<_, String>(
-        "SELECT display_name FROM users WHERE id=$1",
-    )
-    .bind(ctx.user_id)
-    .fetch_one(&s.db)
-    .await
-    {
+    let display_name =
+        match sqlx::query_scalar::<_, String>("SELECT display_name FROM users WHERE id=$1")
+            .bind(ctx.user_id)
+            .fetch_one(&s.db)
+            .await
+        {
         Ok(v) => v,
         Err(e) => return db_error(e),
     };
@@ -1602,13 +1634,11 @@ async fn confirm_email_change(
         return bad("The verification code is invalid or expired.");
     }
 
-    if let Ok(Some(_)) = sqlx::query(
-        "SELECT id FROM users WHERE lower(email)=lower($1) AND id<>$2",
-    )
-    .bind(&email)
-    .bind(ctx.user_id)
-    .fetch_optional(&s.db)
-    .await
+    if let Ok(Some(_)) = sqlx::query("SELECT id FROM users WHERE lower(email)=lower($1) AND id<>$2")
+        .bind(&email)
+        .bind(ctx.user_id)
+        .fetch_optional(&s.db)
+        .await
     {
         return (
             StatusCode::CONFLICT,
@@ -1708,10 +1738,7 @@ async fn mark_notification_read(
     }
 }
 
-async fn mark_all_notifications_read(
-    State(s): State<AppState>,
-    headers: HeaderMap,
-) -> Response {
+async fn mark_all_notifications_read(State(s): State<AppState>, headers: HeaderMap) -> Response {
     let ctx = match authenticate(&s, &headers).await {
         Ok(v) => v,
         Err(c) => return c.into_response(),
@@ -1720,12 +1747,10 @@ async fn mark_all_notifications_read(
         return c.into_response();
     }
 
-    match sqlx::query(
-        "UPDATE notifications SET read_at=now() WHERE user_id=$1 AND read_at IS NULL",
-    )
-    .bind(ctx.user_id)
-    .execute(&s.db)
-    .await
+    match sqlx::query("UPDATE notifications SET read_at=now() WHERE user_id=$1 AND read_at IS NULL")
+        .bind(ctx.user_id)
+        .execute(&s.db)
+        .await
     {
         Ok(_) => Json(json!({"ok":true})).into_response(),
         Err(e) => db_error(e),
