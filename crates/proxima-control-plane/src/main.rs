@@ -222,10 +222,7 @@ async fn main() -> Result<()> {
             "/api/v1/auth/oidc/callback",
             get(production::entra_callback),
         )
-        .route(
-            "/api/v1/organization/team",
-            get(organization_team),
-        )
+        .route("/api/v1/organization/team", get(organization_team))
         .route(
             "/api/v1/organization/invitations",
             get(organization_invitations).post(production::invite),
@@ -268,8 +265,10 @@ async fn logo() -> Html<&'static str> {
 }
 
 async fn openapi() -> Json<Value> {
-    Json(serde_json::from_str(include_str!("../../../control-plane/openapi.json"))
-        .expect("control-plane OpenAPI contract must be valid JSON"))
+    Json(
+        serde_json::from_str(include_str!("../../../control-plane/openapi.json"))
+            .expect("control-plane OpenAPI contract must be valid JSON"),
+    )
 }
 
 async fn healthz(State(s): State<AppState>) -> Response {
@@ -518,14 +517,21 @@ async fn organization_team(State(s): State<AppState>, headers: HeaderMap) -> Res
     .fetch_all(&s.db)
     .await
     {
-        Ok(rows) => Json(rows.iter().map(|r| json!({
-            "id": r.get::<Uuid,_>("id"),
-            "email": r.get::<String,_>("email"),
-            "display_name": r.get::<String,_>("display_name"),
-            "role": r.get::<String,_>("role"),
-            "created_at": r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),
-            "current": r.get::<Uuid,_>("id") == ctx.user_id
-        })).collect::<Vec<_>>()).into_response(),
+        Ok(rows) => Json(
+            rows.iter()
+                .map(|r| {
+                    json!({
+                        "id": r.get::<Uuid,_>("id"),
+                        "email": r.get::<String,_>("email"),
+                        "display_name": r.get::<String,_>("display_name"),
+                        "role": r.get::<String,_>("role"),
+                        "created_at": r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),
+                        "current": r.get::<Uuid,_>("id") == ctx.user_id
+                    })
+                })
+                .collect::<Vec<_>>(),
+        )
+        .into_response(),
         Err(e) => db_error(e),
     }
 }
@@ -602,7 +608,8 @@ async fn revoke_organization_invitation(
         Ok(_) => (
             StatusCode::NOT_FOUND,
             Json(json!({"ok":false,"message":"Pending invitation not found."})),
-        ).into_response(),
+        )
+            .into_response(),
         Err(e) => db_error(e),
     }
 }
