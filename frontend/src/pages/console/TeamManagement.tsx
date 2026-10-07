@@ -91,7 +91,7 @@ export function TeamManagement() {
       {!invitations.length ? <div className="empty-state"><MailPlus size={22}/><strong>No invitations</strong><span>Send an invitation above when you want another person to join.</span></div> :
         <div className="resource-table-wrap"><table className="resource-table"><thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Expires</th><th></th></tr></thead><tbody>
           {invitations.map(i=><tr key={i.id}><td>{i.email}</td><td>{i.role}</td><td>{i.status}</td><td>{new Date(i.expires_at).toLocaleDateString()}</td><td>{i.status==="pending"&&<button className="console-secondary-button" type="button" onClick={()=>void revoke(i.id)}>Revoke</button>}</td></tr>)}
-        </tbody></div>}
+        </tbody></table></div>}
     </section>
   </div>;
 }
