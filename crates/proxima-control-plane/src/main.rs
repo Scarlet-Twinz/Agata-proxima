@@ -98,6 +98,18 @@ struct SupportInput {
     priority: Option<String>,
 }
 
+#[derive(Deserialize)]
+struct ApiKeyInput {
+    name: String,
+}
+
+#[derive(Deserialize)]
+struct WebhookInput {
+    name: String,
+    endpoint_url: String,
+    events: Vec<String>,
+}
+
 #[derive(Serialize)]
 struct Message {
     ok: bool,
@@ -135,6 +147,9 @@ async fn main() -> Result<()> {
         .execute(&db)
         .await?;
     sqlx::raw_sql(include_str!("../migrations/0004_oidc.sql"))
+        .execute(&db)
+        .await?;
+    sqlx::raw_sql(include_str!("../migrations/0005_developer.sql"))
         .execute(&db)
         .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
@@ -180,6 +195,7 @@ async fn main() -> Result<()> {
         .route("/api/v1/auth/logout", post(logout))
         .route("/api/v1/session", get(session))
         .route("/api/v1/platform/status", get(platform_status))
+        .route("/api/v1/control-plane/overview", get(control_plane_overview))
         .route(
             "/api/v1/organizations",
             get(organizations).post(create_organization),
@@ -197,6 +213,11 @@ async fn main() -> Result<()> {
         )
         .route("/api/v1/audit", get(audit_events))
         .route("/api/v1/support", get(support).post(create_support))
+        .route("/api/v1/developer/api-keys", get(api_keys).post(create_api_key))
+        .route("/api/v1/developer/api-keys/{id}", delete(revoke_api_key))
+        .route("/api/v1/developer/webhooks", get(webhooks).post(create_webhook))
+        .route("/api/v1/developer/webhooks/{id}", get(webhook_detail).delete(delete_webhook))
+        .route("/api/v1/developer/webhooks/{id}/deliveries", get(webhook_deliveries))
         .route("/api/v1/nodes/{id}/enrollment", post(start_enrollment))
         .route("/verify-email", get(production::verify_email))
         .route("/reset-password", get(production::reset_password_page))
@@ -533,6 +554,68 @@ async fn session(State(s): State<AppState>, headers: HeaderMap) -> Response {
     }
 }
 
+async fn api_keys(State(s: State<AppState>, headers: HeaderMap) -> Response {
+    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};
+    match sqlx::query("SELECT id,name,key_prefix,last_used_at,created_at,revoked_at FROM api_keys WHERE organization_id=$1 ORDER BY created_at DESC").bind(ctx.organization_id).fetch_all(&s.db).await{
+      Ok(rows)=>Json(rows.iter().map(|r|json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"key_prefix":r.get::<String,_>("key_prefix"),"last_used_at":r.get::<Option<chrono::DateTime<chrono::Utc>>,_>("last_used_at"),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),"revoked_at":r.get::<Option<chrono::DateTime<chrono::Utc>>,_>("revoked_at")})).collect::<Vec<_>>()).into_response(),
+      Err(e)=>db_error(e)
+    }
+}
+async fn create_api_key(State(s: State<AppState>, headers: HeaderMap, Json(input): Json<ApiKeyInput>) -> Response {
+    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()}; if let Err(c)=require_write(&ctx,&headers){return c.into_response();}
+    let name=input.name.trim(); if name.is_empty(){return bad("API key name is required.");}
+    let id=Uuid::new_v4(); let token=format!("aga_{}_{}",id.simple(),Uuid::new_v4().simple()); let prefix=token.chars().take(12).collect::<String>();
+    if let Err(e)=sqlx::query("INSERT INTO api_keys(id,organization_id,name,key_prefix,key_hash) VALUES($1,$2,$3,$4,$5)").bind(id).bind(ctx.organization_id).bind(name).bind(&prefix).bind(token_hash(&token)).execute(&s.db).await{return db_error(e);}
+    audit(&s.db,ctx.organization_id,ctx.user_id,"developer.api_key.created","api_key",Some(id),json!({"name":name})).await;
+    Json(json!({"id":id,"name":name,"key":token,"key_prefix":prefix,"message":"Copy this key now. The full secret will not be shown again."})).into_response()
+}
+async fn revoke_api_key(State(s: State<AppState>, Path(id): Path<Uuid>, headers: HeaderMap) -> Response {
+    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()}; if let Err(c)=require_write(&ctx,&headers){return c.into_response();}
+    match sqlx::query("UPDATE api_keys SET revoked_at=now() WHERE id=$1 AND organization_id=$2 AND revoked_at IS NULL").bind(id).bind(ctx.organization_id).execute(&s.db).await{
+      Ok(r) if r.rows_affected()==1=>{audit(&s.db,ctx.organization_id,ctx.user_id,"developer.api_key.revoked","api_key",Some(id),json!({})).await;Json(json!({"ok":true,"message":"API key revoked."})).into_response()},
+      Ok(_)=>(StatusCode::NOT_FOUND,Json(json!({"message":"API key not found."}))).into_response(), Err(e)=>db_error(e)
+    }
+}
+async fn webhooks(State(s: State<AppState>, headers: HeaderMap) -> Response {
+    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};
+    match sqlx::query("SELECT id,name,endpoint_url,events,enabled,created_at,updated_at FROM webhooks WHERE organization_id=$1 ORDER BY created_at DESC").bind(ctx.organization_id).fetch_all(&s.db).await{
+      Ok(rows)=>Json(rows.iter().map(|r|json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"endpoint_url":r.get::<String,_>("endpoint_url"),"events":r.get::<Value,_>("events"),"enabled":r.get::<bool,_>("enabled"),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),"updated_at":r.get::<chrono::DateTime<chrono::Utc>,_>("updated_at")})).collect::<Vec<_>>()).into_response(),
+      Err(e)=>db_error(e)
+    }
+}
+async fn create_webhook(State(s: State<AppState>, headers: HeaderMap, Json(input): Json<WebhookInput>) -> Response {
+    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()}; if let Err(c)=require_write(&ctx,&headers){return c.into_response();}
+    let name=input.name.trim(); let endpoint=input.endpoint_url.trim(); if name.is_empty()||endpoint.is_empty(){return bad("Webhook name and endpoint URL are required.");}
+    if !(endpoint.starts_with("https://")||endpoint.starts_with("http://127.0.0.1")||endpoint.starts_with("http://localhost")){return bad("Webhook endpoint must use HTTPS outside local development.");}
+    let id=Uuid::new_v4(); let secret=format!("whsec_{}_{}",id.simple(),Uuid::new_v4().simple()); let hint=secret.chars().rev().take(6).collect::<String>().chars().rev().collect::<String>();
+    if let Err(e)=sqlx::query("INSERT INTO webhooks(id,organization_id,name,endpoint_url,signing_secret_hash,signing_secret_hint,events) VALUES($1,$2,$3,$4,$5,$6,$7)").bind(id).bind(ctx.organization_id).bind(name).bind(endpoint).bind(token_hash(&secret)).bind(&hint).bind(json!(input.events)).execute(&s.db).await{return db_error(e);}
+    audit(&s.db,ctx.organization_id,ctx.user_id,"developer.webhook.created","webhook",Some(id),json!({"name":name})).await;
+    Json(json!({"id":id,"name":name,"endpoint_url":endpoint,"events":input.events,"signing_secret":secret,"message":"Copy the signing secret now. It will not be shown again."})).into_response()
+}
+async fn webhook_detail(State(s: State<AppState>, Path(id): Path<Uuid>, headers: HeaderMap) -> Response {
+    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};
+    match sqlx::query("SELECT id,name,endpoint_url,events,enabled,signing_secret_hint,created_at,updated_at FROM webhooks WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id).fetch_optional(&s.db).await{
+      Ok(Some(r))=>Json(json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"endpoint_url":r.get::<String,_>("endpoint_url"),"events":r.get::<Value,_>("events"),"enabled":r.get::<bool,_>("enabled"),"signing_secret_hint":r.get::<String,_>("signing_secret_hint"),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),"updated_at":r.get::<chrono::DateTime<chrono::Utc>,_>("updated_at")})).into_response(),
+      Ok(None)=>(StatusCode::NOT_FOUND,Json(json!({"message":"Webhook not found."}))).into_response(), Err(e)=>db_error(e)
+    }
+}
+async fn delete_webhook(State(s: State<AppState>, Path(id): Path<Uuid>, headers: HeaderMap) -> Response {
+    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()}; if let Err(c)=require_write(&ctx,&headers){return c.into_response();}
+    match sqlx::query("DELETE FROM webhooks WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id).execute(&s.db).await{
+      Ok(r) if r.rows_affected()==1=>{audit(&s.db,ctx.organization_id,ctx.user_id,"developer.webhook.deleted","webhook",Some(id),json!({})).await;Json(json!({"ok":true})).into_response()},
+      Ok(_)=>(StatusCode::NOT_FOUND,Json(json!({"message":"Webhook not found."}))).into_response(), Err(e)=>db_error(e)
+    }
+}
+async fn webhook_deliveries(State(s: State<AppState>, Path(id): Path<Uuid>, headers: HeaderMap) -> Response {
+    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};
+    let exists=sqlx::query("SELECT 1 FROM webhooks WHERE id=$1 AND organization_id=$2").bind(id).fetch_optional(&s.db).await;
+    if !matches!(exists,Ok(Some(_))){return (StatusCode::NOT_FOUND,Json(json!({"message":"Webhook not found."}))).into_response();}
+    match sqlx::query("SELECT id,event_type,event_id,status,status_code,response_ms,created_at FROM webhook_deliveries WHERE webhook_id=$1 ORDER BY created_at DESC LIMIT 100").bind(id).fetch_all(&s.db).await{
+      Ok(rows)=>Json(rows.iter().map(|r|json!({"id":r.get::<Uuid,_>("id"),"event_type":r.get::<String,_>("event_type"),"event_id":r.get::<String,_>("event_id"),"status":r.get::<String,_>("status"),"status_code":r.get::<Option<i32>,_>("status_code"),"response_ms":r.get::<Option<i32>,_>("response_ms"),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at")})).collect::<Vec<_>>()).into_response(),
+      Err(e)=>db_error(e)
+    }
+}
+
 async fn organization_team(State(s): State<AppState>, headers: HeaderMap) -> Response {
     let ctx = match authenticate(&s, &headers).await {
         Ok(v) => v,
@@ -679,6 +762,35 @@ async fn platform_status(State(s): State<AppState>, headers: HeaderMap) -> Respo
         "offline_behavior": "engine_continues_enforcement"
     }))
     .into_response()
+}
+
+async fn control_plane_overview(State(s): State<AppState>, headers: HeaderMap) -> Response {
+    let ctx = match authenticate(&s, &headers).await { Ok(v) => v, Err(c) => return c.into_response() };
+    let tenant_count = scalar_count(&s.db, "SELECT count(*) FROM tenants t JOIN projects p ON p.id=t.project_id WHERE p.organization_id=$1", ctx.organization_id).await;
+    let policy_count = scalar_count(&s.db, "SELECT count(*) FROM policies WHERE organization_id=$1", ctx.organization_id).await;
+    let node_count = scalar_count(&s.db, "SELECT count(*) FROM nodes WHERE organization_id=$1", ctx.organization_id).await;
+    let active_deployments = scalar_count(&s.db, "SELECT count(*) FROM deployments WHERE organization_id=$1 AND status NOT IN ('healthy','rolled_back')", ctx.organization_id).await;
+    let latest_verification = sqlx::query("SELECT status FROM verification_results WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 1").bind(ctx.organization_id).fetch_optional(&s.db).await.ok().flatten();
+    let trend_rows = sqlx::query("SELECT date_trunc('day',created_at) AS timestamp,count(*)::bigint AS value FROM verification_results WHERE organization_id=$1 GROUP BY 1 ORDER BY 1 DESC LIMIT 30").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
+    let tenant_rows = sqlx::query("SELECT t.id,t.name,t.status FROM tenants t JOIN projects p ON p.id=t.project_id WHERE p.organization_id=$1 ORDER BY t.created_at DESC LIMIT 12").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
+    let node_rows = sqlx::query("SELECT id,name,region,environment,status,version FROM nodes WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 12").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
+    let audit_rows = sqlx::query("SELECT id,action,resource_type,resource_id,created_at FROM audit_events WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 10").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
+    let verification_state = latest_verification.as_ref().map(|r| r.get::<String,_>("status").to_uppercase()).unwrap_or_else(|| "NO RUNS".into());
+    Json(json!({
+        "organization_id": ctx.organization_id,
+        "role": ctx.role,
+        "metrics": {"tenants":tenant_count,"policies":policy_count,"nodes":node_count,"active_deployments":active_deployments},
+        "protection": {
+            "tenantIsolation": if tenant_count > 0 {"ENFORCED"} else {"READY"},
+            "policyEnforcement": if policy_count > 0 {"CONFIGURED"} else {"READY"},
+            "verification": verification_state,
+            "databaseProtection": "CONNECTED"
+        },
+        "verificationTrend": trend_rows.iter().rev().map(|r| json!({"timestamp":r.get::<chrono::DateTime<chrono::Utc>,_>("timestamp"),"value":r.get::<i64,_>("value")})).collect::<Vec<_>>(),
+        "tenants": tenant_rows.iter().map(|r| json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"status":r.get::<String,_>("status")})).collect::<Vec<_>>(),
+        "nodes": node_rows.iter().map(|r| json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"region":r.get::<String,_>("region"),"environment":r.get::<String,_>("environment"),"status":r.get::<String,_>("status"),"version":r.get::<String,_>("version")})).collect::<Vec<_>>(),
+        "recentActivity": audit_rows.iter().map(|r| json!({"id":r.get::<Uuid,_>("id"),"type":r.get::<String,_>("action"),"message":format!("{} {}",r.get::<String,_>("resource_type"),r.get::<Option<Uuid>,_>("resource_id").map(|v|v.to_string()).unwrap_or_default()),"timestamp":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),"href":"/app/audit"})).collect::<Vec<_>>()
+    })).into_response()
 }
 
 async fn organizations(State(s): State<AppState>, headers: HeaderMap) -> Response {
