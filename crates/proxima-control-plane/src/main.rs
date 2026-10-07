@@ -113,6 +113,7 @@ struct AuthOutput {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let _ = dotenvy::dotenv();
     tracing_subscriber::fmt().with_target(false).init();
 
     let database_url = env::var("PROXIMA_CONTROL_DATABASE_URL").unwrap_or_else(|_| {
