@@ -71,6 +71,13 @@ export function ConsoleLayout() {
   const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
+    const savedTheme = localStorage.getItem("agata.theme");
+    if (savedTheme === "dark" || savedTheme === "light") {
+      document.documentElement.dataset.theme = savedTheme;
+    }
+  }, []);
+
+  useEffect(() => {
     localStorage.setItem(
       "agata.console.sidebar",
       collapsed ? "collapsed" : "expanded",
