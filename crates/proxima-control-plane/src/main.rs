@@ -397,6 +397,7 @@ async fn signup(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Resp
     if let Err(e) = production::send_verification_email(&s.db, user_id, &email, &display_name).await
     {
         tracing::error!(%e, "verification email delivery failed");
+        return service_unavailable("Workspace created, but the verification email could not be sent. Check the Resend configuration and try again.");
     }
 
     Json(json!({
