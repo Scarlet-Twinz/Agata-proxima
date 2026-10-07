@@ -248,7 +248,8 @@ const guideSections = (topic: string): Section[] => {
 
 export function ConsoleDocumentation() {
   const { topic = "overview" } = useParams();
-  const page = topics[topic] ?? topics.overview;\n  const sections = [...page.sections, ...guideSections(topic)];
+  const page = topics[topic] ?? topics.overview;
+  const sections = [...page.sections, ...guideSections(topic)];
   return <section className="resource-page">
     <Link className="back-link" to="/app"><ArrowLeft size={16}/> Command Center</Link>
     <div className="page-heading"><div><span className="eyebrow">{page.eyebrow}</span><h1>{page.title}</h1><p>{page.summary}</p></div></div>
