@@ -1650,7 +1650,7 @@ fn external_error<E: std::fmt::Display>(e: E) -> Response {
     service_unavailable("External integration request failed.")
 }
 
-fn service_unavailable(message: &str) -> Response {
+pub(crate) fn service_unavailable(message: &str) -> Response {
     (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"ok":false,"message":message}))).into_response()
 }
 
