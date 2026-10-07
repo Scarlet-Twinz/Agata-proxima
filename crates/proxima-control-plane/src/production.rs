@@ -1076,16 +1076,13 @@ pub(crate) async fn send_verification_email(
         .trim_end_matches('/')
         .to_string();
     let link = format!("{base}/verify-email?token={token}");
-    send_email(
+    send_template_email(
         email,
-        "Verify your Agata Proxima email",
-        &format!(
-            "<div style=\"font-family:Inter,Arial,sans-serif;background:#05080c;color:#eef7f8;padding:40px\">
-             <h1>Agata Proxima</h1><p>Hello {display_name},</p>
-             <p>Confirm this address to activate verified email status for your Proxima workspace.</p>
-             <p><a href=\"{link}\" style=\"display:inline-block;padding:12px 18px;background:#71dcff;color:#061015;text-decoration:none;border-radius:8px\">Verify email</a></p>
-             <p style=\"color:#8ea0ab\">This link expires in 24 hours.</p></div>"
-        ),
+        "091dbdb2-21ed-444f-a209-6f44e55d192d",
+        json!({
+            "DISPLAY_NAME": display_name,
+            "ACTION_URL": link
+        }),
     )
     .await
 }
@@ -1168,14 +1165,16 @@ pub(crate) async fn request_password_reset(
             .trim_end_matches('/')
             .to_string();
         let link = format!("{base}/reset-password?token={token}");
-        let html = format!(
-            "<div style=\"font-family:Inter,Arial,sans-serif;background:#05080c;color:#eef7f8;padding:40px\">
-             <h1>Agata Proxima</h1><p>Hello {},</p><p>A password reset was requested for your workspace.</p>
-             <p><a href=\"{link}\" style=\"display:inline-block;padding:12px 18px;background:#71dcff;color:#061015;text-decoration:none;border-radius:8px\">Reset password</a></p>
-             <p style=\"color:#8ea0ab\">This link expires in 30 minutes. If you did not request it, ignore this email.</p></div>",
-            row.get::<String,_>("display_name")
-        );
-        if let Err(e) = send_email(&email, "Reset your Agata Proxima password", &html).await {
+        if let Err(e) = send_template_email(
+            &email,
+            "d3c046c7-fef6-42f0-931e-d92b6f96cfdf",
+            json!({
+                "DISPLAY_NAME": row.get::<String,_>("display_name"),
+                "ACTION_URL": link
+            }),
+        )
+        .await
+        {
             tracing::error!(%e, "password reset email failed");
         }
     }
@@ -1260,15 +1259,33 @@ pub(crate) async fn invite(
         return db_error(e);
     }
 
-    let base = env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:8080".into()).trim_end_matches('/').to_string();
+    let organization_name = match sqlx::query_scalar::<_, String>(
+        "SELECT name FROM organizations WHERE id=$1",
+    )
+    .bind(ctx.organization_id)
+    .fetch_one(&s.db)
+    .await
+    {
+        Ok(name) => name,
+        Err(e) => return db_error(e),
+    };
+
+    let base = env::var("AGATA_PUBLIC_BASE_URL")
+        .unwrap_or_else(|_| "http://127.0.0.1:8080".into())
+        .trim_end_matches('/')
+        .to_string();
     let link = format!("{base}/accept-invite?token={token}");
-    let html = format!(
-        "<div style=\"font-family:Inter,Arial,sans-serif;background:#05080c;color:#eef7f8;padding:40px\">
-         <h1>Agata Proxima</h1><p>You have been invited to a Proxima organization.</p>
-         <p>Role: <strong>{role}</strong></p><p><a href=\"{link}\" style=\"display:inline-block;padding:12px 18px;background:#71dcff;color:#061015;text-decoration:none;border-radius:8px\">Accept invitation</a></p>
-         <p style=\"color:#8ea0ab\">This invitation expires in 7 days.</p></div>"
-    );
-    if let Err(e) = send_email(&email, "You have been invited to Agata Proxima", &html).await {
+    if let Err(e) = send_template_email(
+        &email,
+        "0757a210-a372-4a5a-8fca-e642c2fed3da",
+        json!({
+            "ORGANIZATION": organization_name,
+            "ROLE": role,
+            "ACTION_URL": link
+        }),
+    )
+    .await
+    {
         tracing::error!(%e, "invitation email failed");
     }
 
@@ -1352,7 +1369,11 @@ pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
     })).into_response()
 }
 
-async fn send_email(to: &str, subject: &str, html: &str) -> anyhow::Result<()> {
+async fn send_template_email(
+    to: &str,
+    template_id: &str,
+    variables: Value,
+) -> anyhow::Result<()> {
     let key = env::var("RESEND_API_KEY")?;
     let from = match env::var("RESEND_FROM_EMAIL") {
         Ok(v) if !v.trim().is_empty() => v,
@@ -1361,7 +1382,14 @@ async fn send_email(to: &str, subject: &str, html: &str) -> anyhow::Result<()> {
     let response = Client::new()
         .post("https://api.resend.com/emails")
         .bearer_auth(key)
-        .json(&json!({"from":from,"to":[to],"subject":subject,"html":html}))
+        .json(&json!({
+            "from": from,
+            "to": [to],
+            "template": {
+                "id": template_id,
+                "variables": variables
+            }
+        }))
         .send()
         .await?;
     if !response.status().is_success() {
