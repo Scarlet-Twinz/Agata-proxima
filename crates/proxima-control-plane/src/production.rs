@@ -1169,11 +1169,6 @@ fn html_escape(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-fn email_logo_url() -> String {
-    env::var("AGATA_EMAIL_LOGO_URL")
-        .unwrap_or_else(|_| "https://agataproxima.com/logo.svg".into())
-}
-
 fn email_shell(content: &str) -> String {
     format!(
         "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\"></head><body style=\"margin:0;background-color:#05080c;font-family:Arial,Helvetica,sans-serif;color:#eef7f8;\"><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" bgcolor=\"#05080c\"><tr><td align=\"center\" style=\"padding:32px 16px;\"><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:600px;background-color:#071019;border:1px solid #20303b;\"><tr><td align=\"center\" style=\"padding:28px 28px 10px;\"><table cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td width=\"56\" height=\"56\" align=\"center\" bgcolor=\"#70d8ff\" style=\"width:56px;height:56px;background-color:#70d8ff;color:#071019;font-family:Arial,Helvetica,sans-serif;font-size:28px;line-height:56px;font-weight:700;\">A</td></tr></table></td></tr><tr><td align=\"center\" style=\"padding:0 28px 18px;font-family:Arial,Helvetica,sans-serif;font-size:22px;line-height:28px;font-weight:700;color:#eef7f8;\">Agata Proxima</td></tr><tr><td style=\"padding:8px 28px 28px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:25px;color:#dce9ee;\">{content}</td></tr><tr><td style=\"padding:18px 28px 24px;border-top:1px solid #20303b;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#8ea0ab;\">Agata Proxima · Tenant isolation infrastructure<br><a href=\"https://agataproxima.com\" style=\"color:#70d8ff;text-decoration:none;\">Visit agataproxima.com</a> · <a href=\"https://agataproxima.com/support\" style=\"color:#70d8ff;text-decoration:none;\">Support</a><br><span style=\"color:#71828c;\">This is an automated message from Agata Proxima.</span></td></tr></table></td></tr></table></body></html>"
