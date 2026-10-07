@@ -1,4 +1,4 @@
-import { ArrowRight, Check, ChevronRight, Database, FileCheck2, LockKeyhole, Network, ShieldCheck, Terminal, Webhook } from "lucide-react";
+import { ArrowRight, Check, ChevronRight, Database, FileCheck2, Network, ShieldCheck, Terminal, Webhook } from "lucide-react";
 import { Link } from "react-router-dom";
 
 
