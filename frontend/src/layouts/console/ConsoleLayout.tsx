@@ -72,7 +72,6 @@ export function ConsoleLayout() {
   const [searchQuery, setSearchQuery] = useState("");
   const [session, setSession] = useState<Session | null>(null);
   const [organizationName, setOrganizationName] = useState("Workspace");
-  const [organizationSlug, setOrganizationSlug] = useState("");
   const [accountDisplayName, setAccountDisplayName] = useState("Account");
   const [accountEmail, setAccountEmail] = useState("");
   const [unreadNotifications, setUnreadNotifications] = useState(0);
@@ -104,7 +103,6 @@ export function ConsoleLayout() {
       .then((settings) => {
         if (!active) return;
         setOrganizationName(settings.organization.name || "Workspace");
-        setOrganizationSlug(settings.organization.slug || "");
         setAccountDisplayName(settings.user.display_name || "Account");
         setAccountEmail(settings.user.email || "");
       })
