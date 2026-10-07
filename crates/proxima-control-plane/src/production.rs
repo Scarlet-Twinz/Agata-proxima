@@ -1114,7 +1114,7 @@ pub(crate) async fn resend_verification_email(
 
     if let Some(row) = user {
         if row
-            .get::<Option<chrono::DateTime<chrono::Utc>, _>("email_verified_at")
+            .get::<Option<chrono::DateTime<chrono::Utc>>, _>("email_verified_at")
             .is_none()
         {
             if let Err(e) = send_verification_email(
