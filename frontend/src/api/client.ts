@@ -16,7 +16,13 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   });
 
   if (!response.ok) {
-    let message = `Request failed with status ${response.status}`;
+    if (response.status === 401) {
+      sessionStorage.removeItem("proxima_csrf");
+      window.dispatchEvent(new CustomEvent("agata:session-expired"));
+    }
+    let message = response.status === 401
+      ? "Your security session is no longer valid. Sign in again to continue."
+      : `Request failed with status ${response.status}`;
     let code = "";
     try {
       const body = await response.json();
