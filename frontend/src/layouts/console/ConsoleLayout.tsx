@@ -67,6 +67,9 @@ export function ConsoleLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [environmentOpen, setEnvironmentOpen] = useState(false);
+  const [projects, setProjects] = useState<Array<{id:string;name:string;slug:string}>>([]);
+  const [environments, setEnvironments] = useState<Array<{id:string;name:string;slug:string;kind:string;status:string}>>([]);
+  const [activeProjectId, setActiveProjectId] = useState(() => localStorage.getItem("agata.active.project") || "");
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [organizations, setOrganizations] = useState<Array<{id:string;name:string;slug:string;role:string}>>([]);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -91,10 +94,24 @@ export function ConsoleLayout() {
       });
 
     api.get<Array<{id:string;name:string;slug:string;role:string}>>("/api/v1/organizations").then(setOrganizations).catch(()=>{});
+    api.get<Array<{id:string;name:string;slug:string}>>("/api/v1/projects").then((items) => {
+      setProjects(items);
+      const saved = localStorage.getItem("agata.active.project");
+      const selected = items.find((item) => item.id === saved) ?? items[0];
+      if (selected) {
+        setActiveProjectId(selected.id);
+        localStorage.setItem("agata.active.project", selected.id);
+      }
+    }).catch(()=>{});
     return () => {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!activeProjectId) { setEnvironments([]); return; }
+    api.get<Array<{id:string;name:string;slug:string;kind:string;status:string}>>(`/api/v1/projects/${activeProjectId}/environments`).then(setEnvironments).catch(() => setEnvironments([]));
+  }, [activeProjectId]);
 
   async function handleLogout() {
     await logout();
@@ -354,29 +371,37 @@ export function ConsoleLayout() {
                 }}
               >
                 <span className="environment-dot" />
-                Production
+                {environments.find((environment) => environment.kind === "production")?.name ?? "Environment"}
                 <ChevronDown size={15} />
               </button>
 
               {environmentOpen && (
                 <div className="console-environment-menu">
-                  <button
-                    className="console-environment-option is-selected"
-                    type="button"
-                    onClick={() => setEnvironmentOpen(false)}
-                  >
-                    <span>
-                      <strong>Production</strong>
-                      <small>Active environment</small>
-                    </span>
-                    <span className="environment-check">✓</span>
-                  </button>
+                  {environments.length ? environments.map((environment) => (
+                    <button
+                      key={environment.id}
+                      className="console-environment-option"
+                      type="button"
+                      onClick={() => {
+                        setEnvironmentOpen(false);
+                        navigate(`/app/projects/${activeProjectId}/environments/${environment.id}`);
+                      }}
+                    >
+                      <span>
+                        <strong>{environment.name}</strong>
+                        <small>{environment.kind} · {environment.status}</small>
+                      </span>
+                      {environment.kind === "production" && <span className="environment-check">●</span>}
+                    </button>
+                  )) : (
+                    <div className="console-search-empty">No environments are available for the active project.</div>
+                  )}
                   <button
                     className="console-environment-settings"
                     type="button"
                     onClick={() => {
                       setEnvironmentOpen(false);
-                      navigate("/app/settings");
+                      navigate(activeProjectId ? `/app/projects/${activeProjectId}` : "/app/projects");
                     }}
                   >
                     Manage environments
