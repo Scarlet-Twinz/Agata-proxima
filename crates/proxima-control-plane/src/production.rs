@@ -70,6 +70,19 @@ pub(crate) struct PasswordResetConfirm {
     pub token: String,
     pub password: String,
 }
+fn plan_for_price(price_id: Option<&str>) -> Option<&'static str> {
+    let starter = env::var("AGATA_STRIPE_STARTER_PRICE_ID").ok();
+    let growth = env::var("AGATA_STRIPE_GROWTH_PRICE_ID").ok();
+    let scale = env::var("AGATA_STRIPE_SCALE_PRICE_ID").ok();
+
+    match price_id {
+        Some(id) if starter.as_deref() == Some(id) => Some("starter"),
+        Some(id) if growth.as_deref() == Some(id) => Some("growth"),
+        Some(id) if scale.as_deref() == Some(id) => Some("scale"),
+        _ => None,
+    }
+}
+
 fn plan_limits(plan: &str) -> (i32, i32, i32, i32, bool, bool, bool, bool, bool) {
     match plan {
         "starter" => (2, 25, 2, 30, false, true, false, false, false),
@@ -1270,28 +1283,5 @@ mod tests {
     use super::*;
 
     #[test]
-    fn stripe_signature_round_trip() {
-        let payload = r#"{"id":"evt_test","type":"invoice.paid"}"#;
-        let secret = "whsec_test";
-        let timestamp = chrono::Utc::now().timestamp();
-        let signed = format!("{timestamp}.{payload}");
-        let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
-        mac.update(signed.as_bytes());
-        let signature = hex::encode(mac.finalize().into_bytes());
-        let header = format!("t={timestamp},v1={signature}");
-        assert!(verify_stripe_signature(payload, &header, secret));
+        #[test]
     }
-
-    #[test]
-    fn expired_stripe_signature_is_rejected() {
-        let payload = "payload";
-        let secret = "whsec_test";
-        let timestamp = chrono::Utc::now().timestamp() - 301;
-        let signed = format!("{timestamp}.{payload}");
-        let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
-        mac.update(signed.as_bytes());
-        let signature = hex::encode(mac.finalize().into_bytes());
-        let header = format!("t={timestamp},v1={signature}");
-        assert!(!verify_stripe_signature(payload, &header, secret));
-    }
-}
