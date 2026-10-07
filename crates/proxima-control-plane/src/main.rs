@@ -1020,17 +1020,33 @@ async fn platform_status(State(s): State<AppState>, headers: HeaderMap) -> Respo
 }
 
 async fn control_plane_overview(State(s): State<AppState>, headers: HeaderMap) -> Response {
-    let ctx = match authenticate(&s, &headers).await { Ok(v) => v, Err(c) => return c.into_response() };
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
     let tenant_count = scalar_count(&s.db, "SELECT count(*) FROM tenants t JOIN projects p ON p.id=t.project_id WHERE p.organization_id=$1", ctx.organization_id).await;
-    let policy_count = scalar_count(&s.db, "SELECT count(*) FROM policies WHERE organization_id=$1", ctx.organization_id).await;
-    let node_count = scalar_count(&s.db, "SELECT count(*) FROM nodes WHERE organization_id=$1", ctx.organization_id).await;
+    let policy_count = scalar_count(
+        &s.db,
+        "SELECT count(*) FROM policies WHERE organization_id=$1",
+        ctx.organization_id,
+    )
+    .await;
+    let node_count = scalar_count(
+        &s.db,
+        "SELECT count(*) FROM nodes WHERE organization_id=$1",
+        ctx.organization_id,
+    )
+    .await;
     let active_deployments = scalar_count(&s.db, "SELECT count(*) FROM deployments WHERE organization_id=$1 AND status NOT IN ('healthy','rolled_back')", ctx.organization_id).await;
     let latest_verification = sqlx::query("SELECT status FROM verification_results WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 1").bind(ctx.organization_id).fetch_optional(&s.db).await.ok().flatten();
     let trend_rows = sqlx::query("SELECT date_trunc('day',created_at) AS timestamp,count(*)::bigint AS value FROM verification_results WHERE organization_id=$1 GROUP BY 1 ORDER BY 1 DESC LIMIT 30").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
     let tenant_rows = sqlx::query("SELECT t.id,t.name,t.status FROM tenants t JOIN projects p ON p.id=t.project_id WHERE p.organization_id=$1 ORDER BY t.created_at DESC LIMIT 12").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
     let node_rows = sqlx::query("SELECT id,name,region,environment,status,version FROM nodes WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 12").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
     let audit_rows = sqlx::query("SELECT id,action,resource_type,resource_id,created_at FROM audit_events WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 10").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
-    let verification_state = latest_verification.as_ref().map(|r| r.get::<String,_>("status").to_uppercase()).unwrap_or_else(|| "NO RUNS".into());
+    let verification_state = latest_verification
+        .as_ref()
+        .map(|r| r.get::<String, _>("status").to_uppercase())
+        .unwrap_or_else(|| "NO RUNS".into());
     Json(json!({
         "organization_id": ctx.organization_id,
         "role": ctx.role,
