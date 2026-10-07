@@ -1,17 +1,3 @@
-async fn delete_account(State(s: State<AppState>, headers: HeaderMap) -> Response {{
-    let ctx = match authenticate(&s, &headers).await {
-        Ok(v) => v,
-        Err(c) => return c.into_response(),
-    };
-    if let Err(c) = require_write(&ctx, &headers) {
-        return c.into_response();
-    }
-    if ctx.role != "owner" {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(json!({"ok":false,"message":"Only the organization owner can delete this account."})),
-        ).into_response();
-    }
 #[rustfmt::skip]
 mod production;
 
