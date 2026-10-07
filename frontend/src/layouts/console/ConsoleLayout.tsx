@@ -108,7 +108,7 @@ export function ConsoleLayout() {
   }, []);
 
   useEffect(() => {
-    if (!activeProjectId) { setEnvironments([]); return; }
+    if (!activeProjectId) return;
     api.get<Array<{id:string;name:string;slug:string;kind:string;status:string}>>(`/api/v1/projects/${activeProjectId}/environments`).then((items) => {
       setEnvironments(items);
       const saved = localStorage.getItem("agata.active.environment");
