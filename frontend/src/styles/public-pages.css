@@ -823,3 +823,13 @@
   color: inherit;
   background: var(--agata-paper);
 }
+
+
+/* Deep public documentation navigation */
+.public-detail-layout { display:grid; grid-template-columns:230px minmax(0,820px); gap:72px; align-items:start; }
+.public-detail-sidebar { position:sticky; top:96px; display:grid; gap:2px; padding:10px; border:1px solid var(--agata-border); border-radius:12px; background:var(--agata-white); }
+.public-detail-sidebar-title { padding:8px 10px 10px; color:var(--agata-text-muted); font-size:10px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
+.public-detail-sidebar a { min-height:36px; display:flex; align-items:center; padding:0 10px; color:var(--agata-text-secondary); border-radius:7px; font-size:12px; font-weight:650; }
+.public-detail-sidebar a:hover { color:var(--agata-text); background:var(--agata-paper); }
+.public-detail-sidebar a.is-active { color:var(--agata-blue); background:var(--agata-blue-soft); }
+@media(max-width:900px){.public-detail-layout{grid-template-columns:1fr;gap:30px}.public-detail-sidebar{position:static}}
