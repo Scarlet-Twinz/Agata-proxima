@@ -1244,9 +1244,9 @@ async fn settings(State(s): State<AppState>, headers: HeaderMap) -> Response {
     let user = match sqlx::query(
         "SELECT id,email,display_name,preferences,pending_email FROM users WHERE id=$1",
     )
-        .bind(ctx.user_id)
-        .fetch_optional(&s.db)
-        .await
+    .bind(ctx.user_id)
+    .fetch_optional(&s.db)
+    .await
     {
         Ok(Some(r)) => r,
         Ok(None) => return unauthorized(),
@@ -1505,13 +1505,12 @@ async fn change_email(
         return bad("Enter a valid email address.");
     }
 
-    let password_hash = match sqlx::query_scalar::<_, String>(
-        "SELECT password_hash FROM users WHERE id=$1",
-    )
-    .bind(ctx.user_id)
-    .fetch_one(&s.db)
-    .await
-    {
+    let password_hash =
+        match sqlx::query_scalar::<_, String>("SELECT password_hash FROM users WHERE id=$1")
+            .bind(ctx.user_id)
+            .fetch_one(&s.db)
+            .await
+        {
         Ok(v) => v,
         Err(e) => return db_error(e),
     };
@@ -1544,9 +1543,9 @@ async fn change_email(
             .fetch_one(&s.db)
             .await
         {
-        Ok(v) => v,
-        Err(e) => return db_error(e),
-    };
+            Ok(v) => v,
+            Err(e) => return db_error(e),
+        };
 
     if let Err(e) = sqlx::query(
         "UPDATE users SET pending_email=$1,pending_email_token_hash=$2,
