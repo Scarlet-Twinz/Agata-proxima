@@ -269,12 +269,14 @@ export function PublicDetail() {
     links:[{label:"Home",to:"/"},{label:"Support",to:"/support"}],
   };
 
+  const sections = detail.sections.concat(longGuideSections[pathname] ?? []);
+
   return (
     <PublicPage eyebrow={detail.eyebrow} title={detail.title} description={detail.description}>
       <section className="public-content">
         <div className="agata-container">
           <article className="public-prose">
-            {detail.sections.map((section) => (
+            {sections.map((section) => (
               <section key={section.title} className="public-detail-section">
                 <h2>{section.title}</h2>
                 {section.paragraphs?.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
