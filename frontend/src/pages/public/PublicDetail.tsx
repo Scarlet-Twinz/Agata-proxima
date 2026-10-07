@@ -132,6 +132,44 @@ const details: Record<string, Detail> = {
     sections:[{title:"Core resource groups",bullets:["Organizations and membership","Tenants and policies","Nodes and deployments","Verification and audit","Developer credentials and events"]},{title:"Contract discipline",paragraphs:["API behavior should be explicit, authenticated and compatible with the control-plane authority boundary described in the platform architecture."]}],
     links:[{label:"OpenAPI surface",to:"/docs/api-reference"},{label:"Developer platform",to:"/developers"}],
   },
+  "/docs/customer-integration": {
+    eyebrow:"Docs · Customer integration", title:"Customer integration and production acceptance.", description:"A complete path from an existing multi-tenant SaaS to a verified Proxima database boundary.",
+    sections:[
+      {title:"1. Establish the resource boundary",bullets:["Create the organization and project.","Create development, staging and production environments.","Register the integration against the intended project and environment."]},
+      {title:"2. Preserve application responsibilities",paragraphs:["Keep application authentication, business authorization and tenant identity in the customer application. Proxima protects the database path; it does not become the customer's business authorization system."]},
+      {title:"3. Establish tenant context",bullets:["Create or resolve the tenant from authenticated application identity.","Sign the tenant assertion with the configured secret.","Carry the assertion to the Proxima boundary using the documented PostgreSQL startup option contract.","Reject missing, malformed, expired or tampered context."]},
+      {title:"4. Verify the real database path",bullets:["Run tenant-local reads and writes.","Attempt cross-tenant reads and writes.","Exercise transactions and prepared statements.","Reuse connections and confirm tenant binding remains stable.","Rotate or expire credentials.","Restart Proxima Engine.","Disable the Control Plane and repeat runtime tests."]},
+      {title:"5. Record evidence and promote",paragraphs:["Compare application behavior with verification evidence and audit events. Promote development → staging → canary → production only after the external SaaS acceptance procedure passes."]},
+    ],
+    links:[{label:"Developer quickstart",to:"/developers/quickstart"},{label:"External SaaS acceptance",to:"/docs/external-saas-v2"},{label:"Architecture",to:"/product/model"}],
+  },
+  "/docs/developer-guide": {
+    eyebrow:"Docs · Developer guide", title:"Developer guide.", description:"The control-plane API, authentication model, customer lifecycle and integration contract in one place.",
+    sections:[
+      {title:"API boundary",paragraphs:["Agata exposes a versioned /api/v1 control-plane API. State-changing requests require the CSRF token returned by the authenticated session endpoint. Organization-scoped authorization is enforced server-side."]},
+      {title:"Customer lifecycle",bullets:["Organizations and team membership.","Projects and environments.","Integration registration.","Tenant inventory.","Policies and nodes.","Deployments.","Verification evidence.","Audit history.","Billing and support."]},
+      {title:"Runtime authority",paragraphs:["The Command Center and Control Plane manage configuration and evidence. Proxima Engine remains the runtime authority for tenant isolation, and Control Plane loss must not disable an active Engine."]},
+    ],
+    links:[{label:"API reference",to:"/docs/api-reference"},{label:"Customer integration",to:"/docs/customer-integration"},{label:"Security",to:"/docs/security"}],
+  },
+  "/docs/external-saas-v2": {
+    eyebrow:"Docs · External SaaS acceptance", title:"External SaaS acceptance procedure.", description:"The test that separates repository implementation from a real production-capable integration.",
+    sections:[
+      {title:"Test topology",paragraphs:["Use a real customer-like application with at least three tenants and a real PostgreSQL database path through Proxima. The Control Plane must not be required for normal query enforcement."]},
+      {title:"Required tests",bullets:["Tenant A/B/C positive traffic.","Cross-tenant reads and writes.","Transactions.","Prepared statements.","Connection reuse.","Credential expiry and rotation.","Engine restart.","Control Plane outage.","Audit and verification evidence comparison."]},
+      {title:"Acceptance decision",paragraphs:["A repository harness can validate scripts and fixtures, but it cannot prove that an external deployment works. Production acceptance is complete only after the real application and database have passed the procedure and the evidence has been reviewed."]},
+    ],
+    links:[{label:"Customer integration",to:"/docs/customer-integration"},{label:"Verification",to:"/docs/verification"},{label:"Architecture",to:"/product/model"}],
+  },
+  "/docs/identity/microsoft-entra-oidc": {
+    eyebrow:"Docs · Enterprise identity", title:"Microsoft Entra OIDC.", description:"How enterprise identity fits into Agata organization authentication without becoming the tenant-isolation authority.",
+    sections:[
+      {title:"Identity boundary",paragraphs:["OIDC authenticates the organization user. The resulting application session still carries organization membership and role information, while Proxima remains independent as the runtime database enforcement boundary."]},
+      {title:"Validation",bullets:["State validation.","Nonce validation.","Issuer validation.","Audience validation.","Tenant identity validation.","Signature validation.","Expiry validation."]},
+      {title:"Production gate",paragraphs:["A repository implementation is not the same as an activated production identity provider. A real public callback, application registration, credentials and tenant acceptance are required before claiming runtime SSO availability."]},
+    ],
+    links:[{label:"Developer authentication",to:"/developers/authentication"},{label:"Trust center",to:"/trust"}],
+  },
   "/docs/getting-started": {
     eyebrow:"Docs · Getting started", title:"Get from zero to a verified integration.", description:"Start with the architecture and move through the smallest useful integration path.",
     sections:[{title:"First steps",bullets:["Understand the enforcement boundary","Configure identity and tenant context","Connect the protected database path","Run verification","Review evidence"]}],
