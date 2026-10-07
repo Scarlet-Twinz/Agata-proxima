@@ -43,6 +43,7 @@ import {
 } from "../pages/console/ConsoleSurfaces";
 import { NestedResource } from "../pages/console/NestedResource";
 import { ActionPage } from "../pages/console/ActionPage";
+import { SettingsHub } from "../pages/console/SettingsHub";
 
 const detailRoutes = [
   "/product/model", "/product/enforcement", "/product/verification", "/product/evidence",
@@ -67,7 +68,7 @@ const consoleResourceRoutes = [
   { path: "security", element: <ConsoleSecurity /> },
   { path: "team", element: <Team /> },
   { path: "billing", element: <Billing /> },
-  { path: "settings", element: <Settings /> },
+  { path: "settings", element: <SettingsHub /> },
   { path: "developer", element: <Developer /> },
   { path: "support", element: <ConsoleSupport /> },
 ];
