@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   ChevronDown,
   CircleHelp,
@@ -61,6 +61,7 @@ const searchNavigation = [
 
 export function ConsoleLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [collapsed, setCollapsed] = useState(() => {
     return localStorage.getItem("agata.console.sidebar") === "collapsed";
   });
@@ -75,6 +76,7 @@ export function ConsoleLayout() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [session, setSession] = useState<Session | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(
@@ -87,10 +89,10 @@ export function ConsoleLayout() {
     let active = true;
     getSession()
       .then((current) => {
-        if (active) setSession(current);
+        if (active) { setSession(current); setSessionChecked(true); }
       })
       .catch(() => {
-        if (active) setSession(null);
+        if (active) { setSession(null); setSessionChecked(true); }
       });
 
     api.get<Array<{id:string;name:string;slug:string;role:string}>>("/api/v1/organizations").then(setOrganizations).catch(()=>{});
@@ -106,6 +108,12 @@ export function ConsoleLayout() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (sessionChecked && !session) {
+      navigate(`/login?returnTo=${encodeURIComponent(location.pathname)}`, { replace: true });
+    }
+  }, [sessionChecked, session, navigate, location.pathname]);
 
   useEffect(() => {
     if (!activeProjectId) return;
