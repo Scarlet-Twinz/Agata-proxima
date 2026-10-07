@@ -80,7 +80,7 @@ Billing and entitlements are server-authoritative:
 - `POST /api/v1/billing/checkout`
 - `POST /api/v1/billing/portal`
 
-Stripe webhooks are received at `POST /api/v1/webhooks/stripe`.
+Billing provider implementation is a Phase 3B concern. Phase 3A exposes only the server-authoritative entitlement/read model; Paystack checkout, webhook processing, billing logs and provider-specific automation are intentionally implemented in Phase 3B.
 
 ## Verification and audit
 
