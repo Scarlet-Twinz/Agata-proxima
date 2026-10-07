@@ -1216,7 +1216,7 @@ async fn settings(State(s): State<AppState>, headers: HeaderMap) -> Response {
         Ok(v) => v,
         Err(c) => return c.into_response(),
     };
-    let user = match sqlx::query("SELECT id,email,display_name,preferences FROM users WHERE id=$1")
+    let user = match sqlx::query("SELECT id,email,display_name,preferences,pending_email FROM users WHERE id=$1")
         .bind(ctx.user_id)
         .fetch_optional(&s.db)
         .await
@@ -1254,7 +1254,8 @@ async fn settings(State(s): State<AppState>, headers: HeaderMap) -> Response {
         "user": {
             "id": user.get::<Uuid,_>("id"),
             "email": user.get::<String,_>("email"),
-            "display_name": user.get::<String,_>("display_name")
+            "display_name": user.get::<String,_>("display_name"),
+            "pending_email": user.get::<Option<String>,_>("pending_email")
         },
         "organization": {
             "id": organization.get::<Uuid,_>("id"),
