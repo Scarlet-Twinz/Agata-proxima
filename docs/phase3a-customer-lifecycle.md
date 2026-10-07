@@ -117,3 +117,24 @@ The following are intentionally external and cannot be honestly marked complete 
 6. Independent security assessment.
 
 Those gates belong to operational acceptance and are never represented as fake green repository state.
+
+
+## Final audit additions
+
+The Phase 3A implementation now includes a documentation-first navigation model. Authenticated resource surfaces link to dedicated documentation routes under `/app/docs/:topic`; nested billing, developer, settings and security destinations also have dedicated documentation pages. Customer lifecycle pages link directly to the customer integration and external SaaS acceptance procedures.
+
+The public website also contains dedicated documentation destinations for customer integration, the developer guide, external SaaS acceptance and Microsoft Entra OIDC. The Terms and Privacy pages have been expanded into structured production-facing policies with scope, responsibilities, security, data handling, retention, third-party services, rights, changes and contact sections.
+
+The customer lifecycle API validates project/environment names, enforces one active Production environment per project, preserves organization scoping, and keeps integration registration explicitly pending until an external system is configured and verified.
+
+The Phase 3A API contract does not advertise a non-existent Paystack endpoint. Paystack implementation begins in Phase 3B.
+
+## Email branding
+
+The repository's transactional Resend sending path now uses a shared branded HTML shell with the Agata Proxima logo, configurable through `AGATA_EMAIL_LOGO_URL` and defaulting to `https://agataproxima.com/logo.svg`. User-controlled display names, organization names, support subjects and IP metadata are HTML-escaped before insertion into email markup.
+
+The connected Resend account also contains five published Agata Proxima transactional templates: Verify Email, New Login Alert, Password Reset, Organization Invitation and Support Request Received. Each published template currently contains the Agata Proxima logo at `https://agataproxima.com/logo.svg`.
+
+## Final external boundary
+
+Repository completion does not claim public hosting, DNS, verified production email delivery, a deployed customer database, external SaaS acceptance or independent security assessment. Those are explicit operational acceptance gates and will be tested separately after the hosting target is selected.
