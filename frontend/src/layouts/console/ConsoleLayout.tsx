@@ -71,6 +71,13 @@ export function ConsoleLayout() {
   const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
+    const savedTheme = localStorage.getItem("agata.theme");
+    if (savedTheme === "dark" || savedTheme === "light") {
+      document.documentElement.dataset.theme = savedTheme;
+    }
+  }, []);
+
+  useEffect(() => {
     localStorage.setItem(
       "agata.console.sidebar",
       collapsed ? "collapsed" : "expanded",
@@ -121,6 +128,15 @@ export function ConsoleLayout() {
     setSearchOpen(false);
     setSearchQuery("");
   }
+
+  useEffect(() => {
+    function handleSessionExpired() {
+      setAccountOpen(false);
+      navigate("/login", { replace: true, state: { from: window.location.pathname, sessionExpired: true } });
+    }
+    window.addEventListener("agata:session-expired", handleSessionExpired);
+    return () => window.removeEventListener("agata:session-expired", handleSessionExpired);
+  }, [navigate]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -191,7 +207,7 @@ export function ConsoleLayout() {
           </button>
         </div>
 
-        <button className="workspace-switcher" type="button">
+        <button className="workspace-switcher" type="button" onClick={() => navigate("/app/settings")}>
           <span className="workspace-symbol">A</span>
 
           {!collapsed && (

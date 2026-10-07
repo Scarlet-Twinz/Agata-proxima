@@ -40,6 +40,12 @@ pub(crate) struct VerifyInput {
 }
 
 #[derive(Deserialize)]
+pub(crate) struct VerificationCodeInput {
+    pub email: String,
+    pub code: String,
+}
+
+#[derive(Deserialize)]
 pub(crate) struct OidcConfigureInput {
     pub tenant_id: String,
     pub jit_provisioning: Option<bool>,
@@ -1061,27 +1067,27 @@ pub(crate) async fn send_verification_email(
     email: &str,
     display_name: &str,
 ) -> anyhow::Result<()> {
-    let token = format!("{}-{}", Uuid::new_v4(), Uuid::new_v4());
+    let bytes = *Uuid::new_v4().as_bytes();
+    let value = u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) % 1_000_000;
+    let code = format!("{value:06}");
+
     sqlx::query(
         "UPDATE users SET email_verification_token_hash=$1,
-         email_verification_expires_at=now()+interval '24 hours' WHERE id=$2",
+         email_verification_expires_at=now()+interval '15 minutes',
+         email_verification_attempts=0 WHERE id=$2",
     )
-    .bind(token_hash(&token))
+    .bind(token_hash(&code))
     .bind(user_id)
     .execute(db)
     .await?;
 
-    let base = env::var("AGATA_PUBLIC_BASE_URL")
-        .unwrap_or_else(|_| "http://127.0.0.1:8080".into())
-        .trim_end_matches('/')
-        .to_string();
-    let link = format!("{base}/verify-email?token={token}");
     send_template_email(
         email,
         "091dbdb2-21ed-444f-a209-6f44e55d192d",
         json!({
             "DISPLAY_NAME": display_name,
-            "ACTION_URL": link
+            "CODE": code,
+            "ACTION_URL": ""
         }),
     )
     .await
@@ -1144,9 +1150,10 @@ pub(crate) async fn verify_email(
 ) -> Response {
     let result = sqlx::query(
         "UPDATE users SET email_verified_at=now(),email_verification_token_hash=NULL,
-         email_verification_expires_at=NULL
+         email_verification_expires_at=NULL,email_verification_attempts=0
          WHERE email_verification_token_hash=$1
            AND email_verification_expires_at>now()
+           AND email_verification_attempts<5
          RETURNING email",
     )
     .bind(token_hash(&q.token))
@@ -1156,19 +1163,107 @@ pub(crate) async fn verify_email(
     match result {
         Ok(Some(row)) => Html(format!(
             "<html><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\">
-             <h1>Email verified.</h1><p>{}</p><p><a href=\"/app\">Open Agata Proxima</a></p></body></html>",
+             <h1>Verification now uses a code.</h1><p>{}</p><p>Return to the Agata Proxima sign-in screen and enter the code from your latest email.</p></body></html>",
             row.get::<String,_>("email")
-        ))
-        .into_response(),
+        )).into_response(),
         Ok(None) => (
             StatusCode::BAD_REQUEST,
-            Html("<html><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\"><h1>Verification link expired or invalid.</h1></body></html>"),
-        )
-            .into_response(),
+            Html("<html><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\"><h1>This verification link is no longer active.</h1><p>Request a new verification code from the sign-in screen.</p></body></html>"),
+        ).into_response(),
         Err(e) => db_error(e),
     }
 }
 
+pub(crate) async fn verify_email_code(
+    State(s): State<AppState>,
+    Json(input): Json<VerificationCodeInput>,
+) -> Response {
+    let email = input.email.trim().to_lowercase();
+    let code = input.code.trim();
+
+    if email.is_empty() || !email.contains('@') {
+        return bad("A valid email is required.");
+    }
+    if code.len() != 6 || !code.chars().all(|value| value.is_ascii_digit()) {
+        return bad("Enter the 6-digit verification code from your latest email.");
+    }
+
+    let row = match sqlx::query(
+        "SELECT id,email_verification_token_hash,email_verification_expires_at,email_verification_attempts
+         FROM users WHERE email=$1 AND status='active'",
+    )
+    .bind(&email)
+    .fetch_optional(&s.db)
+    .await
+    {
+        Ok(Some(row)) => row,
+        Ok(None) => return bad("The verification code is invalid or expired."),
+        Err(e) => return db_error(e),
+    };
+
+    let attempts: i32 = row.get("email_verification_attempts");
+    if attempts >= 5 {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({"ok":false,"message":"Too many verification attempts. Request a new code and try again."})),
+        ).into_response();
+    }
+
+    let expected: Vec<u8> = row.get("email_verification_token_hash");
+    if token_hash(code) != expected {
+        let _ = sqlx::query(
+            "UPDATE users SET email_verification_attempts=email_verification_attempts+1 WHERE id=$1",
+        )
+        .bind(row.get::<Uuid,_>("id"))
+        .execute(&s.db)
+        .await;
+        return bad("The verification code is invalid or expired.");
+    }
+
+    let updated = sqlx::query(
+        "UPDATE users SET email_verified_at=now(),email_verification_token_hash=NULL,
+         email_verification_expires_at=NULL,email_verification_attempts=0
+         WHERE id=$1
+           AND email_verification_token_hash=$2
+           AND email_verification_expires_at>now()
+           AND email_verification_attempts<5
+         RETURNING id,email",
+    )
+    .bind(row.get::<Uuid,_>("id"))
+    .bind(token_hash(code))
+    .fetch_optional(&s.db)
+    .await;
+
+    match updated {
+        Ok(Some(user)) => {
+            if let Ok(Some(membership)) = sqlx::query(
+                "SELECT organization_id FROM memberships WHERE user_id=$1 ORDER BY created_at LIMIT 1",
+            )
+            .bind(user.get::<Uuid,_>("id"))
+            .fetch_optional(&s.db)
+            .await
+            {
+                audit(
+                    &s.db,
+                    membership.get::<Uuid,_>("organization_id"),
+                    user.get::<Uuid,_>("id"),
+                    "auth.email_verified",
+                    "user",
+                    Some(user.get::<Uuid,_>("id")),
+                    json!({"method":"verification_code"}),
+                ).await;
+            }
+            Json(json!({
+                "ok":true,
+                "verified":true,
+                "email":user.get::<String,_>("email"),
+                "message":"Email verified. Sign in to open your Agata Proxima workspace."
+            })).into_response()
+        }
+        Ok(None) => bad("The verification code is invalid or expired."),
+        Err(e) => db_error(e),
+    }
+}
 pub(crate) async fn reset_password_page(Query(q): Query<VerifyInput>) -> Response {
     let token = q.token.replace('"', "");
     Html(format!(
