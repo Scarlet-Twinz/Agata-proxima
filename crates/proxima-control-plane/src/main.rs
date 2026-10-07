@@ -1727,10 +1727,12 @@ async fn mark_notification_read(
 
     match sqlx::query(
         "UPDATE notifications SET read_at=COALESCE(read_at,now())
-         WHERE id=$1 AND user_id=$2",
+         WHERE id=$1 AND user_id=$2
+           AND (organization_id IS NULL OR organization_id=$3)",
     )
     .bind(id)
     .bind(ctx.user_id)
+    .bind(ctx.organization_id)
     .execute(&s.db)
     .await
     {
@@ -2369,6 +2371,22 @@ async fn create_verification(
     }
 
     let id = Uuid::new_v4();
+    if let Some(tenant_id) = input.tenant_id {
+        let tenant_exists = match sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM tenants WHERE id=$1 AND organization_id=$2)"
+        )
+        .bind(tenant_id)
+        .bind(ctx.organization_id)
+        .fetch_one(&s.db)
+        .await {
+            Ok(v) => v,
+            Err(e) => return db_error(e),
+        };
+        if !tenant_exists {
+            return (StatusCode::NOT_FOUND, Json(json!({"ok":false,"message":"Tenant not found in the active organization."}))).into_response();
+        }
+    }
+
     match sqlx::query(
         "INSERT INTO verification_results(id,organization_id,tenant_id,kind,status,evidence,created_by)
          VALUES($1,$2,$3,$4,$5,$6,$7)"
@@ -2526,6 +2544,21 @@ fn require_csrf(ctx: &AuthContext, headers: &HeaderMap) -> Result<(), StatusCode
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
     if supplied == ctx.csrf {
+        Ok(())
+    } else {
+        Err(StatusCode::FORBIDDEN)
+    }
+}
+
+fn require_admin(ctx: &AuthContext, headers: &HeaderMap) -> Result<(), StatusCode> {
+    let supplied = headers
+        .get("x-csrf-token")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    if supplied != ctx.csrf {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    if matches!(ctx.role.as_str(), "owner" | "admin") {
         Ok(())
     } else {
         Err(StatusCode::FORBIDDEN)
