@@ -1789,7 +1789,7 @@ async fn create_organization(
         json!({}),
     )
     .await;
-    audit(&s.db, id, ctx.user_id, "organization.created", "organization", Some(id), json!({})).await;
+    create_notification(&s.db, ctx.user_id, Some(id), "workspace", "Organization created", &format!("“{}” is ready with its own Production project.", name), Some("/app")).await;
     Json(json!({"id":id,"name":name,"slug":slug})).into_response()
 }
 
