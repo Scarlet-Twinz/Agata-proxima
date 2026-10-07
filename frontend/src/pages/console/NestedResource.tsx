@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowLeft, ArrowUpRight, BookOpen, ChevronRight, Copy, ExternalLink, RefreshCw, ShieldCheck } from "lucide-react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { ResourceSurface } from "../../components/console/ResourceSurface";
@@ -141,7 +141,7 @@ const developerDocs: Record<string,{title:string;intro:string;sections:{title:st
   },
 };
 
-function ContextShell({config,children}:{config:Config;children:React.ReactNode}) {
+function ContextShell({config,children}:{config:Config;children:ReactNode}) {
   const {pathname}=useLocation();
   const [open,setOpen]=useState(true);
   return <div className="context-page">
@@ -177,7 +177,7 @@ const baseConfigs:Record<string,Config>={
 
 export function NestedResource(){
   const {pathname}=useLocation(); const params=useParams();
-  const detailId=params.tenantId??params.policyId??params.nodeId??params.deploymentId??params.runId??params.eventId;
+  const detailId=params.tenantId??params.policyId??params.nodeId??params.deploymentId??params.runId??params.eventId??params.apiKeyId??params.webhookId;
   const base=detailId?pathname.replace(/\/[^/]+$/,""):pathname;
   const config=baseConfigs[base]??baseConfigs[pathname];
   if(detailId && config?.endpoint) return <DetailPage config={config} id={detailId}/>;
