@@ -35,7 +35,6 @@ import {
   Nodes,
   Policies,
   Security as ConsoleSecurity,
-  Settings,
   Support as ConsoleSupport,
   Team,
   Tenants,
