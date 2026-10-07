@@ -67,7 +67,6 @@ export function ConsoleLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [environmentOpen, setEnvironmentOpen] = useState(false);
-  const [projects, setProjects] = useState<Array<{id:string;name:string;slug:string}>>([]);
   const [environments, setEnvironments] = useState<Array<{id:string;name:string;slug:string;kind:string;status:string}>>([]);
   const [activeProjectId, setActiveProjectId] = useState(() => localStorage.getItem("agata.active.project") || "");
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
@@ -95,7 +94,6 @@ export function ConsoleLayout() {
 
     api.get<Array<{id:string;name:string;slug:string;role:string}>>("/api/v1/organizations").then(setOrganizations).catch(()=>{});
     api.get<Array<{id:string;name:string;slug:string}>>("/api/v1/projects").then((items) => {
-      setProjects(items);
       const saved = localStorage.getItem("agata.active.project");
       const selected = items.find((item) => item.id === saved) ?? items[0];
       if (selected) {
