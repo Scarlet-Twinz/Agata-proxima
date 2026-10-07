@@ -1,7 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, ArrowUpRight } from "lucide-react";
 
-type Section = { title: string; paragraphs?: string[]; bullets?: string[] };
+type Section = { title: string; paragraphs?: string[]; bullets?: string[]; example?: string };
 
 type Topic = {
   eyebrow: string;
@@ -170,18 +170,94 @@ const topics: Record<string, Topic> = {
   }
 };
 
+const guideSections = (topic: string): Section[] => {
+  const common: Record<string, Section[]> = {
+    overview: [
+      { title:"How to use the Command Center", paragraphs:["Start at the workspace level, then move downward: organization → project → environment → integration → tenant → verification. Each level answers a different operational question. Do not skip directly from a marketing claim to a production assumption."] },
+      { title:"What a new customer should do", bullets:["Create or join the organization.","Create the project that represents the customer application.","Confirm Production was created automatically.","Create Development and Staging if required.","Register the integration.","Configure and verify tenant context.","Run the external SaaS acceptance procedure before production promotion."] },
+      { title:"Example", example:"Organization: Acme Ltd.\nProject: Acme SaaS\nEnvironment: Staging\nIntegration: Engine / pending\nTenant: acme-customer-001\nVerification: not_run → running → pass\nPromotion: staging → canary → production" }
+    ],
+    security: [
+      { title:"How to read the security pages", paragraphs:["Security is not one feature. It is a chain of controls. When reviewing a security claim, ask: who authenticated, which tenant was established, where was it verified, which database control enforced it, and what evidence proves the behavior?"] },
+      { title:"Incident-style questions", bullets:["Can Tenant A read Tenant B?","Can a missing token reach PostgreSQL?","Can an expired token be replayed?","Can an administrator in Organization A inspect Organization B?","Does Control Plane downtime disable the Engine?","Can the UI display a success state without backend evidence?"] },
+      { title:"Security review example", example:"Claim: 'Tenant isolation is verified.'\nEvidence required: actual positive + negative runtime tests.\nNot sufficient: a tenant record, a green badge, or a saved policy." }
+    ],
+    "tenant-isolation":[
+      { title:"What happens on a request", paragraphs:["The application authenticates the user and resolves the customer's tenant. A signed tenant assertion is then carried into the protected connection. Proxima validates that assertion before the ordinary query stream is allowed to proceed. PostgreSQL controls remain part of the defense-in-depth model."] },
+      { title:"Failure cases", bullets:["Missing assertion → reject.","Malformed assertion → reject.","Expired assertion → reject.","Tampered assertion → reject.","Tenant A attempting Tenant B data → reject.","Control Plane unavailable while Engine is running → runtime enforcement continues."] },
+      { title:"Minimal acceptance example", example:"A: SELECT own rows       => allowed\nA: SELECT B rows          => denied\nA: UPDATE B rows          => denied\nNo tenant context         => denied\nExpired context           => denied" }
+    ],
+    tenants:[
+      { title:"Why tenant records exist", paragraphs:["The tenant registry is an administrative inventory. It lets operators identify which customer boundaries belong to which project and organization. It does not magically make an application's database queries safe."] },
+      { title:"Creating a tenant correctly", bullets:["Select the organization.","Select the project explicitly when multiple projects exist.","Give the tenant a stable business identifier.","Configure the application's authenticated tenant resolution.","Create and verify the signed tenant context.","Exercise the real database path."] },
+      { title:"Common mistake", paragraphs:["Do not create a tenant record and immediately treat it as proof of isolation. The record describes intent and inventory; verification describes observed security behavior."] }
+    ],
+    policies:[
+      { title:"Policy lifecycle in practice", paragraphs:["A policy starts as desired state. Operators review it, deploy it through the intended environment, then verify the behavior. The important distinction is between 'saved' and 'enforced'."] },
+      { title:"Review checklist", bullets:["Is the policy organization-scoped?","Which project/environment does it affect?","Which version is intended?","What should be allowed?","What should be denied?","Has the deployed runtime been verified?","Is the change auditable?"] },
+      { title:"Example", example:"Policy v7\nIntent: Tenant A may access only A rows\nDeployment: staging\nVerification: cross-tenant read denied\nPromotion: approved after evidence review" }
+    ],
+    nodes:[
+      { title:"Node versus environment", paragraphs:["An environment describes lifecycle context. A node describes enforcement infrastructure. A node may belong to an environment, but registering it does not prove that the underlying process is healthy."] },
+      { title:"Operational review", bullets:["Confirm node identity.","Confirm environment and region.","Confirm desired version.","Inspect observed runtime state.","Verify after deployment.","Record failure instead of displaying an optimistic success state."] },
+      { title:"Example", example:"Environment: Production\nNode: prod-ng-01\nDesired version: 3.x\nObserved state: healthy\nLast verification: pass" }
+    ],
+    deployments:[
+      { title:"Deployment means intent plus observation", paragraphs:["A deployment record answers what version should run and where. Runtime telemetry answers what actually happened. Keeping those concepts separate prevents the dashboard from calling a requested deployment successful before the runtime confirms it."] },
+      { title:"Safe promotion", bullets:["Validate in Development.","Verify in Staging.","Run canary checks.","Promote Production.","Run post-deployment verification.","Keep rollback evidence available."] },
+      { title:"Example", example:"Requested: v1.8 → staging\nObserved: v1.8 healthy\nVerification: pass\nPromotion: production approved" }
+    ],
+    verification:[
+      { title:"Verification is evidence, not decoration", paragraphs:["A verification result should correspond to an actual test. The result must identify what was tested, which boundary was tested and whether the expected allow/deny behavior occurred."] },
+      { title:"Required test matrix", bullets:["Positive tenant-local read.","Positive tenant-local write.","Negative cross-tenant read.","Negative cross-tenant write.","Missing context.","Expired context.","Tampered context.","Prepared statements.","Transactions.","Connection reuse.","Engine restart.","Control Plane outage."] },
+      { title:"Example result", example:"Tenant A local read: PASS\nTenant A → Tenant B read: PASS (correctly denied)\nExpired token: PASS (correctly denied)\nControl Plane outage: PASS (Engine remained enforcing)" }
+    ],
+    audit:[
+      { title:"How to use audit history", paragraphs:["Audit is an investigation tool. Start with the time range, identify the organization and actor, then inspect the resource and action. For security incidents, correlate administrative changes with verification evidence rather than treating either feed as complete on its own."] },
+      { title:"Events worth investigating", bullets:["Project creation.","Environment creation.","Integration registration.","Policy changes.","Deployment actions.","Verification runs.","Team membership changes.","Security-sensitive configuration changes."] },
+      { title:"Example investigation", example:"09:12  admin   integration.created   project=Acme\n09:18  operator verification.started  environment=staging\n09:21  system   verification.pass     tenant-isolation\n09:30  admin   promotion.approved      production" }
+    ],
+    team:[
+      { title:"Organization membership", paragraphs:["An organization is the administrative boundary. Members receive roles within that organization. Switching organizations should change the active authorization context; it must never grant access to resources belonging to another organization."] },
+      { title:"When you would create another organization", paragraphs:["Create a second organization only when you are operating a genuinely separate customer or business boundary. Do not create one simply to make another project. Projects belong inside an organization."] },
+      { title:"Example", example:"Organization A: Acme Ltd\n  Project: Customer Portal\nOrganization B: Beta Ltd\n  Project: Beta Analytics\n\nA member of A should not automatically see B's projects." }
+    ],
+    billing:[
+      { title:"Billing is a system, not a page", paragraphs:["Billing connects commercial plans, provider transactions, server-side entitlements and resource limits. A serious billing area therefore needs separate views for the current plan, usage, transactions/invoices and provider actions."] },
+      { title:"What changes in Phase 3B", bullets:["Paystack customer/payment identity.","Plan and price mapping.","Checkout initialization.","Verified webhook processing.","Transaction persistence.","Entitlement activation/deactivation.","Usage enforcement.","Payment failure handling.","Billing audit events."] },
+      { title:"Example", example:"Customer chooses Pro\n→ Paystack checkout\n→ Paystack confirms transaction\n→ webhook verified\n→ transaction persisted\n→ entitlement activated\n→ protected feature becomes available" }
+    ],
+    developer:[
+      { title:"The developer journey", paragraphs:["A developer should not have to guess which page comes next. Start with the quickstart, understand the integration mode, establish tenant context, create the required credentials, connect PostgreSQL through the selected boundary, then run the verification matrix."] },
+      { title:"Do not confuse API credentials with tenant identity", paragraphs:["An API credential identifies an integration or machine. Tenant context identifies the customer boundary for a protected operation. One does not replace the other."] },
+      { title:"Example", example:"API credential → 'this integration may call Proxima'\nTenant assertion → 'this operation is for tenant acme-001'\nProxima → validates context\nPostgreSQL → enforces protected access" }
+    ],
+    settings:[
+      { title:"Authentication versus identity", paragraphs:["Authentication establishes the session. Enterprise identity such as Microsoft Entra can establish that a user came from an approved identity provider. Authorization still depends on organization membership and role."] },
+      { title:"Security settings", bullets:["Review session security.","Review organization roles.","Review integration credentials.","Review tenant-isolation verification.","Review audit evidence.","Never interpret a setting as a certification claim."] },
+      { title:"Production identity example", example:"Entra application registration\n→ public callback\n→ OIDC validation\n→ Agata session\n→ organization membership\n→ role authorization" }
+    ],
+    support:[
+      { title:"Support workflow", bullets:["Identify the organization and project.","Identify the environment.","Record the exact failing action.","Check the relevant documentation.","Check verification/audit evidence.","Create a support request with the request ID and safe diagnostic context.","Never paste API keys or passwords into support."] },
+      { title:"What a useful support report contains", paragraphs:["A useful report tells the support team what you expected, what happened, where it happened, when it happened, which environment was involved and what evidence you already checked."] },
+      { title:"Example", example:"Organization: Acme\nProject: Customer Portal\nEnvironment: staging\nExpected: Tenant A query succeeds\nObserved: 403\nStarted: 2026-10-07 10:20 UTC\nVerification run: #1234" }
+    ]
+  };
+  return common[topic] ?? [];
+};
+
 export function ConsoleDocumentation() {
   const { topic = "overview" } = useParams();
-  const page = topics[topic] ?? topics.overview;
+  const page = topics[topic] ?? topics.overview;\n  const sections = [...page.sections, ...guideSections(topic)];
   return <section className="resource-page">
     <Link className="back-link" to="/app"><ArrowLeft size={16}/> Command Center</Link>
     <div className="page-heading"><div><span className="eyebrow">{page.eyebrow}</span><h1>{page.title}</h1><p>{page.summary}</p></div></div>
     <div className="resource-layout">
       <article className="surface resource-documentation">
-        {page.sections.map(section => <section key={section.title} className="documentation-section">
+        {sections.map(section => <section key={section.title} className="documentation-section">
           <h2>{section.title}</h2>
           {section.paragraphs?.map(p => <p key={p}>{p}</p>)}
-          {section.bullets && <ul>{section.bullets.map(b => <li key={b}>{b}</li>)}</ul>}
+          {section.bullets && <ul>{section.bullets.map(b => <li key={b}>{b}</li>)}</ul>}{section.example && <pre className="documentation-example"><code>{section.example}</code></pre>}
         </section>)}
       </article>
       <aside className="surface resource-links"><span className="eyebrow">RELATED</span>{page.links.map(link=><Link key={link.href} to={link.href}>{link.label}<ArrowUpRight size={16}/></Link>)}</aside>
