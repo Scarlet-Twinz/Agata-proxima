@@ -2373,17 +2373,22 @@ async fn create_verification(
     let id = Uuid::new_v4();
     if let Some(tenant_id) = input.tenant_id {
         let tenant_exists = match sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS(SELECT 1 FROM tenants WHERE id=$1 AND organization_id=$2)"
+            "SELECT EXISTS(SELECT 1 FROM tenants WHERE id=$1 AND organization_id=$2)",
         )
         .bind(tenant_id)
         .bind(ctx.organization_id)
         .fetch_one(&s.db)
-        .await {
+        .await
+        {
             Ok(v) => v,
             Err(e) => return db_error(e),
         };
         if !tenant_exists {
-            return (StatusCode::NOT_FOUND, Json(json!({"ok":false,"message":"Tenant not found in the active organization."}))).into_response();
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"ok":false,"message":"Tenant not found in the active organization."})),
+            )
+                .into_response();
         }
     }
 
