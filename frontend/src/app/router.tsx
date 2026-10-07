@@ -43,6 +43,8 @@ import {
 import { NestedResource } from "../pages/console/NestedResource";
 import { ActionPage } from "../pages/console/ActionPage";
 import { SettingsHub } from "../pages/console/SettingsHub";
+import { Notifications } from "../pages/console/Notifications";
+import { TeamManagement } from "../pages/console/TeamManagement";
 
 const detailRoutes = [
   "/product/model", "/product/enforcement", "/product/verification", "/product/evidence",
@@ -65,7 +67,8 @@ const consoleResourceRoutes = [
   { path: "verification", element: <Verification /> },
   { path: "audit", element: <Audit /> },
   { path: "security", element: <ConsoleSecurity /> },
-  { path: "team", element: <Team /> },
+  { path: "team", element: <TeamManagement /> },
+  { path: "notifications", element: <Notifications /> },
   { path: "billing", element: <Billing /> },
   { path: "settings", element: <SettingsHub /> },
   { path: "developer", element: <Developer /> },
