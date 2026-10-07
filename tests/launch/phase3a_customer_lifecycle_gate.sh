@@ -33,8 +33,8 @@ grep -q 'proximaDatabaseUrl' packages/proxima-node-sdk/src/index.ts
 grep -q 'proxima_csrf' frontend/src/api/client.ts
 grep -q 'INSERT INTO environments(project_id,name,slug,kind)' crates/proxima-control-plane/src/main.rs
 grep -q 'project_id: Option<Uuid>' crates/proxima-control-plane/src/main.rs
-grep -q 'AGATA_EMAIL_LOGO_URL' crates/proxima-control-plane/src/production.rs
-grep -q 'https://agataproxima.com/logo.svg' crates/proxima-control-plane/src/production.rs
+grep -q 'Agata Proxima · Tenant isolation infrastructure' crates/proxima-control-plane/src/production.rs
+grep -q 'https://agataproxima.com/support' crates/proxima-control-plane/src/production.rs
 grep -q 'documentation' frontend/src/pages/console/ConsoleDocumentation.tsx
 test "$(grep -c '/api/v1/webhooks/paystack' control-plane/openapi.json)" -eq 0
 
