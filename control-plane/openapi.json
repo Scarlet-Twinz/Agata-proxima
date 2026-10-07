@@ -416,6 +416,100 @@
           }
         }
       }
+    },
+    "/api/v1/organization/team": {
+      "get": {
+        "summary": "List members and roles for the current organization",
+        "responses": {
+          "200": {
+            "description": "Organization membership"
+          }
+        }
+      }
+    },
+    "/api/v1/organization/invitations": {
+      "get": {
+        "summary": "List organization invitations",
+        "responses": {
+          "200": {
+            "description": "Invitation history"
+          }
+        }
+      },
+      "post": {
+        "summary": "Invite a member to the current organization",
+        "responses": {
+          "200": {
+            "description": "Invitation created or refreshed"
+          },
+          "400": {
+            "description": "Invalid invitation input"
+          },
+          "403": {
+            "description": "Write access or CSRF check failed"
+          }
+        }
+      }
+    },
+    "/api/v1/organization/invitations/{id}": {
+      "delete": {
+        "summary": "Revoke a pending organization invitation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invitation revoked"
+          },
+          "404": {
+            "description": "Pending invitation not found"
+          }
+        }
+      }
+    },
+    "/api/v1/billing": {
+      "get": {
+        "summary": "Get current organization billing state",
+        "responses": {
+          "200": {
+            "description": "Billing state"
+          }
+        }
+      }
+    },
+    "/api/v1/billing/checkout": {
+      "post": {
+        "summary": "Create a billing checkout session",
+        "responses": {
+          "200": {
+            "description": "Checkout URL returned"
+          },
+          "503": {
+            "description": "Billing provider is not configured"
+          }
+        }
+      }
+    },
+    "/api/v1/billing/portal": {
+      "post": {
+        "summary": "Create a billing customer portal session",
+        "responses": {
+          "200": {
+            "description": "Portal URL returned"
+          },
+          "503": {
+            "description": "Billing provider is not configured"
+          }
+        }
+      }
     }
   },
   "components": {
