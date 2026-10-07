@@ -430,7 +430,7 @@ async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Respo
         return unauthorized();
     }
 
-    if row.get::<Option<chrono::DateTime<chrono::Utc>, _>("email_verified_at").is_none() {
+    if row.get::<Option<chrono::DateTime<chrono::Utc>, _>>("email_verified_at").is_none() {
         return (
             StatusCode::FORBIDDEN,
             Json(json!({
