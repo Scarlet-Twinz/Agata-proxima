@@ -172,6 +172,10 @@ async fn main() -> Result<()> {
         .route("/api/v1/health", get(healthz))
         .route("/api/v1/auth/signup", post(signup))
         .route("/api/v1/auth/login", post(login))
+        .route(
+            "/api/v1/auth/verification/resend",
+            post(production::resend_verification_email),
+        )
         .route("/api/v1/auth/logout", post(logout))
         .route("/api/v1/session", get(session))
         .route("/api/v1/platform/status", get(platform_status))
@@ -395,16 +399,20 @@ async fn signup(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Resp
         tracing::error!(%e, "verification email delivery failed");
     }
 
-    match create_session(&s.db, user_id, organization_id).await {
-        Ok((token, csrf)) => auth_response(&s, user_id, organization_id, csrf, token),
-        Err(e) => db_error(e),
-    }
+    Json(json!({
+        "ok": true,
+        "verification_required": true,
+        "user_id": user_id,
+        "organization_id": organization_id,
+        "message": "Workspace created. Check your email to verify your address before signing in."
+    }))
+        .into_response()
 }
 
 async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Response {
     let email = input.email.trim().to_lowercase();
     let row =
-        match sqlx::query("SELECT id,password_hash FROM users WHERE email=$1 AND status='active'")
+        match sqlx::query("SELECT id,password_hash,email_verified_at FROM users WHERE email=$1 AND status='active'")
             .bind(&email)
             .fetch_optional(&s.db)
             .await
@@ -419,6 +427,18 @@ async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Respo
 
     if !verify_password(&input.password, &password_hash) {
         return unauthorized();
+    }
+
+    if row.get::<Option<chrono::DateTime<chrono::Utc>, _>("email_verified_at").is_none() {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({
+                "ok": false,
+                "error": "email_verification_required",
+                "message": "Verify your email address before signing in. Check your inbox for the Agata Proxima verification email."
+            })),
+        )
+            .into_response();
     }
 
     let organization_id: Uuid = match sqlx::query(

@@ -1087,6 +1087,57 @@ pub(crate) async fn send_verification_email(
     .await
 }
 
+#[derive(Deserialize)]
+pub(crate) struct VerificationResendInput {
+    pub email: String,
+}
+
+pub(crate) async fn resend_verification_email(
+    State(s): State<AppState>,
+    Json(input): Json<VerificationResendInput>,
+) -> Response {
+    let email = input.email.trim().to_lowercase();
+    if email.is_empty() || !email.contains('@') {
+        return bad("A valid email is required.");
+    }
+
+    let user = match sqlx::query(
+        "SELECT id,display_name,email_verified_at FROM users WHERE email=$1 AND status='active'",
+    )
+    .bind(&email)
+    .fetch_optional(&s.db)
+    .await
+    {
+        Ok(value) => value,
+        Err(e) => return db_error(e),
+    };
+
+    if let Some(row) = user {
+        if row
+            .get::<Option<chrono::DateTime<chrono::Utc>, _>("email_verified_at")
+            .is_none()
+        {
+            if let Err(e) = send_verification_email(
+                &s.db,
+                row.get("id"),
+                &email,
+                row.get("display_name"),
+            )
+            .await
+            {
+                tracing::error!(%e, "verification email delivery failed");
+                return service_unavailable("Verification email could not be sent. Check the Resend configuration.");
+            }
+        }
+    }
+
+    Json(json!({
+        "ok": true,
+        "message": "If the account requires verification, a new verification email has been sent."
+    }))
+    .into_response()
+}
+
 pub(crate) async fn verify_email(
     State(s): State<AppState>,
     Query(q): Query<VerifyInput>,
