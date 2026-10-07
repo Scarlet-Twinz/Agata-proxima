@@ -1,5 +1,5 @@
-import { FormEvent, useEffect, useState } from "react";
-import { ArrowLeft, CheckCircle2, Copy, ExternalLink, ShieldCheck } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { ArrowLeft, CheckCircle2, Copy, ShieldCheck } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { api, type ApiError } from "../../api/client";
 
