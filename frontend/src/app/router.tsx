@@ -36,7 +36,6 @@ import {
   Policies,
   Security as ConsoleSecurity,
   Support as ConsoleSupport,
-  Team,
   Tenants,
   Verification,
 } from "../pages/console/ConsoleSurfaces";
