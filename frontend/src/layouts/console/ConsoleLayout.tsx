@@ -73,6 +73,8 @@ export function ConsoleLayout() {
   const [session, setSession] = useState<Session | null>(null);
   const [organizationName, setOrganizationName] = useState("Workspace");
   const [organizationSlug, setOrganizationSlug] = useState("");
+  const [accountDisplayName, setAccountDisplayName] = useState("Account");
+  const [accountEmail, setAccountEmail] = useState("");
   const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   useEffect(() => {
@@ -103,6 +105,8 @@ export function ConsoleLayout() {
         if (!active) return;
         setOrganizationName(settings.organization.name || "Workspace");
         setOrganizationSlug(settings.organization.slug || "");
+        setAccountDisplayName(settings.user.display_name || "Account");
+        setAccountEmail(settings.user.email || "");
       })
       .catch(() => undefined);
     api.get<{notifications:{read:boolean}[]}>("/api/v1/notifications")
@@ -121,8 +125,8 @@ export function ConsoleLayout() {
     navigate("/login", { replace: true });
   }
 
-  const accountLabel = session?.user_id || "Account";
-  const accountInitial = accountLabel.slice(0, 1).toUpperCase();
+  const accountLabel = accountDisplayName || "Account";
+  const accountInitial = accountLabel.trim().slice(0, 1).toUpperCase() || "A";
   const organizationInitial = organizationName.trim().slice(0, 1).toUpperCase() || "W";
 
   const searchResults = useMemo(() => {
@@ -230,7 +234,7 @@ export function ConsoleLayout() {
           {!collapsed && (
             <span className="workspace-copy">
               <strong>{organizationName}</strong>
-              <small>Production{organizationSlug ? ` · ${organizationSlug}` : ""}</small>
+              <small>Production</small>
             </span>
           )}
 
@@ -432,7 +436,7 @@ export function ConsoleLayout() {
                 <div className="console-account-menu">
                   <div className="console-account-meta">
                     <strong>{accountLabel}</strong>
-                    <span>{session?.role || "Account"}</span>
+                    <span>{accountEmail || session?.role || "Account"}</span>
                   </div>
                   <button type="button" onClick={handleLogout}>
                     Sign out
