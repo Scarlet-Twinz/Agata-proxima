@@ -1,0 +1,33 @@
+name: Phase 3A Rustfmt Repair
+
+on:
+  push:
+    branches: ["phase3-foundation-audit"]
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: "!startsWith(github.event.head_commit.message, 'style(3a): rustfmt')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase3-foundation-audit
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Apply rustfmt
+        run: cargo fmt --all
+      - name: Commit formatted Rust
+        run: |
+          if git diff --quiet; then
+            echo "Rust sources are already formatted."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "style(3a): rustfmt control-plane sources"
+          git push origin phase3-foundation-audit
