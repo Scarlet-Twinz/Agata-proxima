@@ -1,7 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, ArrowUpRight } from "lucide-react";
 
-type Section = { title: string; paragraphs: string[]; bullets?: string[] };
+type Section = { title: string; paragraphs?: string[]; bullets?: string[] };
 
 type Topic = {
   eyebrow: string;
