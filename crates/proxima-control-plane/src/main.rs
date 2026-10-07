@@ -2446,7 +2446,7 @@ fn slugify(value: &str) -> String {
         .join("-")
 }
 
-async fn create_notification(
+pub(crate) async fn create_notification(
     db: &PgPool,
     user_id: Uuid,
     organization_id: Option<Uuid>,
