@@ -32,7 +32,7 @@ grep -q 'user_identities' crates/proxima-control-plane/migrations/0004_oidc.sql 
 grep -q 'control_plane_coupling.*non_authoritative' crates/proxima-control-plane/src/main.rs || fail "control-plane non-authoritative health contract missing"
 grep -q 'engine_continues_enforcement' crates/proxima-control-plane/src/main.rs || fail "engine independence contract missing"
 
-grep -q 'X-Proxima-Tenant-Token' tests/external-saas/reference-app/server.js || fail "external SaaS tenant-token boundary missing"
+grep -q 'x-proxima-tenant-token' tests/external-saas/reference-app/server.js || fail "external SaaS tenant-token boundary missing"
 grep -q 'External SaaS reference application acceptance: PASS' tests/external-saas/verify_reference_app.sh || fail "external SaaS acceptance result contract missing"
 
 echo "Phase 58-59 repository launch gate"
