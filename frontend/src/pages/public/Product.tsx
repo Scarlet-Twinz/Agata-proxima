@@ -1,4 +1,13 @@
+import { Link } from "react-router-dom";
+import { ArrowRight } from "lucide-react";
 import { PublicPage } from "../../components/layout/PublicPage";
+
+const areas = [
+  ["Operating model","See how identity, tenant context, enforcement, PostgreSQL and evidence fit together.","/product/model"],
+  ["Enforcement","Understand the explicit security decision boundary.","/product/enforcement"],
+  ["Verification","See how isolation behavior is tested instead of assumed.","/product/verification"],
+  ["Evidence","Understand the operational evidence around security decisions.","/product/evidence"],
+];
 
 export function Product() {
   return (
@@ -9,31 +18,15 @@ export function Product() {
     >
       <section className="public-content">
         <div className="agata-container">
-          <div className="public-content-grid">
-            <aside className="public-content-aside">
-              <div className="public-content-aside-title">
-                Product
-              </div>
-              <a href="#model">Operating model</a>
-              <a href="#enforcement">Enforcement</a>
-              <a href="#verification">Verification</a>
-              <a href="#evidence">Evidence</a>
-            </aside>
-
-            <article className="public-prose">
-              <section id="model">
-                <h2>The Proxima model</h2>
-                <p>
-                  A multi-tenant application should not have to rely
-                  entirely on application code to preserve tenant
-                  boundaries. Proxima introduces an explicit
-                  infrastructure boundary where tenant context can be
-                  enforced and verified before database operations are
-                  allowed to proceed.
-                </p>
-
-                <pre className="public-code">
-{`Identity
+          <div className="public-prose">
+            <h2>The Proxima model</h2>
+            <p>
+              A multi-tenant application should not rely entirely on application code
+              to preserve tenant boundaries. Proxima introduces an explicit infrastructure
+              boundary where tenant context can be enforced and verified before database
+              operations are allowed to proceed.
+            </p>
+            <pre className="public-code">{`Identity
    ↓
 Tenant context
    ↓
@@ -43,41 +36,19 @@ PostgreSQL roles / RLS
    ↓
 Verification
    ↓
-Audit evidence`}
-                </pre>
-              </section>
+Audit evidence`}</pre>
+          </div>
 
-              <div className="public-rule" />
-
-              <section id="enforcement">
-                <h2>Enforcement</h2>
-                <p>
-                  Proxima is designed around an explicit decision:
-                  requests with valid tenant context can proceed;
-                  missing, invalid, expired or cross-tenant context is
-                  rejected.
-                </p>
-              </section>
-
-              <section id="verification">
-                <h2>Verification</h2>
-                <p>
-                  Isolation should be tested as a system property.
-                  Verification exercises the boundary and records
-                  whether expected tenant-local operations are allowed
-                  and cross-tenant operations are blocked.
-                </p>
-              </section>
-
-              <section id="evidence">
-                <h2>Evidence</h2>
-                <p>
-                  Operational security becomes stronger when teams can
-                  inspect what happened: policy versions, verification
-                  outcomes, tenant context and security events.
-                </p>
-              </section>
-            </article>
+          <div className="public-feature-grid public-product-area-grid">
+            {areas.map(([title,text,to]) => (
+              <article className="public-feature" key={title}>
+                <h3>{title}</h3>
+                <p>{text}</p>
+                <Link to={to} className="public-inline-link">
+                  Explore {title} <ArrowRight size={15} />
+                </Link>
+              </article>
+            ))}
           </div>
         </div>
       </section>

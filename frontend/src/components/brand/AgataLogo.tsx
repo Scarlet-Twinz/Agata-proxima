@@ -1,4 +1,5 @@
 import "./AgataLogo.css";
+import logo from "../../assets/agata-proxima-logo.svg";
 
 type AgataLogoProps = {
   compact?: boolean;
@@ -11,17 +12,8 @@ export function AgataLogo({
 }: AgataLogoProps) {
   return (
     <div className={`agata-logo ${compact ? "agata-logo--compact" : ""} ${className}`.trim()}>
-      <img
-        src="/src/assets/agata-proxima-logo.svg"
-        alt="Agata Proxima"
-        className="agata-logo__mark"
-      />
-
-      {!compact && (
-        <span className="agata-logo__wordmark">
-          AGATA PROXIMA
-        </span>
-      )}
+      <img src={logo} alt="Agata Proxima" className="agata-logo__mark" />
+      {!compact && <span className="agata-logo__wordmark">AGATA PROXIMA</span>}
     </div>
   );
 }

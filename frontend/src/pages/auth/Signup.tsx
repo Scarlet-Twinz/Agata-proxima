@@ -1,9 +1,10 @@
 import { ArrowRight, Building2, Eye, EyeOff, ShieldCheck } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
 
 export default function Signup() {
   const [showPassword, setShowPassword] = useState(false);
+  const navigate = useNavigate();
 
   return (
     <div className="agata-auth-form">
@@ -24,7 +25,10 @@ export default function Signup() {
 
       <form
         className="agata-form"
-        onSubmit={(event) => event.preventDefault()}
+        onSubmit={(event) => {
+          event.preventDefault();
+          navigate("/app");
+        }}
       >
         <div className="agata-form-split">
           <div className="agata-field">
