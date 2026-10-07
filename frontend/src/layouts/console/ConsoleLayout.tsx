@@ -100,7 +100,7 @@ export function ConsoleLayout() {
       .catch(() => {
         if (active) setSession(null);
       });
-    api.get<{organization:{name:string;slug:string};organizations:unknown[];user:unknown}>("/api/v1/settings")
+    api.get<{organization:{name:string;slug:string};organizations:unknown[];user:{display_name?:string;email?:string}}>("/api/v1/settings")
       .then((settings) => {
         if (!active) return;
         setOrganizationName(settings.organization.name || "Workspace");
