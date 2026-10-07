@@ -53,7 +53,8 @@ const detailRoutes = [
   "/developers/webhooks", "/developers/events", "/developers/sdks", "/developers/cli",
   "/developers/terraform", "/developers/api-reference",
   "/docs/getting-started", "/docs/core-concepts", "/docs/api-reference", "/docs/security",
-  "/docs/operations", "/docs/troubleshooting", "/docs/verification",
+  "/docs/operations", "/docs/troubleshooting", "/docs/verification", "/docs/customer-integration",
+  "/docs/developer-guide", "/docs/external-saas-v2", "/docs/identity/microsoft-entra-oidc",
   "/changelog/frontend-reconstruction", "/changelog/control-plane-foundation",
 ];
 
