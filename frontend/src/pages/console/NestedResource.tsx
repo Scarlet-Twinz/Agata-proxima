@@ -1,88 +1,31 @@
-import { useLocation } from "react-router-dom";
-import { ResourceSurface } from "../../components/console/ResourceSurface";
+import { useEffect,useState } from "react";
+import { Link,useLocation } from "react-router-dom";
+import { ArrowLeft,RefreshCw } from "lucide-react";
+import { api } from "../../api/client";
 
-const titles: Record<string, { eyebrow: string; title: string; description: string }> = {
-  "/app/billing/usage": {
-    eyebrow: "BILLING",
-    title: "Usage",
-    description: "Inspect workspace usage and consumption against the current entitlement.",
-  },
-  "/app/billing/plans": {
-    eyebrow: "BILLING",
-    title: "Plans",
-    description: "Review available plans and the workspace entitlement state.",
-  },
-  "/app/billing/invoices": {
-    eyebrow: "BILLING",
-    title: "Invoices",
-    description: "Review invoice history and billing records for this workspace.",
-  },
-  "/app/developer/api-keys": {
-    eyebrow: "DEVELOPER",
-    title: "API keys",
-    description: "Manage credentials used to integrate with the Proxima control plane.",
-  },
-  "/app/developer/tenant-context": {
-    eyebrow: "DEVELOPER",
-    title: "Tenant context",
-    description: "Inspect the tenant context contract used by protected requests.",
-  },
-  "/app/developer/webhooks": {
-    eyebrow: "DEVELOPER",
-    title: "Webhooks",
-    description: "Inspect webhook delivery and integration configuration.",
-  },
-  "/app/developer/api-reference": {
-    eyebrow: "DEVELOPER",
-    title: "API reference",
-    description: "Explore the control-plane API surface exposed to integrations.",
-  },
-  "/app/settings/authentication": {
-    eyebrow: "SETTINGS",
-    title: "Authentication",
-    description: "Configure workspace authentication and session controls.",
-  },
-  "/app/settings/identity": {
-    eyebrow: "SETTINGS",
-    title: "Enterprise identity",
-    description: "Inspect enterprise identity and organization identity configuration.",
-  },
-  "/app/settings/security": {
-    eyebrow: "SETTINGS",
-    title: "Security settings",
-    description: "Configure workspace security controls and protection preferences.",
-  },
-  "/app/security/tenant-isolation": {
-    eyebrow: "SECURITY",
-    title: "Tenant isolation",
-    description: "Inspect the tenant-isolation enforcement boundary.",
-  },
-  "/app/security/events": {
-    eyebrow: "SECURITY",
-    title: "Security events",
-    description: "Inspect security events reported by the control plane.",
-  },
+const groups:Record<string,{eyebrow:string;title:string;description:string;tabs:{label:string;href:string}[];endpoint?:string}> = {
+ "/app/billing/usage":{eyebrow:"BILLING",title:"Usage",description:"Inspect workspace usage and consumption against the current entitlement.",tabs:[{label:"Usage",href:"/app/billing/usage"},{label:"Plans",href:"/app/billing/plans"},{label:"Invoices",href:"/app/billing/invoices"}],endpoint:"/api/v1/billing/entitlements"},
+ "/app/billing/plans":{eyebrow:"BILLING",title:"Plans",description:"Review available plans and the workspace entitlement state.",tabs:[{label:"Usage",href:"/app/billing/usage"},{label:"Plans",href:"/app/billing/plans"},{label:"Invoices",href:"/app/billing/invoices"}],endpoint:"/api/v1/billing/plans"},
+ "/app/billing/invoices":{eyebrow:"BILLING",title:"Invoices",description:"Review invoice history and billing records for this workspace.",tabs:[{label:"Usage",href:"/app/billing/usage"},{label:"Plans",href:"/app/billing/plans"},{label:"Invoices",href:"/app/billing/invoices"}],endpoint:"/api/v1/billing"},
+ "/app/developer/api-keys":{eyebrow:"DEVELOPER",title:"API keys",description:"Manage credentials used to integrate with the Proxima control plane.",tabs:[{label:"API keys",href:"/app/developer/api-keys"},{label:"Tenant context",href:"/app/developer/tenant-context"},{label:"Webhooks",href:"/app/developer/webhooks"},{label:"API reference",href:"/app/developer/api-reference"}]},
+ "/app/developer/tenant-context":{eyebrow:"DEVELOPER",title:"Tenant context",description:"Inspect the tenant-context contract used by protected requests.",tabs:[{label:"API keys",href:"/app/developer/api-keys"},{label:"Tenant context",href:"/app/developer/tenant-context"},{label:"Webhooks",href:"/app/developer/webhooks"},{label:"API reference",href:"/app/developer/api-reference"}]},
+ "/app/developer/webhooks":{eyebrow:"DEVELOPER",title:"Webhooks",description:"Inspect webhook delivery and integration configuration.",tabs:[{label:"API keys",href:"/app/developer/api-keys"},{label:"Tenant context",href:"/app/developer/tenant-context"},{label:"Webhooks",href:"/app/developer/webhooks"},{label:"API reference",href:"/app/developer/api-reference"}]},
+ "/app/developer/api-reference":{eyebrow:"DEVELOPER",title:"API reference",description:"Explore the control-plane API surface exposed to integrations.",tabs:[{label:"API keys",href:"/app/developer/api-keys"},{label:"Tenant context",href:"/app/developer/tenant-context"},{label:"Webhooks",href:"/app/developer/webhooks"},{label:"API reference",href:"/app/developer/api-reference"}]},
+ "/app/settings/authentication":{eyebrow:"SETTINGS",title:"Authentication",description:"Configure workspace authentication and session controls.",tabs:[{label:"Authentication",href:"/app/settings/authentication"},{label:"Enterprise identity",href:"/app/settings/identity"},{label:"Security",href:"/app/settings/security"}]},
+ "/app/settings/identity":{eyebrow:"SETTINGS",title:"Enterprise identity",description:"Inspect enterprise identity and organization identity configuration.",tabs:[{label:"Authentication",href:"/app/settings/authentication"},{label:"Enterprise identity",href:"/app/settings/identity"},{label:"Security",href:"/app/settings/security"}]},
+ "/app/settings/security":{eyebrow:"SETTINGS",title:"Security settings",description:"Configure workspace security controls and protection preferences.",tabs:[{label:"Authentication",href:"/app/settings/authentication"},{label:"Enterprise identity",href:"/app/settings/identity"},{label:"Security",href:"/app/settings/security"}]},
+ "/app/security/tenant-isolation":{eyebrow:"SECURITY",title:"Tenant isolation",description:"Inspect the tenant-isolation enforcement boundary.",tabs:[{label:"Security overview",href:"/app/security"},{label:"Tenant isolation",href:"/app/security/tenant-isolation"},{label:"Security events",href:"/app/security/events"}],endpoint:"/api/v1/verifications"},
+ "/app/security/events":{eyebrow:"SECURITY",title:"Security events",description:"Inspect security events reported by the control plane.",tabs:[{label:"Security overview",href:"/app/security"},{label:"Tenant isolation",href:"/app/security/tenant-isolation"},{label:"Security events",href:"/app/security/events"}],endpoint:"/api/v1/audit"},
 };
 
-export function NestedResource() {
-  const location = useLocation();
-  const config = titles[location.pathname] ?? {
-    eyebrow: "RESOURCE",
-    title: "Resource detail",
-    description: "Inspect the selected control-plane resource.",
-  };
-
-  return (
-    <ResourceSurface
-      eyebrow={config.eyebrow}
-      title={config.title}
-      description={config.description}
-      links={[
-        { label: "Overview", href: "/app" },
-        { label: "Security", href: "/app/security" },
-        { label: "Verification", href: "/app/verification" },
-        { label: "Audit", href: "/app/audit" },
-      ]}
-    />
-  );
+export function NestedResource(){
+ const {pathname}=useLocation(); const config=groups[pathname]??{eyebrow:"RESOURCE",title:"Resource detail",description:"Inspect the selected control-plane resource.",tabs:[{label:"Overview",href:"/app"}]};
+ const [data,setData]=useState<unknown>(null); const [error,setError]=useState("");
+ useEffect(()=>{if(!config.endpoint)return;setError("");api.get(config.endpoint).then(setData).catch(e=>setError(e instanceof Error?e.message:"Unable to load resource."))},[config.endpoint]);
+ return <div className="resource-page">
+   <Link className="back-link" to="/app"><ArrowLeft size={16}/> Command Center</Link>
+   <div className="page-heading"><div><span className="eyebrow">{config.eyebrow}</span><h1>{config.title}</h1><p>{config.description}</p></div></div>
+   <nav className="console-context-tabs" aria-label={config.eyebrow}>{config.tabs.map(tab=><Link key={tab.href} className={pathname===tab.href?"is-active":""} to={tab.href}>{tab.label}</Link>)}</nav>
+   <section className="surface"><div className="panel-heading"><div><strong>{config.title}</strong><span>{config.description}</span></div>{config.endpoint&&<button className="console-secondary-button" onClick={()=>{setData(null);api.get(config.endpoint!).then(setData).catch(e=>setError(e instanceof Error?e.message:"Unable to load resource."))}}><RefreshCw size={15}/>Refresh</button>}</div>{error&&<div className="console-inline-error">{error}</div>}{config.endpoint?<pre className="console-json">{JSON.stringify(data,null,2)}</pre>:<div className="console-detail-copy"><p>This surface is intentionally scoped to <strong>{config.title}</strong>. Use the related tabs above to move between sibling resources without losing the current control-plane context.</p><ul><li>API-backed state is shown when the control plane exposes it.</li><li>No fabricated telemetry is presented.</li><li>Sibling resources remain in this same contextual navigation group.</li></ul></div>}</section>
+ </div>;
 }
