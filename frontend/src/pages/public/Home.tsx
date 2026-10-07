@@ -91,6 +91,19 @@ export function Home() {
           </div>
         </div>
       </section>
+      <section className="public-section">
+        <div className="agata-container">
+          <div className="public-section-header">
+            <div className="public-eyebrow">Read the operating model</div>
+            <h2>Every important product claim has a place where engineers can inspect the model behind it.</h2>
+            <p>Use the dedicated product, security, developer, documentation, trust and legal surfaces instead of relying on marketing copy alone.</p>
+          </div>
+          <div className="home-three-up">
+            {[["Architecture","Understand the application → Proxima → PostgreSQL boundary.","/docs/core-concepts"],["Integration","Follow the customer lifecycle from project to verified deployment.","/docs/customer-integration"],["Trust & security","Review the security model, evidence philosophy and current production gates.","/trust"]].map(([title,text,to]) => <Link className="home-three-up-card" to={to} key={title}><ShieldCheck size={22} color="var(--agata-blue)" /><h3>{title}</h3><p>{text}</p><span className="public-inline-link">Read documentation <ArrowRight size={15}/></span></Link>)}
+          </div>
+        </div>
+      </section>
+
     </>
   );
 }

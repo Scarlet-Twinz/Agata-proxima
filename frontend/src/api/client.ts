@@ -9,10 +9,12 @@ async function request<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
+  const csrf = sessionStorage.getItem("proxima_csrf");
   const response = await fetch(`${API_BASE}${path}`, {
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
+      ...(csrf && options.method && options.method !== "GET" ? { "x-csrf-token": csrf } : {}),
       ...(options.headers ?? {}),
     },
     ...options,

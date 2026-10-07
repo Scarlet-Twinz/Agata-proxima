@@ -4,13 +4,11 @@ use axum::{
     response::{Html, IntoResponse, Response},
     Json,
 };
-use hmac::{Hmac, Mac};
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
 use jsonwebtoken::jwk::JwkSet;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use sha2::Sha256;
 use sqlx::Row;
 use std::env;
 use uuid::Uuid;
@@ -19,8 +17,6 @@ use super::{
     audit, authenticate, bad, create_session, db_error, hash_password, internal, require_write, token_hash,
     AppState,
 };
-
-type HmacSha256 = Hmac<Sha256>;
 
 #[derive(Deserialize)]
 pub(crate) struct CheckoutInput {
@@ -328,29 +324,6 @@ pub(crate) async fn entitlements(State(s): State<AppState>, headers: HeaderMap) 
         Err(e) => db_error(e),
     }
 }
-
-async fn apply_entitlements(db: &sqlx::PgPool, organization_id: Uuid, plan: &str) -> Result<(), sqlx::Error> {
-    let (nodes, tenants, environments, retention, advanced, fleet, priority, entra, private_deployment) = plan_limits(plan);
-    sqlx::query(
-        "INSERT INTO organization_entitlements
-            (organization_id,plan_key,billing_status,node_limit,tenant_limit,environment_limit,
-             audit_retention_days,advanced_verification,fleet_controls,priority_support,entra_oidc,
-             private_deployment,updated_at)
-         VALUES($1,$2,'active',$3,$4,$5,$6,$7,$8,$9,$10,$11,now())
-         ON CONFLICT (organization_id) DO UPDATE SET
-            plan_key=EXCLUDED.plan_key,billing_status=EXCLUDED.billing_status,
-            node_limit=EXCLUDED.node_limit,tenant_limit=EXCLUDED.tenant_limit,
-            environment_limit=EXCLUDED.environment_limit,audit_retention_days=EXCLUDED.audit_retention_days,
-            advanced_verification=EXCLUDED.advanced_verification,fleet_controls=EXCLUDED.fleet_controls,
-            priority_support=EXCLUDED.priority_support,entra_oidc=EXCLUDED.entra_oidc,
-            private_deployment=EXCLUDED.private_deployment,updated_at=now()"
-    )
-    .bind(organization_id).bind(plan).bind(nodes).bind(tenants).bind(environments).bind(retention)
-    .bind(advanced).bind(fleet).bind(priority).bind(entra).bind(private_deployment)
-    .execute(db).await?;
-    Ok(())
-}
-
 
 pub(crate) async fn configure_entra(
     State(s): State<AppState>,
@@ -903,193 +876,6 @@ pub(crate) async fn portal(State(s): State<AppState>, headers: HeaderMap) -> Res
     Json(json!({"ok":true,"portal_url":url})).into_response()
 }
 
-pub(crate) async fn stripe_webhook(State(s): State<AppState>, headers: HeaderMap, body: String) -> Response {
-    let signature = match headers.get("stripe-signature").and_then(|v| v.to_str().ok()) {
-        Some(v) => v,
-        None => return StatusCode::BAD_REQUEST.into_response(),
-    };
-    let secret = match env::var("STRIPE_WEBHOOK_SECRET") {
-        Ok(v) if !v.is_empty() => v,
-        _ => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
-    };
-    if !verify_stripe_signature(&body, signature, &secret) {
-        return StatusCode::UNAUTHORIZED.into_response();
-    }
-
-    let event: Value = match serde_json::from_str(&body) {
-        Ok(v) => v,
-        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
-    };
-    let event_id = event.get("id").and_then(Value::as_str).unwrap_or_default();
-    let event_type = event.get("type").and_then(Value::as_str).unwrap_or_default();
-    if event_id.is_empty() || event_type.is_empty() {
-        return StatusCode::BAD_REQUEST.into_response();
-    }
-
-    let inserted = match sqlx::query(
-        "INSERT INTO billing_events(stripe_event_id,event_type,payload)
-         VALUES($1,$2,$3) ON CONFLICT (stripe_event_id) DO NOTHING",
-    )
-    .bind(event_id)
-    .bind(event_type)
-    .bind(&event)
-    .execute(&s.db)
-    .await
-    {
-        Ok(v) => v.rows_affected() == 1,
-        Err(e) => return db_error(e),
-    };
-
-    if !inserted {
-        return Json(json!({"received":true,"duplicate":true})).into_response();
-    }
-
-    let object = event.pointer("/data/object").cloned().unwrap_or(Value::Null);
-    let customer_id = object.get("customer").and_then(Value::as_str);
-    let metadata_org = object.pointer("/metadata/organization_id").and_then(Value::as_str);
-
-    let organization_id = if let Some(value) = metadata_org {
-        Uuid::parse_str(value).ok()
-    } else if let Some(customer) = customer_id {
-        sqlx::query("SELECT organization_id FROM billing_accounts WHERE stripe_customer_id=$1")
-            .bind(customer)
-            .fetch_optional(&s.db)
-            .await
-            .ok()
-            .flatten()
-            .map(|r| r.get::<Uuid,_>("organization_id"))
-    } else {
-        None
-    };
-
-    if let Some(org) = organization_id {
-        let subscription_id = object.get("subscription").and_then(Value::as_str)
-            .or_else(|| object.get("id").and_then(Value::as_str));
-        let status = object.get("status").and_then(Value::as_str).unwrap_or("active");
-        let price_id = object.pointer("/items/data/0/price/id").and_then(Value::as_str);
-        let cancel_at_period_end = object.get("cancel_at_period_end").and_then(Value::as_bool).unwrap_or(false);
-        let period_end = object.get("current_period_end").and_then(Value::as_i64);
-
-        match event_type {
-            "checkout.session.completed"
-            | "customer.subscription.created"
-            | "customer.subscription.updated"
-            | "customer.subscription.deleted" => {
-                let normalized_status = if event_type == "customer.subscription.deleted" {
-                    "canceled"
-                } else {
-                    status
-                };
-                let plan = if event_type == "customer.subscription.deleted" {
-                    "free"
-                } else {
-                    plan_for_price(price_id).unwrap_or("free")
-                };
-                if let Err(e) = sqlx::query(
-                    "INSERT INTO billing_accounts(
-                        organization_id,stripe_customer_id,stripe_subscription_id,stripe_price_id,
-                        plan_key,status,current_period_end,cancel_at_period_end,updated_at)
-                     VALUES($1,$2,$3,$4,$5,$6,
-                        CASE WHEN $7::bigint IS NULL THEN NULL ELSE to_timestamp($7) END,$8,now())
-                     ON CONFLICT (organization_id) DO UPDATE SET
-                       stripe_customer_id=COALESCE(EXCLUDED.stripe_customer_id,billing_accounts.stripe_customer_id),
-                       stripe_subscription_id=COALESCE(EXCLUDED.stripe_subscription_id,billing_accounts.stripe_subscription_id),
-                       stripe_price_id=COALESCE(EXCLUDED.stripe_price_id,billing_accounts.stripe_price_id),
-                       plan_key=EXCLUDED.plan_key,status=EXCLUDED.status,
-                       current_period_end=EXCLUDED.current_period_end,
-                       cancel_at_period_end=EXCLUDED.cancel_at_period_end,updated_at=now()",
-                )
-                .bind(org)
-                .bind(customer_id)
-                .bind(subscription_id)
-                .bind(price_id)
-                .bind(plan)
-                .bind(normalized_status)
-                .bind(period_end)
-                .bind(cancel_at_period_end)
-                .execute(&s.db)
-                .await {
-                    return db_error(e);
-                }
-                if let Err(e) = apply_entitlements(&s.db, org, plan).await {
-                    return db_error(e);
-                }
-            }
-            "invoice.payment_failed" | "invoice.paid" => {
-                let normalized_status = if event_type == "invoice.payment_failed" {
-                    "past_due"
-                } else {
-                    "active"
-                };
-                if let Err(e) = sqlx::query(
-                    "UPDATE billing_accounts SET status=$1,updated_at=now() WHERE organization_id=$2",
-                )
-                .bind(normalized_status)
-                .bind(org)
-                .execute(&s.db)
-                .await {
-                    return db_error(e);
-                }
-            }
-            _ => {}
-        }
-        audit(
-            &s.db,
-            org,
-            Uuid::nil(),
-            "billing.webhook.processed",
-            "billing_event",
-            None,
-            json!({"event_id":event_id,"event_type":event_type}),
-        )
-        .await;
-    }
-
-    let _ = sqlx::query(
-        "UPDATE billing_events SET status='processed',processed_at=now() WHERE stripe_event_id=$1",
-    )
-    .bind(event_id)
-    .execute(&s.db)
-    .await;
-
-    Json(json!({"received":true})).into_response()
-}
-
-pub(crate) async fn send_verification_email(
-    db: &sqlx::PgPool,
-    user_id: Uuid,
-    email: &str,
-    display_name: &str,
-) -> anyhow::Result<()> {
-    let token = format!("{}-{}", Uuid::new_v4(), Uuid::new_v4());
-    sqlx::query(
-        "UPDATE users SET email_verification_token_hash=$1,
-         email_verification_expires_at=now()+interval '24 hours' WHERE id=$2",
-    )
-    .bind(token_hash(&token))
-    .bind(user_id)
-    .execute(db)
-    .await?;
-
-    let base = env::var("AGATA_PUBLIC_BASE_URL")
-        .unwrap_or_else(|_| "http://127.0.0.1:8080".into())
-        .trim_end_matches('/')
-        .to_string();
-    let link = format!("{base}/verify-email?token={token}");
-    send_email(
-        email,
-        "Verify your Agata Proxima email",
-        &format!(
-            "<div style=\"font-family:Inter,Arial,sans-serif;background:#05080c;color:#eef7f8;padding:40px\">
-             <h1>Agata Proxima</h1><p>Hello {display_name},</p>
-             <p>Confirm this address to activate verified email status for your Proxima workspace.</p>
-             <p><a href=\"{link}\" style=\"display:inline-block;padding:12px 18px;background:#71dcff;color:#061015;text-decoration:none;border-radius:8px\">Verify email</a></p>
-             <p style=\"color:#8ea0ab\">This link expires in 24 hours.</p></div>"
-        ),
-    )
-    .await
-}
-
 pub(crate) async fn verify_email(
     State(s): State<AppState>,
     Query(q): Query<VerifyInput>,
@@ -1150,12 +936,10 @@ pub(crate) async fn request_password_reset(
         Ok(v) => v,
         Err(e) => return db_error(e),
     };
-
     if let Some(row) = user {
         let token = format!("{}-{}", Uuid::new_v4(), Uuid::new_v4());
         if let Err(e) = sqlx::query(
-            "UPDATE users SET password_reset_token_hash=$1,password_reset_expires_at=now()+interval '30 minutes'
-             WHERE id=$2",
+            "UPDATE users SET password_reset_token_hash=$1,password_reset_expires_at=now()+interval '30 minutes' WHERE id=$2"
         )
         .bind(token_hash(&token))
         .bind(row.get::<Uuid,_>("id"))
@@ -1168,18 +952,24 @@ pub(crate) async fn request_password_reset(
             .trim_end_matches('/')
             .to_string();
         let link = format!("{base}/reset-password?token={token}");
-        let html = format!(
-            "<div style=\"font-family:Inter,Arial,sans-serif;background:#05080c;color:#eef7f8;padding:40px\">
-             <h1>Agata Proxima</h1><p>Hello {},</p><p>A password reset was requested for your workspace.</p>
-             <p><a href=\"{link}\" style=\"display:inline-block;padding:12px 18px;background:#71dcff;color:#061015;text-decoration:none;border-radius:8px\">Reset password</a></p>
-             <p style=\"color:#8ea0ab\">This link expires in 30 minutes. If you did not request it, ignore this email.</p></div>",
-            row.get::<String,_>("display_name")
-        );
-        if let Err(e) = send_email(&email, "Reset your Agata Proxima password", &html).await {
-            tracing::error!(%e, "password reset email failed");
+        let name = html_escape(&row.get::<String,_>("display_name"));
+        let html = email_shell(&format!(
+            "<p>Hello {name},</p><p>A password reset was requested for your workspace.</p><p><a href=\"{link}\" style=\"display:inline-block;padding:12px 18px;background:#71dcff;color:#061015;text-decoration:none;border-radius:8px\">Reset password</a></p><p style=\"color:#8ea0ab\">This link expires in 30 minutes. If you did not request it, ignore this email.</p>"
+        ));
+        match configured_sender("RESEND_NOTIFICATIONS_FROM_EMAIL") {
+            Ok(sender) => {
+                if let Err(e) = send_email_from(
+                    &email,
+                    "Reset your Agata Proxima password",
+                    &sender,
+                    &html,
+                ).await {
+                    tracing::error!(%e, "password reset email failed");
+                }
+            }
+            Err(e) => tracing::error!(%e, "password reset sender is not configured"),
         }
     }
-
     Json(json!({"ok":true,"message":"If that address exists, a reset email has been sent."})).into_response()
 }
 
@@ -1262,14 +1052,22 @@ pub(crate) async fn invite(
 
     let base = env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:8080".into()).trim_end_matches('/').to_string();
     let link = format!("{base}/accept-invite?token={token}");
-    let html = format!(
-        "<div style=\"font-family:Inter,Arial,sans-serif;background:#05080c;color:#eef7f8;padding:40px\">
-         <h1>Agata Proxima</h1><p>You have been invited to a Proxima organization.</p>
-         <p>Role: <strong>{role}</strong></p><p><a href=\"{link}\" style=\"display:inline-block;padding:12px 18px;background:#71dcff;color:#061015;text-decoration:none;border-radius:8px\">Accept invitation</a></p>
-         <p style=\"color:#8ea0ab\">This invitation expires in 7 days.</p></div>"
-    );
-    if let Err(e) = send_email(&email, "You have been invited to Agata Proxima", &html).await {
-        tracing::error!(%e, "invitation email failed");
+    let escaped_role = html_escape(&role);
+    let html = email_shell(&format!(
+        "<p>You have been invited to a Proxima organization.</p><p>Role: <strong>{escaped_role}</strong></p><p><a href=\"{link}\" style=\"display:inline-block;padding:12px 18px;background:#71dcff;color:#061015;text-decoration:none;border-radius:8px\">Accept invitation</a></p><p style=\"color:#8ea0ab\">This invitation expires in 7 days.</p>"
+    ));
+    match configured_sender("RESEND_NOTIFICATIONS_FROM_EMAIL") {
+        Ok(sender) => {
+            if let Err(e) = send_email_from(
+                &email,
+                "You have been invited to Agata Proxima",
+                &sender,
+                &html,
+            ).await {
+                tracing::error!(%e, "invitation email failed");
+            }
+        }
+        Err(e) => tracing::error!(%e, "invitation sender is not configured"),
     }
 
     audit(&s.db, ctx.organization_id, ctx.user_id, "organization.invite.created", "organization_invite", Some(id), json!({"email":email,"role":role})).await;
@@ -1352,12 +1150,33 @@ pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
     })).into_response()
 }
 
-async fn send_email(to: &str, subject: &str, html: &str) -> anyhow::Result<()> {
+fn configured_sender(variable: &str) -> anyhow::Result<String> {
+    match env::var(variable) {
+        Ok(v) if !v.trim().is_empty() => Ok(v),
+        _ => match env::var("RESEND_FROM_EMAIL") {
+            Ok(v) if !v.trim().is_empty() => Ok(v),
+            _ => anyhow::bail!("{variable} and RESEND_FROM_EMAIL are not configured for the current deployment"),
+        },
+    }
+}
+
+fn html_escape(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+fn email_shell(content: &str) -> String {
+    format!(
+        "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\"></head><body style=\"margin:0;background-color:#05080c;font-family:Arial,Helvetica,sans-serif;color:#eef7f8;\"><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" bgcolor=\"#05080c\"><tr><td align=\"center\" style=\"padding-top:36px;padding-bottom:36px;padding-left:16px;padding-right:16px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;color:#eef7f8;\"><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:600px;background-color:#071019;border:1px solid #20303b;\"><tr><td style=\"padding-top:26px;padding-bottom:22px;padding-left:32px;padding-right:32px;border-bottom:1px solid #20303b;\"><table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td valign=\"middle\" width=\"54\"><table cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td width=\"46\" height=\"46\" align=\"center\" valign=\"middle\" bgcolor=\"#70d8ff\" style=\"width:46px;height:46px;background-color:#70d8ff;color:#071019;font-family:Arial,Helvetica,sans-serif;font-size:17px;line-height:46px;font-weight:700;\">AP</td></tr></table></td><td valign=\"middle\" style=\"padding-left:12px;font-family:Arial,Helvetica,sans-serif;font-size:18px;line-height:24px;font-weight:700;color:#eef7f8;\">Agata Proxima<br><span style=\"font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:16px;font-weight:400;color:#8ea0ab;\">SECURE DATA INFRASTRUCTURE</span></td></tr></table></td></tr><tr><td style=\"padding-top:30px;padding-bottom:30px;padding-left:32px;padding-right:32px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:25px;color:#dce9ee;\">{content}</td></tr><tr><td style=\"padding-top:22px;padding-bottom:26px;padding-left:32px;padding-right:32px;border-top:1px solid #20303b;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#8ea0ab;\"><strong style=\"font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#dce9ee;\">Agata Proxima</strong><br><a href=\"https://agataproxima.com\" style=\"color:#70d8ff;text-decoration:none;\">Visit the website</a> · <a href=\"https://agataproxima.com/support\" style=\"color:#70d8ff;text-decoration:none;\">Support</a> · <a href=\"https://agataproxima.com/docs\" style=\"color:#70d8ff;text-decoration:none;\">Documentation</a><br><span style=\"font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:19px;color:#71828c;\">This is an automated Agata Proxima message. If you did not expect this email, you can safely ignore it.</span></td></tr></table></td></tr></table></body></html>"
+    )
+}
+
+async fn send_email_from(to: &str, subject: &str, from: &str, html: &str) -> anyhow::Result<()> {
     let key = env::var("RESEND_API_KEY")?;
-    let from = match env::var("RESEND_FROM_EMAIL") {
-        Ok(v) if !v.trim().is_empty() => v,
-        _ => anyhow::bail!("RESEND_FROM_EMAIL is not configured for the current deployment"),
-    };
     let response = Client::new()
         .post("https://api.resend.com/emails")
         .bearer_auth(key)
@@ -1372,44 +1191,45 @@ async fn send_email(to: &str, subject: &str, html: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn verify_stripe_signature(payload: &str, signature: &str, secret: &str) -> bool {
-    let mut timestamp = None;
-    let mut signatures = Vec::new();
-    for part in signature.split(',') {
-        let mut pair = part.splitn(2, '=');
-        match (pair.next(), pair.next()) {
-            (Some("t"), Some(value)) => timestamp = value.parse::<i64>().ok(),
-            (Some("v1"), Some(value)) => signatures.push(value.to_string()),
-            _ => {}
-        }
-    }
-    let timestamp = match timestamp {
-        Some(v) => v,
-        None => return false,
-    };
-    let now = chrono::Utc::now().timestamp();
-    if (now - timestamp).abs() > 300 {
-        return false;
-    }
-    let signed = format!("{timestamp}.{payload}");
-    let mut mac = match HmacSha256::new_from_slice(secret.as_bytes()) {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
-    mac.update(signed.as_bytes());
-    let expected = hex::encode(mac.finalize().into_bytes());
-    signatures.iter().any(|candidate| constant_time_equal(candidate, &expected))
+pub(crate) async fn send_verification_email(
+    db: &sqlx::PgPool,
+    user_id: Uuid,
+    email: &str,
+    display_name: &str,
+) -> anyhow::Result<()> {
+    let token = format!("{}-{}", Uuid::new_v4(), Uuid::new_v4());
+    sqlx::query("UPDATE users SET email_verification_token_hash=$1,email_verification_expires_at=now()+interval '24 hours' WHERE id=$2")
+        .bind(token_hash(&token)).bind(user_id).execute(db).await?;
+    let base = env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:8080".into()).trim_end_matches('/').to_string();
+    let link = format!("{base}/verify-email?token={token}");
+    let name = html_escape(display_name);
+    let html = email_shell(&format!("<p style=\"font-size:16px;line-height:25px;color:#dce9ee;\">Hello {name},</p><p style=\"font-size:16px;line-height:25px;color:#dce9ee;\">Welcome to Agata Proxima. Confirm this address to activate verified email status for your workspace.</p><p style=\"font-size:14px;line-height:22px;color:#b7c8cf;\">Verification helps keep account recovery, organization invitations, and security notifications tied to the correct address.</p><p><a href=\"{link}\" style=\"display:inline-block;padding:13px 22px;background:#70d8ff;color:#071019;text-decoration:none;font-weight:700\">Verify my email</a></p><p style=\"font-size:13px;line-height:20px;color:#91a5af;\">This verification link expires in 24 hours. If you did not create this workspace, you can ignore this message.</p>"));
+    send_email_from(email,"Verify your Agata Proxima email",&configured_sender("RESEND_NOTIFICATIONS_FROM_EMAIL")?,&html).await
 }
 
-fn constant_time_equal(a: &str, b: &str) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut diff = 0u8;
-    for (x, y) in a.as_bytes().iter().zip(b.as_bytes()) {
-        diff |= x ^ y;
-    }
-    diff == 0
+pub(crate) async fn send_login_alert(
+    _db: &sqlx::PgPool,
+    to: &str,
+    display_name: &str,
+    organization: &str,
+    ip_address: &str,
+) -> anyhow::Result<()> {
+    let name=html_escape(display_name); let org=html_escape(organization); let ip=html_escape(ip_address);
+    let now=html_escape(&chrono::Utc::now().to_rfc3339());
+    let html=email_shell(&format!("<p style=\"font-size:16px;line-height:25px;color:#dce9ee;\">Hello {name},</p><p style=\"font-size:16px;line-height:25px;color:#dce9ee;\">We detected a new sign-in to your Agata Proxima account.</p><p style=\"font-size:14px;line-height:23px;color:#b7c8cf;\">Time: {now}<br>Organization: {org}<br>IP address: {ip}</p><p style=\"font-size:14px;line-height:22px;color:#b7c8cf;\">If you recognize this activity, no action is required. If you do not recognize it, reset your password and contact support as soon as possible.</p><p style=\"font-size:14px;line-height:22px;\"><a href=\"https://agataproxima.com\" style=\"color:#70d8ff;text-decoration:none;\">Open Agata Proxima</a> · <a href=\"https://agataproxima.com/support\" style=\"color:#70d8ff;text-decoration:none;\">Get support</a></p>"));
+    send_email_from(to,"New login detected on your Agata Proxima account",&configured_sender("RESEND_SECURITY_FROM_EMAIL")?,&html).await
+}
+
+pub(crate) async fn send_support_confirmation(
+    to: &str,
+    display_name: &str,
+    subject: &str,
+    request_id: &str,
+    organization: &str,
+) -> anyhow::Result<()> {
+    let name=html_escape(display_name); let org=html_escape(organization); let subj=html_escape(subject); let req=html_escape(request_id);
+    let html=email_shell(&format!("<p style=\"font-size:16px;line-height:25px;color:#dce9ee;\">Hello {name},</p><p style=\"font-size:16px;line-height:25px;color:#dce9ee;\">Your support request has been received by the Agata Proxima support team.</p><p style=\"font-size:14px;line-height:23px;color:#b7c8cf;\">Organization: {org}<br>Subject: {subj}<br>Request ID: {req}</p><p style=\"font-size:14px;line-height:22px;color:#b7c8cf;\">Keep this message for your records. The request ID can be used to reference the conversation while the request is being handled.</p><p style=\"font-size:14px;line-height:22px;\"><a href=\"https://agataproxima.com/support\" style=\"color:#70d8ff;text-decoration:none;\">Open the support page</a> for additional product guidance.</p>"));
+    send_email_from(to,"We received your Agata Proxima support request",&configured_sender("RESEND_SUPPORT_FROM_EMAIL")?,&html).await
 }
 
 async fn stripe_error(response: reqwest::Response) -> Response {
@@ -1443,34 +1263,5 @@ mod tests {
     #[test]
     fn unknown_plan_defaults_to_free_entitlements() {
         assert_eq!(super::plan_limits("unknown"), super::plan_limits("free"));
-    }
-
-
-    use super::*;
-
-    #[test]
-    fn stripe_signature_round_trip() {
-        let payload = r#"{"id":"evt_test","type":"invoice.paid"}"#;
-        let secret = "whsec_test";
-        let timestamp = chrono::Utc::now().timestamp();
-        let signed = format!("{timestamp}.{payload}");
-        let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
-        mac.update(signed.as_bytes());
-        let signature = hex::encode(mac.finalize().into_bytes());
-        let header = format!("t={timestamp},v1={signature}");
-        assert!(verify_stripe_signature(payload, &header, secret));
-    }
-
-    #[test]
-    fn expired_stripe_signature_is_rejected() {
-        let payload = "payload";
-        let secret = "whsec_test";
-        let timestamp = chrono::Utc::now().timestamp() - 301;
-        let signed = format!("{timestamp}.{payload}");
-        let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
-        mac.update(signed.as_bytes());
-        let signature = hex::encode(mac.finalize().into_bytes());
-        let header = format!("t={timestamp},v1={signature}");
-        assert!(!verify_stripe_signature(payload, &header, secret));
     }
 }

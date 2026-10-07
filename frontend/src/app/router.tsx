@@ -42,6 +42,8 @@ import {
   Verification,
 } from "../pages/console/ConsoleSurfaces";
 import { NestedResource } from "../pages/console/NestedResource";
+import { ProjectsPage, ProjectDetailPage, EnvironmentDetailPage, IntegrationsPage, DeveloperQuickstartPage } from "../pages/console/CustomerIntegration";
+import { ConsoleDocumentation } from "../pages/console/ConsoleDocumentation";
 
 const detailRoutes = [
   "/product/model", "/product/enforcement", "/product/verification", "/product/evidence",
@@ -51,7 +53,8 @@ const detailRoutes = [
   "/developers/webhooks", "/developers/events", "/developers/sdks", "/developers/cli",
   "/developers/terraform", "/developers/api-reference",
   "/docs/getting-started", "/docs/core-concepts", "/docs/api-reference", "/docs/security",
-  "/docs/operations", "/docs/troubleshooting", "/docs/verification",
+  "/docs/operations", "/docs/troubleshooting", "/docs/verification", "/docs/customer-integration",
+  "/docs/developer-guide", "/docs/external-saas-v2", "/docs/identity/microsoft-entra-oidc",
   "/changelog/frontend-reconstruction", "/changelog/control-plane-foundation",
 ];
 
@@ -130,6 +133,12 @@ export const router = createBrowserRouter([
     element: <ConsoleLayout />,
     children: [
       { index: true, element: <Overview /> },
+      { path: "projects", element: <ProjectsPage /> },
+      { path: "projects/:projectId", element: <ProjectDetailPage /> },
+      { path: "projects/:projectId/environments/:environmentId", element: <EnvironmentDetailPage /> },
+      { path: "integrations", element: <IntegrationsPage /> },
+      { path: "developer/quickstart", element: <DeveloperQuickstartPage /> },
+      { path: "docs/:topic", element: <ConsoleDocumentation /> },
       ...consoleResourceRoutes,
       ...nestedConsoleRoutes,
     ],

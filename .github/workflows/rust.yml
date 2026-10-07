@@ -4,7 +4,7 @@ name: Rust
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "phase*"]
   pull_request:
 
 jobs:
@@ -75,6 +75,7 @@ jobs:
           PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0002_production.sql
           PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0003_entitlements.sql
           PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0004_oidc.sql
+          PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0005_customer_lifecycle.sql
 
       - name: Control plane OpenAPI JSON
         run: python -m json.tool control-plane/openapi.json >/dev/null
@@ -91,5 +92,11 @@ jobs:
           bash -n tests/control-plane/api_smoke.sh
           bash -n scripts/proxima-platform.sh
 
+      - name: Phase 3A customer lifecycle gate
+        run: bash tests/launch/phase3a_customer_lifecycle_gate.sh
+
+      # Production launch gate is intentionally deferred until Phase 3B, where the
+      # billing provider is migrated from the legacy Stripe contract to Paystack.
       - name: Phase 58-59 repository launch gate
+        if: github.ref == 'refs/heads/main'
         run: bash tests/launch/phase58_59_repo_gate.sh

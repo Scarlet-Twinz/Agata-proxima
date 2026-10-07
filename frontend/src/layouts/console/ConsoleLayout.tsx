@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   ChevronDown,
   CircleHelp,
@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { getSession, logout, type Session } from "../../api/auth";
+import { api } from "../../api/client";
 import { AgataLogo } from "../../components/brand/AgataLogo";
 
 const primaryNavigation = [
@@ -60,15 +61,22 @@ const searchNavigation = [
 
 export function ConsoleLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [collapsed, setCollapsed] = useState(() => {
     return localStorage.getItem("agata.console.sidebar") === "collapsed";
   });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [environmentOpen, setEnvironmentOpen] = useState(false);
+  const [environments, setEnvironments] = useState<Array<{id:string;name:string;slug:string;kind:string;status:string}>>([]);
+  const [activeProjectId, setActiveProjectId] = useState(() => localStorage.getItem("agata.active.project") || "");
+  const [activeEnvironmentId, setActiveEnvironmentId] = useState(() => localStorage.getItem("agata.active.environment") || "");
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [organizations, setOrganizations] = useState<Array<{id:string;name:string;slug:string;role:string}>>([]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [session, setSession] = useState<Session | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(
@@ -81,16 +89,41 @@ export function ConsoleLayout() {
     let active = true;
     getSession()
       .then((current) => {
-        if (active) setSession(current);
+        if (active) { setSession(current); setSessionChecked(true); }
       })
       .catch(() => {
-        if (active) setSession(null);
+        if (active) { setSession(null); setSessionChecked(true); }
       });
 
+    api.get<Array<{id:string;name:string;slug:string;role:string}>>("/api/v1/organizations").then(setOrganizations).catch(()=>{});
+    api.get<Array<{id:string;name:string;slug:string}>>("/api/v1/projects").then((items) => {
+      const saved = localStorage.getItem("agata.active.project");
+      const selected = items.find((item) => item.id === saved) ?? items[0];
+      if (selected) {
+        setActiveProjectId(selected.id);
+        localStorage.setItem("agata.active.project", selected.id);
+      }
+    }).catch(()=>{});
     return () => {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (sessionChecked && !session) {
+      navigate(`/login?returnTo=${encodeURIComponent(location.pathname)}`, { replace: true });
+    }
+  }, [sessionChecked, session, navigate, location.pathname]);
+
+  useEffect(() => {
+    if (!activeProjectId) return;
+    api.get<Array<{id:string;name:string;slug:string;kind:string;status:string}>>(`/api/v1/projects/${activeProjectId}/environments`).then((items) => {
+      setEnvironments(items);
+      const saved = localStorage.getItem("agata.active.environment");
+      const selected = items.find((item) => item.id === saved) ?? items.find((item) => item.kind === "production") ?? items[0];
+      if (selected) { setActiveEnvironmentId(selected.id); localStorage.setItem("agata.active.environment", selected.id); }
+    }).catch(() => setEnvironments([]));
+  }, [activeProjectId]);
 
   async function handleLogout() {
     await logout();
@@ -191,7 +224,7 @@ export function ConsoleLayout() {
           </button>
         </div>
 
-        <button className="workspace-switcher" type="button">
+        <button className="workspace-switcher" type="button" aria-expanded={workspaceOpen} onClick={() => { setWorkspaceOpen(v => !v); setAccountOpen(false); setEnvironmentOpen(false); }}>
           <span className="workspace-symbol">A</span>
 
           {!collapsed && (
@@ -203,6 +236,22 @@ export function ConsoleLayout() {
 
           {!collapsed && <ChevronDown size={16} />}
         </button>
+
+        {!collapsed && workspaceOpen && (
+          <div className="console-workspace-menu">
+            {organizations.map((org) => (
+              <button key={org.id} type="button" onClick={async () => {
+                const switched = await api.post<{csrf_token:string}>("/api/v1/organization/switch", { organization_id: org.id });
+                sessionStorage.setItem("proxima_csrf", switched.csrf_token);
+                setWorkspaceOpen(false);
+                window.location.reload();
+              }}>
+                <strong>{org.name}</strong><small>{org.role}</small>
+              </button>
+            ))}
+            <button type="button" onClick={() => { setWorkspaceOpen(false); navigate("/app/projects"); }}>Manage projects</button>
+          </div>
+        )}
 
         <nav className="console-nav">
           <div className="console-nav-group">
@@ -334,29 +383,37 @@ export function ConsoleLayout() {
                 }}
               >
                 <span className="environment-dot" />
-                Production
+                {environments.find((environment) => environment.id === activeEnvironmentId)?.name ?? "Environment"}
                 <ChevronDown size={15} />
               </button>
 
               {environmentOpen && (
                 <div className="console-environment-menu">
-                  <button
-                    className="console-environment-option is-selected"
-                    type="button"
-                    onClick={() => setEnvironmentOpen(false)}
-                  >
-                    <span>
-                      <strong>Production</strong>
-                      <small>Active environment</small>
-                    </span>
-                    <span className="environment-check">✓</span>
-                  </button>
+                  {environments.length ? environments.map((environment) => (
+                    <button
+                      key={environment.id}
+                      className="console-environment-option"
+                      type="button"
+                      onClick={() => {
+                        setEnvironmentOpen(false);
+                        navigate(`/app/projects/${activeProjectId}/environments/${environment.id}`);
+                      }}
+                    >
+                      <span>
+                        <strong>{environment.name}</strong>
+                        <small>{environment.kind} · {environment.status}</small>
+                      </span>
+                      {environment.id === activeEnvironmentId && <span className="environment-check">✓</span>}
+                    </button>
+                  )) : (
+                    <div className="console-search-empty">No environments are available for the active project.</div>
+                  )}
                   <button
                     className="console-environment-settings"
                     type="button"
                     onClick={() => {
                       setEnvironmentOpen(false);
-                      navigate("/app/settings");
+                      navigate(activeProjectId ? `/app/projects/${activeProjectId}` : "/app/projects");
                     }}
                   >
                     Manage environments

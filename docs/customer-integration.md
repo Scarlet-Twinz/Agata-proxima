@@ -29,14 +29,17 @@ A running Engine does not call the Control Plane for every database query. If ma
 
 ## 4. Typical onboarding
 1. Create an Agata Proxima workspace.
-2. Register a Proxima node.
-3. Store the one-time enrollment token.
-4. Configure the Engine beside PostgreSQL.
-5. Configure tenant signing material.
-6. Point the application's database connection at Proxima.
-7. Issue tenant-bound connection context.
-8. Run the three-tenant verification suite.
-9. Promote the node after evidence is clean.
+2. Create a project representing the customer application.
+3. Confirm the automatically-created Production environment; add Development and Staging environments as needed.
+4. Register an Engine, SDK, or Proxy integration for the selected project/environment.
+5. Register a Proxima node when using Engine mode and store the one-time enrollment token.
+6. Configure the Engine beside PostgreSQL.
+7. Configure tenant signing material.
+8. Point the application's database connection at Proxima.
+9. Issue tenant-bound connection context.
+10. Run the three-tenant verification suite.
+11. Compare audit evidence and verification results.
+12. Promote the integration only after the external acceptance run is clean.
 
 ## 5. Production topology
 Control Plane → desired state → Proxima Engine nodes → PostgreSQL tenant data.

@@ -2,12 +2,17 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Agata Proxima Control Plane API",
-    "version": "0.2.0",
-    "description": "Authenticated management plane for organizations, tenants, policies, fleet, deployments, verification, audit and support. The Proxima Engine remains the independent data-plane enforcement authority."
+    "version": "0.3.0",
+    "description": "Authenticated customer management plane for organizations, projects, environments, integrations, tenants, policies, fleet, deployments, verification, audit and support. Proxima Engine remains the independent runtime enforcement authority."
   },
   "servers": [
     {
-      "url": "http://127.0.0.1:8080"
+      "url": "https://agataproxima.com",
+      "description": "Production public endpoint"
+    },
+    {
+      "url": "http://127.0.0.1:8080",
+      "description": "Local control plane"
     }
   ],
   "security": [
@@ -236,24 +241,46 @@
       "post": {
         "summary": "Configure Microsoft Entra OIDC for the current organization",
         "responses": {
-          "200": {"description": "OIDC connection configured"},
-          "403": {"description": "Plan or role does not permit enterprise SSO"}
+          "200": {
+            "description": "OIDC connection configured"
+          },
+          "403": {
+            "description": "Plan or role does not permit enterprise SSO"
+          }
         }
       }
     },
     "/api/v1/auth/oidc/start": {
       "get": {
         "security": [],
-        "parameters": [{"name":"organization_id","in":"query","required":true,"schema":{"type":"string","format":"uuid"}}],
-        "responses": {"200": {"description":"Authorization URL returned"}}
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorization URL returned"
+          }
+        }
       }
     },
     "/api/v1/auth/oidc/callback": {
       "get": {
         "security": [],
         "responses": {
-          "200": {"description":"SSO session established"},
-          "400": {"description":"Identity validation failed"}
+          "200": {
+            "description": "SSO session established"
+          },
+          "400": {
+            "description": "Identity validation failed"
+          }
         }
       }
     },
@@ -276,6 +303,210 @@
           },
           "401": {
             "description": "Authentication required"
+          }
+        }
+      }
+    },
+    "/api/v1/projects": {
+      "get": {
+        "summary": "List projects for the current organization",
+        "responses": {
+          "200": {
+            "description": "Project inventory"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a project and its Production environment",
+        "responses": {
+          "200": {
+            "description": "Project created"
+          },
+          "403": {
+            "description": "Write access or CSRF check failed"
+          },
+          "409": {
+            "description": "Project identity already exists"
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/environments": {
+      "get": {
+        "summary": "List environments for a project",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Environment inventory"
+          },
+          "404": {
+            "description": "Project not found"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a development, staging, or production environment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Environment created"
+          },
+          "400": {
+            "description": "Invalid environment input"
+          },
+          "403": {
+            "description": "Write access or CSRF check failed"
+          }
+        }
+      }
+    },
+    "/api/v1/integrations": {
+      "get": {
+        "summary": "List customer integration installations",
+        "responses": {
+          "200": {
+            "description": "Integration inventory"
+          }
+        }
+      },
+      "post": {
+        "summary": "Register an Engine, SDK, or Proxy integration",
+        "responses": {
+          "200": {
+            "description": "Integration registered in pending state"
+          },
+          "400": {
+            "description": "Invalid integration mode"
+          },
+          "403": {
+            "description": "Write access or CSRF check failed"
+          }
+        }
+      }
+    },
+    "/api/v1/organization/switch": {
+      "post": {
+        "summary": "Switch the authenticated session to another organization the user belongs to",
+        "responses": {
+          "200": {
+            "description": "New organization-scoped session established"
+          },
+          "403": {
+            "description": "User is not a member or CSRF validation failed"
+          }
+        }
+      }
+    },
+    "/api/v1/organization/team": {
+      "get": {
+        "summary": "List members and roles for the current organization",
+        "responses": {
+          "200": {
+            "description": "Organization membership"
+          }
+        }
+      }
+    },
+    "/api/v1/organization/invitations": {
+      "get": {
+        "summary": "List organization invitations",
+        "responses": {
+          "200": {
+            "description": "Invitation history"
+          }
+        }
+      },
+      "post": {
+        "summary": "Invite a member to the current organization",
+        "responses": {
+          "200": {
+            "description": "Invitation created or refreshed"
+          },
+          "400": {
+            "description": "Invalid invitation input"
+          },
+          "403": {
+            "description": "Write access or CSRF check failed"
+          }
+        }
+      }
+    },
+    "/api/v1/organization/invitations/{id}": {
+      "delete": {
+        "summary": "Revoke a pending organization invitation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invitation revoked"
+          },
+          "404": {
+            "description": "Pending invitation not found"
+          }
+        }
+      }
+    },
+    "/api/v1/billing": {
+      "get": {
+        "summary": "Get current organization billing state",
+        "responses": {
+          "200": {
+            "description": "Billing state"
+          }
+        }
+      }
+    },
+    "/api/v1/billing/checkout": {
+      "post": {
+        "summary": "Create a billing checkout session",
+        "responses": {
+          "200": {
+            "description": "Checkout URL returned"
+          },
+          "503": {
+            "description": "Billing provider is not configured"
+          }
+        }
+      }
+    },
+    "/api/v1/billing/portal": {
+      "post": {
+        "summary": "Create a billing customer portal session",
+        "responses": {
+          "200": {
+            "description": "Portal URL returned"
+          },
+          "503": {
+            "description": "Billing provider is not configured"
           }
         }
       }

@@ -50,8 +50,34 @@ struct NameInput {
 }
 
 #[derive(Deserialize)]
+struct ProjectInput {
+    name: String,
+}
+
+#[derive(Deserialize)]
+struct OrganizationSwitchInput {
+    organization_id: Uuid,
+}
+
+#[derive(Deserialize)]
+struct EnvironmentInput {
+    project_id: Uuid,
+    name: String,
+    kind: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct IntegrationInput {
+    project_id: Uuid,
+    environment_id: Option<Uuid>,
+    mode: String,
+    endpoint: Option<String>,
+}
+
+#[derive(Deserialize)]
 struct TenantInput {
     organization_id: Uuid,
+    project_id: Option<Uuid>,
     name: String,
     slug: String,
     isolation_mode: Option<String>,
@@ -136,6 +162,9 @@ async fn main() -> Result<()> {
     sqlx::raw_sql(include_str!("../migrations/0004_oidc.sql"))
         .execute(&db)
         .await?;
+    sqlx::raw_sql(include_str!("../migrations/0005_customer_lifecycle.sql"))
+        .execute(&db)
+        .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
@@ -173,11 +202,21 @@ async fn main() -> Result<()> {
         .route("/api/v1/auth/signup", post(signup))
         .route("/api/v1/auth/login", post(login))
         .route("/api/v1/auth/logout", post(logout))
+        .route("/api/v1/organization/switch", post(switch_organization))
         .route("/api/v1/session", get(session))
         .route("/api/v1/platform/status", get(platform_status))
         .route(
             "/api/v1/organizations",
             get(organizations).post(create_organization),
+        )
+        .route("/api/v1/projects", get(projects).post(create_project))
+        .route(
+            "/api/v1/projects/{id}/environments",
+            get(environments).post(create_environment),
+        )
+        .route(
+            "/api/v1/integrations",
+            get(integrations).post(create_integration),
         )
         .route("/api/v1/tenants", get(tenants).post(create_tenant))
         .route("/api/v1/policies", get(policies).post(create_policy))
@@ -212,7 +251,6 @@ async fn main() -> Result<()> {
         )
         .route("/api/v1/billing/checkout", post(production::checkout))
         .route("/api/v1/billing/portal", post(production::portal))
-        .route("/api/v1/webhooks/stripe", post(production::stripe_webhook))
         .route(
             "/api/v1/organization/oidc/entra",
             post(production::configure_entra),
@@ -222,10 +260,7 @@ async fn main() -> Result<()> {
             "/api/v1/auth/oidc/callback",
             get(production::entra_callback),
         )
-        .route(
-            "/api/v1/organization/team",
-            get(organization_team),
-        )
+        .route("/api/v1/organization/team", get(organization_team))
         .route(
             "/api/v1/organization/invitations",
             get(organization_invitations).post(production::invite),
@@ -268,8 +303,10 @@ async fn logo() -> Html<&'static str> {
 }
 
 async fn openapi() -> Json<Value> {
-    Json(serde_json::from_str(include_str!("../../../control-plane/openapi.json"))
-        .expect("control-plane OpenAPI contract must be valid JSON"))
+    Json(
+        serde_json::from_str(include_str!("../../../control-plane/openapi.json"))
+            .expect("control-plane OpenAPI contract must be valid JSON"),
+    )
 }
 
 async fn healthz(State(s): State<AppState>) -> Response {
@@ -358,10 +395,21 @@ async fn signup(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Resp
         return db_error(e);
     }
 
-    if let Err(e) = sqlx::query(
-        "INSERT INTO projects(organization_id,name,slug) VALUES($1,'Production','production')",
+    let project_id = match sqlx::query(
+        "INSERT INTO projects(organization_id,name,slug) VALUES($1,'Production','production') RETURNING id"
     )
     .bind(organization_id)
+    .fetch_one(&mut *tx)
+    .await
+    {
+        Ok(row) => row.get::<Uuid,_>("id"),
+        Err(e) => return db_error(e),
+    };
+
+    if let Err(e) = sqlx::query(
+        "INSERT INTO environments(project_id,name,slug,kind) VALUES($1,'Production','production','production')"
+    )
+    .bind(project_id)
     .execute(&mut *tx)
     .await
     {
@@ -402,21 +450,27 @@ async fn signup(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Resp
     }
 }
 
-async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Response {
+async fn login(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<AuthInput>,
+) -> Response {
     let email = input.email.trim().to_lowercase();
-    let row =
-        match sqlx::query("SELECT id,password_hash FROM users WHERE email=$1 AND status='active'")
-            .bind(&email)
-            .fetch_optional(&s.db)
-            .await
-        {
-            Ok(Some(row)) => row,
-            Ok(None) => return unauthorized(),
-            Err(e) => return db_error(e),
-        };
+    let row = match sqlx::query(
+        "SELECT id,password_hash,display_name FROM users WHERE email=$1 AND status='active'",
+    )
+    .bind(&email)
+    .fetch_optional(&s.db)
+    .await
+    {
+        Ok(Some(row)) => row,
+        Ok(None) => return unauthorized(),
+        Err(e) => return db_error(e),
+    };
 
     let user_id: Uuid = row.get("id");
     let password_hash: String = row.get("password_hash");
+    let display_name: String = row.get("display_name");
 
     if !verify_password(&input.password, &password_hash) {
         return unauthorized();
@@ -443,6 +497,21 @@ async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Respo
         Err(e) => return db_error(e),
     };
 
+    let organization_name =
+        sqlx::query_scalar::<_, String>("SELECT name FROM organizations WHERE id=$1")
+            .bind(organization_id)
+            .fetch_one(&s.db)
+            .await
+            .unwrap_or_else(|_| "Agata Proxima".into());
+
+    let login_ip = headers
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.split(',').next())
+        .map(str::trim)
+        .unwrap_or("unavailable")
+        .to_string();
+
     audit(
         &s.db,
         organization_id,
@@ -453,6 +522,13 @@ async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Respo
         json!({"method":"password"}),
     )
     .await;
+
+    if let Err(e) =
+        production::send_login_alert(&s.db, &email, &display_name, &organization_name, &login_ip)
+            .await
+    {
+        tracing::warn!(%e, "login alert email failed");
+    }
 
     match create_session(&s.db, user_id, organization_id).await {
         Ok((token, csrf)) => auth_response(&s, user_id, organization_id, csrf, token),
@@ -518,14 +594,21 @@ async fn organization_team(State(s): State<AppState>, headers: HeaderMap) -> Res
     .fetch_all(&s.db)
     .await
     {
-        Ok(rows) => Json(rows.iter().map(|r| json!({
-            "id": r.get::<Uuid,_>("id"),
-            "email": r.get::<String,_>("email"),
-            "display_name": r.get::<String,_>("display_name"),
-            "role": r.get::<String,_>("role"),
-            "created_at": r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),
-            "current": r.get::<Uuid,_>("id") == ctx.user_id
-        })).collect::<Vec<_>>()).into_response(),
+        Ok(rows) => Json(
+            rows.iter()
+                .map(|r| {
+                    json!({
+                        "id": r.get::<Uuid,_>("id"),
+                        "email": r.get::<String,_>("email"),
+                        "display_name": r.get::<String,_>("display_name"),
+                        "role": r.get::<String,_>("role"),
+                        "created_at": r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),
+                        "current": r.get::<Uuid,_>("id") == ctx.user_id
+                    })
+                })
+                .collect::<Vec<_>>(),
+        )
+        .into_response(),
         Err(e) => db_error(e),
     }
 }
@@ -602,7 +685,40 @@ async fn revoke_organization_invitation(
         Ok(_) => (
             StatusCode::NOT_FOUND,
             Json(json!({"ok":false,"message":"Pending invitation not found."})),
-        ).into_response(),
+        )
+            .into_response(),
+        Err(e) => db_error(e),
+    }
+}
+
+async fn switch_organization(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<OrganizationSwitchInput>,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    let allowed = sqlx::query("SELECT 1 FROM memberships WHERE user_id=$1 AND organization_id=$2")
+        .bind(ctx.user_id)
+        .bind(input.organization_id)
+        .fetch_optional(&s.db)
+        .await;
+    match allowed {
+        Ok(Some(_)) => {}
+        Ok(None) => return StatusCode::FORBIDDEN.into_response(),
+        Err(e) => return db_error(e),
+    }
+    let supplied = headers
+        .get("x-csrf-token")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    if supplied != ctx.csrf {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    match create_session(&s.db, ctx.user_id, input.organization_id).await {
+        Ok((token, csrf)) => auth_response(&s, ctx.user_id, input.organization_id, csrf, token),
         Err(e) => db_error(e),
     }
 }
@@ -682,11 +798,17 @@ async fn create_organization(
         return c.into_response();
     }
 
+    let name = input.name.trim().to_string();
+    let slug = slugify(&name);
+    if name.len() < 2 || name.len() > 120 || slug.is_empty() {
+        return bad(
+            "Organization name must contain 2–120 characters and at least one letter or number.",
+        );
+    }
     let id = Uuid::new_v4();
-    let slug = slugify(&input.name);
     if let Err(e) = sqlx::query("INSERT INTO organizations(id,name,slug) VALUES($1,$2,$3)")
         .bind(id)
-        .bind(&input.name)
+        .bind(&name)
         .bind(&slug)
         .execute(&s.db)
         .await
@@ -713,6 +835,27 @@ async fn create_organization(
         return db_error(e);
     }
 
+    let project_id = Uuid::new_v4();
+    if let Err(e) = sqlx::query(
+        "INSERT INTO projects(id,organization_id,name,slug) VALUES($1,$2,'Production','production')",
+    )
+    .bind(project_id)
+    .bind(id)
+    .execute(&s.db)
+    .await
+    {
+        return db_error(e);
+    }
+    if let Err(e) = sqlx::query(
+        "INSERT INTO environments(project_id,name,slug,kind) VALUES($1,'Production','production','production')",
+    )
+    .bind(project_id)
+    .execute(&s.db)
+    .await
+    {
+        return db_error(e);
+    }
+
     audit(
         &s.db,
         id,
@@ -723,7 +866,200 @@ async fn create_organization(
         json!({}),
     )
     .await;
-    Json(json!({"id":id,"name":input.name,"slug":slug})).into_response()
+    Json(json!({"id":id,"name":name,"slug":slug,"project_id":project_id})).into_response()
+}
+
+async fn projects(State(s): State<AppState>, headers: HeaderMap) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    match sqlx::query("SELECT id,name,slug,created_at FROM projects WHERE organization_id=$1 ORDER BY created_at").bind(ctx.organization_id).fetch_all(&s.db).await{
+  Ok(rows)=>Json(rows.iter().map(|r|json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"slug":r.get::<String,_>("slug"),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at")})).collect::<Vec<_>>()).into_response(),
+  Err(e)=>db_error(e)
+ }
+}
+async fn create_project(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<ProjectInput>,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
+    let name = input.name.trim().to_string();
+    let slug = slugify(&name);
+    if name.len() < 2 || name.len() > 120 || slug.is_empty() {
+        return bad(
+            "Project name must contain 2–120 characters and at least one letter or number.",
+        );
+    }
+    let id = Uuid::new_v4();
+    match sqlx::query("INSERT INTO projects(id,organization_id,name,slug) VALUES($1,$2,$3,$4)")
+        .bind(id)
+        .bind(ctx.organization_id)
+        .bind(&name)
+        .bind(&slug)
+        .execute(&s.db)
+        .await
+    {
+        Ok(_) => {
+            if let Err(e)=sqlx::query("INSERT INTO environments(project_id,name,slug,kind) VALUES($1,'Production','production','production') ON CONFLICT DO NOTHING").bind(id).execute(&s.db).await{return db_error(e)};
+            audit(
+                &s.db,
+                ctx.organization_id,
+                ctx.user_id,
+                "project.created",
+                "project",
+                Some(id),
+                json!({}),
+            )
+            .await;
+            Json(json!({"id":id,"name":name,"slug":slug})).into_response()
+        }
+        Err(e) => unique_error(e),
+    }
+}
+async fn environments(
+    State(s): State<AppState>,
+    Path(project_id): Path<Uuid>,
+    headers: HeaderMap,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    match sqlx::query("SELECT e.id,e.name,e.slug,e.kind,e.status,e.created_at,e.updated_at FROM environments e JOIN projects p ON p.id=e.project_id WHERE e.project_id=$1 AND p.organization_id=$2 ORDER BY e.created_at").bind(project_id).bind(ctx.organization_id).fetch_all(&s.db).await{
+  Ok(rows)=>Json(rows.iter().map(|r|json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"slug":r.get::<String,_>("slug"),"kind":r.get::<String,_>("kind"),"status":r.get::<String,_>("status"),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),"updated_at":r.get::<chrono::DateTime<chrono::Utc>,_>("updated_at")})).collect::<Vec<_>>()).into_response(),Err(e)=>db_error(e)
+ }
+}
+async fn create_environment(
+    State(s): State<AppState>,
+    Path(project_id): Path<Uuid>,
+    headers: HeaderMap,
+    Json(input): Json<EnvironmentInput>,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if input.project_id != project_id {
+        return bad("project_id does not match the route.");
+    };
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
+    let ok = sqlx::query("SELECT 1 FROM projects WHERE id=$1 AND organization_id=$2")
+        .bind(project_id)
+        .bind(ctx.organization_id)
+        .fetch_optional(&s.db)
+        .await;
+    match ok {
+        Ok(Some(_)) => {}
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(e) => return db_error(e),
+    }
+    let name = input.name.trim().to_string();
+    let slug = slugify(&name);
+    if name.len() < 2 || name.len() > 120 || slug.is_empty() {
+        return bad(
+            "Environment name must contain 2–120 characters and at least one letter or number.",
+        );
+    }
+    let kind = input.kind.unwrap_or_else(|| "development".into());
+    if !matches!(kind.as_str(), "development" | "staging" | "production") {
+        return bad("Environment kind must be development, staging, or production.");
+    }
+    if kind == "production" {
+        let existing=sqlx::query("SELECT 1 FROM environments WHERE project_id=$1 AND kind='production' AND status <> 'retired' LIMIT 1").bind(project_id).fetch_optional(&s.db).await;
+        match existing {
+            Ok(Some(_)) => {
+                return bad("A project can have only one active Production environment.")
+            }
+            Ok(None) => {}
+            Err(e) => return db_error(e),
+        }
+    }
+    let id = Uuid::new_v4();
+    match sqlx::query(
+        "INSERT INTO environments(id,project_id,name,slug,kind) VALUES($1,$2,$3,$4,$5)",
+    )
+    .bind(id)
+    .bind(project_id)
+    .bind(&name)
+    .bind(&slug)
+    .bind(&kind)
+    .execute(&s.db)
+    .await
+    {
+        Ok(_) => {
+            audit(
+                &s.db,
+                ctx.organization_id,
+                ctx.user_id,
+                "environment.created",
+                "environment",
+                Some(id),
+                json!({"project_id":project_id,"kind":kind}),
+            )
+            .await;
+            Json(json!({"id":id,"name":name,"slug":slug,"kind":kind,"status":"active"}))
+                .into_response()
+        }
+        Err(e) => unique_error(e),
+    }
+}
+async fn integrations(State(s): State<AppState>, headers: HeaderMap) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    match sqlx::query("SELECT i.id,i.project_id,i.environment_id,i.mode,i.status,i.endpoint,i.verification_status,i.last_verified_at,i.created_at FROM integration_installations i JOIN projects p ON p.id=i.project_id WHERE p.organization_id=$1 ORDER BY i.created_at DESC").bind(ctx.organization_id).fetch_all(&s.db).await{
+  Ok(rows)=>Json(rows.iter().map(|r|json!({"id":r.get::<Uuid,_>("id"),"project_id":r.get::<Uuid,_>("project_id"),"environment_id":r.try_get::<Uuid,_>("environment_id").ok(),"mode":r.get::<String,_>("mode"),"status":r.get::<String,_>("status"),"endpoint":r.try_get::<String,_>("endpoint").ok(),"verification_status":r.get::<String,_>("verification_status"),"last_verified_at":r.try_get::<chrono::DateTime<chrono::Utc>,_>("last_verified_at").ok(),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at")})).collect::<Vec<_>>()).into_response(),Err(e)=>db_error(e)}
+}
+async fn create_integration(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<IntegrationInput>,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    };
+    if !matches!(input.mode.as_str(), "engine" | "sdk" | "proxy") {
+        return bad("Integration mode must be engine, sdk, or proxy.");
+    }
+    let ok = sqlx::query("SELECT 1 FROM projects WHERE id=$1 AND organization_id=$2")
+        .bind(input.project_id)
+        .bind(ctx.organization_id)
+        .fetch_optional(&s.db)
+        .await;
+    match ok {
+        Ok(Some(_)) => {}
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(e) => return db_error(e),
+    }
+    if let Some(eid) = input.environment_id {
+        let ok = sqlx::query("SELECT 1 FROM environments WHERE id=$1 AND project_id=$2")
+            .bind(eid)
+            .bind(input.project_id)
+            .fetch_optional(&s.db)
+            .await;
+        match ok {
+            Ok(Some(_)) => {}
+            Ok(None) => return bad("environment_id does not belong to the selected project."),
+            Err(e) => return db_error(e),
+        }
+    }
+    let id = Uuid::new_v4();
+    match sqlx::query("INSERT INTO integration_installations(id,project_id,environment_id,mode,endpoint) VALUES($1,$2,$3,$4,$5)").bind(id).bind(input.project_id).bind(input.environment_id).bind(&input.mode).bind(&input.endpoint).execute(&s.db).await{Ok(_)=>{audit(&s.db,ctx.organization_id,ctx.user_id,"integration.created","integration",Some(id),json!({"mode":input.mode})).await;Json(json!({"id":id,"status":"pending","verification_status":"not_run","next_step":"configure_endpoint_and_run_external_verification"})).into_response()},Err(e)=>db_error(e)}
 }
 
 async fn tenants(State(s): State<AppState>, headers: HeaderMap) -> Response {
@@ -761,26 +1097,51 @@ async fn create_tenant(
         return c.into_response();
     }
 
-    let project = match sqlx::query(
-        "SELECT id FROM projects WHERE organization_id=$1 ORDER BY created_at LIMIT 1",
-    )
-    .bind(ctx.organization_id)
-    .fetch_optional(&s.db)
-    .await
-    {
-        Ok(Some(row)) => row.get::<Uuid, _>("id"),
-        Ok(None) => {
-            return (
-                StatusCode::CONFLICT,
-                Json(Message {
-                    ok: false,
-                    message: "Create a project before creating tenants.".into(),
-                }),
+    let project =
+        match input.project_id {
+            Some(project_id) => {
+                match sqlx::query("SELECT id FROM projects WHERE id=$1 AND organization_id=$2")
+                    .bind(project_id)
+                    .bind(ctx.organization_id)
+                    .fetch_optional(&s.db)
+                    .await
+                {
+                    Ok(Some(row)) => row.get::<Uuid, _>("id"),
+                    Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+                    Err(e) => return db_error(e),
+                }
+            }
+            None => match sqlx::query(
+                "SELECT id FROM projects WHERE organization_id=$1 ORDER BY created_at",
             )
-                .into_response()
-        }
-        Err(e) => return db_error(e),
-    };
+            .bind(ctx.organization_id)
+            .fetch_all(&s.db)
+            .await
+            {
+                Ok(rows) if rows.len() == 1 => rows[0].get::<Uuid, _>("id"),
+                Ok(rows) if rows.is_empty() => {
+                    return (
+                        StatusCode::CONFLICT,
+                        Json(Message {
+                            ok: false,
+                            message: "Create a project before creating tenants.".into(),
+                        }),
+                    )
+                        .into_response()
+                }
+                Ok(_) => return (
+                    StatusCode::CONFLICT,
+                    Json(Message {
+                        ok: false,
+                        message:
+                            "project_id is required when the organization has multiple projects."
+                                .into(),
+                    }),
+                )
+                    .into_response(),
+                Err(e) => return db_error(e),
+            },
+        };
 
     if let Err(response) = production::enforce_capacity(&s.db, ctx.organization_id, "tenants").await
     {
@@ -810,7 +1171,7 @@ async fn create_tenant(
                 "tenant.created",
                 "tenant",
                 Some(id),
-                json!({"isolation_mode":mode}),
+                json!({"isolation_mode":mode,"project_id":project}),
             )
             .await;
             Json(json!({"id":id,"name":input.name,"slug":input.slug,"isolation_mode":mode,"status":"active"})).into_response()
@@ -1224,6 +1585,33 @@ async fn create_support(
                 json!({}),
             )
             .await;
+
+            if let Ok(row) = sqlx::query(
+                "SELECT u.email,u.display_name,o.name
+                 FROM users u JOIN organizations o ON o.id=$1
+                 WHERE u.id=$2",
+            )
+            .bind(ctx.organization_id)
+            .bind(ctx.user_id)
+            .fetch_one(&s.db)
+            .await
+            {
+                let email: String = row.get("email");
+                let display_name: String = row.get("display_name");
+                let organization_name: String = row.get("name");
+                if let Err(e) = production::send_support_confirmation(
+                    &email,
+                    &display_name,
+                    &input.subject,
+                    &id.to_string(),
+                    &organization_name,
+                )
+                .await
+                {
+                    tracing::warn!(%e, "support confirmation email failed");
+                }
+            }
+
             Json(json!({"id":id,"status":"open"})).into_response()
         }
         Err(e) => db_error(e),
