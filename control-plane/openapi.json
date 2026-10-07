@@ -404,16 +404,6 @@
         }
       }
     },
-    "/api/v1/webhooks/stripe": {
-      "post": {
-        "summary": "Legacy billing webhook; scheduled for removal in Phase 3B Paystack migration",
-        "responses": {
-          "200": {
-            "description": "Legacy handler"
-          }
-        }
-      }
-    },
     "/api/v1/organization/switch": {
       "post": {
         "summary": "Switch the authenticated session to another organization the user belongs to",
