@@ -404,17 +404,6 @@
         }
       }
     },
-    "/api/v1/webhooks/paystack": {
-      "post": {
-        "summary": "Paystack webhook endpoint reserved for Phase 3B",
-        "security": [],
-        "responses": {
-          "501": {
-            "description": "Not implemented until Paystack billing migration is accepted"
-          }
-        }
-      }
-    },
     "/api/v1/webhooks/stripe": {
       "post": {
         "summary": "Legacy billing webhook; scheduled for removal in Phase 3B Paystack migration",
