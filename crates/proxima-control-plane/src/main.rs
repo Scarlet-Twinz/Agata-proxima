@@ -748,11 +748,15 @@ async fn create_organization(
         return c.into_response();
     }
 
+    let name = input.name.trim().to_string();
+    let slug = slugify(&name);
+    if name.len() < 2 || name.len() > 120 || slug.is_empty() {
+        return bad("Organization name must contain 2–120 characters and at least one letter or number.");
+    }
     let id = Uuid::new_v4();
-    let slug = slugify(&input.name);
     if let Err(e) = sqlx::query("INSERT INTO organizations(id,name,slug) VALUES($1,$2,$3)")
         .bind(id)
-        .bind(&input.name)
+        .bind(&name)
         .bind(&slug)
         .execute(&s.db)
         .await
@@ -810,7 +814,7 @@ async fn create_organization(
         json!({}),
     )
     .await;
-    Json(json!({"id":id,"name":input.name,"slug":slug})).into_response()
+    Json(json!({"id":id,"name":name,"slug":slug,"project_id":project_id})).into_response()
 }
 
 async fn projects(State(s): State<AppState>, headers: HeaderMap) -> Response {
