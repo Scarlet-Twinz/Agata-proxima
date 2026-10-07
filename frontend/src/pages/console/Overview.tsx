@@ -6,7 +6,7 @@ import { InfrastructureTopology } from "../../components/console/topology/Infras
 import { useOverview } from "../../hooks/useOverview";
 
 export function Overview() {
-  const { data, isLoading, isError } = useOverview();
+  const { data, isLoading, isError, isFetching, dataUpdatedAt } = useOverview();
 
   const protection = data?.protection;
 
@@ -20,6 +20,8 @@ export function Overview() {
             Observe, verify, and operate the tenant-isolation boundary.
           </p>
         </div>
+
+        <div className="live-overview-status"><span className={isFetching ? "live-dot live-dot--syncing" : "live-dot"} />{isFetching ? "Syncing live data" : dataUpdatedAt ? `Live · updated ${new Date(dataUpdatedAt).toLocaleTimeString()}` : "Live telemetry"}</div>
 
         <div className="heading-actions">
           <Link className="primary-action" to="/app/verification">

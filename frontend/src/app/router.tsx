@@ -42,6 +42,7 @@ import {
   Verification,
 } from "../pages/console/ConsoleSurfaces";
 import { NestedResource } from "../pages/console/NestedResource";
+import { ActionPage } from "../pages/console/ActionPage";
 
 const detailRoutes = [
   "/product/model", "/product/enforcement", "/product/verification", "/product/evidence",
@@ -83,8 +84,10 @@ const nestedConsoleRoutes = [
   "billing/plans",
   "billing/invoices",
   "developer/api-keys",
+  "developer/api-keys/:apiKeyId",
   "developer/tenant-context",
   "developer/webhooks",
+  "developer/webhooks/:webhookId",
   "developer/api-reference",
   "settings/authentication",
   "settings/identity",
@@ -133,6 +136,14 @@ export const router = createBrowserRouter([
       { index: true, element: <Overview /> },
       ...consoleResourceRoutes,
       ...nestedConsoleRoutes,
+      { path: "tenants/new", element: <ActionPage /> },
+      { path: "policies/new", element: <ActionPage /> },
+      { path: "nodes/new", element: <ActionPage /> },
+      { path: "deployments/new", element: <ActionPage /> },
+      { path: "verification/new", element: <ActionPage /> },
+      { path: "support/new", element: <ActionPage /> },
+      { path: "developer/api-keys/new", element: <ActionPage /> },
+      { path: "developer/webhooks/new", element: <ActionPage /> },
     ],
   },
   {

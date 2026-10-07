@@ -1,87 +1,98 @@
 import { ResourceSurface } from "../../components/console/ResourceSurface";
 
 export function Security() {
-  return <ResourceSurface eyebrow="SECURITY" title="Security posture" description="Observe the controls protecting the Proxima isolation boundary." sections={[
-    {title:"Tenant isolation",text:"Review the explicit tenant-isolation boundary and verification workflow.",href:"/app/security/tenant-isolation"},
-    {title:"Security events",text:"Inspect security-oriented events recorded by the control plane.",href:"/app/security/events"},
+  return <ResourceSurface eyebrow="SECURITY" title="Security posture" description="A live security workspace for tenant isolation, verification evidence and security events." sections={[
+    {title:"Tenant isolation",text:"Inspect enforcement mode, verification history and tenant-level isolation evidence.",href:"/app/security/tenant-isolation"},
+    {title:"Security events",text:"Search organization-scoped events and open individual event records.",href:"/app/security/events"},
+    {title:"Verification evidence",text:"Review the tests that establish expected allow and expected block behavior.",href:"/app/verification"},
   ]} links={[
-    {label:"Tenant isolation",href:"/app/security/tenant-isolation"},
-    {label:"Verification",href:"/app/verification"},
-    {label:"Security events",href:"/app/security/events"},
+    {label:"Verification",href:"/app/verification"},{label:"Audit",href:"/app/audit"},{label:"Security documentation",href:"/docs/security"},
   ]}/>;
 }
 
 export function Tenants() {
-  return <ResourceSurface endpoint="/api/v1/tenants" eyebrow="TENANTS" title="Tenant registry" description="Manage and inspect protected tenant contexts." links={[
+  return <ResourceSurface endpoint="/api/v1/tenants" detailBase="/app/tenants" createHref="/app/tenants/new" createLabel="Create tenant" eyebrow="TENANTS" title="Tenant registry" description="Manage customer boundaries, isolation modes and project placement." links={[
     {label:"Policies",href:"/app/policies"},{label:"Verification",href:"/app/verification"},{label:"Nodes",href:"/app/nodes"},
   ]}/>;
 }
 
 export function Policies() {
-  return <ResourceSurface endpoint="/api/v1/policies" eyebrow="POLICIES" title="Policy control" description="Inspect enforcement policies, versions and deployment state." links={[
-    {label:"Deployments",href:"/app/deployments"},{label:"Verification",href:"/app/verification"},
+  return <ResourceSurface endpoint="/api/v1/policies" detailBase="/app/policies" createHref="/app/policies/new" createLabel="Create policy" eyebrow="POLICIES" title="Policy control" description="Author and inspect versioned enforcement intent before it moves into deployment." links={[
+    {label:"Deployments",href:"/app/deployments"},{label:"Verification",href:"/app/verification"},{label:"Policy documentation",href:"/docs/core-concepts"},
   ]}/>;
 }
 
 export function Nodes() {
-  return <ResourceSurface endpoint="/api/v1/nodes" eyebrow="INFRASTRUCTURE" title="Node inventory" description="Inspect Proxima enforcement infrastructure and topology." links={[
-    {label:"Deployments",href:"/app/deployments"},{label:"Security",href:"/app/security"},
+  return <ResourceSurface endpoint="/api/v1/nodes" detailBase="/app/nodes" createHref="/app/nodes/new" createLabel="Register node" eyebrow="INFRASTRUCTURE" title="Node inventory" description="Register and inspect Proxima enforcement infrastructure, environments and health." links={[
+    {label:"Deployments",href:"/app/deployments"},{label:"Security posture",href:"/app/security"},{label:"Fleet documentation",href:"/developers/fleet"},
   ]}/>;
 }
 
 export function Deployments() {
-  return <ResourceSurface endpoint="/api/v1/deployments" eyebrow="DEPLOYMENTS" title="Deployment history" description="Track desired and observed deployment state." links={[
+  return <ResourceSurface endpoint="/api/v1/deployments" detailBase="/app/deployments" createHref="/app/deployments/new" createLabel="Create deployment" eyebrow="DEPLOYMENTS" title="Deployment control" description="Track desired state, observed state, node placement and deployment lifecycle." links={[
     {label:"Policies",href:"/app/policies"},{label:"Verification",href:"/app/verification"},{label:"Nodes",href:"/app/nodes"},
   ]}/>;
 }
 
 export function Verification() {
-  return <ResourceSurface endpoint="/api/v1/verifications" eyebrow="VERIFICATION" title="Verification evidence" description="Inspect recorded tenant-isolation verification results." links={[
-    {label:"Security",href:"/app/security"},{label:"Audit",href:"/app/audit"},
+  return <ResourceSurface endpoint="/api/v1/verifications" detailBase="/app/verification" createHref="/app/verification/new" createLabel="Run verification" eyebrow="VERIFICATION" title="Verification evidence" description="Inspect and record tenant-isolation verification outcomes and evidence." links={[
+    {label:"Security posture",href:"/app/security"},{label:"Audit",href:"/app/audit"},{label:"Verification documentation",href:"/docs/verification"},
   ]}/>;
 }
 
 export function Audit() {
-  return <ResourceSurface endpoint="/api/v1/audit" eyebrow="AUDIT" title="Audit stream" description="Search organization-scoped control-plane and security evidence." links={[
-    {label:"Verification",href:"/app/verification"},{label:"Security",href:"/app/security"},
+  return <ResourceSurface endpoint="/api/v1/audit" detailBase="/app/audit" eyebrow="AUDIT" title="Audit explorer" description="Search organization-scoped administrative and security evidence with direct event detail." links={[
+    {label:"Verification",href:"/app/verification"},{label:"Security",href:"/app/security"},{label:"Operations",href:"/docs/operations"},
   ]}/>;
 }
 
 export function Team() {
-  return <ResourceSurface endpoint="/api/v1/organization/team" eyebrow="TEAM" title="Team and access" description="Inspect organization members, roles and access state." links={[
+  return <ResourceSurface endpoint="/api/v1/organization/team" detailBase="/app/team/members" eyebrow="TEAM" title="Team and access" description="Inspect organization members and roles. Invitations and access policy live alongside the workspace identity model." sections={[
+    {title:"Invitations",text:"Review pending organization invitations and their lifecycle.",href:"/app/team/invitations"},
+    {title:"Roles",text:"Understand owner, admin, operator and viewer responsibilities.",href:"/app/team/roles"},
+  ]} links={[
     {label:"Settings",href:"/app/settings"},{label:"Authentication",href:"/app/settings/authentication"},
   ]}/>;
 }
 
 export function Billing() {
-  return <ResourceSurface endpoint="/api/v1/billing" eyebrow="BILLING" title="Billing" description="Inspect subscription, plan and billing-account state." links={[
-    {label:"Usage",href:"/app/billing/usage"},{label:"Plans",href:"/app/billing/plans"},{label:"Invoices",href:"/app/billing/invoices"},
+  return <ResourceSurface endpoint="/api/v1/billing" eyebrow="BILLING" title="Billing command center" description="Understand the active commercial account, subscription state and entitlement controls." sections={[
+    {title:"Usage",text:"See actual resource consumption against the current entitlement limits.",href:"/app/billing/usage"},
+    {title:"Plans",text:"Compare the live plan catalog and the workspace's current entitlement.",href:"/app/billing/plans"},
+    {title:"Invoices",text:"Inspect billing-account and invoice-facing records.",href:"/app/billing/invoices"},
+  ]} links={[
+    {label:"Plans",href:"/app/billing/plans"},{label:"Usage",href:"/app/billing/usage"},{label:"Invoices",href:"/app/billing/invoices"},
   ]}/>;
 }
 
 export function Developer() {
-  return <ResourceSurface eyebrow="DEVELOPER" title="Developer platform" description="Build integrations against the Proxima control plane." sections={[
-    {title:"API keys",text:"Review integration credential policy and the security boundary around machine access.",href:"/app/developer/api-keys"},
-    {title:"Tenant context",text:"Understand how authenticated identity and tenant context meet at the protected request boundary.",href:"/app/developer/tenant-context"},
-    {title:"Webhooks",text:"Review event delivery, idempotency and safe retry behavior.",href:"/app/developer/webhooks"},
-    {title:"API reference",text:"Explore the authenticated control-plane contract.",href:"/app/developer/api-reference"},
+  return <ResourceSurface eyebrow="DEVELOPER" title="Developer platform" description="Credentials, tenant context, webhooks, SDK guidance, CLI workflows and the authenticated API contract." sections={[
+    {title:"API keys",text:"Create, revoke and inspect machine credentials. Secrets are shown once.",href:"/app/developer/api-keys"},
+    {title:"Tenant context",text:"Follow the identity → organization → tenant → enforcement contract.",href:"/app/developer/tenant-context"},
+    {title:"Webhooks",text:"Create endpoints, select events, inspect signing configuration and delivery history.",href:"/app/developer/webhooks"},
+    {title:"API reference",text:"Explore resource groups and request/response contracts.",href:"/app/developer/api-reference"},
+    {title:"SDKs",text:"Language-level integration guidance with examples and links to the underlying API contract.",href:"/app/developer/sdks"},
+    {title:"CLI",text:"Command-line workflows for authentication, inspection and verification.",href:"/app/developer/cli"},
+    {title:"Terraform",text:"Infrastructure-as-code guidance for repeatable Proxima configuration.",href:"/app/developer/terraform"},
   ]} links={[
-    {label:"API keys",href:"/app/developer/api-keys"},{label:"Tenant context",href:"/app/developer/tenant-context"},{label:"Webhooks",href:"/app/developer/webhooks"},{label:"API reference",href:"/app/developer/api-reference"},
+    {label:"API keys",href:"/app/developer/api-keys"},{label:"Webhooks",href:"/app/developer/webhooks"},{label:"API reference",href:"/app/developer/api-reference"},
   ]}/>;
 }
 
 export function Settings() {
-  return <ResourceSurface eyebrow="SETTINGS" title="Workspace settings" description="Configure workspace identity, authentication, security and environments." sections={[
-    {title:"Authentication",text:"Review email verification, password authentication and session protection.",href:"/app/settings/authentication"},
-    {title:"Enterprise identity",text:"Review enterprise identity and OIDC configuration.",href:"/app/settings/identity"},
-    {title:"Security",text:"Review workspace security controls and session behavior.",href:"/app/settings/security"},
+  return <ResourceSurface eyebrow="SETTINGS" title="Workspace settings" description="A navigable configuration area for identity, authentication, security, environments, notifications and workspace controls." sections={[
+    {title:"Authentication",text:"Email verification, password and active session behavior.",href:"/app/settings/authentication"},
+    {title:"Enterprise identity",text:"Microsoft Entra/OIDC connection state, configuration and readiness.",href:"/app/settings/identity"},
+    {title:"Security",text:"Security controls and workspace protection preferences.",href:"/app/settings/security"},
+    {title:"Environments",text:"Understand production and future environment boundaries.",href:"/app/settings/environments"},
+    {title:"Notifications",text:"Operational and security notification preferences.",href:"/app/settings/notifications"},
   ]} links={[
     {label:"Authentication",href:"/app/settings/authentication"},{label:"Enterprise identity",href:"/app/settings/identity"},{label:"Security",href:"/app/settings/security"},
   ]}/>;
 }
 
 export function Support() {
-  return <ResourceSurface endpoint="/api/v1/support" eyebrow="SUPPORT" title="Support" description="Inspect support requests associated with this workspace." links={[
+  return <ResourceSurface endpoint="/api/v1/support" detailBase="/app/support" createHref="/app/support/new" createLabel="Open support request" eyebrow="SUPPORT" title="Support workspace" description="Inspect support requests and move from a problem report to an actionable support workflow." links={[
     {label:"Documentation",href:"/docs"},{label:"Contact support",href:"/contact"},{label:"Security",href:"/app/security"},
   ]}/>;
 }
