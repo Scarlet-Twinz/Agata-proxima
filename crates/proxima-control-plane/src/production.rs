@@ -4,13 +4,11 @@ use axum::{
     response::{Html, IntoResponse, Response},
     Json,
 };
-use hmac::{Hmac, Mac};
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
 use jsonwebtoken::jwk::JwkSet;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use sha2::Sha256;
 use sqlx::Row;
 use std::env;
 use uuid::Uuid;
@@ -19,8 +17,6 @@ use super::{
     audit, authenticate, bad, create_session, db_error, hash_password, internal, require_write, token_hash,
     AppState,
 };
-
-type HmacSha256 = Hmac<Sha256>;
 
 #[derive(Deserialize)]
 pub(crate) struct CheckoutInput {
@@ -74,19 +70,6 @@ pub(crate) struct PasswordResetConfirm {
     pub token: String,
     pub password: String,
 }
-fn plan_for_price(price_id: Option<&str>) -> Option<&'static str> {
-    let starter = env::var("AGATA_STRIPE_STARTER_PRICE_ID").ok();
-    let growth = env::var("AGATA_STRIPE_GROWTH_PRICE_ID").ok();
-    let scale = env::var("AGATA_STRIPE_SCALE_PRICE_ID").ok();
-
-    match price_id {
-        Some(id) if starter.as_deref() == Some(id) => Some("starter"),
-        Some(id) if growth.as_deref() == Some(id) => Some("growth"),
-        Some(id) if scale.as_deref() == Some(id) => Some("scale"),
-        _ => None,
-    }
-}
-
 fn plan_limits(plan: &str) -> (i32, i32, i32, i32, bool, bool, bool, bool, bool) {
     match plan {
         "starter" => (2, 25, 2, 30, false, true, false, false, false),
@@ -328,29 +311,6 @@ pub(crate) async fn entitlements(State(s): State<AppState>, headers: HeaderMap) 
         Err(e) => db_error(e),
     }
 }
-
-async fn apply_entitlements(db: &sqlx::PgPool, organization_id: Uuid, plan: &str) -> Result<(), sqlx::Error> {
-    let (nodes, tenants, environments, retention, advanced, fleet, priority, entra, private_deployment) = plan_limits(plan);
-    sqlx::query(
-        "INSERT INTO organization_entitlements
-            (organization_id,plan_key,billing_status,node_limit,tenant_limit,environment_limit,
-             audit_retention_days,advanced_verification,fleet_controls,priority_support,entra_oidc,
-             private_deployment,updated_at)
-         VALUES($1,$2,'active',$3,$4,$5,$6,$7,$8,$9,$10,$11,now())
-         ON CONFLICT (organization_id) DO UPDATE SET
-            plan_key=EXCLUDED.plan_key,billing_status=EXCLUDED.billing_status,
-            node_limit=EXCLUDED.node_limit,tenant_limit=EXCLUDED.tenant_limit,
-            environment_limit=EXCLUDED.environment_limit,audit_retention_days=EXCLUDED.audit_retention_days,
-            advanced_verification=EXCLUDED.advanced_verification,fleet_controls=EXCLUDED.fleet_controls,
-            priority_support=EXCLUDED.priority_support,entra_oidc=EXCLUDED.entra_oidc,
-            private_deployment=EXCLUDED.private_deployment,updated_at=now()"
-    )
-    .bind(organization_id).bind(plan).bind(nodes).bind(tenants).bind(environments).bind(retention)
-    .bind(advanced).bind(fleet).bind(priority).bind(entra).bind(private_deployment)
-    .execute(db).await?;
-    Ok(())
-}
-
 
 pub(crate) async fn configure_entra(
     State(s): State<AppState>,
@@ -903,158 +863,6 @@ pub(crate) async fn portal(State(s): State<AppState>, headers: HeaderMap) -> Res
     Json(json!({"ok":true,"portal_url":url})).into_response()
 }
 
-pub(crate) async fn stripe_webhook(State(s): State<AppState>, headers: HeaderMap, body: String) -> Response {
-    let signature = match headers.get("stripe-signature").and_then(|v| v.to_str().ok()) {
-        Some(v) => v,
-        None => return StatusCode::BAD_REQUEST.into_response(),
-    };
-    let secret = match env::var("STRIPE_WEBHOOK_SECRET") {
-        Ok(v) if !v.is_empty() => v,
-        _ => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
-    };
-    if !verify_stripe_signature(&body, signature, &secret) {
-        return StatusCode::UNAUTHORIZED.into_response();
-    }
-
-    let event: Value = match serde_json::from_str(&body) {
-        Ok(v) => v,
-        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
-    };
-    let event_id = event.get("id").and_then(Value::as_str).unwrap_or_default();
-    let event_type = event.get("type").and_then(Value::as_str).unwrap_or_default();
-    if event_id.is_empty() || event_type.is_empty() {
-        return StatusCode::BAD_REQUEST.into_response();
-    }
-
-    let inserted = match sqlx::query(
-        "INSERT INTO billing_events(stripe_event_id,event_type,payload)
-         VALUES($1,$2,$3) ON CONFLICT (stripe_event_id) DO NOTHING",
-    )
-    .bind(event_id)
-    .bind(event_type)
-    .bind(&event)
-    .execute(&s.db)
-    .await
-    {
-        Ok(v) => v.rows_affected() == 1,
-        Err(e) => return db_error(e),
-    };
-
-    if !inserted {
-        return Json(json!({"received":true,"duplicate":true})).into_response();
-    }
-
-    let object = event.pointer("/data/object").cloned().unwrap_or(Value::Null);
-    let customer_id = object.get("customer").and_then(Value::as_str);
-    let metadata_org = object.pointer("/metadata/organization_id").and_then(Value::as_str);
-
-    let organization_id = if let Some(value) = metadata_org {
-        Uuid::parse_str(value).ok()
-    } else if let Some(customer) = customer_id {
-        sqlx::query("SELECT organization_id FROM billing_accounts WHERE stripe_customer_id=$1")
-            .bind(customer)
-            .fetch_optional(&s.db)
-            .await
-            .ok()
-            .flatten()
-            .map(|r| r.get::<Uuid,_>("organization_id"))
-    } else {
-        None
-    };
-
-    if let Some(org) = organization_id {
-        let subscription_id = object.get("subscription").and_then(Value::as_str)
-            .or_else(|| object.get("id").and_then(Value::as_str));
-        let status = object.get("status").and_then(Value::as_str).unwrap_or("active");
-        let price_id = object.pointer("/items/data/0/price/id").and_then(Value::as_str);
-        let cancel_at_period_end = object.get("cancel_at_period_end").and_then(Value::as_bool).unwrap_or(false);
-        let period_end = object.get("current_period_end").and_then(Value::as_i64);
-
-        match event_type {
-            "checkout.session.completed"
-            | "customer.subscription.created"
-            | "customer.subscription.updated"
-            | "customer.subscription.deleted" => {
-                let normalized_status = if event_type == "customer.subscription.deleted" {
-                    "canceled"
-                } else {
-                    status
-                };
-                let plan = if event_type == "customer.subscription.deleted" {
-                    "free"
-                } else {
-                    plan_for_price(price_id).unwrap_or("free")
-                };
-                if let Err(e) = sqlx::query(
-                    "INSERT INTO billing_accounts(
-                        organization_id,stripe_customer_id,stripe_subscription_id,stripe_price_id,
-                        plan_key,status,current_period_end,cancel_at_period_end,updated_at)
-                     VALUES($1,$2,$3,$4,$5,$6,
-                        CASE WHEN $7::bigint IS NULL THEN NULL ELSE to_timestamp($7) END,$8,now())
-                     ON CONFLICT (organization_id) DO UPDATE SET
-                       stripe_customer_id=COALESCE(EXCLUDED.stripe_customer_id,billing_accounts.stripe_customer_id),
-                       stripe_subscription_id=COALESCE(EXCLUDED.stripe_subscription_id,billing_accounts.stripe_subscription_id),
-                       stripe_price_id=COALESCE(EXCLUDED.stripe_price_id,billing_accounts.stripe_price_id),
-                       plan_key=EXCLUDED.plan_key,status=EXCLUDED.status,
-                       current_period_end=EXCLUDED.current_period_end,
-                       cancel_at_period_end=EXCLUDED.cancel_at_period_end,updated_at=now()",
-                )
-                .bind(org)
-                .bind(customer_id)
-                .bind(subscription_id)
-                .bind(price_id)
-                .bind(plan)
-                .bind(normalized_status)
-                .bind(period_end)
-                .bind(cancel_at_period_end)
-                .execute(&s.db)
-                .await {
-                    return db_error(e);
-                }
-                if let Err(e) = apply_entitlements(&s.db, org, plan).await {
-                    return db_error(e);
-                }
-            }
-            "invoice.payment_failed" | "invoice.paid" => {
-                let normalized_status = if event_type == "invoice.payment_failed" {
-                    "past_due"
-                } else {
-                    "active"
-                };
-                if let Err(e) = sqlx::query(
-                    "UPDATE billing_accounts SET status=$1,updated_at=now() WHERE organization_id=$2",
-                )
-                .bind(normalized_status)
-                .bind(org)
-                .execute(&s.db)
-                .await {
-                    return db_error(e);
-                }
-            }
-            _ => {}
-        }
-        audit(
-            &s.db,
-            org,
-            Uuid::nil(),
-            "billing.webhook.processed",
-            "billing_event",
-            None,
-            json!({"event_id":event_id,"event_type":event_type}),
-        )
-        .await;
-    }
-
-    let _ = sqlx::query(
-        "UPDATE billing_events SET status='processed',processed_at=now() WHERE stripe_event_id=$1",
-    )
-    .bind(event_id)
-    .execute(&s.db)
-    .await;
-
-    Json(json!({"received":true})).into_response()
-}
-
 pub(crate) async fn verify_email(
     State(s): State<AppState>,
     Query(q): Query<VerifyInput>,
@@ -1423,46 +1231,6 @@ pub(crate) async fn send_support_confirmation(
     let name=html_escape(display_name); let org=html_escape(organization); let subj=html_escape(subject); let req=html_escape(request_id);
     let html=email_shell(&format!("<p>Hello {name},</p><p>Your support request has been received by the Agata Proxima support team.</p><p>Organization: {org}<br>Subject: {subj}<br>Request ID: {req}</p><p>We will use the request details to investigate and respond.</p>"));
     send_email_from(to,"We received your Agata Proxima support request",&configured_sender("RESEND_SUPPORT_FROM_EMAIL")?,&html).await
-}
-
-fn verify_stripe_signature(payload: &str, signature: &str, secret: &str) -> bool {
-    let mut timestamp = None;
-    let mut signatures = Vec::new();
-    for part in signature.split(',') {
-        let mut pair = part.splitn(2, '=');
-        match (pair.next(), pair.next()) {
-            (Some("t"), Some(value)) => timestamp = value.parse::<i64>().ok(),
-            (Some("v1"), Some(value)) => signatures.push(value.to_string()),
-            _ => {}
-        }
-    }
-    let timestamp = match timestamp {
-        Some(v) => v,
-        None => return false,
-    };
-    let now = chrono::Utc::now().timestamp();
-    if (now - timestamp).abs() > 300 {
-        return false;
-    }
-    let signed = format!("{timestamp}.{payload}");
-    let mut mac = match HmacSha256::new_from_slice(secret.as_bytes()) {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
-    mac.update(signed.as_bytes());
-    let expected = hex::encode(mac.finalize().into_bytes());
-    signatures.iter().any(|candidate| constant_time_equal(candidate, &expected))
-}
-
-fn constant_time_equal(a: &str, b: &str) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut diff = 0u8;
-    for (x, y) in a.as_bytes().iter().zip(b.as_bytes()) {
-        diff |= x ^ y;
-    }
-    diff == 0
 }
 
 async fn stripe_error(response: reqwest::Response) -> Response {
