@@ -1445,15 +1445,6 @@ async fn delete_account(State(s): State<AppState>, headers: HeaderMap) -> Respon
             .into_response();
     }
 
-    let org_count: i64 =
-        match sqlx::query_scalar("SELECT count(*) FROM memberships WHERE user_id=$1")
-            .bind(ctx.user_id)
-            .fetch_one(&s.db)
-            .await
-        {
-            Ok(v) => v,
-            Err(e) => return db_error(e),
-        };
     let shared_orgs: i64 = match sqlx::query_scalar(
         "SELECT count(*) FROM memberships m
          WHERE m.organization_id IN (SELECT organization_id FROM memberships WHERE user_id=$1)
@@ -1466,12 +1457,61 @@ async fn delete_account(State(s): State<AppState>, headers: HeaderMap) -> Respon
         Ok(v) => v,
         Err(e) => return db_error(e),
     };
-    if org_count > 0 && shared_orgs > 0 {
+    if shared_orgs > 0 {
         return (
             StatusCode::CONFLICT,
             Json(json!({"ok":false,"message":"Account deletion is blocked while another member still depends on one of your organizations. Transfer ownership or remove other members first."})),
         )
             .into_response();
+    }
+
+    let non_owner_memberships: i64 = match sqlx::query_scalar(
+        "SELECT count(*) FROM memberships WHERE user_id=$1 AND role<>'owner'",
+    )
+    .bind(ctx.user_id)
+    .fetch_one(&s.db)
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => return db_error(e),
+    };
+    if non_owner_memberships > 0 {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({"ok":false,"message":"Account deletion requires ownership of every organization on this account. Leave or transfer any organization where you are not the owner first."})),
+        )
+            .into_response();
+    }
+
+    let active_billing: i64 = match sqlx::query_scalar(
+        "SELECT count(*) FROM billing_accounts b
+         WHERE b.organization_id IN (SELECT organization_id FROM memberships WHERE user_id=$1)
+           AND b.status NOT IN ('inactive','canceled')",
+    )
+    .bind(ctx.user_id)
+    .fetch_one(&s.db)
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => return db_error(e),
+    };
+    if active_billing > 0 {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({"ok":false,"message":"Cancel active organization billing before deleting the account."})),
+        )
+            .into_response();
+    }
+
+    if let Err(e) = sqlx::query(
+        "DELETE FROM organizations
+         WHERE id IN (SELECT organization_id FROM memberships WHERE user_id=$1)",
+    )
+    .bind(ctx.user_id)
+    .execute(&s.db)
+    .await
+    {
+        return db_error(e);
     }
     if let Err(e) = sqlx::query("DELETE FROM users WHERE id=$1")
         .bind(ctx.user_id)
