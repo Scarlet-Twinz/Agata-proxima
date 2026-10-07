@@ -969,6 +969,23 @@ pub(crate) async fn stripe_webhook(State(s): State<AppState>, headers: HeaderMap
     };
 
     if let Some(org) = organization_id {
+        let (title, message) = match event_type {
+            "invoice.paid" => ("Payment received", "A billing payment was received successfully."),
+            "invoice.payment_failed" => ("Payment failed", "A billing payment failed and the organization may require attention."),
+            "customer.subscription.deleted" => ("Subscription canceled", "The organization subscription was canceled."),
+            "customer.subscription.created" => ("Subscription started", "The organization subscription is now active."),
+            "customer.subscription.updated" => ("Subscription updated", "The organization billing subscription was updated."),
+            "checkout.session.completed" => ("Checkout completed", "The organization billing checkout completed successfully."),
+            _ => ("Billing activity", "A billing event was received for this organization."),
+        };
+        if let Ok(users) = sqlx::query_scalar::<_, Uuid>("SELECT user_id FROM memberships WHERE organization_id=$1")
+            .bind(org).fetch_all(&s.db).await
+        {
+            for user_id in users {
+                super::create_notification(&s.db, user_id, Some(org), "billing", title, message, Some("/app/billing")).await;
+            }
+        }
+
         let subscription_id = object.get("subscription").and_then(Value::as_str)
             .or_else(|| object.get("id").and_then(Value::as_str));
         let status = object.get("status").and_then(Value::as_str).unwrap_or("active");
