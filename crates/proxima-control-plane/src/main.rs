@@ -64,6 +64,7 @@ struct IntegrationInput { project_id: Uuid, environment_id: Option<Uuid>, mode: 
 #[derive(Deserialize)]
 struct TenantInput {
     organization_id: Uuid,
+    project_id: Option<Uuid>,
     name: String,
     slug: String,
     isolation_mode: Option<String>,
@@ -377,10 +378,21 @@ async fn signup(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Resp
         return db_error(e);
     }
 
-    if let Err(e) = sqlx::query(
-        "INSERT INTO projects(organization_id,name,slug) VALUES($1,'Production','production')",
+    let project_id = match sqlx::query(
+        "INSERT INTO projects(organization_id,name,slug) VALUES($1,'Production','production') RETURNING id"
     )
     .bind(organization_id)
+    .fetch_one(&mut *tx)
+    .await
+    {
+        Ok(row) => row.get::<Uuid,_>("id"),
+        Err(e) => return db_error(e),
+    };
+
+    if let Err(e) = sqlx::query(
+        "INSERT INTO environments(project_id,name,slug,kind) VALUES($1,'Production','production','production')"
+    )
+    .bind(project_id)
     .execute(&mut *tx)
     .await
     {
@@ -860,25 +872,20 @@ async fn create_tenant(
         return c.into_response();
     }
 
-    let project = match sqlx::query(
-        "SELECT id FROM projects WHERE organization_id=$1 ORDER BY created_at LIMIT 1",
-    )
-    .bind(ctx.organization_id)
-    .fetch_optional(&s.db)
-    .await
-    {
-        Ok(Some(row)) => row.get::<Uuid, _>("id"),
-        Ok(None) => {
-            return (
-                StatusCode::CONFLICT,
-                Json(Message {
-                    ok: false,
-                    message: "Create a project before creating tenants.".into(),
-                }),
-            )
-                .into_response()
-        }
-        Err(e) => return db_error(e),
+    let project = match input.project_id {
+        Some(project_id) => match sqlx::query("SELECT id FROM projects WHERE id=$1 AND organization_id=$2")
+            .bind(project_id).bind(ctx.organization_id).fetch_optional(&s.db).await {
+                Ok(Some(row)) => row.get::<Uuid,_>("id"),
+                Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+                Err(e) => return db_error(e),
+            },
+        None => match sqlx::query("SELECT id FROM projects WHERE organization_id=$1 ORDER BY created_at")
+            .bind(ctx.organization_id).fetch_all(&s.db).await {
+                Ok(rows) if rows.len()==1 => rows[0].get::<Uuid,_>("id"),
+                Ok(rows) if rows.is_empty() => return (StatusCode::CONFLICT, Json(Message { ok:false, message:"Create a project before creating tenants.".into() })).into_response(),
+                Ok(_) => return (StatusCode::CONFLICT, Json(Message { ok:false, message:"project_id is required when the organization has multiple projects.".into() })).into_response(),
+                Err(e) => return db_error(e),
+            }
     };
 
     if let Err(response) = production::enforce_capacity(&s.db, ctx.organization_id, "tenants").await
@@ -909,7 +916,7 @@ async fn create_tenant(
                 "tenant.created",
                 "tenant",
                 Some(id),
-                json!({"isolation_mode":mode}),
+                json!({"isolation_mode":mode,"project_id":project}),
             )
             .await;
             Json(json!({"id":id,"name":input.name,"slug":input.slug,"isolation_mode":mode,"status":"active"})).into_response()
