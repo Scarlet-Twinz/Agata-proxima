@@ -43,6 +43,7 @@ import {
 } from "../pages/console/ConsoleSurfaces";
 import { NestedResource } from "../pages/console/NestedResource";
 import { ProjectsPage, ProjectDetailPage, IntegrationsPage, DeveloperQuickstartPage } from "../pages/console/CustomerIntegration";
+import { ConsoleDocumentation } from "../pages/console/ConsoleDocumentation";
 
 const detailRoutes = [
   "/product/model", "/product/enforcement", "/product/verification", "/product/evidence",
@@ -135,6 +136,7 @@ export const router = createBrowserRouter([
       { path: "projects/:projectId", element: <ProjectDetailPage /> },
       { path: "integrations", element: <IntegrationsPage /> },
       { path: "developer/quickstart", element: <DeveloperQuickstartPage /> },
+      { path: "docs/:topic", element: <ConsoleDocumentation /> },
       ...consoleResourceRoutes,
       ...nestedConsoleRoutes,
     ],
