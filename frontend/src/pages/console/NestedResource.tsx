@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ArrowLeft, ArrowUpRight, BookOpen, ChevronRight, Copy, ExternalLink, RefreshCw, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, BookOpen, ChevronRight, ExternalLink, RefreshCw, ShieldCheck } from "lucide-react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { ResourceSurface } from "../../components/console/ResourceSurface";
 import { api, type ApiError } from "../../api/client";
