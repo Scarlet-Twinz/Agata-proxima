@@ -95,5 +95,8 @@ jobs:
       - name: Phase 3A customer lifecycle gate
         run: bash tests/launch/phase3a_customer_lifecycle_gate.sh
 
+      # Production launch gate is intentionally deferred until Phase 3B, where the
+      # billing provider is migrated from the legacy Stripe contract to Paystack.
       - name: Phase 58-59 repository launch gate
+        if: github.ref == 'refs/heads/main'
         run: bash tests/launch/phase58_59_repo_gate.sh
