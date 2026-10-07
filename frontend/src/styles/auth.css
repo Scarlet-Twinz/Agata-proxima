@@ -618,3 +618,21 @@
     gap: 6px;
   }
 }
+
+
+.auth-inline-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 0;
+  color: var(--agata-blue);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.auth-inline-action:disabled { opacity: .55; cursor: wait; }
+.auth-security-callout small { display:block; margin-top:8px; color:var(--muted); line-height:1.5; }
