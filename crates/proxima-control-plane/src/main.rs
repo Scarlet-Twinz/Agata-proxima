@@ -1041,7 +1041,7 @@ async fn revoke_organization_invitation(
         Ok(v) => v,
         Err(c) => return c.into_response(),
     };
-    if let Err(c) = require_write(&ctx, &headers) {
+    if let Err(c) = require_admin(&ctx, &headers) {
         return c.into_response();
     }
 
