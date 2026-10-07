@@ -407,7 +407,7 @@ async fn signup(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Resp
         "organization_id": organization_id,
         "message": "Workspace created. Check your email to verify your address before signing in."
     }))
-        .into_response()
+    .into_response()
 }
 
 async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Response {
@@ -670,7 +670,7 @@ async fn platform_status(State(s): State<AppState>, headers: HeaderMap) -> Respo
         "proxima_enforcement": "independent",
         "offline_behavior": "engine_continues_enforcement"
     }))
-        .into_response()
+    .into_response()
 }
 
 async fn organizations(State(s): State<AppState>, headers: HeaderMap) -> Response {
