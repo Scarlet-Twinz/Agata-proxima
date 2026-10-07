@@ -652,7 +652,7 @@ async fn api_keys(State(s): State<AppState>, headers: HeaderMap) -> Response {
         Err(c) => return c.into_response(),
     };
     match sqlx::query("SELECT id,name,key_prefix,last_used_at,created_at,revoked_at FROM api_keys WHERE organization_id=$1 ORDER BY created_at DESC").bind(ctx.organization_id).fetch_all(&s.db).await{
-      Ok(rows)=>Json(rows.iter().map(|r|json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"key_prefix":r.get::<String,_>("key_prefix"),"last_used_at":r.get::<Option<chrono::DateTime<chrono::Utc>>,_>("last_used_at"),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),"revoked_at":r.get::<Option<chrono::DateTime<chrono::Utc>>,_>("revoked_at")})).collect::<Vec<_>>()).into_response(),
+      Ok(rows)=>Json(rows.iter().map(|r|json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"key_prefix":r.get::<String,_>("key_prefix"),"last_used_at":r.get::<Option<chrono::DateTime<chrono::Utc>>,_>("last_used_at"),"created_at":r.get::<chrono::DateTime<chrono::Utc>, _>("created_at"),"revoked_at":r.get::<Option<chrono::DateTime<chrono::Utc>>,_>("revoked_at")})).collect::<Vec<_>>()).into_response(),
       Err(e)=>db_error(e)
     }
 }
@@ -1701,7 +1701,7 @@ async fn notifications(State(s): State<AppState>, headers: HeaderMap) -> Respons
                 "title":r.get::<String,_>("title"),
                 "message":r.get::<String,_>("message"),
                 "href":r.get::<Option<String>,_>("href"),
-                "read":r.get::<Option<chrono::DateTime<chrono::Utc>,_>("read_at").is_some(),
+                "read":r.get::<Option<chrono::DateTime<chrono::Utc>>, _>("read_at").is_some(),
                 "created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at")
             })).collect::<Vec<_>>()
         }))
