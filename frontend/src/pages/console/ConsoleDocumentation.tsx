@@ -154,7 +154,7 @@ const topics: Record<string, Topic> = {
   },
   "developer-api-reference": {
     eyebrow:"DEVELOPER",title:"API reference documentation",summary:"Agata exposes a versioned control-plane API under /api/v1 with authentication, CSRF protection and organization-scoped authorization.",
-    sections:[{title:"Core resources",bullets:["Organizations and memberships.","Projects and environments.","Integrations.","Tenants and policies.","Nodes and deployments.","Verification and audit evidence.","Billing and support."]},{title:"Contract rules",bullets:["Use documented /api/v1 paths.","Send the session CSRF token on state-changing requests.","Treat non-2xx responses as authoritative failures.","Keep organization and resource identifiers explicit."]}],links:[{label:"OpenAPI contract",href:"/docs/openapi.json"},{label:"Developer guide",href:"/docs/developer-guide"}]
+    sections:[{title:"Core resources",bullets:["Organizations and memberships.","Projects and environments.","Integrations.","Tenants and policies.","Nodes and deployments.","Verification and audit evidence.","Billing and support."]},{title:"Contract rules",bullets:["Use documented /api/v1 paths.","Send the session CSRF token on state-changing requests.","Treat non-2xx responses as authoritative failures.","Keep organization and resource identifiers explicit."]}],links:[{label:"OpenAPI contract",href:"/docs/api-reference"},{label:"Developer guide",href:"/docs/developer-guide"}]
   },
   "settings-authentication": {
     eyebrow:"SETTINGS",title:"Authentication documentation",summary:"Authentication establishes the user session; authorization remains organization-scoped and role-aware.",
@@ -162,7 +162,7 @@ const topics: Record<string, Topic> = {
   },
   "settings-identity": {
     eyebrow:"SETTINGS",title:"Enterprise identity documentation",summary:"Microsoft Entra OIDC provides enterprise identity integration while the application retains organization membership and authorization semantics.",
-    sections:[{title:"OIDC boundary",paragraphs:["The repository validates OIDC state, nonce, issuer, audience, tenant identity, signature and expiry before session creation."]},{title:"Production requirement",paragraphs:["Runtime SSO is not claimed until the real public callback, application registration, credentials and tenant acceptance are completed."]}],links:[{label:"Identity guide",href:"/docs/identity/microsoft-entra-oidc.md"},{label:"Settings",href:"/app/settings"}]
+    sections:[{title:"OIDC boundary",paragraphs:["The repository validates OIDC state, nonce, issuer, audience, tenant identity, signature and expiry before session creation."]},{title:"Production requirement",paragraphs:["Runtime SSO is not claimed until the real public callback, application registration, credentials and tenant acceptance are completed."]}],links:[{label:"Identity guide",href:"/docs/identity/microsoft-entra-oidc"},{label:"Settings",href:"/app/settings"}]
   },
   "settings-security": {
     eyebrow:"SETTINGS",title:"Security settings documentation",summary:"Security settings should expose actual controls and their current state without implying certifications or guarantees.",
