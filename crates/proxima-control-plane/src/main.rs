@@ -1133,15 +1133,14 @@ async fn change_password(
         return bad("New password must be at least 12 characters.");
     }
 
-    let hash: String =
-        match sqlx::query_scalar("SELECT password_hash FROM users WHERE id=$1")
-            .bind(ctx.user_id)
-            .fetch_one(&s.db)
-            .await
-        {
-            Ok(v) => v,
-            Err(e) => return db_error(e),
-        };
+    let hash: String = match sqlx::query_scalar("SELECT password_hash FROM users WHERE id=$1")
+        .bind(ctx.user_id)
+        .fetch_one(&s.db)
+        .await
+    {
+        Ok(v) => v,
+        Err(e) => return db_error(e),
+    };
     if !verify_password(&input.current_password, &hash) {
         return (
             StatusCode::UNAUTHORIZED,
@@ -1167,13 +1166,11 @@ async fn change_password(
     {
         return db_error(e);
     }
-    if let Err(e) = sqlx::query(
-        "DELETE FROM sessions WHERE user_id=$1 AND token_hash<>$2",
-    )
-    .bind(ctx.user_id)
-    .bind(token_hash(&token))
-    .execute(&s.db)
-    .await
+    if let Err(e) = sqlx::query("DELETE FROM sessions WHERE user_id=$1 AND token_hash<>$2")
+        .bind(ctx.user_id)
+        .bind(token_hash(&token))
+        .execute(&s.db)
+        .await
     {
         return db_error(e);
     }
@@ -1197,16 +1194,15 @@ async fn settings(State(s): State<AppState>, headers: HeaderMap) -> Response {
         Ok(v) => v,
         Err(c) => return c.into_response(),
     };
-    let user =
-        match sqlx::query("SELECT id,email,display_name,preferences FROM users WHERE id=$1")
-            .bind(ctx.user_id)
-            .fetch_optional(&s.db)
-            .await
-        {
-            Ok(Some(r)) => r,
-            Ok(None) => return unauthorized(),
-            Err(e) => return db_error(e),
-        };
+    let user = match sqlx::query("SELECT id,email,display_name,preferences FROM users WHERE id=$1")
+        .bind(ctx.user_id)
+        .fetch_optional(&s.db)
+        .await
+    {
+        Ok(Some(r)) => r,
+        Ok(None) => return unauthorized(),
+        Err(e) => return db_error(e),
+    };
     let organization = match sqlx::query(
         "SELECT o.id,o.name,o.slug,m.role FROM organizations o JOIN memberships m
          ON m.organization_id=o.id WHERE o.id=$1 AND m.user_id=$2",
@@ -1288,15 +1284,14 @@ async fn update_settings(
         if org_name.is_empty() || org_name.len() > 120 {
             return bad("Organization name must be between 1 and 120 characters.");
         }
-        let current: String =
-            match sqlx::query_scalar("SELECT name FROM organizations WHERE id=$1")
-                .bind(ctx.organization_id)
-                .fetch_one(&s.db)
-                .await
-            {
-                Ok(v) => v,
-                Err(e) => return db_error(e),
-            };
+        let current: String = match sqlx::query_scalar("SELECT name FROM organizations WHERE id=$1")
+            .bind(ctx.organization_id)
+            .fetch_one(&s.db)
+            .await
+        {
+            Ok(v) => v,
+            Err(e) => return db_error(e),
+        };
         if org_name != current {
             if !matches!(ctx.role.as_str(), "owner" | "admin") {
                 return (
@@ -1306,13 +1301,12 @@ async fn update_settings(
                     .into_response();
             }
             let slug = slugify(org_name);
-            if let Err(e) =
-                sqlx::query("UPDATE organizations SET name=$1,slug=$2 WHERE id=$3")
-                    .bind(org_name)
-                    .bind(&slug)
-                    .bind(ctx.organization_id)
-                    .execute(&s.db)
-                    .await
+            if let Err(e) = sqlx::query("UPDATE organizations SET name=$1,slug=$2 WHERE id=$3")
+                .bind(org_name)
+                .bind(&slug)
+                .bind(ctx.organization_id)
+                .execute(&s.db)
+                .await
             {
                 return unique_error(e);
             }
@@ -1391,14 +1385,13 @@ async fn switch_organization(
     if let Err(c) = require_csrf(&ctx, &headers) {
         return c.into_response();
     }
-    let membership = match sqlx::query(
-        "SELECT role FROM memberships WHERE user_id=$1 AND organization_id=$2",
-    )
-    .bind(ctx.user_id)
-    .bind(input.organization_id)
-    .fetch_optional(&s.db)
-    .await
-    {
+    let membership =
+        match sqlx::query("SELECT role FROM memberships WHERE user_id=$1 AND organization_id=$2")
+            .bind(ctx.user_id)
+            .bind(input.organization_id)
+            .fetch_optional(&s.db)
+            .await
+        {
         Ok(Some(r)) => r,
         Ok(None) => {
             return (
@@ -1436,10 +1429,7 @@ async fn switch_organization(
     Json(json!({"ok":true,"organization_id":input.organization_id})).into_response()
 }
 
-async fn delete_account(
-    State(s): State<AppState>,
-    headers: HeaderMap,
-) -> Response {
+async fn delete_account(State(s): State<AppState>, headers: HeaderMap) -> Response {
     let ctx = match authenticate(&s, &headers).await {
         Ok(v) => v,
         Err(c) => return c.into_response(),
@@ -1455,13 +1445,12 @@ async fn delete_account(
             .into_response();
     }
 
-    let org_count: i64 = match sqlx::query_scalar(
-        "SELECT count(*) FROM memberships WHERE user_id=$1",
-    )
-    .bind(ctx.user_id)
-    .fetch_one(&s.db)
-    .await
-    {
+    let org_count: i64 =
+        match sqlx::query_scalar("SELECT count(*) FROM memberships WHERE user_id=$1")
+            .bind(ctx.user_id)
+            .fetch_one(&s.db)
+            .await
+        {
         Ok(v) => v,
         Err(e) => return db_error(e),
     };
@@ -1494,9 +1483,7 @@ async fn delete_account(
     let mut response_headers = HeaderMap::new();
     response_headers.insert(
         header::SET_COOKIE,
-        HeaderValue::from_static(
-            "proxima_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict",
-        ),
+        HeaderValue::from_static("proxima_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict"),
     );
     (
         response_headers,
