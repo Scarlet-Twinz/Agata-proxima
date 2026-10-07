@@ -1392,16 +1392,16 @@ async fn switch_organization(
             .fetch_optional(&s.db)
             .await
         {
-        Ok(Some(r)) => r,
-        Ok(None) => {
-            return (
-                StatusCode::FORBIDDEN,
-                Json(json!({"ok":false,"message":"You do not belong to that organization."})),
-            )
-                .into_response()
-        }
-        Err(e) => return db_error(e),
-    };
+            Ok(Some(r)) => r,
+            Ok(None) => {
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(json!({"ok":false,"message":"You do not belong to that organization."})),
+                )
+                    .into_response()
+            }
+            Err(e) => return db_error(e),
+        };
     let token = match cookie(&headers, "proxima_session") {
         Some(v) => v,
         None => return unauthorized(),
@@ -1451,9 +1451,9 @@ async fn delete_account(State(s): State<AppState>, headers: HeaderMap) -> Respon
             .fetch_one(&s.db)
             .await
         {
-        Ok(v) => v,
-        Err(e) => return db_error(e),
-    };
+            Ok(v) => v,
+            Err(e) => return db_error(e),
+        };
     let shared_orgs: i64 = match sqlx::query_scalar(
         "SELECT count(*) FROM memberships m
          WHERE m.organization_id IN (SELECT organization_id FROM memberships WHERE user_id=$1)
