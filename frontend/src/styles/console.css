@@ -1170,3 +1170,48 @@ a {
 .console-detail-copy{color:var(--muted);font-size:13px;line-height:1.8}.console-detail-copy strong{color:var(--text)}.console-detail-copy li{margin:8px 0}
 @media(max-width:900px){.console-metric-grid{grid-template-columns:repeat(2,1fr)}.console-card-grid,.console-architecture{grid-template-columns:1fr}}
 @media(max-width:560px){.console-metric-grid{grid-template-columns:1fr}.panel-heading{align-items:flex-start;flex-direction:column}.console-card-grid{grid-template-columns:1fr}}
+
+
+/* Live resource surfaces */
+.console-refresh-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 12px;
+  color: var(--agata-blue);
+  background: white;
+  border: 1px solid var(--console-border);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.console-refresh-button:disabled { opacity: .55; cursor: wait; }
+.is-spinning { animation: console-spin .9s linear infinite; }
+@keyframes console-spin { to { transform: rotate(360deg); } }
+
+.resource-section-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.resource-info-card { padding: 22px; }
+.resource-info-card h2 { margin: 8px 0 8px; font-size: 17px; }
+.resource-info-card p { margin: 0; color: var(--muted); line-height: 1.65; font-size: 13px; }
+.resource-data-surface { padding: 22px; margin-bottom: 16px; }
+.resource-data-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+.resource-data-heading h2 { margin: 7px 0 0; font-size: 18px; }
+.resource-table-wrap { overflow-x: auto; border: 1px solid var(--console-border); border-radius: 10px; }
+.resource-table { width: 100%; border-collapse: collapse; min-width: 640px; }
+.resource-table th, .resource-table td { padding: 11px 13px; border-bottom: 1px solid #edf0f4; text-align: left; vertical-align: top; font-size: 12px; }
+.resource-table th { color: var(--muted); background: #f8fafc; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
+.resource-table td { color: var(--text); }
+.resource-table tr:last-child td { border-bottom: 0; }
+.resource-error strong { color: var(--danger); }
+
+@media (max-width: 800px) {
+  .resource-section-grid { grid-template-columns: 1fr; }
+  .resource-data-heading { align-items: flex-start; gap: 12px; }
+}
