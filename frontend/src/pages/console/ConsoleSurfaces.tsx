@@ -1,4 +1,6 @@
-﻿import { ResourceSurface } from "../../components/console/ResourceSurface";
+﻿import { FormEvent, useEffect, useState } from "react";
+import { ResourceSurface } from "../../components/console/ResourceSurface";
+import { api } from "../../api/client";
 
 export function Security() {
   return <ResourceSurface eyebrow="SECURITY" title="Security posture" description="Observe organization-scoped security and platform state returned by the control plane." endpoint="/api/v1/platform/status" docsHref="/app/docs/security" links={[{label:"Tenant isolation",href:"/app/security/tenant-isolation"},{label:"Verification",href:"/app/verification"},{label:"Security events",href:"/app/security/events"}]} />;
@@ -28,8 +30,98 @@ export function Audit() {
   return <ResourceSurface eyebrow="AUDIT" title="Audit stream" description="Inspect organization-scoped administrative and security evidence." endpoint="/api/v1/audit" docsHref="/app/docs/audit" links={[{label:"Verification",href:"/app/verification"},{label:"Security",href:"/app/security"}]} />;
 }
 
+type TeamMember = { id: string; email: string; display_name: string; role: string; current: boolean };
+type Invitation = { id: string; email: string; role: string; status: string; expires_at: string; accepted_at?: string | null };
+
 export function Team() {
-  return <ResourceSurface eyebrow="TEAM" title="Team and access" description="Inspect current organization membership. Invitations remain organization-scoped and auditable." endpoint="/api/v1/organization/team" docsHref="/app/docs/team" links={[{label:"Settings",href:"/app/settings"},{label:"Authentication",href:"/app/settings/authentication"}]} />;
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [organizationId, setOrganizationId] = useState("");
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState("viewer");
+  const [loading, setLoading] = useState(true);
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState("");
+
+  async function refresh() {
+    setLoading(true);
+    setError("");
+    try {
+      const [session, team, invites] = await Promise.all([
+        api.get<{ organization_id: string }>("/api/v1/session"),
+        api.get<TeamMember[]>("/api/v1/organization/team"),
+        api.get<Invitation[]>("/api/v1/organization/invitations"),
+      ]);
+      setOrganizationId(session.organization_id);
+      setMembers(team);
+      setInvitations(invites);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to load organization access.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { void refresh(); }, []);
+
+  async function invite(event: FormEvent) {
+    event.preventDefault();
+    if (!organizationId || !email.trim()) return;
+    setWorking(true);
+    setError("");
+    try {
+      await api.post("/api/v1/organization/invitations", {
+        organization_id: organizationId,
+        email: email.trim().toLowerCase(),
+        role,
+      });
+      setEmail("");
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to send invitation.");
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function revoke(id: string) {
+    setWorking(true);
+    setError("");
+    try {
+      await api.delete(`/api/v1/organization/invitations/${id}`);
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to revoke invitation.");
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  return <section className="resource-page">
+    <div className="page-heading">
+      <div><span className="eyebrow">TEAM</span><h1>Team and access</h1><p>Manage organization membership and auditable invitations inside the active workspace.</p></div>
+      <a className="agata-button agata-button-secondary" href="/app/docs/team">Read access documentation</a>
+    </div>
+    <div className="surface">
+      <span className="eyebrow">INVITE</span><h2>Invite a teammate</h2>
+      <form className="customer-form" onSubmit={invite}>
+        <input aria-label="Invite email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="teammate@company.com" required />
+        <select aria-label="Invitation role" value={role} onChange={e => setRole(e.target.value)}>
+          <option value="viewer">Viewer</option><option value="operator">Operator</option><option value="admin">Admin</option>
+        </select>
+        <button type="submit" disabled={working || !organizationId}>{working ? "Sending…" : "Send invitation"}</button>
+      </form>
+      {error && <p role="alert" className="customer-error">{error}</p>}
+    </div>
+    <div className="surface">
+      <span className="eyebrow">MEMBERSHIP</span><h2>Current members</h2>
+      {loading ? <p>Loading organization membership…</p> : members.length === 0 ? <p>No members returned.</p> : <div className="resource-records">{members.map(member => <div className="customer-row" key={member.id}><strong>{member.display_name}</strong><span>{member.email}</span><span>{member.role}</span>{member.current && <span>Current session</span>}</div>)}</div>}
+    </div>
+    <div className="surface">
+      <span className="eyebrow">INVITATIONS</span><h2>Invitation history</h2>
+      {loading ? <p>Loading invitations…</p> : invitations.length === 0 ? <p>No invitations have been issued for this organization.</p> : <div className="resource-records">{invitations.map(inv => <div className="customer-row" key={inv.id}><strong>{inv.email}</strong><span>{inv.role}</span><span>{inv.status}</span><span>expires {new Date(inv.expires_at).toLocaleDateString()}</span>{inv.status === "pending" && <button type="button" onClick={() => revoke(inv.id)} disabled={working}>Revoke</button>}</div>)}</div>}
+    </div>
+  </section>;
 }
 
 export function Billing() {
