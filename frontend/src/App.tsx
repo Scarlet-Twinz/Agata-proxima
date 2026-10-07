@@ -9,7 +9,6 @@ import {
   Nodes,
   Policies,
   Security,
-  Settings,
   Support,
   Team,
   Tenants,
