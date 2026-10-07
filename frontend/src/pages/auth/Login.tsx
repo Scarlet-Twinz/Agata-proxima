@@ -15,7 +15,9 @@ export default function Login() {
   const [verificationRequired,setVerificationRequired]=useState(false);
   const [resendBusy,setResendBusy]=useState(false);
   const [resendMessage,setResendMessage]=useState("");
-  const verifiedMessage=(location.state as {verified?:boolean}|null)?.verified ? "Email verified. Sign in to open your workspace." : "";
+  const locationState=location.state as {verified?:boolean;sessionExpired?:boolean}|null;
+  const verifiedMessage=locationState?.verified ? "Email verified. Sign in to open your workspace." : "";
+  const sessionMessage=locationState?.sessionExpired ? "Your previous security session expired. Sign in again to continue." : "";
 
   async function submit(event:React.FormEvent) {
     event.preventDefault();
@@ -60,7 +62,7 @@ export default function Login() {
       <h2>Welcome back.</h2>
       <p>Sign in to your Proxima workspace and manage your tenant security boundary.</p>
     </div>
-    {verifiedMessage && <div className="auth-security-callout"><CheckCircle2 size={18}/><div><strong>Email verified</strong><span>{verifiedMessage}</span></div></div>}
+    {sessionMessage && <div className="auth-security-callout"><ShieldCheck size={18}/><div><strong>Session expired</strong><span>{sessionMessage}</span></div></div>}{verifiedMessage && <div className="auth-security-callout"><CheckCircle2 size={18}/><div><strong>Email verified</strong><span>{verifiedMessage}</span></div></div>}
     {error && <div className="auth-error" role="alert">{error}</div>}
     <form className="agata-form" onSubmit={submit}>
       <div className="agata-field"><label htmlFor="login-email">Work email</label><input id="login-email" name="email" type="email" required value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email" placeholder="you@company.com"/></div>
