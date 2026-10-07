@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowUpRight, RefreshCw } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Plus, RefreshCw, Search } from "lucide-react";
 import { Link } from "react-router-dom";
+import { api, type ApiError } from "../../api/client";
 
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 type Props = {
@@ -8,15 +9,12 @@ type Props = {
   eyebrow: string;
   description: string;
   endpoint?: string;
+  detailBase?: string;
+  createHref?: string;
+  createLabel?: string;
   links?: { label: string; href: string }[];
   sections?: { title: string; text: string; href?: string }[];
 };
-
-function formatValue(value: JsonValue): string {
-  if (value === null) return "—";
-  if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
-}
 
 function rowsFrom(value: JsonValue | null): Record<string, JsonValue>[] {
   if (!value) return [];
@@ -36,64 +34,76 @@ function rowsFrom(value: JsonValue | null): Record<string, JsonValue>[] {
   return [record];
 }
 
+function labelFor(key: string) {
+  return key.replaceAll("_", " ").replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+function valueFor(value: JsonValue) {
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "object") {
+    if (Array.isArray(value)) return value.length ? value.map(String).join(", ") : "None";
+    return "Structured data";
+  }
+  if (typeof value === "string" && /_at$|created|updated/i.test(value)) {
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime())) return date.toLocaleString();
+  }
+  return String(value);
+}
+
+function isStatus(value: JsonValue) {
+  return typeof value === "string" && /^(active|healthy|degraded|offline|pending|queued|applying|failed|rolled_back|pass|fail|review|running|paid|open|in_progress|resolved|closed|revoked|enabled|disabled)$/i.test(value);
+}
+
 export function ResourceSurface({
-  title,
-  eyebrow,
-  description,
-  endpoint,
-  links = [],
-  sections = [],
+  title, eyebrow, description, endpoint, detailBase, createHref, createLabel = "Create",
+  links = [], sections = [],
 }: Props) {
   const [data, setData] = useState<JsonValue | null>(null);
   const [loading, setLoading] = useState(Boolean(endpoint));
   const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
 
   async function load() {
     if (!endpoint) return;
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(endpoint, {
-        credentials: "include",
-        headers: { Accept: "application/json" },
-      });
-      const body = (await response.json().catch(() => ({}))) as JsonValue & {
-        message?: string;
-      };
-      if (!response.ok) {
-        throw new Error(
-          typeof body?.message === "string"
-            ? body.message
-            : "Request failed (" + response.status + ").",
-        );
-      }
-      setData(body);
+      setData(await api.get<JsonValue>(endpoint));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load this resource.");
+      const apiError = err as ApiError;
+      if (apiError?.status === 401) {
+        setError("Your secure session is no longer valid. Sign in again to continue.");
+      } else if (apiError?.status === 403) {
+        setError("Your current role does not have access to this resource.");
+      } else {
+        setError(err instanceof Error ? err.message : apiError?.message ?? "Unable to load this resource.");
+      }
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => {
-    void load();
-  }, [endpoint]);
+  useEffect(() => { void load(); }, [endpoint]);
 
-  const rows = useMemo(() => rowsFrom(data), [data]);
+  const rows = useMemo(() => {
+    const normalized = rowsFrom(data);
+    const q = query.trim().toLowerCase();
+    if (!q) return normalized;
+    return normalized.filter((row) => Object.values(row).some((value) => valueFor(value).toLowerCase().includes(q)));
+  }, [data, query]);
+
   const columns = useMemo(() => {
     const keys = new Set<string>();
-    rows.slice(0, 12).forEach((row) =>
-      Object.keys(row).forEach((key) => keys.add(key)),
-    );
-    return Array.from(keys).slice(0, 8);
+    rows.slice(0, 20).forEach((row) => Object.keys(row).forEach((key) => keys.add(key)));
+    const preferred = ["name","email","status","plan_key","role","environment","region","version","desired_state","observed_state","created_at","updated_at"];
+    return [...preferred.filter((key) => keys.has(key)), ...Array.from(keys).filter((key) => !preferred.includes(key))].slice(0, 8);
   }, [rows]);
 
   return (
     <div className="resource-page">
-      <Link className="back-link" to="/app">
-        <ArrowLeft size={16} />
-        Command Center
-      </Link>
+      <Link className="back-link" to="/app"><ArrowLeft size={16}/> Command Center</Link>
 
       <div className="page-heading">
         <div>
@@ -101,32 +111,20 @@ export function ResourceSurface({
           <h1>{title}</h1>
           <p>{description}</p>
         </div>
-        {endpoint && (
-          <button
-            className="console-refresh-button"
-            type="button"
-            onClick={() => void load()}
-            disabled={loading}
-          >
-            <RefreshCw size={15} className={loading ? "is-spinning" : ""} />
-            Refresh
-          </button>
-        )}
+        <div className="heading-actions">
+          {endpoint && <button className="console-refresh-button" type="button" onClick={() => void load()} disabled={loading}><RefreshCw size={15} className={loading ? "is-spinning" : ""}/> {loading ? "Refreshing" : "Refresh"}</button>}
+          {createHref && <Link className="primary-action" to={createHref}><Plus size={16}/> {createLabel}</Link>}
+        </div>
       </div>
 
       {sections.length > 0 && (
         <div className="resource-section-grid">
           {sections.map((section) => (
-            <div className="surface resource-info-card" key={section.title}>
-              <span className="eyebrow">CONFIGURATION</span>
-              <h2>{section.title}</h2>
+            <Link className="surface resource-info-card resource-info-card--link" key={section.title} to={section.href ?? "#"}>
+              <span className="eyebrow">EXPLORE</span>
+              <h2>{section.title}<ArrowUpRight size={15}/></h2>
               <p>{section.text}</p>
-              {section.href && (
-                <Link className="public-inline-link" to={section.href}>
-                  Open {section.title} <ArrowUpRight size={15} />
-                </Link>
-              )}
-            </div>
+            </Link>
           ))}
         </div>
       )}
@@ -136,57 +134,32 @@ export function ResourceSurface({
           <div className="resource-data-heading">
             <div>
               <span className="eyebrow">LIVE CONTROL-PLANE DATA</span>
-              <h2>
-                {loading
-                  ? "Loading current state…"
-                  : error
-                    ? "Unable to load current state"
-                    : rows.length
-                      ? rows.length + " record" + (rows.length === 1 ? "" : "s") + " returned"
-                      : "No records yet"}
-              </h2>
+              <h2>{loading ? "Reading current state…" : error ? "Current state unavailable" : rows.length ? `${rows.length} record${rows.length === 1 ? "" : "s"}` : "No records yet"}</h2>
             </div>
+            {!loading && !error && rows.length > 0 && (
+              <label className="resource-search"><Search size={15}/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter current records" aria-label="Filter records"/></label>
+            )}
           </div>
 
-          {loading && (
-            <div className="empty-state">
-              <strong>Loading live data…</strong>
-              <span>Reading the authenticated control-plane endpoint.</span>
-            </div>
-          )}
-
-          {!loading && error && (
-            <div className="empty-state resource-error">
-              <strong>{error}</strong>
-              <span>Check the backend, database connection and authenticated session, then refresh.</span>
-            </div>
-          )}
-
-          {!loading && !error && rows.length === 0 && (
-            <div className="empty-state">
-              <strong>No records have been created yet.</strong>
-              <span>This is a real empty state, not placeholder telemetry. Create the first resource and return here to see it.</span>
-            </div>
-          )}
+          {loading && <div className="empty-state"><strong>Loading live data…</strong><span>Reading the authenticated control-plane endpoint.</span></div>}
+          {!loading && error && <div className="empty-state resource-error"><strong>{error}</strong><span>Refresh after confirming the control plane and secure session are healthy.</span></div>}
+          {!loading && !error && rows.length === 0 && <div className="empty-state"><strong>No records have been created yet.</strong><span>This is a real empty state. Use the action above to create the first resource.</span>{createHref && <Link className="primary-action" to={createHref}>Create the first {title.toLowerCase().replace(" registry","")}</Link>}</div>}
 
           {!loading && !error && rows.length > 0 && (
             <div className="resource-table-wrap">
               <table className="resource-table">
-                <thead>
-                  <tr>
-                    {columns.map((column) => (
-                      <th key={column}>{column.replaceAll("_", " ")}</th>
-                    ))}
-                  </tr>
-                </thead>
+                <thead><tr>{columns.map((column) => <th key={column}>{labelFor(column)}</th>)}{detailBase && <th>Details</th>}</tr></thead>
                 <tbody>
-                  {rows.map((row, index) => (
-                    <tr key={String(row.id ?? row.key ?? index)}>
-                      {columns.map((column) => (
-                        <td key={column}>{formatValue(row[column])}</td>
-                      ))}
-                    </tr>
-                  ))}
+                  {rows.map((row, index) => {
+                    const id = String(row.id ?? row.key ?? index);
+                    return <tr key={id}>
+                      {columns.map((column) => {
+                        const value = row[column];
+                        return <td key={column}>{isStatus(value) ? <span className={`console-status console-status--${String(value).toLowerCase().replaceAll("_","-")}`}>{valueFor(value)}</span> : valueFor(value)}</td>;
+                      })}
+                      {detailBase && <td><Link className="table-detail-link" to={`${detailBase}/${id}`}>Open <ArrowUpRight size={14}/></Link></td>}
+                    </tr>;
+                  })}
                 </tbody>
               </table>
             </div>
@@ -194,17 +167,7 @@ export function ResourceSurface({
         </section>
       )}
 
-      {links.length > 0 && (
-        <aside className="surface resource-links">
-          <span className="eyebrow">RELATED</span>
-          {links.map((link) => (
-            <Link key={link.href} to={link.href}>
-              {link.label}
-              <ArrowUpRight size={16} />
-            </Link>
-          ))}
-        </aside>
-      )}
+      {links.length > 0 && <aside className="surface resource-links"><span className="eyebrow">RELATED WORKFLOWS</span>{links.map((link) => <Link key={link.href} to={link.href}>{link.label}<ArrowUpRight size={16}/></Link>)}</aside>}
     </div>
   );
 }
