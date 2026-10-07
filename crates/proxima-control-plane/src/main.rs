@@ -154,11 +154,12 @@ struct AuthOutput {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let _ = dotenvy::from_filename(".env.local");
     let _ = dotenvy::dotenv();
     tracing_subscriber::fmt().with_target(false).init();
 
     let database_url = env::var("PROXIMA_CONTROL_DATABASE_URL").unwrap_or_else(|_| {
-        "postgres://proxima_control:proxima-control-dev@127.0.0.1:55432/proxima_control".into()
+        "postgres://proxima_control:proxima-control-dev@127.0.0.1:55443/proxima_control".into()
     });
 
     let db = PgPoolOptions::new()
