@@ -1511,9 +1511,9 @@ async fn change_email(
             .fetch_one(&s.db)
             .await
         {
-        Ok(v) => v,
-        Err(e) => return db_error(e),
-    };
+            Ok(v) => v,
+            Err(e) => return db_error(e),
+        };
     if !verify_password(&input.current_password, &password_hash) {
         return (
             StatusCode::UNAUTHORIZED,
