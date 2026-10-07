@@ -1,12 +1,7 @@
 import { ArrowRight, Check, ChevronRight, Database, FileCheck2, LockKeyhole, Network, ShieldCheck, Terminal, Webhook } from "lucide-react";
 import { Link } from "react-router-dom";
 
-const productAreas = [
-  {title:"Enforcement",text:"Understand how identity, tenant context, Proxima and PostgreSQL form the protected path.",to:"/product/enforcement",icon:LockKeyhole},
-  {title:"Verification",text:"Test expected allows and expected blocks and retain evidence instead of relying on status theatre.",to:"/product/verification",icon:FileCheck2},
-  {title:"Evidence",text:"Inspect audit and verification history around the security boundary.",to:"/product/evidence",icon:ShieldCheck},
-  {title:"Developer platform",text:"Integrate through the authenticated API, webhooks, SDK guidance, CLI and infrastructure workflows.",to:"/developers",icon:Terminal},
-];
+
 
 const operatingAreas = [
   ["Tenant registry","Create and inspect protected customer boundaries.","/app/tenants"],
