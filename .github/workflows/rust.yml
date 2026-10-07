@@ -1,6 +1,6 @@
 name: Rust
-# Phase 51-57 launch gate: build, test, lint, migrations, API contracts, and acceptance syntax.
-# Re-run after rustfmt correction.
+# Phase 51-59 launch gate: build, test, lint, migrations, API contracts, and acceptance syntax.
+# External production services remain explicit deployment gates.
 
 on:
   push:
@@ -85,6 +85,8 @@ jobs:
           grep -q "STRIPE_SECRET_KEY" .env.example
           grep -q "RESEND_API_KEY" .env.example
           grep -q "PROXIMA_OIDC_ISSUER" .env.example
+          grep -q "^RESEND_FROM_EMAIL=$" .env.example
+          ! grep -q "^AGATA_STRIPE_PRICE_ID=" .env.example
 
       - name: Control plane operational scripts
         run: |
