@@ -97,6 +97,36 @@ const details: Record<string, Detail> = {
     sections:[{title:"Authentication model",paragraphs:["Authentication identifies the caller. Tenant context then establishes the customer boundary that protected operations are permitted to access."]}],
     links:[{label:"API reference",to:"/developers/api-reference"},{label:"Security",to:"/security"}],
   },
+  "/developers/organizations": {
+    eyebrow:"Developers · Organizations", title:"Keep administrative identity explicit.", description:"Organizations are the administrative boundary that owns membership, resources, audit evidence and commercial state.",
+    sections:[{title:"Organization boundary",paragraphs:["Authenticate the caller, resolve the organization, then operate on resources that belong to that organization."]},{title:"Membership",bullets:["Owner — organization authority","Admin — operational administration","Operator — day-to-day resource operations","Viewer — read-oriented access"]}],
+    links:[{label:"Tenant context",to:"/developers/tenant-context"},{label:"API reference",to:"/developers/api-reference"}],
+  },
+  "/developers/policies": {
+    eyebrow:"Developers · Policies", title:"Declare enforcement intent before deployment.", description:"Policies are versioned documents that describe the security behavior the platform should enforce.",
+    sections:[{title:"Policy lifecycle",bullets:["Draft the policy","Review the document","Deploy the intended version","Run verification","Retain evidence"]},{title:"Why versioning matters",paragraphs:["A versioned policy gives operators an explicit answer to which security intent was active when a deployment or verification occurred."]}],
+    links:[{label:"Deployments",to:"/developers/deployments"},{label:"Verification",to:"/developers/verification"}],
+  },
+  "/developers/fleet": {
+    eyebrow:"Developers · Fleet", title:"Know where enforcement is running.", description:"Nodes connect Proxima enforcement to explicit environments, regions and health state.",
+    sections:[{title:"Node lifecycle",bullets:["Register","Enroll","Observe health","Deploy a version","Revoke when trust is lost"]},{title:"Operational state",paragraphs:["Node state belongs in the control plane so deployments and verification can reference an explicit enforcement target."]}],
+    links:[{label:"Deployments",to:"/developers/deployments"},{label:"Operations docs",to:"/docs/operations"}],
+  },
+  "/developers/deployments": {
+    eyebrow:"Developers · Deployments", title:"Move desired state through an observable lifecycle.", description:"Deployments connect policy intent, node placement, desired state and observed state.",
+    sections:[{title:"Deployment lifecycle",bullets:["Declare desired version","Target a node","Apply desired state","Observe result","Verify behavior","Audit the change"]}],
+    links:[{label:"Fleet",to:"/developers/fleet"},{label:"Verification",to:"/developers/verification"}],
+  },
+  "/developers/verification": {
+    eyebrow:"Developers · Verification", title:"Turn isolation assumptions into evidence.", description:"Verification exercises expected behavior and leaves an inspectable result in the control plane.",
+    sections:[{title:"What to test",bullets:["Valid tenant-local access","Cross-tenant rejection","Missing context rejection","Malformed context rejection","Evidence persistence"]},{title:"Operational workflow",paragraphs:["Run verification after meaningful policy, node or deployment changes and inspect the resulting audit trail."]}],
+    links:[{label:"Verification docs",to:"/docs/verification"},{label:"Audit",to:"/developers/audit"}],
+  },
+  "/developers/audit": {
+    eyebrow:"Developers · Audit", title:"Trace what changed and why.", description:"Audit events provide organization-scoped operational evidence around security and control-plane changes.",
+    sections:[{title:"Useful event families",bullets:["Authentication and identity","Tenant and policy changes","Node and deployment changes","Verification outcomes","Credential lifecycle","Support operations"]},{title:"Use audit as evidence",paragraphs:["A dashboard status tells you what the system reports now; an audit trail helps explain how it got there."]}],
+    links:[{label:"Security",to:"/security"},{label:"Operations",to:"/docs/operations"}],
+  },
   "/developers/tenant-context": {
     eyebrow:"Developers · Tenant context", title:"Carry tenant identity through the protected path.", description:"Treat tenant context as a first-class part of the infrastructure request path.",
     sections:[{title:"Context lifecycle",bullets:["Resolve context from authenticated identity","Validate the tenant boundary","Enforce before protected database access","Verify expected isolation behavior"]}],
