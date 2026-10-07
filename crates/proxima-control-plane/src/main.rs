@@ -790,9 +790,10 @@ async fn projects(State(s): State<AppState>, headers: HeaderMap) -> Response {
 }
 async fn create_project(State(s):State<AppState>,headers:HeaderMap,Json(input):Json<ProjectInput>)->Response{
  let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()}; if let Err(c)=require_write(&ctx,&headers){return c.into_response();}
- let id=Uuid::new_v4(); let slug=slugify(&input.name);
- match sqlx::query("INSERT INTO projects(id,organization_id,name,slug) VALUES($1,$2,$3,$4)").bind(id).bind(ctx.organization_id).bind(&input.name).bind(&slug).execute(&s.db).await{
-  Ok(_)=>{if let Err(e)=sqlx::query("INSERT INTO environments(project_id,name,slug,kind) VALUES($1,'Production','production','production') ON CONFLICT DO NOTHING").bind(id).execute(&s.db).await{return db_error(e)}; audit(&s.db,ctx.organization_id,ctx.user_id,"project.created","project",Some(id),json!({})).await; Json(json!({"id":id,"name":input.name,"slug":slug})).into_response()},
+ let name=input.name.trim().to_string(); let slug=slugify(&name); if name.len()<2||name.len()>120||slug.is_empty(){return bad("Project name must contain 2–120 characters and at least one letter or number.");}
+ let id=Uuid::new_v4();
+ match sqlx::query("INSERT INTO projects(id,organization_id,name,slug) VALUES($1,$2,$3,$4)").bind(id).bind(ctx.organization_id).bind(&name).bind(&slug).execute(&s.db).await{
+  Ok(_)=>{if let Err(e)=sqlx::query("INSERT INTO environments(project_id,name,slug,kind) VALUES($1,'Production','production','production') ON CONFLICT DO NOTHING").bind(id).execute(&s.db).await{return db_error(e)}; audit(&s.db,ctx.organization_id,ctx.user_id,"project.created","project",Some(id),json!({})).await; Json(json!({"id":id,"name":name,"slug":slug})).into_response()},
   Err(e)=>unique_error(e)
  }
 }
@@ -805,8 +806,11 @@ async fn environments(State(s):State<AppState>,Path(project_id):Path<Uuid>,heade
 async fn create_environment(State(s):State<AppState>,Path(project_id):Path<Uuid>,headers:HeaderMap,Json(input):Json<EnvironmentInput>)->Response{
  let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()}; if input.project_id!=project_id{return bad("project_id does not match the route.")}; if let Err(c)=require_write(&ctx,&headers){return c.into_response();}
  let ok=sqlx::query("SELECT 1 FROM projects WHERE id=$1 AND organization_id=$2").bind(project_id).bind(ctx.organization_id).fetch_optional(&s.db).await; match ok{Ok(Some(_))=>{},Ok(None)=>return StatusCode::NOT_FOUND.into_response(),Err(e)=>return db_error(e)}
- let kind=input.kind.unwrap_or_else(||"development".into()); if !matches!(kind.as_str(),"development"|"staging"|"production"){return bad("Environment kind must be development, staging, or production.")}; let id=Uuid::new_v4(); let slug=slugify(&input.name);
- match sqlx::query("INSERT INTO environments(id,project_id,name,slug,kind) VALUES($1,$2,$3,$4,$5)").bind(id).bind(project_id).bind(&input.name).bind(&slug).bind(&kind).execute(&s.db).await{Ok(_)=>{audit(&s.db,ctx.organization_id,ctx.user_id,"environment.created","environment",Some(id),json!({"project_id":project_id,"kind":kind})).await;Json(json!({"id":id,"name":input.name,"slug":slug,"kind":kind,"status":"active"})).into_response()},Err(e)=>unique_error(e)}
+ let name=input.name.trim().to_string(); let slug=slugify(&name); if name.len()<2||name.len()>120||slug.is_empty(){return bad("Environment name must contain 2–120 characters and at least one letter or number.");}
+ let kind=input.kind.unwrap_or_else(||"development".into()); if !matches!(kind.as_str(),"development"|"staging"|"production"){return bad("Environment kind must be development, staging, or production.");}
+ if kind=="production" { let existing=sqlx::query("SELECT 1 FROM environments WHERE project_id=$1 AND kind='production' AND status <> 'retired' LIMIT 1").bind(project_id).fetch_optional(&s.db).await; match existing { Ok(Some(_))=>return bad("A project can have only one active Production environment."), Ok(None)=>{}, Err(e)=>return db_error(e) } }
+ let id=Uuid::new_v4();
+ match sqlx::query("INSERT INTO environments(id,project_id,name,slug,kind) VALUES($1,$2,$3,$4,$5)").bind(id).bind(project_id).bind(&name).bind(&slug).bind(&kind).execute(&s.db).await{Ok(_)=>{audit(&s.db,ctx.organization_id,ctx.user_id,"environment.created","environment",Some(id),json!({"project_id":project_id,"kind":kind})).await;Json(json!({"id":id,"name":name,"slug":slug,"kind":kind,"status":"active"})).into_response()},Err(e)=>unique_error(e)}
 }
 async fn integrations(State(s):State<AppState>,headers:HeaderMap)->Response{
  let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};
