@@ -580,11 +580,18 @@ async fn api_keys(State(s): State<AppState>, headers: HeaderMap) -> Response {
     }
 }
 
-async fn create_api_key(State(s): State<AppState>, headers: HeaderMap, Json(input): Json<ApiKeyInput>) -> Response {
+async fn create_api_key(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<ApiKeyInput>,
+) -> Response {
     let ctx = match authenticate(&s, &headers).await {
         Ok(v) => v,
         Err(c) => return c.into_response(),
-    }; if let Err(c)=require_write(&ctx,&headers){return c.into_response();}
+    };
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
     let name = input.name.trim();
     if name.is_empty() {
         return bad("API key name is required.");
@@ -618,11 +625,18 @@ async fn create_api_key(State(s): State<AppState>, headers: HeaderMap, Json(inpu
     Json(json!({"id":id,"name":name,"key":token,"key_prefix":prefix,"message":"Copy this key now. The full secret will not be shown again."})).into_response()
 }
 
-async fn revoke_api_key(State(s): State<AppState>, Path(id): Path<Uuid>, headers: HeaderMap) -> Response {
+async fn revoke_api_key(
+    State(s): State<AppState>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+) -> Response {
     let ctx = match authenticate(&s, &headers).await {
         Ok(v) => v,
         Err(c) => return c.into_response(),
-    }; if let Err(c)=require_write(&ctx,&headers){return c.into_response();}
+    };
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
     match sqlx::query("UPDATE api_keys SET revoked_at=now() WHERE id=$1 AND organization_id=$2 AND revoked_at IS NULL").bind(id).bind(ctx.organization_id).execute(&s.db).await{
       Ok(r) if r.rows_affected()==1=>{audit(&s.db,ctx.organization_id,ctx.user_id,"developer.api_key.revoked","api_key",Some(id),json!({})).await;Json(json!({"ok":true,"message":"API key revoked."})).into_response()},
       Ok(_)=>(StatusCode::NOT_FOUND,Json(json!({"message":"API key not found."}))).into_response(), Err(e)=>db_error(e)
@@ -767,7 +781,8 @@ async fn webhook_detail(
             "signing_secret_hint":r.get::<String,_>("signing_secret_hint"),
             "created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),
             "updated_at":r.get::<chrono::DateTime<chrono::Utc>,_>("updated_at")
-        })).into_response(),
+        }))
+        .into_response(),
         Ok(None) => (
             StatusCode::NOT_FOUND,
             Json(json!({"message":"Webhook not found."})),
@@ -828,12 +843,10 @@ async fn webhook_deliveries(
         Err(c) => return c.into_response(),
     };
 
-    let exists = sqlx::query(
-        "SELECT 1 FROM webhooks WHERE id=$1 AND organization_id=$2",
-    )
-    .bind(id)
-    .fetch_optional(&s.db)
-    .await;
+    let exists = sqlx::query("SELECT 1 FROM webhooks WHERE id=$1 AND organization_id=$2")
+        .bind(id)
+        .fetch_optional(&s.db)
+        .await;
 
     if !matches!(exists, Ok(Some(_))) {
         return (
