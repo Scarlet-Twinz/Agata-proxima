@@ -23,7 +23,6 @@ Pricing is separate from entitlement limits. A plan code received from a browser
 | Nodes | 1 | 2 | 5 | 15 | Contract-defined |
 | Tenants | 3 | 25 | 100 | 500 | Contract-defined |
 | Environments | 1 | 2 | 5 | 50 | Contract-defined |
-| Active webhook integrations | 1 | 5 | 20 | 100 | Contract-defined |
 | Audit retention | 7 days | 30 days | 180 days | 365 days | Contract-defined |
 
 ## Feature contract
@@ -40,7 +39,7 @@ Pricing is separate from entitlement limits. A plan code received from a browser
 ## Entitlement dimensions to enforce
 
 1. Node, tenant and environment capacity.
-2. Active outbound webhook integration count. Disabled webhooks do not consume a slot; re-enabling one requires available capacity.
+2. Integration count.
 3. Verification quota and usage period.
 4. Audit retention policy.
 5. Team seats and outstanding invitations.
