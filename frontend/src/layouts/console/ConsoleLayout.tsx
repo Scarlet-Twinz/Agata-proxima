@@ -78,6 +78,7 @@ export function ConsoleLayout() {
   const [searchQuery, setSearchQuery] = useState("");
   const [session, setSession] = useState<Session | null>(null);
   const [organizationName, setOrganizationName] = useState("Workspace");
+  const [organizations, setOrganizations] = useState<{id:string;name:string;slug:string;role:string}[]>([]);
   const [accountDisplayName, setAccountDisplayName] = useState("Account");
   const [accountEmail, setAccountEmail] = useState("");
   const [unreadNotifications, setUnreadNotifications] = useState(0);
