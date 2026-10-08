@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS environments (
 ALTER TABLE public.environments
   ADD COLUMN IF NOT EXISTS organization_id uuid REFERENCES organizations(id) ON DELETE CASCADE,
   ADD COLUMN IF NOT EXISTS key text,
+  ADD COLUMN IF NOT EXISTS slug text,
   ADD COLUMN IF NOT EXISTS mode text NOT NULL DEFAULT 'development',
   ADD COLUMN IF NOT EXISTS configuration jsonb NOT NULL DEFAULT '{}'::jsonb,
   ADD COLUMN IF NOT EXISTS deployment_state text NOT NULL DEFAULT 'not_deployed',
@@ -82,6 +83,13 @@ SET key = CASE
   ELSE 'development'
 END
 WHERE key IS NULL;
+
+UPDATE public.environments
+SET slug = key
+WHERE slug IS NULL;
+
+ALTER TABLE public.environments
+  ALTER COLUMN slug SET NOT NULL;
 
 UPDATE public.environments
 SET mode = CASE key
@@ -252,20 +260,20 @@ SELECT gen_random_uuid(),o.id,'Production','production'
 FROM organizations o
 WHERE NOT EXISTS (SELECT 1 FROM projects p WHERE p.organization_id=o.id AND p.slug='production');
 
-INSERT INTO environments(id,organization_id,project_id,key,name,mode)
-SELECT gen_random_uuid(),p.organization_id,p.id,'development','Development','development'
+INSERT INTO environments(id,organization_id,project_id,key,slug,name,mode)
+SELECT gen_random_uuid(),p.organization_id,p.id,'development','development','Development','development'
 FROM projects p
 WHERE p.slug='development'
 ON CONFLICT (organization_id,key) DO NOTHING;
 
-INSERT INTO environments(id,organization_id,project_id,key,name,mode)
-SELECT gen_random_uuid(),p.organization_id,p.id,'staging','Staging','shadow'
+INSERT INTO environments(id,organization_id,project_id,key,slug,name,mode)
+SELECT gen_random_uuid(),p.organization_id,p.id,'staging','staging','Staging','shadow'
 FROM projects p
 WHERE p.slug='staging'
 ON CONFLICT (organization_id,key) DO NOTHING;
 
-INSERT INTO environments(id,organization_id,project_id,key,name,mode)
-SELECT gen_random_uuid(),p.organization_id,p.id,'production','Production','enforcement'
+INSERT INTO environments(id,organization_id,project_id,key,slug,name,mode)
+SELECT gen_random_uuid(),p.organization_id,p.id,'production','production','Production','enforcement'
 FROM projects p
 WHERE p.slug='production'
 ON CONFLICT (organization_id,key) DO NOTHING;
