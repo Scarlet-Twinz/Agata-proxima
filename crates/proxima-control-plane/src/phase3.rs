@@ -18,8 +18,8 @@ use std::{collections::HashMap, env};
 use uuid::Uuid;
 
 use super::{
-    audit, authenticate, bad, db_error, require_admin, require_write, token_hash, unique_error, AppState,
-    AuthContext,
+    audit, authenticate, bad, db_error, require_admin, require_write, token_hash, unique_error,
+    AppState, AuthContext,
 };
 
 type HmacSha256 = Hmac<Sha256>;
