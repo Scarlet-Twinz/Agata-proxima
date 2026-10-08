@@ -146,5 +146,14 @@ jobs:
           PGDATABASE: postgres
         run: bash tests/entitlements/phase322_f_team_seats_gate.sh
 
+      - name: Phase 3.22-G API, enterprise, and support entitlements
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: proxima
+          PGPASSWORD: proxima-dev-only
+          PGDATABASE: postgres
+        run: bash tests/entitlements/phase322_g_api_enterprise_gate.sh
+
       - name: Phase 58-59 repository launch gate
         run: bash tests/launch/phase58_59_repo_gate.sh
