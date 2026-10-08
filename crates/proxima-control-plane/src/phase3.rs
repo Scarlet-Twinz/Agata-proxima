@@ -942,7 +942,7 @@ pub(crate) async fn team_change_role(
                     StatusCode::NOT_FOUND,
                     Json(json!({"ok":false,"message":"Member not found."})),
                 )
-                .into_response()
+                    .into_response()
             }
             Err(e) => return db_error(e),
         };
