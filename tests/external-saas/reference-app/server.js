@@ -128,4 +128,4 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, HOST, () => {
   console.log(`Agata Proxima external SaaS reference listening on http://${HOST}:${PORT}`);
 });
-\n})();\n
+})();
