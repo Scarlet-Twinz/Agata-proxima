@@ -349,6 +349,7 @@ async fn main() -> Result<()> {
             "/api/v1/integrations/{id}/credentials/rotate",
             post(phase3::rotate_integration_credential),
         )
+        .route("/api/v1/integration-environment-credentials", get(phase3::environment_credentials))
         .route(
             "/api/v1/integrations/{id}/credentials/revoke",
             post(phase3::revoke_integration_credential),
