@@ -127,6 +127,7 @@ export function App() {
 
         <Route path="support" element={<Support />} />
         <Route path="support/new" element={<ActionPage />} />
+        <Route path="support/:supportId" element={<NestedResource />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/app" replace />} />
