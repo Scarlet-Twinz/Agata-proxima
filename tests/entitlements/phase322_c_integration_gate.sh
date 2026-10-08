@@ -84,6 +84,7 @@ SQL
 pass "disabled integrations can be retained and re-enable is quota-checked"
 
 # A missing entitlement row must never be interpreted as unlimited access.
+psql -v ON_ERROR_STOP=1 -d "${test_db}" -c "DELETE FROM organization_entitlements WHERE organization_id='${org_c}'" >/dev/null
 psql -v ON_ERROR_STOP=1 -d "${test_db}" <<'SQL'
 DO $$
 DECLARE message_text text;
