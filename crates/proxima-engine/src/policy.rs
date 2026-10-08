@@ -72,6 +72,10 @@ mod tests {
         TenantContext {
             tenant_id: "tenant_a".into(),
             expires_at,
+            organization_id: None,
+            environment_id: None,
+            integration_id: None,
+            jti: None,
         }
     }
 
@@ -93,6 +97,10 @@ mod tests {
         let other = TenantContext {
             tenant_id: "tenant_b".into(),
             expires_at: 2_000,
+            organization_id: None,
+            environment_id: None,
+            integration_id: None,
+            jti: None,
         };
 
         assert_eq!(binding.bind(other, 1_000), Err(BindingError::AlreadyBound));
@@ -116,6 +124,10 @@ mod tests {
         let other = TenantContext {
             tenant_id: "tenant_b".into(),
             expires_at: 3_000,
+            organization_id: None,
+            environment_id: None,
+            integration_id: None,
+            jti: None,
         };
 
         binding.bind(other, 1_000).unwrap();

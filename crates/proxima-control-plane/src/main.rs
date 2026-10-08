@@ -1,5 +1,6 @@
 #[rustfmt::skip]
 mod production;
+mod phase3;
 
 use crate::production::service_unavailable;
 
@@ -190,6 +191,24 @@ async fn main() -> Result<()> {
     sqlx::raw_sql(include_str!("../migrations/0007_notifications_email.sql"))
         .execute(&db)
         .await?;
+    sqlx::raw_sql(include_str!(
+        "../migrations/0008_phase3a_customer_integration.sql"
+    ))
+    .execute(&db)
+    .await?;
+    sqlx::raw_sql(include_str!(
+        "../migrations/0009_environment_credentials.sql"
+    ))
+    .execute(&db)
+    .await?;
+    sqlx::raw_sql(include_str!("../migrations/0010_audit_tamper_evidence.sql"))
+        .execute(&db)
+        .await?;
+    sqlx::raw_sql(include_str!(
+        "../migrations/0011_phase3a_runtime_compatibility.sql"
+    ))
+    .execute(&db)
+    .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
@@ -249,7 +268,7 @@ async fn main() -> Result<()> {
             post(mark_all_notifications_read),
         )
         .route(
-            "/api/v1/notifications/:id/read",
+            "/api/v1/notifications/{id}/read",
             post(mark_notification_read),
         )
         .route("/api/v1/account", delete(delete_account))
@@ -264,7 +283,14 @@ async fn main() -> Result<()> {
             get(organizations).post(create_organization),
         )
         .route("/api/v1/tenants", get(tenants).post(create_tenant))
+        .route("/api/v1/tenants/{id}", get(phase3::tenant_detail).patch(phase3::tenant_update))
+        .route("/api/v1/tenants/{id}/disable", post(phase3::tenant_disable))
+        .route("/api/v1/tenants/{id}/enable", post(phase3::tenant_enable))
         .route("/api/v1/policies", get(policies).post(create_policy))
+        .route("/api/v1/policies/{id}", get(phase3::policy_detail).patch(phase3::policy_update))
+        .route("/api/v1/policies/{id}/new-version", post(phase3::policy_new_version))
+        .route("/api/v1/policies/{id}/validate", post(phase3::policy_validate))
+        .route("/api/v1/projects", get(phase3::project_list))
         .route("/api/v1/nodes", get(nodes).post(create_node))
         .route(
             "/api/v1/deployments",
@@ -332,6 +358,87 @@ async fn main() -> Result<()> {
             "/api/v1/organization/invitations/{id}",
             delete(revoke_organization_invitation),
         )
+        .route(
+            "/api/v1/integrations",
+            get(phase3::integrations).post(phase3::create_integration),
+        )
+        .route(
+            "/api/v1/integrations/{id}/credentials/rotate",
+            post(phase3::rotate_integration_credential),
+        )
+        .route("/api/v1/integration-environment-credentials", get(phase3::environment_credentials))
+        .route(
+            "/api/v1/integrations/{id}/credentials/revoke",
+            post(phase3::revoke_integration_credential),
+        )
+        .route(
+            "/api/v1/integrations/{id}/deactivate",
+            post(phase3::deactivate_integration),
+        )
+        .route(
+            "/api/v1/integrations/{integration_id}/environments/{environment_id}/credentials/rotate",
+            post(phase3::rotate_environment_credential),
+        )
+        .route(
+            "/api/v1/integrations/{integration_id}/environments/{environment_id}/credentials/revoke",
+            post(phase3::revoke_environment_credential),
+        )
+        .route(
+            "/api/v1/environments",
+            get(phase3::environments).post(phase3::create_environment),
+        )
+        .route(
+            "/api/v1/environments/{id}/mode",
+            axum::routing::patch(phase3::set_environment_mode),
+        )
+        .route(
+            "/api/v1/environments/{id}/bypass",
+            post(phase3::request_environment_bypass),
+        )
+        .route(
+            "/api/v1/database-connections",
+            get(phase3::database_connections).post(phase3::create_database_connection),
+        )
+        .route(
+            "/api/v1/database-connections/{id}/validate",
+            post(phase3::validate_database_connection),
+        )
+        .route(
+            "/api/v1/integrations/{integration_id}/environments/{environment_id}/credentials",
+            post(phase3::create_environment_credential),
+        )
+        .route("/api/v1/customer/context", post(phase3::issue_customer_context))
+        .route("/api/v1/tenant-context", post(phase3::issue_context))
+        .route(
+            "/api/v1/tenant-context/verify",
+            post(phase3::verify_context),
+        )
+        .route("/api/v1/tenant-policies", post(phase3::bind_policy))
+        .route(
+            "/api/v1/migrations",
+            get(phase3::migrations).post(phase3::create_migration),
+        )
+        .route(
+            "/api/v1/migrations/{id}/preflight",
+            post(phase3::migration_preflight),
+        )
+        .route(
+            "/api/v1/organization/invitations/{id}/resend",
+            post(phase3::team_resend_invitation),
+        )
+        .route(
+            "/api/v1/organization/invitations/reject",
+            post(phase3::team_reject_invitation),
+        )
+        .route(
+            "/api/v1/organization/team/{member_id}/role",
+            axum::routing::patch(phase3::team_change_role),
+        )
+        .route(
+            "/api/v1/organization/team/{member_id}",
+            delete(phase3::team_remove_member),
+        )
+        .route("/api/v1/audit/search", get(phase3::audit_search))
         .route("/api/v1/production/readiness", get(production::readiness))
         .with_state(state)
         .layer(TraceLayer::new_for_http());
@@ -488,6 +595,10 @@ async fn signup(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Resp
     }
 
     if let Err(e) = tx.commit().await {
+        return db_error(e);
+    }
+
+    if let Err(e) = phase3::ensure_organization_environments(&s.db, organization_id).await {
         return db_error(e);
     }
 
@@ -1951,6 +2062,9 @@ async fn create_organization(
     {
         return db_error(e);
     }
+    if let Err(e) = phase3::ensure_organization_environments(&s.db, id).await {
+        return db_error(e);
+    }
 
     audit(
         &s.db,
@@ -2041,10 +2155,11 @@ async fn create_tenant(
         .isolation_mode
         .unwrap_or_else(|| "enforced-proxy".into());
     match sqlx::query(
-        "INSERT INTO tenants(id,project_id,name,slug,isolation_mode) VALUES($1,$2,$3,$4,$5)",
+        "INSERT INTO tenants(id,project_id,organization_id,name,slug,isolation_mode) VALUES($1,$2,$3,$4,$5,$6)",
     )
-    .bind(id)
+     .bind(id)
     .bind(project)
+    .bind(ctx.organization_id)
     .bind(&input.name)
     .bind(&input.slug)
     .bind(&mode)
@@ -2705,10 +2820,51 @@ async fn audit(
     resource_id: Option<Uuid>,
     metadata: Value,
 ) {
+    let correlation_id = Uuid::new_v4().to_string();
+    let previous_hash: Option<Vec<u8>> = sqlx::query_scalar(
+        "SELECT event_hash FROM audit_events
+         WHERE organization_id=$1
+         ORDER BY created_at DESC, id DESC
+         LIMIT 1",
+    )
+    .bind(org)
+    .fetch_optional(db)
+    .await
+    .unwrap_or(None)
+    .flatten();
+    let canonical = format!(
+        "{}|{}|{}|{}|{}|{}|{}|{}",
+        previous_hash.as_ref().map(hex::encode).unwrap_or_default(),
+        org,
+        user,
+        action,
+        resource_type,
+        resource_id
+            .map(|value| value.to_string())
+            .unwrap_or_default(),
+        correlation_id,
+        metadata,
+    );
+    let mut hasher = Sha256::new();
+    hasher.update(canonical.as_bytes());
+    let event_hash = hasher.finalize().to_vec();
     let _ = sqlx::query(
-        "INSERT INTO audit_events(organization_id,user_id,action,resource_type,resource_id,metadata)
-         VALUES($1,$2,$3,$4,$5,$6)"
-    ).bind(org).bind(user).bind(action).bind(resource_type).bind(resource_id).bind(metadata).execute(db).await;
+        "INSERT INTO audit_events(
+            organization_id,user_id,action,resource_type,resource_id,metadata,
+            correlation_id,previous_hash,event_hash
+         ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+    )
+    .bind(org)
+    .bind(user)
+    .bind(action)
+    .bind(resource_type)
+    .bind(resource_id)
+    .bind(metadata)
+    .bind(correlation_id)
+    .bind(previous_hash)
+    .bind(event_hash)
+    .execute(db)
+    .await;
 }
 
 fn bad(message: &str) -> Response {

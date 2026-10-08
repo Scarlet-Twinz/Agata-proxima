@@ -44,6 +44,8 @@ import { ActionPage } from "../pages/console/ActionPage";
 import { SettingsHub } from "../pages/console/SettingsHub";
 import { Notifications } from "../pages/console/Notifications";
 import { TeamManagement } from "../pages/console/TeamManagement";
+import { TeamInvitations, TeamRoles } from "../pages/console/TeamAccessDetails";
+import { Integrations, Environments, DatabaseConnections } from "../pages/console/IntegrationFoundation";
 
 const detailRoutes = [
   "/product/model", "/product/enforcement", "/product/verification", "/product/evidence",
@@ -67,6 +69,9 @@ const consoleResourceRoutes = [
   { path: "audit", element: <Audit /> },
   { path: "security", element: <ConsoleSecurity /> },
   { path: "team", element: <TeamManagement /> },
+  { path: "integrations", element: <Integrations /> },
+  { path: "environments", element: <Environments /> },
+  { path: "database", element: <DatabaseConnections /> },
   { path: "notifications", element: <Notifications /> },
   { path: "billing", element: <Billing /> },
   { path: "settings", element: <SettingsHub /> },
@@ -82,8 +87,7 @@ const nestedConsoleRoutes = [
   "audit/:eventId",
   "verification/:runId",
   "team/members/:memberId",
-  "team/invitations",
-  "team/roles",
+  "support/:supportId",
   "security/tenant-isolation",
   "security/events",
   "billing/usage",
@@ -150,6 +154,9 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Overview /> },
       ...consoleResourceRoutes,
+      { path: "team/members", element: <TeamManagement /> },
+      { path: "team/invitations", element: <TeamInvitations /> },
+      { path: "team/roles", element: <TeamRoles /> },
       ...nestedConsoleRoutes,
       { path: "tenants/new", element: <ActionPage /> },
       { path: "policies/new", element: <ActionPage /> },

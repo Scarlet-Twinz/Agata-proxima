@@ -75,6 +75,36 @@ jobs:
           PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0002_production.sql
           PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0003_entitlements.sql
           PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0004_oidc.sql
+          PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0005_developer.sql
+          PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0006_account_settings.sql
+          PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0007_notifications_email.sql
+          PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0008_phase3a_customer_integration.sql
+          PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0009_environment_credentials.sql
+          PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0010_audit_tamper_evidence.sql
+
+      - name: Control plane startup smoke test
+        env:
+          PROXIMA_CONTROL_DATABASE_URL: postgres://proxima:proxima-dev-only@localhost:5432/proxima_control
+          PROXIMA_CONTROL_BIND: 127.0.0.1:18080
+          PROXIMA_COOKIE_SECURE: "false"
+        run: |
+          set +e
+          timeout 30s cargo run -p proxima-control-plane
+          status=$?
+          set -e
+          if [ "$status" -ne 124 ]; then
+            echo "Control plane failed during startup (exit $status)."
+            exit "$status"
+          fi
+
+      - name: Phase 3A schema acceptance gate
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: proxima
+          PGPASSWORD: proxima-dev-only
+          PGDATABASE: proxima_control
+        run: bash tests/control-plane/phase3a_schema_gate.sh
 
       - name: Control plane OpenAPI JSON
         run: python -m json.tool control-plane/openapi.json >/dev/null
@@ -84,7 +114,10 @@ jobs:
           grep -q "AGATA_PUBLIC_BASE_URL" .env.example
           grep -q "STRIPE_SECRET_KEY" .env.example
           grep -q "RESEND_API_KEY" .env.example
+          grep -q "RESEND_INVITATION_TEMPLATE_ID" .env.example
           grep -q "PROXIMA_OIDC_ISSUER" .env.example
+          grep -q "AGATA_SECRET_ENCRYPTION_KEY" .env.example
+          grep -q "PROXIMA_CONTEXT_SIGNING_KEY" .env.example
           grep -q "^RESEND_FROM_EMAIL=$" .env.example
           ! grep -q "^AGATA_STRIPE_PRICE_ID=" .env.example
 

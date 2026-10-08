@@ -17,7 +17,6 @@ import {
 } from "lucide-react";
 import { NavLink, Link } from "react-router-dom";
 import { AgataLogo } from "../brand/AgataLogo";
-
 type ConsoleSidebarProps = {
   open: boolean;
   onClose: () => void;
@@ -41,6 +40,7 @@ const organization = [
   { to: "/app/team", label: "Team", icon: Users },
   { to: "/app/billing", label: "Billing", icon: CreditCard },
   { to: "/app/developer", label: "Developer", icon: KeyRound },
+  { to: "/app/database", label: "Database", icon: Network },
 ];
 
 export default function ConsoleSidebar({
