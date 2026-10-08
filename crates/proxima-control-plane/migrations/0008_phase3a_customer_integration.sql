@@ -101,58 +101,26 @@ ALTER TABLE public.environments
   ALTER COLUMN organization_id SET NOT NULL,
   ALTER COLUMN key SET NOT NULL;
 
-DO $
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-    WHERE conrelid = 'public.environments'::regclass
-      AND conname = 'environments_key_check'
-  ) THEN
-    ALTER TABLE public.environments
-      ADD CONSTRAINT environments_key_check
-      CHECK (key IN ('development','staging','production'));
-  END IF;
+-- Recreate the Phase 3A environment checks after removing the legacy Phase-2 checks.
+-- DROP ... IF EXISTS keeps this idempotent for both fresh and upgraded databases.
+ALTER TABLE public.environments
+  DROP CONSTRAINT IF EXISTS environments_key_check,
+  DROP CONSTRAINT IF EXISTS environments_mode_check,
+  DROP CONSTRAINT IF EXISTS environments_status_check,
+  DROP CONSTRAINT IF EXISTS environments_deployment_state_check,
+  DROP CONSTRAINT IF EXISTS environments_verification_state_check;
 
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-    WHERE conrelid = 'public.environments'::regclass
-      AND conname = 'environments_mode_check'
-  ) THEN
-    ALTER TABLE public.environments
-      ADD CONSTRAINT environments_mode_check
-      CHECK (mode IN ('development','shadow','enforcement','maintenance'));
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-    WHERE conrelid = 'public.environments'::regclass
-      AND conname = 'environments_status_check'
-  ) THEN
-    ALTER TABLE public.environments
-      ADD CONSTRAINT environments_status_check
-      CHECK (status IN ('active','suspended','decommissioned'));
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-    WHERE conrelid = 'public.environments'::regclass
-      AND conname = 'environments_deployment_state_check'
-  ) THEN
-    ALTER TABLE public.environments
-      ADD CONSTRAINT environments_deployment_state_check
-      CHECK (deployment_state IN ('not_deployed','deploying','healthy','degraded','failed'));
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-    WHERE conrelid = 'public.environments'::regclass
-      AND conname = 'environments_verification_state_check'
-  ) THEN
-    ALTER TABLE public.environments
-      ADD CONSTRAINT environments_verification_state_check
-      CHECK (verification_state IN ('not_run','running','pass','fail','blocked','error','inconclusive'));
-  END IF;
-END $;
+ALTER TABLE public.environments
+  ADD CONSTRAINT environments_key_check
+    CHECK (key IN ('development','staging','production')),
+  ADD CONSTRAINT environments_mode_check
+    CHECK (mode IN ('development','shadow','enforcement','maintenance')),
+  ADD CONSTRAINT environments_status_check
+    CHECK (status IN ('active','suspended','decommissioned')),
+  ADD CONSTRAINT environments_deployment_state_check
+    CHECK (deployment_state IN ('not_deployed','deploying','healthy','degraded','failed')),
+  ADD CONSTRAINT environments_verification_state_check
+    CHECK (verification_state IN ('not_run','running','pass','fail','blocked','error','inconclusive'));
 
 -- Match the Phase 3A uniqueness contract. ON CONFLICT (organization_id,key)
 -- can infer this unique index on both fresh and upgraded databases.
