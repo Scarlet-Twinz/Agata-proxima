@@ -263,7 +263,7 @@ async fn main() -> Result<()> {
             post(mark_all_notifications_read),
         )
         .route(
-            "/api/v1/notifications/:id/read",
+            "/api/v1/notifications/{id}/read",
             post(mark_notification_read),
         )
         .route("/api/v1/account", delete(delete_account))
