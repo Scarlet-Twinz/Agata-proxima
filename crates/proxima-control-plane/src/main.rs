@@ -36,6 +36,7 @@ struct AuthContext {
     organization_id: Uuid,
     role: String,
     csrf: String,
+    api_key: bool,
 }
 
 #[derive(Deserialize)]
@@ -2599,7 +2600,90 @@ async fn create_session(
     Ok((token, csrf))
 }
 
+async fn enforce_api_rate_limit(db: &PgPool, organization_id: Uuid) -> Result<(), StatusCode> {
+    match production::consume_api_request(db, organization_id).await {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(StatusCode::TOO_MANY_REQUESTS),
+        Err(e) => {
+            let message = e.as_database_error().map(|db| db.message()).unwrap_or("");
+            if message.starts_with("AGATA_ENTITLEMENT_MISSING:") {
+                Err(StatusCode::SERVICE_UNAVAILABLE)
+            } else if message.starts_with("AGATA_SUBSCRIPTION_INACTIVE:") {
+                Err(StatusCode::PAYMENT_REQUIRED)
+            } else {
+                Err(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+        }
+    }
+}
+
 async fn authenticate(s: &AppState, headers: &HeaderMap) -> Result<AuthContext, StatusCode> {
+    if let Some(auth_header) = headers.get(header::AUTHORIZATION) {
+        let value = auth_header.to_str().map_err(|_| StatusCode::UNAUTHORIZED)?;
+        let (scheme, token) = value.split_once(' ').ok_or(StatusCode::UNAUTHORIZED)?;
+        if !scheme.eq_ignore_ascii_case("bearer") || !token.starts_with("aga_") {
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+
+        let key = sqlx::query(
+            "SELECT id,organization_id,created_by
+             FROM api_keys WHERE key_hash=$1 AND revoked_at IS NULL",
+        )
+        .bind(token_hash(token.trim()))
+        .fetch_optional(&s.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+        let key_id: Uuid = key.get("id");
+        let organization_id: Uuid = key.get("organization_id");
+        let created_by: Option<Uuid> = key.get("created_by");
+        let actor = if let Some(creator) = created_by {
+            sqlx::query_scalar::<_, Uuid>(
+                "SELECT user_id FROM memberships WHERE organization_id=$1 AND user_id=$2",
+            )
+            .bind(organization_id)
+            .bind(creator)
+            .fetch_optional(&s.db)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        } else {
+            None
+        };
+        let actor_id = match actor {
+            Some(id) => id,
+            None => sqlx::query_scalar::<_, Uuid>(
+                "SELECT user_id FROM memberships WHERE organization_id=$1
+                 ORDER BY CASE WHEN role='owner' THEN 0 ELSE 1 END, user_id LIMIT 1",
+            )
+            .bind(organization_id)
+            .fetch_optional(&s.db)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .ok_or(StatusCode::UNAUTHORIZED)?,
+        };
+
+        let updated = sqlx::query(
+            "UPDATE api_keys SET last_used_at=now() WHERE id=$1 AND revoked_at IS NULL",
+        )
+        .bind(key_id)
+        .execute(&s.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        if updated.rows_affected() != 1 {
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+
+        enforce_api_rate_limit(&s.db, organization_id).await?;
+        return Ok(AuthContext {
+            user_id: actor_id,
+            organization_id,
+            role: "operator".into(),
+            csrf: String::new(),
+            api_key: true,
+        });
+    }
+
     let token = cookie(headers, "proxima_session").ok_or(StatusCode::UNAUTHORIZED)?;
     let row = sqlx::query(
         "SELECT s.user_id,s.organization_id,s.csrf_token,m.role
@@ -2613,15 +2697,21 @@ async fn authenticate(s: &AppState, headers: &HeaderMap) -> Result<AuthContext, 
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    Ok(AuthContext {
+    let ctx = AuthContext {
         user_id: row.get("user_id"),
         organization_id: row.get("organization_id"),
         csrf: row.get("csrf_token"),
         role: row.get("role"),
-    })
+        api_key: false,
+    };
+    enforce_api_rate_limit(&s.db, ctx.organization_id).await?;
+    Ok(ctx)
 }
 
 fn require_csrf(ctx: &AuthContext, headers: &HeaderMap) -> Result<(), StatusCode> {
+    if ctx.api_key {
+        return Err(StatusCode::FORBIDDEN);
+    }
     let supplied = headers
         .get("x-csrf-token")
         .and_then(|v| v.to_str().ok())
@@ -2634,6 +2724,9 @@ fn require_csrf(ctx: &AuthContext, headers: &HeaderMap) -> Result<(), StatusCode
 }
 
 fn require_admin(ctx: &AuthContext, headers: &HeaderMap) -> Result<(), StatusCode> {
+    if ctx.api_key {
+        return Err(StatusCode::FORBIDDEN);
+    }
     let supplied = headers
         .get("x-csrf-token")
         .and_then(|v| v.to_str().ok())
@@ -2649,6 +2742,13 @@ fn require_admin(ctx: &AuthContext, headers: &HeaderMap) -> Result<(), StatusCod
 }
 
 fn require_write(ctx: &AuthContext, headers: &HeaderMap) -> Result<(), StatusCode> {
+    if ctx.api_key {
+        return if ctx.role == "operator" {
+            Ok(())
+        } else {
+            Err(StatusCode::FORBIDDEN)
+        };
+    }
     let supplied = headers
         .get("x-csrf-token")
         .and_then(|v| v.to_str().ok())
