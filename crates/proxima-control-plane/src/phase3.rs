@@ -877,11 +877,11 @@ pub(crate) async fn team_resend_invitation(
         Ok(v) => v,
         Err(e) => return db_error(e),
     };
-    let base = env::var("AGATA_PUBLIC_BASE_URL")
-        .unwrap_or_else(|_| "http://127.0.0.1:8080".into())
-        .trim_end_matches('/')
-        .to_string();
-    if super::production::send_template_email(&email,"0757a210-a372-4a5a-8fca-e642c2fed3da",json!({"ORGANIZATION":org,"ROLE":role,"ACTION_URL":format!("{base}/accept-invite?token={token}")})).await.is_err(){return super::service_unavailable("Invitation email could not be sent.")}
+    let base = match env::var("AGATA_PUBLIC_BASE_URL") {
+        Ok(value) if !value.trim().is_empty() => value.trim_end_matches('/').to_string(),
+        _ => return super::service_unavailable("AGATA_PUBLIC_BASE_URL is not configured."),
+    };
+    if env::var("RESEND_INVITATION_TEMPLATE_ID").ok().map(|id| super::production::send_template_email(&email,&id,json!({"ORGANIZATION":org,"ROLE":role,"ACTION_URL":format!("{base}/accept-invite?token={token}")}))).map(|future| async move { future.await }).unwrap_or_else(|| Box::pin(async { Err(()) })).await.is_err(){return super::service_unavailable("RESEND_INVITATION_TEMPLATE_ID is not configured or invitation email failed.")}
     audit(
         &s.db,
         ctx.organization_id,
@@ -1088,6 +1088,36 @@ pub(crate) async fn ensure_organization_environments(
     Ok(())
 }
 
+
+pub(crate) async fn environment_credentials(State(s): State<AppState>, headers: HeaderMap) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(value) => value,
+        Err(code) => return code.into_response(),
+    };
+    match sqlx::query(
+        "SELECT c.id,c.integration_id,c.environment_id,e.key,c.key_prefix,c.active,c.created_at,c.revoked_at
+         FROM environment_integration_credentials c
+         JOIN environments e ON e.id=c.environment_id
+         WHERE c.organization_id=$1
+         ORDER BY e.key,c.created_at DESC",
+    )
+    .bind(ctx.organization_id)
+    .fetch_all(&s.db)
+    .await
+    {
+        Ok(rows) => Json(rows.iter().map(|r| json!({
+            "id":r.get::<Uuid,_>("id"),
+            "integration_id":r.get::<Uuid,_>("integration_id"),
+            "environment_id":r.get::<Uuid,_>("environment_id"),
+            "environment":r.get::<String,_>("key"),
+            "key_prefix":r.get::<String,_>("key_prefix"),
+            "active":r.get::<bool,_>("active"),
+            "created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),
+            "revoked_at":r.get::<Option<chrono::DateTime<chrono::Utc>>,_>("revoked_at")
+        })).collect::<Vec<_>>()).into_response(),
+        Err(error) => db_error(error),
+    }
+}
 
 pub(crate) async fn rotate_environment_credential(
     State(s): State<AppState>,
