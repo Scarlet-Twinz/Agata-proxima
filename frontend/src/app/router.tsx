@@ -154,6 +154,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Overview /> },
       ...consoleResourceRoutes,
+      { path: "team/members", element: <TeamManagement /> },
       { path: "team/invitations", element: <TeamInvitations /> },
       { path: "team/roles", element: <TeamRoles /> },
       ...nestedConsoleRoutes,
