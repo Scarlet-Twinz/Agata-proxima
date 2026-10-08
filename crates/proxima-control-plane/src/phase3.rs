@@ -1291,3 +1291,120 @@ async fn issue_environment_credentials(
     }
     Ok(issued)
 }
+
+
+#[derive(Deserialize)]
+pub(crate) struct TenantPatchInput {
+    pub name: Option<String>,
+    pub slug: Option<String>,
+    pub isolation_mode: Option<String>,
+}
+#[derive(Deserialize)]
+pub(crate) struct PolicyPatchInput {
+    pub name: Option<String>,
+    pub document: Option<Value>,
+    pub status: Option<String>,
+}
+#[derive(Deserialize)]
+pub(crate) struct ContextCredentialInput {
+    pub environment_id: Uuid,
+    pub tenant_id: Uuid,
+}
+
+async fn scoped_tenant(db:&sqlx::PgPool,ctx:&AuthContext,id:Uuid)->Result<PgRow,Response>{
+    sqlx::query("SELECT id,organization_id,project_id,name,slug,status,isolation_mode,created_at,disabled_at FROM tenants WHERE id=$1 AND organization_id=$2")
+        .bind(id).bind(ctx.organization_id).fetch_optional(db).await.map_err(db_error)?
+        .ok_or_else(||(StatusCode::NOT_FOUND,Json(json!({"ok":false,"message":"Tenant not found in the active organization."}))).into_response())
+}
+
+pub(crate) async fn tenant_detail(State(s):State<AppState>,Path(id):Path<Uuid>,headers:HeaderMap)->Response{
+    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};
+    match scoped_tenant(&s.db,&ctx,id).await{
+        Ok(r)=>Json(json!({"id":r.get::<Uuid,_>("id"),"organization_id":r.get::<Uuid,_>("organization_id"),"project_id":r.get::<Uuid,_>("project_id"),"name":r.get::<String,_>("name"),"slug":r.get::<String,_>("slug"),"status":r.get::<String,_>("status"),"isolation_mode":r.get::<String,_>("isolation_mode"),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),"disabled_at":r.get::<Option<chrono::DateTime<chrono::Utc>>,_>("disabled_at")})).into_response(),
+        Err(e)=>e
+    }
+}
+
+pub(crate) async fn tenant_update(State(s):State<AppState>,Path(id):Path<Uuid>,headers:HeaderMap,Json(input):Json<TenantPatchInput>)->Response{
+    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()}; if let Err(c)=require_write(&ctx,&headers){return c.into_response()};
+    let current=match scoped_tenant(&s.db,&ctx,id).await{Ok(v)=>v,Err(e)=>return e};
+    let name=input.name.unwrap_or_else(||current.get::<String,_>("name")); let slug=input.slug.unwrap_or_else(||current.get::<String,_>("slug")); let mode=input.isolation_mode.unwrap_or_else(||current.get::<String,_>("isolation_mode"));
+    if name.trim().is_empty()||slug.trim().is_empty(){return bad("Tenant name and slug are required.")};
+    if !matches!(mode.as_str(),"enforced-proxy"|"application-managed"|"strict"){return bad("Unsupported tenant isolation mode.")};
+    match sqlx::query("UPDATE tenants SET name=$1,slug=$2,isolation_mode=$3 WHERE id=$4 AND organization_id=$5").bind(name.trim()).bind(slug.trim()).bind(&mode).bind(id).bind(ctx.organization_id).execute(&s.db).await{
+        Ok(_)=>{audit(&s.db,ctx.organization_id,ctx.user_id,"tenant.updated","tenant",Some(id),json!({"isolation_mode":mode})).await;Json(json!({"ok":true,"id":id,"name":name.trim(),"slug":slug.trim(),"isolation_mode":mode})).into_response()},
+        Err(e)=>unique_error(e)
+    }
+}
+
+pub(crate) async fn tenant_disable(State(s):State<AppState>,Path(id):Path<Uuid>,headers:HeaderMap)->Response{
+    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()}; if let Err(c)=require_admin(&ctx,&headers){return c.into_response()}; if let Err(e)=scoped_tenant(&s.db,&ctx,id).await{return e};
+    match sqlx::query("UPDATE tenants SET status='suspended',disabled_at=now() WHERE id=$1 AND organization_id=$2 AND status='active'").bind(id).bind(ctx.organization_id).execute(&s.db).await{
+        Ok(r) if r.rows_affected()==1=>{audit(&s.db,ctx.organization_id,ctx.user_id,"tenant.disabled","tenant",Some(id),json!({})).await;Json(json!({"ok":true,"status":"suspended"})).into_response()},
+        Ok(_)=>(StatusCode::CONFLICT,Json(json!({"ok":false,"message":"Tenant is not currently active."}))).into_response(),
+        Err(e)=>db_error(e)
+    }
+}
+
+pub(crate) async fn tenant_enable(State(s):State<AppState>,Path(id):Path<Uuid>,headers:HeaderMap)->Response{
+    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()}; if let Err(c)=require_admin(&ctx,&headers){return c.into_response()};
+    if let Err(e)=scoped_tenant(&s.db,&ctx,id).await{return e};
+    match sqlx::query("UPDATE tenants SET status='active',disabled_at=NULL WHERE id=$1 AND organization_id=$2 AND status='suspended'").bind(id).bind(ctx.organization_id).execute(&s.db).await{
+        Ok(r) if r.rows_affected()==1=>{audit(&s.db,ctx.organization_id,ctx.user_id,"tenant.enabled","tenant",Some(id),json!({})).await;Json(json!({"ok":true,"status":"active"})).into_response()},
+        Ok(_)=>(StatusCode::CONFLICT,Json(json!({"ok":false,"message":"Tenant is not currently suspended."}))).into_response(),
+        Err(e)=>db_error(e)
+    }
+}
+
+pub(crate) async fn policy_detail(State(s):State<AppState>,Path(id):Path<Uuid>,headers:HeaderMap)->Response{
+    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};
+    match sqlx::query("SELECT id,name,version,status,document,created_by,created_at,updated_at FROM policies WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id).fetch_optional(&s.db).await{
+        Ok(Some(r))=>Json(json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"version":r.get::<i32,_>("version"),"status":r.get::<String,_>("status"),"document":r.get::<Value,_>("document"),"created_by":r.get::<Option<Uuid>,_>("created_by"),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),"updated_at":r.get::<chrono::DateTime<chrono::Utc>,_>("updated_at")})).into_response(),
+        Ok(None)=>(StatusCode::NOT_FOUND,Json(json!({"ok":false,"message":"Policy not found in the active organization."}))).into_response(),
+        Err(e)=>db_error(e)
+    }
+}
+
+fn validate_policy_document(document:&Value)->Result<(),String>{
+    let Some(object)=document.as_object() else{return Err("Policy document must be a JSON object.".into())};
+    if object.get("rules").is_none(){return Err("Policy document must define rules explicitly.".into())}
+    Ok(())
+}
+
+pub(crate) async fn policy_update(State(s):State<AppState>,Path(id):Path<Uuid>,headers:HeaderMap,Json(input):Json<PolicyPatchInput>)->Response{
+    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()}; if let Err(c)=require_admin(&ctx,&headers){return c.into_response()};
+    let current=match sqlx::query("SELECT name,version,status,document FROM policies WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id).fetch_optional(&s.db).await{Ok(Some(v))=>v,Ok(None)=>(StatusCode::NOT_FOUND,Json(json!({"ok":false,"message":"Policy not found in the active organization."}))).into_response(),Err(e)=>return db_error(e)};
+    let name=input.name.unwrap_or_else(||current.get::<String,_>("name")); let doc=input.document.unwrap_or_else(||current.get::<Value,_>("document")); if let Err(message)=validate_policy_document(&doc){return bad(&message)};
+    let status=input.status.unwrap_or_else(||current.get::<String,_>("status")); if !matches!(status.as_str(),"draft"|"active"|"archived"){return bad("Policy status must be draft, active, or archived.")};
+    if status=="active" && current.get::<String,_>("status")=="archived"{return bad("Archived policies cannot be reactivated; create a new version.")};
+    let version=current.get::<i32,_>("version");
+    match sqlx::query("UPDATE policies SET name=$1,document=$2,status=$3 WHERE id=$4 AND organization_id=$5").bind(name.trim()).bind(&doc).bind(&status).bind(id).bind(ctx.organization_id).execute(&s.db).await{
+        Ok(_)=>{audit(&s.db,ctx.organization_id,ctx.user_id,"policy.updated","policy",Some(id),json!({"version":version,"status":status})).await;Json(json!({"ok":true,"id":id,"version":version,"status":status})).into_response()},
+        Err(e)=>unique_error(e)
+    }
+}
+
+pub(crate) async fn policy_new_version(State(s):State<AppState>,Path(id):Path<Uuid>,headers:HeaderMap,Json(input):Json<PolicyPatchInput>)->Response{
+    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()}; if let Err(c)=require_admin(&ctx,&headers){return c.into_response()};
+    let current=match sqlx::query("SELECT name,version,document FROM policies WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id).fetch_optional(&s.db).await{Ok(Some(v))=>v,Ok(None)=>(StatusCode::NOT_FOUND,Json(json!({"ok":false,"message":"Policy not found in the active organization."}))).into_response(),Err(e)=>return db_error(e)};
+    let doc=input.document.unwrap_or_else(||current.get::<Value,_>("document")); if let Err(message)=validate_policy_document(&doc){return bad(&message)};
+    let version=current.get::<i32,_>("version")+1; let new_id=Uuid::new_v4(); let name=input.name.unwrap_or_else(||current.get::<String,_>("name"));
+    match sqlx::query("INSERT INTO policies(id,organization_id,name,version,status,document,created_by) VALUES($1,$2,$3,$4,'draft',$5,$6)").bind(new_id).bind(ctx.organization_id).bind(name.trim()).bind(version).bind(&doc).bind(ctx.user_id).execute(&s.db).await{
+        Ok(_)=>{audit(&s.db,ctx.organization_id,ctx.user_id,"policy.version.created","policy",Some(new_id),json!({"previous_policy_id":id,"version":version})).await;Json(json!({"ok":true,"id":new_id,"version":version,"status":"draft"})).into_response()},
+        Err(e)=>unique_error(e)
+    }
+}
+
+pub(crate) async fn policy_validate(State(s):State<AppState>,Path(id):Path<Uuid>,headers:HeaderMap)->Response{
+    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};
+    let r=match sqlx::query("SELECT version,status,document FROM policies WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id).fetch_optional(&s.db).await{Ok(Some(v))=>v,Ok(None)=>(StatusCode::NOT_FOUND,Json(json!({"ok":false,"message":"Policy not found in the active organization."}))).into_response(),Err(e)=>return db_error(e)};
+    match validate_policy_document(&r.get::<Value,_>("document")){Ok(())=>Json(json!({"ok":true,"result":"PASS","version":r.get::<i32,_>("version"),"status":r.get::<String,_>("status")})).into_response(),Err(m)=>Json(json!({"ok":false,"result":"FAIL","message":m})).into_response()}
+}
+
+pub(crate) async fn project_list(State(s):State<AppState>,headers:HeaderMap)->Response{
+    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};
+    match sqlx::query("SELECT id,name,slug,created_at FROM projects WHERE organization_id=$1 ORDER BY created_at").bind(ctx.organization_id).fetch_all(&s.db).await{
+        Ok(rows)=>Json(rows.iter().map(|r|json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"slug":r.get::<String,_>("slug"),"created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at")})).collect::<Vec<_>>()).into_response(),
+        Err(e)=>db_error(e)
+    }
+}
