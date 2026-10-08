@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Agata Proxima Control Plane API",
-    "version": "0.3.0",
+    "version": "0.3.1",
     "description": "Authenticated management plane for organizations, tenants, policies, fleet, deployments, verification, audit and support. The Proxima Engine remains the independent data-plane enforcement authority."
   },
   "servers": [
@@ -652,6 +652,38 @@
         "responses": {
           "200": {
             "description": "Search organization-scoped audit evidence"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Organization authorization denied"
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/{integration_id}/environments/{environment_id}/credentials/rotate": {
+      "post": {
+        "summary": "Rotate a credential bound to one environment",
+        "responses": {
+          "200": {
+            "description": "Rotate a credential bound to one environment"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Organization authorization denied"
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/{integration_id}/environments/{environment_id}/credentials/revoke": {
+      "post": {
+        "summary": "Revoke a credential bound to one environment",
+        "responses": {
+          "200": {
+            "description": "Revoke a credential bound to one environment"
           },
           "401": {
             "description": "Authentication required"
