@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Agata Proxima Control Plane API",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "description": "Authenticated management plane for organizations, tenants, policies, fleet, deployments, verification, audit and support. The Proxima Engine remains the independent data-plane enforcement authority."
   },
   "servers": [
@@ -236,24 +236,46 @@
       "post": {
         "summary": "Configure Microsoft Entra OIDC for the current organization",
         "responses": {
-          "200": {"description": "OIDC connection configured"},
-          "403": {"description": "Plan or role does not permit enterprise SSO"}
+          "200": {
+            "description": "OIDC connection configured"
+          },
+          "403": {
+            "description": "Plan or role does not permit enterprise SSO"
+          }
         }
       }
     },
     "/api/v1/auth/oidc/start": {
       "get": {
         "security": [],
-        "parameters": [{"name":"organization_id","in":"query","required":true,"schema":{"type":"string","format":"uuid"}}],
-        "responses": {"200": {"description":"Authorization URL returned"}}
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorization URL returned"
+          }
+        }
       }
     },
     "/api/v1/auth/oidc/callback": {
       "get": {
         "security": [],
         "responses": {
-          "200": {"description":"SSO session established"},
-          "400": {"description":"Identity validation failed"}
+          "200": {
+            "description": "SSO session established"
+          },
+          "400": {
+            "description": "Identity validation failed"
+          }
         }
       }
     },
@@ -276,6 +298,366 @@
           },
           "401": {
             "description": "Authentication required"
+          }
+        }
+      }
+    },
+    "/api/v1/integrations": {
+      "get": {
+        "summary": "List active-organization customer integrations",
+        "responses": {
+          "200": {
+            "description": "List active-organization customer integrations"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Organization authorization denied"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create an organization-owned integration and one-time credential",
+        "responses": {
+          "200": {
+            "description": "Create an organization-owned integration and one-time credential"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Organization authorization denied"
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/{id}/credentials/rotate": {
+      "post": {
+        "summary": "Rotate an integration credential",
+        "responses": {
+          "200": {
+            "description": "Rotate an integration credential"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Organization authorization denied"
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/{id}/credentials/revoke": {
+      "post": {
+        "summary": "Revoke an integration credential",
+        "responses": {
+          "200": {
+            "description": "Revoke an integration credential"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Organization authorization denied"
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/{id}/deactivate": {
+      "post": {
+        "summary": "Deactivate an integration",
+        "responses": {
+          "200": {
+            "description": "Deactivate an integration"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Organization authorization denied"
+          }
+        }
+      }
+    },
+    "/api/v1/environments": {
+      "get": {
+        "summary": "List Development, Staging and Production environments",
+        "responses": {
+          "200": {
+            "description": "List Development, Staging and Production environments"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Organization authorization denied"
+          }
+        }
+      },
+      "post": {
+        "summary": "Configure an environment",
+        "responses": {
+          "200": {
+            "description": "Configure an environment"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Organization authorization denied"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/mode": {
+      "patch": {
+        "summary": "Change environment integration mode",
+        "responses": {
+          "200": {
+            "description": "Change environment integration mode"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Organization authorization denied"
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}/bypass": {
+      "post": {
+        "summary": "Authorize explicit time-limited emergency maintenance mode",
+        "responses": {
+          "200": {
+            "description": "Authorize explicit time-limited emergency maintenance mode"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Organization authorization denied"
+          }
+        }
+      }
+    },
+    "/api/v1/database-connections": {
+      "get": {
+        "summary": "List environment PostgreSQL connection health without secrets",
+        "responses": {
+          "200": {
+            "description": "List environment PostgreSQL connection health without secrets"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Organization authorization denied"
+          }
+        }
+      },
+      "post": {
+        "summary": "Store and validate an encrypted PostgreSQL environment connection",
+        "responses": {
+          "200": {
+            "description": "Store and validate an encrypted PostgreSQL environment connection"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Organization authorization denied"
+          }
+        }
+      }
+    },
+    "/api/v1/database-connections/{id}/validate": {
+      "post": {
+        "summary": "Revalidate an encrypted PostgreSQL connection",
+        "responses": {
+          "200": {
+            "description": "Revalidate an encrypted PostgreSQL connection"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Organization authorization denied"
+          }
+        }
+      }
+    },
+    "/api/v1/tenant-context": {
+      "post": {
+        "summary": "Issue a short-lived signed identity-to-tenant context",
+        "responses": {
+          "200": {
+            "description": "Issue a short-lived signed identity-to-tenant context"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Organization authorization denied"
+          }
+        }
+      }
+    },
+    "/api/v1/tenant-context/verify": {
+      "post": {
+        "summary": "Verify signature, expiry, organization and replay state for tenant context",
+        "responses": {
+          "200": {
+            "description": "Verify signature, expiry, organization and replay state for tenant context"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Organization authorization denied"
+          }
+        }
+      }
+    },
+    "/api/v1/tenant-policies": {
+      "post": {
+        "summary": "Associate an organization policy with a tenant",
+        "responses": {
+          "200": {
+            "description": "Associate an organization policy with a tenant"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Organization authorization denied"
+          }
+        }
+      }
+    },
+    "/api/v1/migrations": {
+      "get": {
+        "summary": "List customer migration runs",
+        "responses": {
+          "200": {
+            "description": "List customer migration runs"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Organization authorization denied"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a rollback-safe customer migration plan",
+        "responses": {
+          "200": {
+            "description": "Create a rollback-safe customer migration plan"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Organization authorization denied"
+          }
+        }
+      }
+    },
+    "/api/v1/migrations/{id}/preflight": {
+      "post": {
+        "summary": "Run migration compatibility and readiness preflight",
+        "responses": {
+          "200": {
+            "description": "Run migration compatibility and readiness preflight"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Organization authorization denied"
+          }
+        }
+      }
+    },
+    "/api/v1/organization/invitations/{id}/resend": {
+      "post": {
+        "summary": "Resend a pending organization invitation",
+        "responses": {
+          "200": {
+            "description": "Resend a pending organization invitation"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Organization authorization denied"
+          }
+        }
+      }
+    },
+    "/api/v1/organization/invitations/reject": {
+      "post": {
+        "summary": "Reject an invitation addressed to the authenticated user",
+        "responses": {
+          "200": {
+            "description": "Reject an invitation addressed to the authenticated user"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Organization authorization denied"
+          }
+        }
+      }
+    },
+    "/api/v1/organization/team/{member_id}/role": {
+      "patch": {
+        "summary": "Change a non-owner member role",
+        "responses": {
+          "200": {
+            "description": "Change a non-owner member role"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Organization authorization denied"
+          }
+        }
+      }
+    },
+    "/api/v1/organization/team/{member_id}": {
+      "delete": {
+        "summary": "Remove a non-owner member",
+        "responses": {
+          "200": {
+            "description": "Remove a non-owner member"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Organization authorization denied"
+          }
+        }
+      }
+    },
+    "/api/v1/audit/search": {
+      "get": {
+        "summary": "Search organization-scoped audit evidence",
+        "responses": {
+          "200": {
+            "description": "Search organization-scoped audit evidence"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Organization authorization denied"
           }
         }
       }
