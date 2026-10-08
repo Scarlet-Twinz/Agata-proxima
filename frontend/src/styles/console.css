@@ -1300,3 +1300,47 @@ a {
 @media(max-width:650px){.console-workspace-menu{position:fixed;left:16px;right:16px;top:74px}.console-user-text{display:none}}
 
 .workspace-switcher-wrap{position:relative}.console-workspace-menu--light{top:calc(100% + 8px);left:0;right:auto;min-width:250px;color:var(--text)}.console-workspace-menu--light .workspace-symbol{flex:0 0 28px;width:28px;height:28px;display:grid;place-items:center;border-radius:7px;background:var(--agata-blue-soft);color:var(--agata-blue);font-size:11px;font-weight:800}.console-workspace-menu--light .console-workspace-manage{justify-content:flex-start;color:var(--agata-blue);font-size:10px;font-weight:750}.console-workspace-menu--light button{background:transparent}.console-workspace-menu--light button:hover,.console-workspace-menu--light button.is-current{background:var(--agata-blue-soft)}
+
+/* Command Center containment: live streams grow inside their surfaces, never the page. */
+.surface--wide .topology {
+  height: 350px;
+  min-height: 0;
+}
+.surface--wide .topology-links {
+  min-height: 0;
+  max-height: 306px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 5px;
+  scrollbar-width: thin;
+}
+.surface .activity-stream {
+  max-height: 350px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 6px;
+  scrollbar-width: thin;
+}
+.surface .activity-row {
+  flex: 0 0 auto;
+}
+@media (max-width: 900px) {
+  .surface--wide .topology {
+    height: 360px;
+    grid-template-columns: 180px minmax(0, 1fr);
+    gap: 20px;
+  }
+}
+@media (max-width: 650px) {
+  .surface--wide .topology {
+    height: 420px;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+  .surface--wide .topology-core {
+    min-height: 110px;
+  }
+  .surface--wide .topology-links {
+    max-height: 260px;
+  }
+}
