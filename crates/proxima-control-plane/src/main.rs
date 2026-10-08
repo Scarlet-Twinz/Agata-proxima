@@ -702,6 +702,9 @@ async fn api_keys(State(s): State<AppState>, headers: HeaderMap) -> Response {
         Ok(v) => v,
         Err(c) => return c.into_response(),
     };
+    if ctx.api_key {
+        return StatusCode::FORBIDDEN.into_response();
+    }
     match sqlx::query("SELECT id,name,key_prefix,last_used_at,created_at,revoked_at FROM api_keys WHERE organization_id=$1 ORDER BY created_at DESC").bind(ctx.organization_id).fetch_all(&s.db).await{
       Ok(rows)=>Json(rows.iter().map(|r|json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"key_prefix":r.get::<String,_>("key_prefix"),"last_used_at":r.get::<Option<chrono::DateTime<chrono::Utc>>,_>("last_used_at"),"created_at":r.get::<chrono::DateTime<chrono::Utc>, _>("created_at"),"revoked_at":r.get::<Option<chrono::DateTime<chrono::Utc>>,_>("revoked_at")})).collect::<Vec<_>>()).into_response(),
       Err(e)=>db_error(e)
@@ -717,6 +720,9 @@ async fn create_api_key(
         Ok(v) => v,
         Err(c) => return c.into_response(),
     };
+    if ctx.api_key {
+        return StatusCode::FORBIDDEN.into_response();
+    }
     if let Err(c) = require_write(&ctx, &headers) {
         return c.into_response();
     }
@@ -724,14 +730,18 @@ async fn create_api_key(
     if name.is_empty() {
         return bad("API key name is required.");
     }
+    if let Err(response) = production::enforce_api_key_capacity(&s.db, ctx.organization_id).await {
+        return response;
+    }
     let id = Uuid::new_v4();
     let token = format!("aga_{}_{}", id.simple(), Uuid::new_v4().simple());
     let prefix = token.chars().take(12).collect::<String>();
     if let Err(e) = sqlx::query(
-        "INSERT INTO api_keys(id,organization_id,name,key_prefix,key_hash) VALUES($1,$2,$3,$4,$5)",
+        "INSERT INTO api_keys(id,organization_id,created_by,name,key_prefix,key_hash) VALUES($1,$2,$3,$4,$5,$6)",
     )
     .bind(id)
     .bind(ctx.organization_id)
+    .bind(ctx.user_id)
     .bind(name)
     .bind(&prefix)
     .bind(token_hash(&token))
@@ -762,6 +772,9 @@ async fn revoke_api_key(
         Ok(v) => v,
         Err(c) => return c.into_response(),
     };
+    if ctx.api_key {
+        return StatusCode::FORBIDDEN.into_response();
+    }
     if let Err(c) = require_write(&ctx, &headers) {
         return c.into_response();
     }
@@ -1820,6 +1833,9 @@ async fn delete_account(State(s): State<AppState>, headers: HeaderMap) -> Respon
         Ok(v) => v,
         Err(c) => return c.into_response(),
     };
+    if ctx.api_key {
+        return StatusCode::FORBIDDEN.into_response();
+    }
     if let Err(c) = require_write(&ctx, &headers) {
         return c.into_response();
     }
@@ -1955,6 +1971,9 @@ async fn create_organization(
         Ok(v) => v,
         Err(c) => return c.into_response(),
     };
+    if ctx.api_key {
+        return StatusCode::FORBIDDEN.into_response();
+    }
     if let Err(c) = require_write(&ctx, &headers) {
         return c.into_response();
     }
