@@ -9,10 +9,10 @@ test -f docs/phase51-57-final-verification.md || fail "Phase 51-57 verification 
 test -f docs/production-readiness.md || fail "production readiness record missing"
 test -f tests/external-saas/verify_reference_app.sh || fail "external SaaS acceptance fixture missing"
 
-grep -q 'AGATA_STRIPE_STARTER_PRICE_ID' .env.example || fail "Starter Stripe Price contract missing"
-grep -q 'AGATA_STRIPE_GROWTH_PRICE_ID' .env.example || fail "Growth Stripe Price contract missing"
-grep -q 'AGATA_STRIPE_SCALE_PRICE_ID' .env.example || fail "Scale Stripe Price contract missing"
-! grep -q 'AGATA_STRIPE_PRICE_ID=' .env.example || fail "legacy generic Stripe Price variable remains"
+grep -q 'AGATA_PAYSTACK_STARTER_PLAN_CODE' .env.example || fail "Starter Paystack plan contract missing"
+grep -q 'AGATA_PAYSTACK_GROWTH_PLAN_CODE' .env.example || fail "Growth Paystack plan contract missing"
+grep -q 'AGATA_PAYSTACK_SCALE_PLAN_CODE' .env.example || fail "Scale Paystack plan contract missing"
+! grep -q 'STRIPE_' .env.example || fail "legacy Stripe billing variables remain"
 
 grep -q 'checkout_url' crates/proxima-control-plane/src/production.rs || fail "checkout response contract missing"
 grep -q 'portal_url' crates/proxima-control-plane/src/production.rs || fail "portal response contract missing"
