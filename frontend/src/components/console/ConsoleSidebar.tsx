@@ -17,13 +17,6 @@ import {
 } from "lucide-react";
 import { NavLink, Link } from "react-router-dom";
 import { AgataLogo } from "../brand/AgataLogo";
-import { useState } from "react";
-import { api } from "../../api/client";
-
-type Organization = { id:string; name:string; slug:string; role:string };
-type WorkspaceSettings = { organization:{id:string;name:string;slug:string;role:string}; organizations:Organization[] };
-function initials(name:string){return name.trim().split(/\\s+/).filter(Boolean).slice(0,2).map(part=>part[0]?.toUpperCase()??"").join("")||"AG";}
-
 type ConsoleSidebarProps = {
   open: boolean;
   onClose: () => void;
