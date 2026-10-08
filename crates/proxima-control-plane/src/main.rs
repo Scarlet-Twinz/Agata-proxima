@@ -190,6 +190,22 @@ async fn main() -> Result<()> {
     sqlx::raw_sql(include_str!("../migrations/0007_notifications_email.sql"))
         .execute(&db)
         .await?;
+
+    sqlx::raw_sql(include_str!("../migrations/0008_paystack_billing.sql"))
+        .execute(&db)
+        .await?;
+    sqlx::raw_sql(include_str!("../migrations/0009_capacity_enforcement.sql"))
+        .execute(&db)
+        .await?;
+    sqlx::raw_sql(include_str!("../migrations/0010_integration_quotas.sql"))
+        .execute(&db)
+        .await?;
+    sqlx::raw_sql(include_str!("../migrations/0011_verification_quotas.sql"))
+        .execute(&db)
+        .await?;
+    sqlx::raw_sql(include_str!("../migrations/0012_audit_retention.sql"))
+        .execute(&db)
+        .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
