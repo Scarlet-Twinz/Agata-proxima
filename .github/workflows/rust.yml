@@ -79,6 +79,7 @@ jobs:
           PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0006_account_settings.sql
           PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0007_notifications_email.sql
           PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0008_phase3a_customer_integration.sql
+          PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0009_environment_credentials.sql
 
       - name: Control plane OpenAPI JSON
         run: python -m json.tool control-plane/openapi.json >/dev/null
