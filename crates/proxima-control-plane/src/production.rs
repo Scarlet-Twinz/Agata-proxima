@@ -10,7 +10,7 @@ use jsonwebtoken::jwk::JwkSet;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use sha2::Sha256;
+use sha2::{Digest, Sha256};
 use sqlx::Row;
 use std::env;
 use uuid::Uuid;
@@ -20,7 +20,7 @@ use super::{
     AppState,
 };
 
-type HmacSha256 = Hmac<Sha256>;
+type HmacSha512 = Hmac<sha2::Sha512>;
 
 #[derive(Deserialize)]
 pub(crate) struct CheckoutInput {
@@ -80,17 +80,20 @@ pub(crate) struct PasswordResetConfirm {
     pub token: String,
     pub password: String,
 }
-fn plan_for_price(price_id: Option<&str>) -> Option<&'static str> {
-    let starter = env::var("AGATA_STRIPE_STARTER_PRICE_ID").ok();
-    let growth = env::var("AGATA_STRIPE_GROWTH_PRICE_ID").ok();
-    let scale = env::var("AGATA_STRIPE_SCALE_PRICE_ID").ok();
-
-    match price_id {
+fn plan_for_code(plan_code: Option<&str>) -> Option<&'static str> {
+    let starter = env::var("AGATA_PAYSTACK_STARTER_PLAN_CODE").ok();
+    let growth = env::var("AGATA_PAYSTACK_GROWTH_PLAN_CODE").ok();
+    let scale = env::var("AGATA_PAYSTACK_SCALE_PLAN_CODE").ok();
+    match plan_code {
         Some(id) if starter.as_deref() == Some(id) => Some("starter"),
         Some(id) if growth.as_deref() == Some(id) => Some("growth"),
         Some(id) if scale.as_deref() == Some(id) => Some("scale"),
         _ => None,
     }
+}
+fn paystack_plan_code(plan: &str) -> Option<String> {
+    let key=match plan {"starter"=>"AGATA_PAYSTACK_STARTER_PLAN_CODE","growth"=>"AGATA_PAYSTACK_GROWTH_PLAN_CODE","scale"=>"AGATA_PAYSTACK_SCALE_PLAN_CODE",_=>return None};
+    env::var(key).ok().filter(|v|!v.trim().is_empty())
 }
 
 fn plan_limits(plan: &str) -> (i32, i32, i32, i32, bool, bool, bool, bool, bool) {
@@ -254,47 +257,13 @@ pub(crate) async fn require_feature(
 }
 
 pub(crate) async fn plans() -> Response {
-    let catalog = [
-        ("free", "Free", 0_i32, "Evaluation and small proofs of concept", "AGATA_STRIPE_FREE_PRICE_ID"),
-        ("starter", "Starter", 149_i32, "First production SaaS deployments", "AGATA_STRIPE_STARTER_PRICE_ID"),
-        ("growth", "Growth", 499_i32, "Multi-tenant production workloads", "AGATA_STRIPE_GROWTH_PRICE_ID"),
-        ("scale", "Scale", 1199_i32, "Larger fleets and security operations", "AGATA_STRIPE_SCALE_PRICE_ID"),
-        ("enterprise", "Enterprise", 0_i32, "Contracted enterprise deployments", ""),
-    ];
-
-    let plans = catalog.iter().map(|(key, name, monthly_usd, description, env_name)| {
-        let price_id = if env_name.is_empty() {
-            None
-        } else {
-            env::var(env_name).ok().filter(|v| !v.trim().is_empty())
-        };
-        let (nodes, tenants, environments, retention, advanced, fleet, priority, entra, private_deployment) =
-            plan_limits(key);
-        json!({
-            "key": key,
-            "name": name,
-            "monthly_usd": monthly_usd,
-            "description": description,
-            "price_id": price_id,
-            "checkout_available": key != &"free" && key != &"enterprise" && price_id.is_some(),
-            "limits": {
-                "nodes": nodes,
-                "tenants": tenants,
-                "environments": environments,
-                "audit_retention_days": retention
-            },
-            "features": {
-                "advanced_verification": advanced,
-                "fleet_controls": fleet,
-                "priority_support": priority,
-                "entra_oidc": entra,
-                "private_deployment": private_deployment,
-                "policy_management": key != &"free"
-            }
-        })
+    let catalog=[("free","Free",0_i32,"Evaluation and small proofs of concept"),("starter","Starter",149_i32,"First production SaaS deployments"),("growth","Growth",499_i32,"Multi-tenant production workloads"),("scale","Scale",1199_i32,"Larger fleets and security operations"),("enterprise","Enterprise",0_i32,"Contracted enterprise deployments")];
+    let plans=catalog.iter().map(|(key,name,monthly_usd,description)|{
+        let plan_code=paystack_plan_code(key);
+        let (nodes,tenants,environments,retention,advanced,fleet,priority,entra,private_deployment)=plan_limits(key);
+        json!({"key":key,"name":name,"monthly_usd":monthly_usd,"description":description,"provider":"paystack","plan_code":plan_code,"checkout_available":key!=&"free"&&key!=&"enterprise"&&paystack_plan_code(key).is_some(),"limits":{"nodes":nodes,"tenants":tenants,"environments":environments,"audit_retention_days":retention},"features":{"advanced_verification":advanced,"fleet_controls":fleet,"priority_support":priority,"entra_oidc":entra,"private_deployment":private_deployment,"policy_management":key!=&"free"}})
     }).collect::<Vec<_>>();
-
-    Json(json!({ "currency": "usd", "billing_interval": "month", "plans": plans })).into_response()
+    Json(json!({"currency":"usd","billing_interval":"month","provider":"paystack","plans":plans})).into_response()
 }
 
 pub(crate) async fn entitlements(State(s): State<AppState>, headers: HeaderMap) -> Response {
@@ -660,911 +629,72 @@ fn oidc_redirect_uri() -> String {
 }
 
 pub(crate) async fn billing_status(State(s): State<AppState>, headers: HeaderMap) -> Response {
-    let ctx = match authenticate(&s, &headers).await {
-        Ok(v) => v,
-        Err(c) => return c.into_response(),
-    };
-
-    match sqlx::query(
-        "SELECT stripe_customer_id,stripe_subscription_id,stripe_price_id,plan_key,status,
-                current_period_end,cancel_at_period_end
-         FROM billing_accounts WHERE organization_id=$1",
-    )
-    .bind(ctx.organization_id)
-    .fetch_optional(&s.db)
-    .await
-    {
-        Ok(Some(row)) => Json(json!({
-            "configured": true,
-            "customer_id": row.get::<Option<String>,_>("stripe_customer_id"),
-            "subscription_id": row.get::<Option<String>,_>("stripe_subscription_id"),
-            "price_id": row.get::<Option<String>,_>("stripe_price_id"),
-            "plan": row.get::<String,_>("plan_key"),
-            "status": row.get::<String,_>("status"),
-            "current_period_end": row.get::<Option<chrono::DateTime<chrono::Utc>>,_>("current_period_end"),
-            "cancel_at_period_end": row.get::<bool,_>("cancel_at_period_end")
-        }))
-        .into_response(),
-        Ok(None) => Json(json!({
-            "configured": false,
-            "plan": "unconfigured",
-            "status": "inactive",
-            "message": "Stripe is integrated; configure an Agata Stripe Price ID before checkout."
-        }))
-        .into_response(),
-        Err(e) => db_error(e),
+    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};
+    match sqlx::query("SELECT paystack_customer_code,paystack_subscription_code,paystack_plan_code,plan_key,status,current_period_end,cancel_at_period_end FROM billing_accounts WHERE organization_id=$1").bind(ctx.organization_id).fetch_optional(&s.db).await{
+        Ok(Some(row))=>Json(json!({"configured":true,"provider":"paystack","customer_code":row.get::<Option<String>,_>("paystack_customer_code"),"subscription_code":row.get::<Option<String>,_>("paystack_subscription_code"),"plan_code":row.get::<Option<String>,_>("paystack_plan_code"),"plan":row.get::<String,_>("plan_key"),"status":row.get::<String,_>("status"),"current_period_end":row.get::<Option<chrono::DateTime<chrono::Utc>>,_>("current_period_end"),"cancel_at_period_end":row.get::<bool,_>("cancel_at_period_end")})).into_response(),
+        Ok(None)=>Json(json!({"configured":false,"provider":"paystack","plan":"free","status":"active"})).into_response(),Err(e)=>db_error(e)
     }
 }
-
-pub(crate) async fn checkout(
-    State(s): State<AppState>,
-    headers: HeaderMap,
-    Json(input): Json<CheckoutInput>,
-) -> Response {
-    let ctx = match authenticate(&s, &headers).await {
-        Ok(v) => v,
-        Err(c) => return c.into_response(),
-    };
-    if let Err(c) = require_write(&ctx, &headers) {
-        return c.into_response();
-    }
-
-    let secret = match env::var("STRIPE_SECRET_KEY") {
-        Ok(v) if !v.is_empty() => v,
-        _ => return service_unavailable("Stripe secret is not configured."),
-    };
-    let price_id = match input.price_id.as_deref().filter(|v| !v.trim().is_empty()) {
-        Some(value) => value.to_string(),
-        None => return bad("Select an Agata Proxima plan before checkout."),
-    };
-    if plan_for_price(Some(&price_id)).is_none() {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(json!({"ok":false,"error":"invalid_agata_price","message":"The selected Stripe Price is not an Agata Proxima plan."})),
-        ).into_response();
-    }
-
-    let user = match sqlx::query("SELECT email FROM users WHERE id=$1")
-        .bind(ctx.user_id)
-        .fetch_one(&s.db)
-        .await
-    {
-        Ok(row) => row.get::<String,_>("email"),
-        Err(e) => return db_error(e),
-    };
-
-    let client = Client::new();
-    let billing = sqlx::query(
-        "SELECT stripe_customer_id FROM billing_accounts WHERE organization_id=$1",
-    )
-    .bind(ctx.organization_id)
-    .fetch_optional(&s.db)
-    .await;
-
-    let existing_customer = match billing {
-        Ok(Some(row)) => row.get::<Option<String>,_>("stripe_customer_id"),
-        Ok(None) => None,
-        Err(e) => return db_error(e),
-    };
-
-    let customer_id = match existing_customer {
-        Some(id) => id,
-        None => {
-            let customer_params = vec![
-                ("email".to_string(), user.clone()),
-                ("description".to_string(), "Agata Proxima organization".to_string()),
-                ("metadata[organization_id]".to_string(), ctx.organization_id.to_string()),
-            ];
-            let response = match client
-                .post("https://api.stripe.com/v1/customers")
-                .bearer_auth(&secret)
-                .form(&customer_params)
-                .send()
-                .await
-            {
-                Ok(r) => r,
-                Err(e) => return external_error(e),
-            };
-            if !response.status().is_success() {
-                return stripe_error(response).await;
-            }
-            let body: Value = match response.json().await {
-                Ok(v) => v,
-                Err(e) => return external_error(e),
-            };
-            let id = body.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
-            if id.is_empty() {
-                return service_unavailable("Stripe did not return a customer ID.");
-            }
-            if let Err(e) = sqlx::query(
-                "INSERT INTO billing_accounts(organization_id,stripe_customer_id,status)
-                 VALUES($1,$2,'pending')
-                 ON CONFLICT (organization_id) DO UPDATE SET stripe_customer_id=EXCLUDED.stripe_customer_id",
-            )
-            .bind(ctx.organization_id)
-            .bind(&id)
-            .execute(&s.db)
-            .await
-            {
-                return db_error(e);
-            }
-            id
-        }
-    };
-
-    let base_url = env::var("AGATA_PUBLIC_BASE_URL")
-        .unwrap_or_else(|_| "http://127.0.0.1:8080".into())
-        .trim_end_matches('/')
-        .to_string();
-
-    let checkout_params = vec![
-        ("mode".to_string(), "subscription".to_string()),
-        ("customer".to_string(), customer_id.clone()),
-        ("line_items[0][price]".to_string(), price_id.clone()),
-        ("line_items[0][quantity]".to_string(), "1".to_string()),
-        ("success_url".to_string(), format!("{base_url}/app?billing=success")),
-        ("cancel_url".to_string(), format!("{base_url}/app?billing=cancelled")),
-        ("client_reference_id".to_string(), ctx.organization_id.to_string()),
-        ("metadata[organization_id]".to_string(), ctx.organization_id.to_string()),
-        ("subscription_data[metadata][organization_id]".to_string(), ctx.organization_id.to_string()),
-    ];
-    let response = match client
-        .post("https://api.stripe.com/v1/checkout/sessions")
-        .bearer_auth(&secret)
-        .form(&checkout_params)
-        .send()
-        .await
-    {
-        Ok(r) => r,
-        Err(e) => return external_error(e),
-    };
-
-    if !response.status().is_success() {
-        return stripe_error(response).await;
-    }
-
-    let body: Value = match response.json().await {
-        Ok(v) => v,
-        Err(e) => return external_error(e),
-    };
-    let url = body.get("url").and_then(Value::as_str).unwrap_or_default();
-    if url.is_empty() {
-        return service_unavailable("Stripe did not return a checkout URL.");
-    }
-
-    audit(
-        &s.db,
-        ctx.organization_id,
-        ctx.user_id,
-        "billing.checkout.created",
-        "billing",
-        None,
-        json!({"price_id":price_id}),
-    )
-    .await;
-
-    Json(json!({"ok":true,"checkout_url":url})).into_response()
+pub(crate) async fn checkout(State(s):State<AppState>,headers:HeaderMap,Json(input):Json<CheckoutInput>)->Response{
+    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};if let Err(c)=require_write(&ctx,&headers){return c.into_response();}
+    let secret=match env::var("PAYSTACK_SECRET_KEY"){Ok(v) if !v.trim().is_empty()=>v,_=>return service_unavailable("Paystack secret is not configured.")};
+    let plan_code=match input.price_id.as_deref().and_then(paystack_plan_code_for_input){Some(v)=>v,None=>return bad("Select an Agata Proxima plan before checkout.")};
+    let plan=match plan_for_code(Some(&plan_code)){Some(v)=>v,None=>return (StatusCode::FORBIDDEN,Json(json!({"ok":false,"error":"invalid_agata_plan"}))).into_response()};
+    let email=match sqlx::query("SELECT email FROM users WHERE id=$1").bind(ctx.user_id).fetch_one(&s.db).await{Ok(r)=>r.get::<String,_>("email"),Err(e)=>return db_error(e)};
+    let base=env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_|"http://127.0.0.1:8080".into()).trim_end_matches('/').to_string();
+    let reference=format!("agata-{}-{}",ctx.organization_id.simple(),Uuid::new_v4().simple());
+    let response=match Client::new().post("https://api.paystack.co/transaction/initialize").bearer_auth(&secret).json(&json!({"email":email,"plan":plan_code,"currency":"USD","reference":reference,"callback_url":format!("{base}/api/v1/billing/paystack/callback"),"metadata":{"organization_id":ctx.organization_id.to_string(),"plan":plan}})).send().await{Ok(r)=>r,Err(e)=>return external_error(e)};
+    if !response.status().is_success(){return paystack_error(response).await;}
+    let body:Value=match response.json().await{Ok(v)=>v,Err(e)=>return external_error(e)};if body.get("status").and_then(Value::as_bool)!=Some(true){return service_unavailable("Paystack did not initialize the transaction.");}
+    let data=body.get("data").cloned().unwrap_or(Value::Null);let url=data.get("authorization_url").and_then(Value::as_str).unwrap_or_default();let access=data.get("access_code").and_then(Value::as_str);let returned=data.get("reference").and_then(Value::as_str).unwrap_or(&reference);if url.is_empty(){return service_unavailable("Paystack did not return a checkout URL.");}
+    if let Err(e)=sqlx::query("INSERT INTO billing_transactions(organization_id,provider,reference,plan_key,plan_code,currency,status,metadata,created_at,updated_at) VALUES($1,'paystack',$2,$3,$4,'USD','initialized',$5,now(),now()) ON CONFLICT(provider,reference) DO NOTHING").bind(ctx.organization_id).bind(returned).bind(plan).bind(&plan_code).bind(&body).execute(&s.db).await{return db_error(e);}
+    audit(&s.db,ctx.organization_id,ctx.user_id,"billing.checkout.created","billing_transaction",None,json!({"provider":"paystack","reference":returned,"plan":plan,"plan_code":plan_code})).await;
+    Json(json!({"ok":true,"provider":"paystack","checkout_url":url,"access_code":access,"reference":returned})).into_response()
 }
-
-pub(crate) async fn portal(State(s): State<AppState>, headers: HeaderMap) -> Response {
-    let ctx = match authenticate(&s, &headers).await {
-        Ok(v) => v,
-        Err(c) => return c.into_response(),
-    };
-    if let Err(c) = require_write(&ctx, &headers) {
-        return c.into_response();
-    }
-
-    let secret = match env::var("STRIPE_SECRET_KEY") {
-        Ok(v) if !v.is_empty() => v,
-        _ => return service_unavailable("Stripe secret is not configured."),
-    };
-    let customer_id = match sqlx::query(
-        "SELECT stripe_customer_id FROM billing_accounts WHERE organization_id=$1",
-    )
-    .bind(ctx.organization_id)
-    .fetch_optional(&s.db)
-    .await
-    {
-        Ok(Some(row)) => row.get::<Option<String>,_>("stripe_customer_id"),
-        Ok(None) => None,
-        Err(e) => return db_error(e),
-    };
-    let customer_id = match customer_id {
-        Some(v) => v,
-        None => return bad("No Stripe customer exists for this organization yet."),
-    };
-
-    let base_url = env::var("AGATA_PUBLIC_BASE_URL")
-        .unwrap_or_else(|_| "http://127.0.0.1:8080".into())
-        .trim_end_matches('/')
-        .to_string();
-
-    let portal_params = vec![
-        ("customer".to_string(), customer_id.clone()),
-        ("return_url".to_string(), format!("{base_url}/app?billing=portal")),
-    ];
-    let response = match Client::new()
-        .post("https://api.stripe.com/v1/billing_portal/sessions")
-        .bearer_auth(&secret)
-        .form(&portal_params)
-        .send()
-        .await
-    {
-        Ok(r) => r,
-        Err(e) => return external_error(e),
-    };
-
-    if !response.status().is_success() {
-        return stripe_error(response).await;
-    }
-    let body: Value = match response.json().await {
-        Ok(v) => v,
-        Err(e) => return external_error(e),
-    };
-    let url = body.get("url").and_then(Value::as_str).unwrap_or_default();
-    if url.is_empty() {
-        return service_unavailable("Stripe did not return a portal URL.");
-    }
-    Json(json!({"ok":true,"portal_url":url})).into_response()
+fn paystack_plan_code_for_input(input:&str)->Option<String>{let v=input.trim();if ["starter","growth","scale"].contains(&v){paystack_plan_code(v)}else{plan_for_code(Some(v)).map(|_|v.to_string())}}
+pub(crate) async fn billing_verify(State(s):State<AppState>,headers:HeaderMap,Query(q):Query<std::collections::HashMap<String,String>>)->Response{
+    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};let reference=match q.get("reference").or_else(||q.get("trxref")){Some(v) if !v.trim().is_empty()=>v.trim(),_=>return bad("Paystack transaction reference is required.")};verify_paystack_transaction(&s.db,ctx.organization_id,reference).await
 }
-
-pub(crate) async fn stripe_webhook(State(s): State<AppState>, headers: HeaderMap, body: String) -> Response {
-    let signature = match headers.get("stripe-signature").and_then(|v| v.to_str().ok()) {
-        Some(v) => v,
-        None => return StatusCode::BAD_REQUEST.into_response(),
-    };
-    let secret = match env::var("STRIPE_WEBHOOK_SECRET") {
-        Ok(v) if !v.is_empty() => v,
-        _ => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
-    };
-    if !verify_stripe_signature(&body, signature, &secret) {
-        return StatusCode::UNAUTHORIZED.into_response();
-    }
-
-    let event: Value = match serde_json::from_str(&body) {
-        Ok(v) => v,
-        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
-    };
-    let event_id = event.get("id").and_then(Value::as_str).unwrap_or_default();
-    let event_type = event.get("type").and_then(Value::as_str).unwrap_or_default();
-    if event_id.is_empty() || event_type.is_empty() {
-        return StatusCode::BAD_REQUEST.into_response();
-    }
-
-    let inserted = match sqlx::query(
-        "INSERT INTO billing_events(stripe_event_id,event_type,payload)
-         VALUES($1,$2,$3) ON CONFLICT (stripe_event_id) DO NOTHING",
-    )
-    .bind(event_id)
-    .bind(event_type)
-    .bind(&event)
-    .execute(&s.db)
-    .await
-    {
-        Ok(v) => v.rows_affected() == 1,
-        Err(e) => return db_error(e),
-    };
-
-    if !inserted {
-        return Json(json!({"received":true,"duplicate":true})).into_response();
-    }
-
-    let object = event.pointer("/data/object").cloned().unwrap_or(Value::Null);
-    let customer_id = object.get("customer").and_then(Value::as_str);
-    let metadata_org = object.pointer("/metadata/organization_id").and_then(Value::as_str);
-
-    let organization_id = if let Some(value) = metadata_org {
-        Uuid::parse_str(value).ok()
-    } else if let Some(customer) = customer_id {
-        sqlx::query("SELECT organization_id FROM billing_accounts WHERE stripe_customer_id=$1")
-            .bind(customer)
-            .fetch_optional(&s.db)
-            .await
-            .ok()
-            .flatten()
-            .map(|r| r.get::<Uuid,_>("organization_id"))
-    } else {
-        None
-    };
-
-    if let Some(org) = organization_id {
-        let (title, message) = match event_type {
-            "invoice.paid" => (
-                "Payment received",
-                "A billing payment was received successfully.",
-            ),
-            "invoice.payment_failed" => (
-                "Payment failed",
-                "A billing payment failed and the organization may require attention.",
-            ),
-            "customer.subscription.deleted" => (
-                "Subscription canceled",
-                "The organization subscription was canceled.",
-            ),
-            "customer.subscription.created" => (
-                "Subscription started",
-                "The organization subscription is now active.",
-            ),
-            "customer.subscription.updated" => (
-                "Subscription updated",
-                "The organization billing subscription was updated.",
-            ),
-            "checkout.session.completed" => (
-                "Checkout completed",
-                "The organization billing checkout completed successfully.",
-            ),
-            _ => (
-                "Billing activity",
-                "A billing event was received for this organization.",
-            ),
-        };
-
-        if let Ok(users) = sqlx::query_scalar::<_, Uuid>(
-            "SELECT user_id FROM memberships WHERE organization_id=$1",
-        )
-        .bind(org)
-        .fetch_all(&s.db)
-        .await
-        {
-            for user_id in users {
-                super::create_notification(
-                    &s.db,
-                    user_id,
-                    Some(org),
-                    "billing",
-                    title,
-                    message,
-                    Some("/app/billing"),
-                )
-                .await;
-            }
+async fn verify_paystack_transaction(db:&sqlx::PgPool,org:Uuid,reference:&str)->Response{
+    let secret=match env::var("PAYSTACK_SECRET_KEY"){Ok(v) if !v.trim().is_empty()=>v,_=>return service_unavailable("Paystack secret is not configured.")};let response=match Client::new().get(format!("https://api.paystack.co/transaction/verify/{reference}")).bearer_auth(secret).send().await{Ok(v)=>v,Err(e)=>return external_error(e)};if !response.status().is_success(){return paystack_error(response).await;}
+    let body:Value=match response.json().await{Ok(v)=>v,Err(e)=>return external_error(e)};if body.get("status").and_then(Value::as_bool)!=Some(true){return service_unavailable("Paystack transaction verification failed.");}
+    let data=body.get("data").cloned().unwrap_or(Value::Null);let status=data.get("status").and_then(Value::as_str).unwrap_or_default();let metadata_org=data.pointer("/metadata/organization_id").and_then(Value::as_str).and_then(|v|Uuid::parse_str(v).ok());if metadata_org!=Some(org){return (StatusCode::FORBIDDEN,Json(json!({"ok":false,"error":"transaction_organization_mismatch"}))).into_response();}
+    let plan_code=data.pointer("/plan/plan_code").and_then(Value::as_str);let plan=plan_code.and_then(|v|plan_for_code(Some(v))).unwrap_or("free");let amount=data.get("amount").and_then(Value::as_i64);let currency=data.get("currency").and_then(Value::as_str).unwrap_or("USD");
+    if let Err(e)=sqlx::query("UPDATE billing_transactions SET transaction_id=$1,plan_key=$2,plan_code=$3,amount=$4,currency=$5,status=$6,payload=$7,updated_at=now() WHERE provider='paystack' AND reference=$8 AND organization_id=$9").bind(data.get("id").and_then(Value::as_u64).map(|v|v as i64)).bind(plan).bind(plan_code).bind(amount).bind(currency).bind(status).bind(&data).bind(reference).bind(org).execute(db).await{return db_error(e);}
+    if status=="success"{if let Err(e)=apply_entitlements(db,org,plan).await{return db_error(e)}if let Err(e)=sqlx::query("UPDATE billing_accounts SET paystack_plan_code=$1,plan_key=$2,status='active',updated_at=now() WHERE organization_id=$3").bind(plan_code).bind(plan).bind(org).execute(db).await{return db_error(e)}}
+    Json(json!({"ok":true,"verified":status=="success","provider":"paystack","reference":reference,"status":status,"plan":plan})).into_response()
+}
+pub(crate) async fn portal(State(s):State<AppState>,headers:HeaderMap)->Response{
+    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};if let Err(c)=require_write(&ctx,&headers){return c.into_response();}
+    let secret=match env::var("PAYSTACK_SECRET_KEY"){Ok(v) if !v.trim().is_empty()=>v,_=>return service_unavailable("Paystack secret is not configured.")};let code=match sqlx::query("SELECT paystack_subscription_code FROM billing_accounts WHERE organization_id=$1").bind(ctx.organization_id).fetch_optional(&s.db).await{Ok(Some(r))=>r.get::<Option<String>,_>("paystack_subscription_code"),Ok(None)=>None,Err(e)=>return db_error(e)};let code=match code{Some(v)=>v,None=>return bad("No Paystack subscription exists for this organization yet.")};
+    let response=match Client::new().get(format!("https://api.paystack.co/subscription/{code}/manage/link")).bearer_auth(secret).send().await{Ok(r)=>r,Err(e)=>return external_error(e)};if !response.status().is_success(){return paystack_error(response).await;}let body:Value=match response.json().await{Ok(v)=>v,Err(e)=>return external_error(e)};let url=body.pointer("/data/link").and_then(Value::as_str).unwrap_or_default();if url.is_empty(){return service_unavailable("Paystack did not return a subscription management URL.");}Json(json!({"ok":true,"provider":"paystack","portal_url":url})).into_response()
+}
+pub(crate) async fn paystack_webhook(State(s):State<AppState>,headers:HeaderMap,body:String)->Response{
+    let signature=match headers.get("x-paystack-signature").and_then(|v|v.to_str().ok()){Some(v)=>v,None=>return StatusCode::BAD_REQUEST.into_response()};let secret=match env::var("PAYSTACK_SECRET_KEY"){Ok(v) if !v.trim().is_empty()=>v,_=>return StatusCode::SERVICE_UNAVAILABLE.into_response()};if !verify_paystack_signature(&body,signature,&secret){return StatusCode::UNAUTHORIZED.into_response();}
+    let event:Value=match serde_json::from_str(&body){Ok(v)=>v,Err(_)=>return StatusCode::BAD_REQUEST.into_response()};let event_type=event.get("event").and_then(Value::as_str).unwrap_or_default();if event_type.is_empty(){return StatusCode::BAD_REQUEST.into_response();}let data=event.get("data").cloned().unwrap_or(Value::Null);
+    let key=data.get("id").and_then(Value::as_i64).map(|v|v.to_string()).or_else(||data.get("reference").and_then(Value::as_str).map(ToOwned::to_owned)).unwrap_or_else(||format!("{}:{}",event_type,hex::encode(Digest::digest(body.as_bytes()))));
+    let inserted=match sqlx::query("INSERT INTO billing_events(provider,provider_event_id,event_type,payload) VALUES('paystack',$1,$2,$3) ON CONFLICT(provider,provider_event_id) DO NOTHING").bind(&key).bind(event_type).bind(&event).execute(&s.db).await{Ok(v)=>v.rows_affected()==1,Err(e)=>return db_error(e)};if !inserted{return Json(json!({"received":true,"duplicate":true})).into_response();}
+    let org=if let Some(v)=data.pointer("/metadata/organization_id").and_then(Value::as_str).and_then(|v|Uuid::parse_str(v).ok()){Some(v)}else if let Some(code)=data.pointer("/customer/customer_code").and_then(Value::as_str).or_else(||data.get("customer_code").and_then(Value::as_str)){sqlx::query("SELECT organization_id FROM billing_accounts WHERE paystack_customer_code=$1").bind(code).fetch_optional(&s.db).await.ok().flatten().map(|r|r.get::<Uuid,_>("organization_id"))}else if let Some(reference)=data.get("reference").and_then(Value::as_str){sqlx::query("SELECT organization_id FROM billing_transactions WHERE provider='paystack' AND reference=$1").bind(reference).fetch_optional(&s.db).await.ok().flatten().map(|r|r.get::<Uuid,_>("organization_id"))}else{None};
+    if let Some(org)=org{
+        let plan_code=data.pointer("/plan/plan_code").and_then(Value::as_str).or_else(||data.get("plan_code").and_then(Value::as_str));let plan=plan_code.and_then(|v|plan_for_code(Some(v))).unwrap_or("free");
+        match event_type{
+            "charge.success"|"subscription.create"|"subscription.enable"=>{let customer=data.pointer("/customer/customer_code").and_then(Value::as_str).or_else(||data.get("customer_code").and_then(Value::as_str));let subscription=data.get("subscription_code").and_then(Value::as_str).or_else(||data.pointer("/subscription/subscription_code").and_then(Value::as_str));let end=data.get("next_payment_date").and_then(Value::as_str).and_then(|v|chrono::DateTime::parse_from_rfc3339(v).ok()).map(|v|v.with_timezone(&chrono::Utc));if let Err(e)=sqlx::query("INSERT INTO billing_accounts(organization_id,paystack_customer_code,paystack_subscription_code,paystack_plan_code,plan_key,status,current_period_end,cancel_at_period_end,updated_at) VALUES($1,$2,$3,$4,$5,'active',$6,false,now()) ON CONFLICT(organization_id) DO UPDATE SET paystack_customer_code=COALESCE(EXCLUDED.paystack_customer_code,billing_accounts.paystack_customer_code),paystack_subscription_code=COALESCE(EXCLUDED.paystack_subscription_code,billing_accounts.paystack_subscription_code),paystack_plan_code=COALESCE(EXCLUDED.paystack_plan_code,billing_accounts.paystack_plan_code),plan_key=EXCLUDED.plan_key,status='active',current_period_end=EXCLUDED.current_period_end,cancel_at_period_end=false,updated_at=now()").bind(org).bind(customer).bind(subscription).bind(plan_code).bind(plan).bind(end).execute(&s.db).await{return db_error(e)}if let Err(e)=apply_entitlements(&s.db,org,plan).await{return db_error(e)}}
+            "invoice.payment_failed"|"subscription.not_renew"|"subscription.disable"=>{let st=if event_type=="subscription.disable"{"canceled"}else{"attention"};if let Err(e)=sqlx::query("UPDATE billing_accounts SET status=$1,cancel_at_period_end=$2,updated_at=now() WHERE organization_id=$3").bind(st,event_type=="subscription.not_renew",org).execute(&s.db).await{return db_error(e)}if let Err(e)=sqlx::query("UPDATE organization_entitlements SET billing_status=$1,updated_at=now() WHERE organization_id=$2").bind(st,org).execute(&s.db).await{return db_error(e)}}
+            "subscription.expiring_cards"=>{let _=sqlx::query("UPDATE billing_accounts SET status='attention',updated_at=now() WHERE organization_id=$1").bind(org).execute(&s.db).await;}
+            "refund.pending"|"refund.processing"|"refund.processed"|"refund.failed"|"refund.needs-attention"=>{if let Some(reference)=data.get("reference").and_then(Value::as_str){let _=sqlx::query("UPDATE billing_transactions SET refund_status=$1,updated_at=now() WHERE provider='paystack' AND reference=$2 AND organization_id=$3").bind(event_type.trim_start_matches("refund.")).bind(reference).bind(org).execute(&s.db).await;}}
+            _=>{}
         }
-
-        let subscription_id = object.get("subscription").and_then(Value::as_str)
-            .or_else(|| object.get("id").and_then(Value::as_str));
-        let status = object.get("status").and_then(Value::as_str).unwrap_or("active");
-        let price_id = object.pointer("/items/data/0/price/id").and_then(Value::as_str);
-        let cancel_at_period_end = object.get("cancel_at_period_end").and_then(Value::as_bool).unwrap_or(false);
-        let period_end = object.get("current_period_end").and_then(Value::as_i64);
-
-        match event_type {
-            "checkout.session.completed"
-            | "customer.subscription.created"
-            | "customer.subscription.updated"
-            | "customer.subscription.deleted" => {
-                let normalized_status = if event_type == "customer.subscription.deleted" {
-                    "canceled"
-                } else {
-                    status
-                };
-                let plan = if event_type == "customer.subscription.deleted" {
-                    "free"
-                } else {
-                    plan_for_price(price_id).unwrap_or("free")
-                };
-                if let Err(e) = sqlx::query(
-                    "INSERT INTO billing_accounts(
-                        organization_id,stripe_customer_id,stripe_subscription_id,stripe_price_id,
-                        plan_key,status,current_period_end,cancel_at_period_end,updated_at)
-                     VALUES($1,$2,$3,$4,$5,$6,
-                        CASE WHEN $7::bigint IS NULL THEN NULL ELSE to_timestamp($7) END,$8,now())
-                     ON CONFLICT (organization_id) DO UPDATE SET
-                       stripe_customer_id=COALESCE(EXCLUDED.stripe_customer_id,billing_accounts.stripe_customer_id),
-                       stripe_subscription_id=COALESCE(EXCLUDED.stripe_subscription_id,billing_accounts.stripe_subscription_id),
-                       stripe_price_id=COALESCE(EXCLUDED.stripe_price_id,billing_accounts.stripe_price_id),
-                       plan_key=EXCLUDED.plan_key,status=EXCLUDED.status,
-                       current_period_end=EXCLUDED.current_period_end,
-                       cancel_at_period_end=EXCLUDED.cancel_at_period_end,updated_at=now()",
-                )
-                .bind(org)
-                .bind(customer_id)
-                .bind(subscription_id)
-                .bind(price_id)
-                .bind(plan)
-                .bind(normalized_status)
-                .bind(period_end)
-                .bind(cancel_at_period_end)
-                .execute(&s.db)
-                .await {
-                    return db_error(e);
-                }
-                if let Err(e) = apply_entitlements(&s.db, org, plan).await {
-                    return db_error(e);
-                }
-            }
-            "invoice.payment_failed" | "invoice.paid" => {
-                let normalized_status = if event_type == "invoice.payment_failed" {
-                    "past_due"
-                } else {
-                    "active"
-                };
-                if let Err(e) = sqlx::query(
-                    "UPDATE billing_accounts SET status=$1,updated_at=now() WHERE organization_id=$2",
-                )
-                .bind(normalized_status)
-                .bind(org)
-                .execute(&s.db)
-                .await {
-                    return db_error(e);
-                }
-            }
-            _ => {}
-        }
-        audit(
-            &s.db,
-            org,
-            Uuid::nil(),
-            "billing.webhook.processed",
-            "billing_event",
-            None,
-            json!({"event_id":event_id,"event_type":event_type}),
-        )
-        .await;
     }
-
-    let _ = sqlx::query(
-        "UPDATE billing_events SET status='processed',processed_at=now() WHERE stripe_event_id=$1",
-    )
-    .bind(event_id)
-    .execute(&s.db)
-    .await;
-
+    let _=sqlx::query("UPDATE billing_events SET status='processed',processed_at=now() WHERE provider='paystack' AND provider_event_id=$1").bind(&key).execute(&s.db).await;
     Json(json!({"received":true})).into_response()
 }
 
-pub(crate) async fn send_verification_email(
-    db: &sqlx::PgPool,
-    user_id: Uuid,
-    email: &str,
-    display_name: &str,
-) -> anyhow::Result<()> {
-    let bytes = *Uuid::new_v4().as_bytes();
-    let value = u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) % 1_000_000;
-    let code = format!("{value:06}");
-
-    sqlx::query(
-        "UPDATE users SET email_verification_token_hash=$1,
-         email_verification_expires_at=now()+interval '15 minutes',
-         email_verification_attempts=0 WHERE id=$2",
-    )
-    .bind(token_hash(&code))
-    .bind(user_id)
-    .execute(db)
-    .await?;
-
-    send_template_email(
-        email,
-        "091dbdb2-21ed-444f-a209-6f44e55d192d",
-        json!({
-            "DISPLAY_NAME": display_name,
-            "CODE": code,
-            "ACTION_URL": ""
-        }),
-    )
-    .await
-}
-
-#[derive(Deserialize)]
-pub(crate) struct VerificationResendInput {
-    pub email: String,
-}
-
-pub(crate) async fn resend_verification_email(
-    State(s): State<AppState>,
-    Json(input): Json<VerificationResendInput>,
-) -> Response {
-    let email = input.email.trim().to_lowercase();
-    if email.is_empty() || !email.contains('@') {
-        return bad("A valid email is required.");
-    }
-
-    let user = match sqlx::query(
-        "SELECT id,display_name,email_verified_at FROM users WHERE email=$1 AND status='active'",
-    )
-    .bind(&email)
-    .fetch_optional(&s.db)
-    .await
-    {
-        Ok(value) => value,
-        Err(e) => return db_error(e),
-    };
-
-    if let Some(row) = user {
-        if row
-            .get::<Option<chrono::DateTime<chrono::Utc>>, _>("email_verified_at")
-            .is_none()
-        {
-            if let Err(e) = send_verification_email(
-                &s.db,
-                row.get("id"),
-                &email,
-                row.get("display_name"),
-            )
-            .await
-            {
-                tracing::error!(%e, "verification email delivery failed");
-                return service_unavailable("Verification email could not be sent. Check the Resend configuration.");
-            }
-        }
-    }
-
-    Json(json!({
-        "ok": true,
-        "message": "If the account requires verification, a new verification email has been sent."
-    }))
-    .into_response()
-}
-
-pub(crate) async fn verify_email(
-    State(s): State<AppState>,
-    Query(q): Query<VerifyInput>,
-) -> Response {
-    let result = sqlx::query(
-        "UPDATE users SET email_verified_at=now(),email_verification_token_hash=NULL,
-         email_verification_expires_at=NULL,email_verification_attempts=0
-         WHERE email_verification_token_hash=$1
-           AND email_verification_expires_at>now()
-           AND email_verification_attempts<5
-         RETURNING email",
-    )
-    .bind(token_hash(&q.token))
-    .fetch_optional(&s.db)
-    .await;
-
-    match result {
-        Ok(Some(row)) => Html(format!(
-            "<html><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\">
-             <h1>Verification now uses a code.</h1><p>{}</p><p>Return to the Agata Proxima sign-in screen and enter the code from your latest email.</p></body></html>",
-            row.get::<String,_>("email")
-        )).into_response(),
-        Ok(None) => (
-            StatusCode::BAD_REQUEST,
-            Html("<html><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\"><h1>This verification link is no longer active.</h1><p>Request a new verification code from the sign-in screen.</p></body></html>"),
-        ).into_response(),
-        Err(e) => db_error(e),
-    }
-}
-
-pub(crate) async fn verify_email_code(
-    State(s): State<AppState>,
-    Json(input): Json<VerificationCodeInput>,
-) -> Response {
-    let email = input.email.trim().to_lowercase();
-    let code = input.code.trim();
-
-    if email.is_empty() || !email.contains('@') {
-        return bad("A valid email is required.");
-    }
-    if code.len() != 6 || !code.chars().all(|value| value.is_ascii_digit()) {
-        return bad("Enter the 6-digit verification code from your latest email.");
-    }
-
-    let row = match sqlx::query(
-        "SELECT id,email_verification_token_hash,email_verification_expires_at,email_verification_attempts
-         FROM users WHERE email=$1 AND status='active'",
-    )
-    .bind(&email)
-    .fetch_optional(&s.db)
-    .await
-    {
-        Ok(Some(row)) => row,
-        Ok(None) => return bad("The verification code is invalid or expired."),
-        Err(e) => return db_error(e),
-    };
-
-    let attempts: i32 = row.get("email_verification_attempts");
-    if attempts >= 5 {
-        return (
-            StatusCode::TOO_MANY_REQUESTS,
-            Json(json!({"ok":false,"message":"Too many verification attempts. Request a new code and try again."})),
-        ).into_response();
-    }
-
-    let expected: Vec<u8> = row.get("email_verification_token_hash");
-    if token_hash(code) != expected {
-        let _ = sqlx::query(
-            "UPDATE users SET email_verification_attempts=email_verification_attempts+1 WHERE id=$1",
-        )
-        .bind(row.get::<Uuid,_>("id"))
-        .execute(&s.db)
-        .await;
-        return bad("The verification code is invalid or expired.");
-    }
-
-    let updated = sqlx::query(
-        "UPDATE users SET email_verified_at=now(),email_verification_token_hash=NULL,
-         email_verification_expires_at=NULL,email_verification_attempts=0
-         WHERE id=$1
-           AND email_verification_token_hash=$2
-           AND email_verification_expires_at>now()
-           AND email_verification_attempts<5
-         RETURNING id,email",
-    )
-    .bind(row.get::<Uuid,_>("id"))
-    .bind(token_hash(code))
-    .fetch_optional(&s.db)
-    .await;
-
-    match updated {
-        Ok(Some(user)) => {
-            if let Ok(Some(membership)) = sqlx::query(
-                "SELECT organization_id FROM memberships WHERE user_id=$1 ORDER BY created_at LIMIT 1",
-            )
-            .bind(user.get::<Uuid,_>("id"))
-            .fetch_optional(&s.db)
-            .await
-            {
-                audit(
-                    &s.db,
-                    membership.get::<Uuid,_>("organization_id"),
-                    user.get::<Uuid,_>("id"),
-                    "auth.email_verified",
-                    "user",
-                    Some(user.get::<Uuid,_>("id")),
-                    json!({"method":"verification_code"}),
-                ).await;
-            }
-            Json(json!({
-                "ok":true,
-                "verified":true,
-                "email":user.get::<String,_>("email"),
-                "message":"Email verified. Sign in to open your Agata Proxima workspace."
-            })).into_response()
-        }
-        Ok(None) => bad("The verification code is invalid or expired."),
-        Err(e) => db_error(e),
-    }
-}
-pub(crate) async fn reset_password_page(Query(q): Query<VerifyInput>) -> Response {
-    let token = q.token.replace('"', "");
-    Html(format!(
-        "<!doctype html><html><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\">
-        <h1>Reset your Agata Proxima password</h1>
-        <form id=\"f\"><input id=\"p\" type=\"password\" minlength=\"12\" placeholder=\"New password\" required style=\"padding:12px;width:320px\">
-        <button style=\"margin-left:8px;padding:12px\">Reset password</button></form>
-        <p id=\"m\"></p>
-        <script>
-        const token={token:?};
-        document.getElementById('f').onsubmit=async(e)=>{{e.preventDefault();const r=await fetch('/api/v1/auth/password-reset/confirm',{{method:'POST',headers:{{'content-type':'application/json'}},body:JSON.stringify({{token,password:document.getElementById('p').value}})}});const j=await r.json();document.getElementById('m').textContent=j.message||'Done';}};
-        </script></body></html>"
-    ))
-    .into_response()
-}
-
-pub(crate) async fn request_password_reset(
-    State(s): State<AppState>,
-    Json(input): Json<PasswordResetRequest>,
-) -> Response {
-    let email = input.email.trim().to_lowercase();
-    let user = match sqlx::query("SELECT id,display_name FROM users WHERE email=$1 AND status='active'")
-        .bind(&email)
-        .fetch_optional(&s.db)
-        .await
-    {
-        Ok(v) => v,
-        Err(e) => return db_error(e),
-    };
-
-    if let Some(row) = user {
-        let token = format!("{}-{}", Uuid::new_v4(), Uuid::new_v4());
-        if let Err(e) = sqlx::query(
-            "UPDATE users SET password_reset_token_hash=$1,password_reset_expires_at=now()+interval '30 minutes'
-             WHERE id=$2",
-        )
-        .bind(token_hash(&token))
-        .bind(row.get::<Uuid,_>("id"))
-        .execute(&s.db)
-        .await {
-            return db_error(e);
-        }
-        let base = env::var("AGATA_PUBLIC_BASE_URL")
-            .unwrap_or_else(|_| "http://127.0.0.1:8080".into())
-            .trim_end_matches('/')
-            .to_string();
-        let link = format!("{base}/reset-password?token={token}");
-        if let Err(e) = send_template_email(
-            &email,
-            "d3c046c7-fef6-42f0-931e-d92b6f96cfdf",
-            json!({
-                "DISPLAY_NAME": row.get::<String,_>("display_name"),
-                "ACTION_URL": link
-            }),
-        )
-        .await
-        {
-            tracing::error!(%e, "password reset email failed");
-        }
-    }
-
-    Json(json!({"ok":true,"message":"If that address exists, a reset email has been sent."})).into_response()
-}
-
-pub(crate) async fn reset_password(
-    State(s): State<AppState>,
-    Json(input): Json<PasswordResetConfirm>,
-) -> Response {
-    if input.password.len() < 12 {
-        return bad("Password must be at least 12 characters.");
-    }
-    let hash = match hash_password(&input.password) {
-        Ok(v) => v,
-        Err(_) => return internal("Password hashing failed."),
-    };
-    let result = match sqlx::query(
-        "UPDATE users SET password_hash=$1,password_reset_token_hash=NULL,password_reset_expires_at=NULL
-         WHERE password_reset_token_hash=$2 AND password_reset_expires_at>now()
-         RETURNING id",
-    )
-    .bind(hash)
-    .bind(token_hash(&input.token))
-    .fetch_optional(&s.db)
-    .await
-    {
-        Ok(v) => v,
-        Err(e) => return db_error(e),
-    };
-
-    match result {
-        Some(row) => {
-            let user_id: Uuid = row.get("id");
-            let _ = sqlx::query("DELETE FROM sessions WHERE user_id=$1")
-                .bind(user_id)
-                .execute(&s.db)
-                .await;
-            Json(json!({"ok":true,"message":"Password changed. Sign in again."})).into_response()
-        }
-        None => bad("Reset link expired or invalid."),
-    }
-}
-
-pub(crate) async fn invite(
-    State(s): State<AppState>,
-    headers: HeaderMap,
-    Json(input): Json<InviteInput>,
-) -> Response {
-    let ctx = match authenticate(&s, &headers).await {
-        Ok(v) => v,
-        Err(c) => return c.into_response(),
-    };
-    if ctx.organization_id != input.organization_id {
-        return StatusCode::FORBIDDEN.into_response();
-    }
-    if let Err(c) = require_admin(&ctx, &headers) {
-        return c.into_response();
-    }
-
-    let role = input.role.unwrap_or_else(|| "viewer".into());
-    if !matches!(role.as_str(), "admin" | "operator" | "viewer") {
-        return bad("Invalid invitation role.");
-    }
-    let email = input.email.trim().to_lowercase();
-    if !email.contains('@') {
-        return bad("A valid email is required.");
-    }
-
-    let token = format!("{}-{}", Uuid::new_v4(), Uuid::new_v4());
-    let id = Uuid::new_v4();
-    if let Err(e) = sqlx::query(
-        "INSERT INTO organization_invites(id,organization_id,invited_by,email,role,token_hash,expires_at)
-         VALUES($1,$2,$3,$4,$5,$6,now()+interval '7 days')
-         ON CONFLICT (organization_id,email) DO UPDATE SET
-           invited_by=EXCLUDED.invited_by,role=EXCLUDED.role,token_hash=EXCLUDED.token_hash,
-           expires_at=EXCLUDED.expires_at,accepted_at=NULL",
-    )
-    .bind(id).bind(ctx.organization_id).bind(ctx.user_id).bind(&email).bind(&role).bind(token_hash(&token))
-    .execute(&s.db).await {
-        return db_error(e);
-    }
-
-    let organization_name = match sqlx::query_scalar::<_, String>(
-        "SELECT name FROM organizations WHERE id=$1",
-    )
-    .bind(ctx.organization_id)
-    .fetch_one(&s.db)
-    .await
-    {
-        Ok(name) => name,
-        Err(e) => return db_error(e),
-    };
-
-    let base = env::var("AGATA_PUBLIC_BASE_URL")
-        .unwrap_or_else(|_| "http://127.0.0.1:8080".into())
-        .trim_end_matches('/')
-        .to_string();
-    let link = format!("{base}/accept-invite?token={token}");
-    if let Err(e) = send_template_email(
-        &email,
-        "0757a210-a372-4a5a-8fca-e642c2fed3da",
-        json!({
-            "ORGANIZATION": organization_name,
-            "ROLE": role,
-            "ACTION_URL": link
-        }),
-    )
-    .await
-    {
-        tracing::error!(%e, "invitation email failed");
-    }
-
-    audit(&s.db, ctx.organization_id, ctx.user_id, "organization.invite.created", "organization_invite", Some(id), json!({"email":email,"role":role})).await;
-    Json(json!({"ok":true,"id":id,"expires_in":"7 days"})).into_response()
-}
-
-pub(crate) async fn accept_invite(
-    State(s): State<AppState>,
-    Query(q): Query<VerifyInput>,
-    headers: HeaderMap,
-) -> Response {
-    let ctx = match authenticate(&s, &headers).await {
-        Ok(v) => v,
-        Err(_) => return (
-            StatusCode::UNAUTHORIZED,
-            Html("<html><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\"><h1>Sign in first.</h1><p>Open the invitation link again after signing in.</p><a href=\"/login\">Sign in</a></body></html>")
-        ).into_response(),
-    };
-
-    let row = match sqlx::query(
-        "SELECT id,organization_id,role FROM organization_invites
-         WHERE token_hash=$1 AND expires_at>now() AND accepted_at IS NULL
-           AND lower(email)=(SELECT lower(email) FROM users WHERE id=$2)",
-    )
-    .bind(token_hash(&q.token))
-    .bind(ctx.user_id)
-    .fetch_optional(&s.db)
-    .await
-    {
-        Ok(v) => v,
-        Err(e) => return db_error(e),
-    };
-
-    match row {
-        Some(row) => {
-            let invite_id: Uuid = row.get("id");
-            let org: Uuid = row.get("organization_id");
-            let role: String = row.get("role");
-            if let Err(e) = sqlx::query(
-                "INSERT INTO memberships(user_id,organization_id,role) VALUES($1,$2,$3)
-                 ON CONFLICT (user_id,organization_id) DO UPDATE SET role=EXCLUDED.role",
-            )
-            .bind(ctx.user_id).bind(org).bind(&role).execute(&s.db).await {
-                return db_error(e);
-            }
-            let _ = sqlx::query("UPDATE organization_invites SET accepted_at=now() WHERE id=$1")
-                .bind(invite_id).execute(&s.db).await;
-            audit(&s.db, org, ctx.user_id, "organization.invite.accepted", "organization_invite", Some(invite_id), json!({})).await;
-            Html("<html><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\"><h1>Invitation accepted.</h1><p>Your organization access is active.</p><a href=\"/app\">Open Command Center</a></body></html>").into_response()
-        }
-        None => bad("Invitation expired, invalid, or not addressed to the signed-in user."),
-    }
-}
-
 pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
-    let db_ok = sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
-    let stripe = env::var("STRIPE_SECRET_KEY").map(|v| !v.is_empty()).unwrap_or(false);
-    let stripe_price = ["AGATA_STRIPE_STARTER_PRICE_ID","AGATA_STRIPE_GROWTH_PRICE_ID","AGATA_STRIPE_SCALE_PRICE_ID"]
-        .iter().all(|key| env::var(key).map(|v| !v.trim().is_empty()).unwrap_or(false));
-    let stripe_webhook = env::var("STRIPE_WEBHOOK_SECRET").map(|v| !v.is_empty()).unwrap_or(false);
-    let resend = env::var("RESEND_API_KEY").map(|v| !v.is_empty()).unwrap_or(false);
-    let from = env::var("RESEND_FROM_EMAIL").map(|v| !v.is_empty()).unwrap_or(false);
-    let base = env::var("AGATA_PUBLIC_BASE_URL").map(|v| !v.is_empty()).unwrap_or(false);
-    let oidc = env::var("PROXIMA_OIDC_CLIENT_ID").map(|v| !v.is_empty()).unwrap_or(false)
-        && env::var("PROXIMA_OIDC_CLIENT_SECRET").map(|v| !v.is_empty()).unwrap_or(false);
-    let all = db_ok && stripe && stripe_price && stripe_webhook && resend && from && base && oidc;
-    Json(json!({
-        "status": if all {"ready"} else {"needs_configuration"},
-        "checks":{
-            "database":db_ok,
-            "stripe_secret":stripe,
-            "stripe_price":stripe_price,
-            "stripe_webhook":stripe_webhook,
-            "resend_api_key":resend,
-            "resend_from":from,
-            "public_base_url":base,
-            "oidc":oidc,
-            "engine_remains_authoritative":true
-        }
-    })).into_response()
+    let db_ok=sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
+    let paystack=env::var("PAYSTACK_SECRET_KEY").map(|v|!v.trim().is_empty()).unwrap_or(false);
+    let plans=["AGATA_PAYSTACK_STARTER_PLAN_CODE","AGATA_PAYSTACK_GROWTH_PLAN_CODE","AGATA_PAYSTACK_SCALE_PLAN_CODE"].iter().all(|k|env::var(k).map(|v|!v.trim().is_empty()).unwrap_or(false));
+    let resend=env::var("RESEND_API_KEY").map(|v|!v.is_empty()).unwrap_or(false);let from=env::var("RESEND_FROM_EMAIL").map(|v|!v.is_empty()).unwrap_or(false);let base=env::var("AGATA_PUBLIC_BASE_URL").map(|v|!v.is_empty()).unwrap_or(false);let oidc=env::var("PROXIMA_OIDC_CLIENT_ID").map(|v|!v.is_empty()).unwrap_or(false)&&env::var("PROXIMA_OIDC_CLIENT_SECRET").map(|v|!v.is_empty()).unwrap_or(false);let all=db_ok&&paystack&&plans&&resend&&from&&base&&oidc;
+    Json(json!({"status":if all{"ready"}else{"needs_configuration"},"checks":{"database":db_ok,"paystack_secret":paystack,"paystack_plans":plans,"resend_api_key":resend,"resend_from":from,"public_base_url":base,"oidc":oidc,"engine_remains_authoritative":true}})).into_response()
 }
 
 pub(crate) async fn send_template_email(
@@ -1598,34 +728,7 @@ pub(crate) async fn send_template_email(
     Ok(())
 }
 
-fn verify_stripe_signature(payload: &str, signature: &str, secret: &str) -> bool {
-    let mut timestamp = None;
-    let mut signatures = Vec::new();
-    for part in signature.split(',') {
-        let mut pair = part.splitn(2, '=');
-        match (pair.next(), pair.next()) {
-            (Some("t"), Some(value)) => timestamp = value.parse::<i64>().ok(),
-            (Some("v1"), Some(value)) => signatures.push(value.to_string()),
-            _ => {}
-        }
-    }
-    let timestamp = match timestamp {
-        Some(v) => v,
-        None => return false,
-    };
-    let now = chrono::Utc::now().timestamp();
-    if (now - timestamp).abs() > 300 {
-        return false;
-    }
-    let signed = format!("{timestamp}.{payload}");
-    let mut mac = match HmacSha256::new_from_slice(secret.as_bytes()) {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
-    mac.update(signed.as_bytes());
-    let expected = hex::encode(mac.finalize().into_bytes());
-    signatures.iter().any(|candidate| constant_time_equal(candidate, &expected))
-}
+fn verify_paystack_signature(payload:&str,signature:&str,secret:&str)->bool{let mut mac=match HmacSha512::new_from_slice(secret.as_bytes()){Ok(v)=>v,Err(_)=>return false};mac.update(payload.as_bytes());let expected=hex::encode(mac.finalize().into_bytes());constant_time_equal(signature.trim(),&expected)}
 
 fn constant_time_equal(a: &str, b: &str) -> bool {
     if a.len() != b.len() {
@@ -1638,12 +741,7 @@ fn constant_time_equal(a: &str, b: &str) -> bool {
     diff == 0
 }
 
-async fn stripe_error(response: reqwest::Response) -> Response {
-    let status = response.status();
-    let body = response.text().await.unwrap_or_default();
-    tracing::error!(%status, body = %body, "Stripe API error");
-    service_unavailable("Stripe request failed.")
-}
+async fn paystack_error(response:reqwest::Response)->Response{let status=response.status();let body=response.text().await.unwrap_or_default();tracing::error!(%status,body=%body,"Paystack API error");service_unavailable("Paystack request failed.")}
 
 fn external_error<E: std::fmt::Display>(e: E) -> Response {
     tracing::error!(error = %e, "external integration error");
@@ -1675,28 +773,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn stripe_signature_round_trip() {
-        let payload = r#"{"id":"evt_test","type":"invoice.paid"}"#;
-        let secret = "whsec_test";
-        let timestamp = chrono::Utc::now().timestamp();
-        let signed = format!("{timestamp}.{payload}");
-        let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
-        mac.update(signed.as_bytes());
-        let signature = hex::encode(mac.finalize().into_bytes());
-        let header = format!("t={timestamp},v1={signature}");
-        assert!(verify_stripe_signature(payload, &header, secret));
-    }
-
+    fn paystack_signature_round_trip(){let payload=r#"{"event":"charge.success","data":{"reference":"ref_test"}}"#;let secret="sk_test";let mut mac=HmacSha512::new_from_slice(secret.as_bytes()).unwrap();mac.update(payload.as_bytes());let signature=hex::encode(mac.finalize().into_bytes());assert!(verify_paystack_signature(payload,&signature,secret));}
     #[test]
-    fn expired_stripe_signature_is_rejected() {
-        let payload = "payload";
-        let secret = "whsec_test";
-        let timestamp = chrono::Utc::now().timestamp() - 301;
-        let signed = format!("{timestamp}.{payload}");
-        let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
-        mac.update(signed.as_bytes());
-        let signature = hex::encode(mac.finalize().into_bytes());
-        let header = format!("t={timestamp},v1={signature}");
-        assert!(!verify_stripe_signature(payload, &header, secret));
-    }
+    fn invalid_paystack_signature_is_rejected(){assert!(!verify_paystack_signature("payload","invalid","sk_test"));}
+
 }
