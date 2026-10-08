@@ -278,7 +278,14 @@ async fn main() -> Result<()> {
             get(organizations).post(create_organization),
         )
         .route("/api/v1/tenants", get(tenants).post(create_tenant))
+        .route("/api/v1/tenants/{id}", get(phase3::tenant_detail).patch(phase3::tenant_update))
+        .route("/api/v1/tenants/{id}/disable", post(phase3::tenant_disable))
+        .route("/api/v1/tenants/{id}/enable", post(phase3::tenant_enable))
         .route("/api/v1/policies", get(policies).post(create_policy))
+        .route("/api/v1/policies/{id}", get(phase3::policy_detail).patch(phase3::policy_update))
+        .route("/api/v1/policies/{id}/new-version", post(phase3::policy_new_version))
+        .route("/api/v1/policies/{id}/validate", post(phase3::policy_validate))
+        .route("/api/v1/projects", get(phase3::project_list))
         .route("/api/v1/nodes", get(nodes).post(create_node))
         .route(
             "/api/v1/deployments",
@@ -2138,10 +2145,11 @@ async fn create_tenant(
         .isolation_mode
         .unwrap_or_else(|| "enforced-proxy".into());
     match sqlx::query(
-        "INSERT INTO tenants(id,project_id,name,slug,isolation_mode) VALUES($1,$2,$3,$4,$5)",
+        "INSERT INTO tenants(id,project_id,organization_id,name,slug,isolation_mode) VALUES($1,$2,$3,$4,$5,$6)",
     )
-    .bind(id)
+     .bind(id)
     .bind(project)
+    .bind(ctx.organization_id)
     .bind(&input.name)
     .bind(&input.slug)
     .bind(&mode)
