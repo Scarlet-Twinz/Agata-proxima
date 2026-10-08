@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS environment_integration_credentials (
   created_at timestamptz NOT NULL DEFAULT now(),
   revoked_at timestamptz,
   active boolean NOT NULL DEFAULT true,
-  UNIQUE (integration_id, environment_id)
+
 );
 
 CREATE INDEX IF NOT EXISTS idx_environment_integration_credentials_org
@@ -23,3 +23,7 @@ ALTER TABLE integration_credentials
 
 -- Existing pre-3A integration credentials, if any, remain valid as integration
 -- credentials. New environment credentials are stored in the explicit table above.
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_environment_integration_credentials_active
+  ON environment_integration_credentials(integration_id, environment_id)
+  WHERE active=true;
