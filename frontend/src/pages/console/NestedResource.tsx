@@ -234,7 +234,6 @@ const baseConfigs:Record<string,Config>={
  "/app/billing/invoices":{eyebrow:"BILLING",title:"Invoices",description:"Inspect the billing account and invoice-facing records.",tabs:[{label:"Usage",href:"/app/billing/usage"},{label:"Plans",href:"/app/billing/plans"},{label:"Invoices",href:"/app/billing/invoices"}],endpoint:"/api/v1/billing"},
  "/app/developer/api-keys":{eyebrow:"DEVELOPER",title:"API keys",description:"Create, revoke and inspect organization-scoped machine credentials.",tabs:developerTabs,endpoint:"/api/v1/developer/api-keys",detailBase:"/app/developer/api-keys",createHref:"/app/developer/api-keys/new",createLabel:"Create API key"},
  "/app/developer/webhooks":{eyebrow:"DEVELOPER",title:"Webhooks",description:"Create signed event endpoints and inspect delivery state.",tabs:developerTabs,endpoint:"/api/v1/developer/webhooks",detailBase:"/app/developer/webhooks",createHref:"/app/developer/webhooks/new",createLabel:"Add webhook"},
- "/app/developer/webhooks":{eyebrow:"DEVELOPER",title:"Webhooks",description:"Create endpoints, select events and inspect delivery history.",tabs:developerTabs,endpoint:"/api/v1/developer/webhooks",detailBase:"/app/developer/webhooks",createHref:"/app/developer/webhooks/new",createLabel:"Add webhook"},
 };
 
 export function NestedResource(){
