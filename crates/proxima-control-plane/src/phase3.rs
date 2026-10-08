@@ -1242,47 +1242,6 @@ pub(crate) async fn revoke_environment_credential(
     }
 }
 
-async fn issue_environment_credentials(
-    db: &sqlx::PgPool,
-    organization_id: Uuid,
-    integration_id: Uuid,
-) -> Result<Vec<Value>, Response> {
-    let environments = sqlx::query(
-        "SELECT id,key FROM environments WHERE organization_id=$1 ORDER BY CASE key WHEN 'development' THEN 0 WHEN 'staging' THEN 1 ELSE 2 END",
-    )
-    .bind(organization_id)
-    .fetch_all(db)
-    .await
-    .map_err(db_error)?;
-    let mut issued = Vec::new();
-    for environment in environments {
-        let environment_id = environment.get::<Uuid, _>("id");
-        let key = environment.get::<String, _>("key");
-        let secret = format!(
-            "aga_env_{}_{}_{}",
-            integration_id.simple(),
-            environment_id.simple(),
-            Uuid::new_v4().simple()
-        );
-        let prefix = secret.chars().take(16).collect::<String>();
-        sqlx::query(
-            "INSERT INTO environment_integration_credentials
-             (id,organization_id,integration_id,environment_id,key_prefix,key_hash)
-             VALUES($1,$2,$3,$4,$5,$6)",
-        )
-        .bind(Uuid::new_v4())
-        .bind(organization_id)
-        .bind(integration_id)
-        .bind(environment_id)
-        .bind(&prefix)
-        .bind(token_hash(&secret))
-        .execute(db)
-        .await
-        .map_err(db_error)?;
-        issued.push(json!({"environment_id":environment_id,"environment":key,"credential":secret}));
-    }
-    Ok(issued)
-}
 #[derive(Deserialize)]
 #[rustfmt::skip]
 pub(crate) struct TenantPatchInput {
