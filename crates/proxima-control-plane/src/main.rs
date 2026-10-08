@@ -2810,7 +2810,8 @@ async fn audit(
     .bind(org)
     .fetch_optional(db)
     .await
-    .unwrap_or(None);
+    .unwrap_or(None)
+    .flatten();
     let canonical = format!(
         "{}|{}|{}|{}|{}|{}|{}|{}",
         previous_hash
