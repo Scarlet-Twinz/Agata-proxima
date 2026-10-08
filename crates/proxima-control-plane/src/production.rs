@@ -10,7 +10,7 @@ use jsonwebtoken::jwk::JwkSet;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
+use sha2::Digest;
 use sqlx::Row;
 use std::env;
 use uuid::Uuid;
