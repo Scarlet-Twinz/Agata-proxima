@@ -702,7 +702,7 @@ pub(crate) async fn paystack_webhook(State(s):State<AppState>,headers:HeaderMap,
         let plan_code=data.pointer("/plan/plan_code").and_then(Value::as_str).or_else(||data.pointer("/subscription/plan/plan_code").and_then(Value::as_str)).or_else(||data.pointer("/subscription/plan_code").and_then(Value::as_str)).or_else(||data.get("plan_code").and_then(Value::as_str));let plan=plan_code.and_then(|v|plan_for_code(Some(v))).unwrap_or("free");
         match event_type{
             "charge.success"|"subscription.create"|"subscription.enable"=>{let customer=data.pointer("/customer/customer_code").and_then(Value::as_str).or_else(||data.get("customer_code").and_then(Value::as_str));let subscription=data.get("subscription_code").and_then(Value::as_str).or_else(||data.pointer("/subscription/subscription_code").and_then(Value::as_str));let end=data.get("next_payment_date").and_then(Value::as_str).and_then(|v|chrono::DateTime::parse_from_rfc3339(v).ok()).map(|v|v.with_timezone(&chrono::Utc));if let Err(e)=sqlx::query("INSERT INTO billing_accounts(organization_id,paystack_customer_code,paystack_subscription_code,paystack_plan_code,plan_key,status,current_period_end,cancel_at_period_end,updated_at) VALUES($1,$2,$3,$4,$5,'active',$6,false,now()) ON CONFLICT(organization_id) DO UPDATE SET paystack_customer_code=COALESCE(EXCLUDED.paystack_customer_code,billing_accounts.paystack_customer_code),paystack_subscription_code=COALESCE(EXCLUDED.paystack_subscription_code,billing_accounts.paystack_subscription_code),paystack_plan_code=COALESCE(EXCLUDED.paystack_plan_code,billing_accounts.paystack_plan_code),plan_key=EXCLUDED.plan_key,status='active',current_period_end=EXCLUDED.current_period_end,cancel_at_period_end=false,updated_at=now()").bind(org).bind(customer).bind(subscription).bind(plan_code).bind(plan).bind(end).execute(&s.db).await{return db_error(e)}if let Err(e)=apply_entitlements(&s.db,org,plan).await{return db_error(e)}}
-            "invoice.payment_failed"|"subscription.disable"|"subscription.not_renew"=>{let st=if event_type=="subscription.disable"{"canceled"}else if event_type=="subscription.not_renew"{"non-renewing"}else{"attention"};if let Err(e)=sqlx::query("UPDATE billing_accounts SET status=$1,cancel_at_period_end=$2,updated_at=now() WHERE organization_id=$3").bind(st,event_type=="subscription.not_renew",org).execute(&s.db).await{return db_error(e)}if event_type!="subscription.not_renew"{if let Err(e)=sqlx::query("UPDATE organization_entitlements SET billing_status=$1,updated_at=now() WHERE organization_id=$2").bind(st,org).execute(&s.db).await{return db_error(e)}}}
+            "invoice.payment_failed"|"subscription.disable"|"subscription.not_renew"=>{let st=if event_type=="subscription.disable"{"canceled"}else if event_type=="subscription.not_renew"{"non-renewing"}else{"attention"};if let Err(e)=sqlx::query("UPDATE billing_accounts SET status=$1,cancel_at_period_end=$2,updated_at=now() WHERE organization_id=$3").bind(st).bind(event_type=="subscription.not_renew").bind(org).execute(&s.db).await{return db_error(e)}if event_type!="subscription.not_renew"{if let Err(e)=sqlx::query("UPDATE organization_entitlements SET billing_status=$1,updated_at=now() WHERE organization_id=$2").bind(st).bind(org).execute(&s.db).await{return db_error(e)}}}
             "subscription.expiring_cards"=>{let _=sqlx::query("UPDATE billing_accounts SET status='attention',updated_at=now() WHERE organization_id=$1").bind(org).execute(&s.db).await;}
             "refund.pending"|"refund.processing"|"refund.processed"|"refund.failed"|"refund.needs-attention"=>{if let Some(reference)=data.get("reference").and_then(Value::as_str){let _=sqlx::query("UPDATE billing_transactions SET refund_status=$1,updated_at=now() WHERE provider='paystack' AND reference=$2 AND organization_id=$3").bind(event_type.trim_start_matches("refund.")).bind(reference).bind(org).execute(&s.db).await;}}
             _=>{}
@@ -711,6 +711,433 @@ pub(crate) async fn paystack_webhook(State(s):State<AppState>,headers:HeaderMap,
     let _=sqlx::query("UPDATE billing_events SET status='processed',processed_at=now() WHERE provider='paystack' AND provider_event_id=$1").bind(&key).execute(&s.db).await;
     Json(json!({"received":true})).into_response()
 }
+
+pub(crate) async fn send_verification_email(
+    db: &sqlx::PgPool,
+    user_id: Uuid,
+    email: &str,
+    display_name: &str,
+) -> anyhow::Result<()> {
+    let bytes = *Uuid::new_v4().as_bytes();
+    let value = u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) % 1_000_000;
+    let code = format!("{value:06}");
+
+    sqlx::query(
+        "UPDATE users SET email_verification_token_hash=$1,
+         email_verification_expires_at=now()+interval '15 minutes',
+         email_verification_attempts=0 WHERE id=$2",
+    )
+    .bind(token_hash(&code))
+    .bind(user_id)
+    .execute(db)
+    .await?;
+
+    send_template_email(
+        email,
+        "091dbdb2-21ed-444f-a209-6f44e55d192d",
+        json!({
+            "DISPLAY_NAME": display_name,
+            "CODE": code,
+            "ACTION_URL": ""
+        }),
+    )
+    .await
+}
+
+#[derive(Deserialize)]
+pub(crate) struct VerificationResendInput {
+    pub email: String,
+}
+
+pub(crate) async fn resend_verification_email(
+    State(s): State<AppState>,
+    Json(input): Json<VerificationResendInput>,
+) -> Response {
+    let email = input.email.trim().to_lowercase();
+    if email.is_empty() || !email.contains('@') {
+        return bad("A valid email is required.");
+    }
+
+    let user = match sqlx::query(
+        "SELECT id,display_name,email_verified_at FROM users WHERE email=$1 AND status='active'",
+    )
+    .bind(&email)
+    .fetch_optional(&s.db)
+    .await
+    {
+        Ok(value) => value,
+        Err(e) => return db_error(e),
+    };
+
+    if let Some(row) = user {
+        if row
+            .get::<Option<chrono::DateTime<chrono::Utc>>, _>("email_verified_at")
+            .is_none()
+        {
+            if let Err(e) = send_verification_email(
+                &s.db,
+                row.get("id"),
+                &email,
+                row.get("display_name"),
+            )
+            .await
+            {
+                tracing::error!(%e, "verification email delivery failed");
+                return service_unavailable("Verification email could not be sent. Check the Resend configuration.");
+            }
+        }
+    }
+
+    Json(json!({
+        "ok": true,
+        "message": "If the account requires verification, a new verification email has been sent."
+    }))
+    .into_response()
+}
+
+pub(crate) async fn verify_email(
+    State(s): State<AppState>,
+    Query(q): Query<VerifyInput>,
+) -> Response {
+    let result = sqlx::query(
+        "UPDATE users SET email_verified_at=now(),email_verification_token_hash=NULL,
+         email_verification_expires_at=NULL,email_verification_attempts=0
+         WHERE email_verification_token_hash=$1
+           AND email_verification_expires_at>now()
+           AND email_verification_attempts<5
+         RETURNING email",
+    )
+    .bind(token_hash(&q.token))
+    .fetch_optional(&s.db)
+    .await;
+
+    match result {
+        Ok(Some(row)) => Html(format!(
+            "<html><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\">
+             <h1>Verification now uses a code.</h1><p>{}</p><p>Return to the Agata Proxima sign-in screen and enter the code from your latest email.</p></body></html>",
+            row.get::<String,_>("email")
+        )).into_response(),
+        Ok(None) => (
+            StatusCode::BAD_REQUEST,
+            Html("<html><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\"><h1>This verification link is no longer active.</h1><p>Request a new verification code from the sign-in screen.</p></body></html>"),
+        ).into_response(),
+        Err(e) => db_error(e),
+    }
+}
+
+pub(crate) async fn verify_email_code(
+    State(s): State<AppState>,
+    Json(input): Json<VerificationCodeInput>,
+) -> Response {
+    let email = input.email.trim().to_lowercase();
+    let code = input.code.trim();
+
+    if email.is_empty() || !email.contains('@') {
+        return bad("A valid email is required.");
+    }
+    if code.len() != 6 || !code.chars().all(|value| value.is_ascii_digit()) {
+        return bad("Enter the 6-digit verification code from your latest email.");
+    }
+
+    let row = match sqlx::query(
+        "SELECT id,email_verification_token_hash,email_verification_expires_at,email_verification_attempts
+         FROM users WHERE email=$1 AND status='active'",
+    )
+    .bind(&email)
+    .fetch_optional(&s.db)
+    .await
+    {
+        Ok(Some(row)) => row,
+        Ok(None) => return bad("The verification code is invalid or expired."),
+        Err(e) => return db_error(e),
+    };
+
+    let attempts: i32 = row.get("email_verification_attempts");
+    if attempts >= 5 {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({"ok":false,"message":"Too many verification attempts. Request a new code and try again."})),
+        ).into_response();
+    }
+
+    let expected: Vec<u8> = row.get("email_verification_token_hash");
+    if token_hash(code) != expected {
+        let _ = sqlx::query(
+            "UPDATE users SET email_verification_attempts=email_verification_attempts+1 WHERE id=$1",
+        )
+        .bind(row.get::<Uuid,_>("id"))
+        .execute(&s.db)
+        .await;
+        return bad("The verification code is invalid or expired.");
+    }
+
+    let updated = sqlx::query(
+        "UPDATE users SET email_verified_at=now(),email_verification_token_hash=NULL,
+         email_verification_expires_at=NULL,email_verification_attempts=0
+         WHERE id=$1
+           AND email_verification_token_hash=$2
+           AND email_verification_expires_at>now()
+           AND email_verification_attempts<5
+         RETURNING id,email",
+    )
+    .bind(row.get::<Uuid,_>("id"))
+    .bind(token_hash(code))
+    .fetch_optional(&s.db)
+    .await;
+
+    match updated {
+        Ok(Some(user)) => {
+            if let Ok(Some(membership)) = sqlx::query(
+                "SELECT organization_id FROM memberships WHERE user_id=$1 ORDER BY created_at LIMIT 1",
+            )
+            .bind(user.get::<Uuid,_>("id"))
+            .fetch_optional(&s.db)
+            .await
+            {
+                audit(
+                    &s.db,
+                    membership.get::<Uuid,_>("organization_id"),
+                    user.get::<Uuid,_>("id"),
+                    "auth.email_verified",
+                    "user",
+                    Some(user.get::<Uuid,_>("id")),
+                    json!({"method":"verification_code"}),
+                ).await;
+            }
+            Json(json!({
+                "ok":true,
+                "verified":true,
+                "email":user.get::<String,_>("email"),
+                "message":"Email verified. Sign in to open your Agata Proxima workspace."
+            })).into_response()
+        }
+        Ok(None) => bad("The verification code is invalid or expired."),
+        Err(e) => db_error(e),
+    }
+}
+pub(crate) async fn reset_password_page(Query(q): Query<VerifyInput>) -> Response {
+    let token = q.token.replace('"', "");
+    Html(format!(
+        "<!doctype html><html><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\">
+        <h1>Reset your Agata Proxima password</h1>
+        <form id=\"f\"><input id=\"p\" type=\"password\" minlength=\"12\" placeholder=\"New password\" required style=\"padding:12px;width:320px\">
+        <button style=\"margin-left:8px;padding:12px\">Reset password</button></form>
+        <p id=\"m\"></p>
+        <script>
+        const token={token:?};
+        document.getElementById('f').onsubmit=async(e)=>{{e.preventDefault();const r=await fetch('/api/v1/auth/password-reset/confirm',{{method:'POST',headers:{{'content-type':'application/json'}},body:JSON.stringify({{token,password:document.getElementById('p').value}})}});const j=await r.json();document.getElementById('m').textContent=j.message||'Done';}};
+        </script></body></html>"
+    ))
+    .into_response()
+}
+
+pub(crate) async fn request_password_reset(
+    State(s): State<AppState>,
+    Json(input): Json<PasswordResetRequest>,
+) -> Response {
+    let email = input.email.trim().to_lowercase();
+    let user = match sqlx::query("SELECT id,display_name FROM users WHERE email=$1 AND status='active'")
+        .bind(&email)
+        .fetch_optional(&s.db)
+        .await
+    {
+        Ok(v) => v,
+        Err(e) => return db_error(e),
+    };
+
+    if let Some(row) = user {
+        let token = format!("{}-{}", Uuid::new_v4(), Uuid::new_v4());
+        if let Err(e) = sqlx::query(
+            "UPDATE users SET password_reset_token_hash=$1,password_reset_expires_at=now()+interval '30 minutes'
+             WHERE id=$2",
+        )
+        .bind(token_hash(&token))
+        .bind(row.get::<Uuid,_>("id"))
+        .execute(&s.db)
+        .await {
+            return db_error(e);
+        }
+        let base = env::var("AGATA_PUBLIC_BASE_URL")
+            .unwrap_or_else(|_| "http://127.0.0.1:8080".into())
+            .trim_end_matches('/')
+            .to_string();
+        let link = format!("{base}/reset-password?token={token}");
+        if let Err(e) = send_template_email(
+            &email,
+            "d3c046c7-fef6-42f0-931e-d92b6f96cfdf",
+            json!({
+                "DISPLAY_NAME": row.get::<String,_>("display_name"),
+                "ACTION_URL": link
+            }),
+        )
+        .await
+        {
+            tracing::error!(%e, "password reset email failed");
+        }
+    }
+
+    Json(json!({"ok":true,"message":"If that address exists, a reset email has been sent."})).into_response()
+}
+
+pub(crate) async fn reset_password(
+    State(s): State<AppState>,
+    Json(input): Json<PasswordResetConfirm>,
+) -> Response {
+    if input.password.len() < 12 {
+        return bad("Password must be at least 12 characters.");
+    }
+    let hash = match hash_password(&input.password) {
+        Ok(v) => v,
+        Err(_) => return internal("Password hashing failed."),
+    };
+    let result = match sqlx::query(
+        "UPDATE users SET password_hash=$1,password_reset_token_hash=NULL,password_reset_expires_at=NULL
+         WHERE password_reset_token_hash=$2 AND password_reset_expires_at>now()
+         RETURNING id",
+    )
+    .bind(hash)
+    .bind(token_hash(&input.token))
+    .fetch_optional(&s.db)
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => return db_error(e),
+    };
+
+    match result {
+        Some(row) => {
+            let user_id: Uuid = row.get("id");
+            let _ = sqlx::query("DELETE FROM sessions WHERE user_id=$1")
+                .bind(user_id)
+                .execute(&s.db)
+                .await;
+            Json(json!({"ok":true,"message":"Password changed. Sign in again."})).into_response()
+        }
+        None => bad("Reset link expired or invalid."),
+    }
+}
+
+pub(crate) async fn invite(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<InviteInput>,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if ctx.organization_id != input.organization_id {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    if let Err(c) = require_admin(&ctx, &headers) {
+        return c.into_response();
+    }
+
+    let role = input.role.unwrap_or_else(|| "viewer".into());
+    if !matches!(role.as_str(), "admin" | "operator" | "viewer") {
+        return bad("Invalid invitation role.");
+    }
+    let email = input.email.trim().to_lowercase();
+    if !email.contains('@') {
+        return bad("A valid email is required.");
+    }
+
+    let token = format!("{}-{}", Uuid::new_v4(), Uuid::new_v4());
+    let id = Uuid::new_v4();
+    if let Err(e) = sqlx::query(
+        "INSERT INTO organization_invites(id,organization_id,invited_by,email,role,token_hash,expires_at)
+         VALUES($1,$2,$3,$4,$5,$6,now()+interval '7 days')
+         ON CONFLICT (organization_id,email) DO UPDATE SET
+           invited_by=EXCLUDED.invited_by,role=EXCLUDED.role,token_hash=EXCLUDED.token_hash,
+           expires_at=EXCLUDED.expires_at,accepted_at=NULL",
+    )
+    .bind(id).bind(ctx.organization_id).bind(ctx.user_id).bind(&email).bind(&role).bind(token_hash(&token))
+    .execute(&s.db).await {
+        return db_error(e);
+    }
+
+    let organization_name = match sqlx::query_scalar::<_, String>(
+        "SELECT name FROM organizations WHERE id=$1",
+    )
+    .bind(ctx.organization_id)
+    .fetch_one(&s.db)
+    .await
+    {
+        Ok(name) => name,
+        Err(e) => return db_error(e),
+    };
+
+    let base = env::var("AGATA_PUBLIC_BASE_URL")
+        .unwrap_or_else(|_| "http://127.0.0.1:8080".into())
+        .trim_end_matches('/')
+        .to_string();
+    let link = format!("{base}/accept-invite?token={token}");
+    if let Err(e) = send_template_email(
+        &email,
+        "0757a210-a372-4a5a-8fca-e642c2fed3da",
+        json!({
+            "ORGANIZATION": organization_name,
+            "ROLE": role,
+            "ACTION_URL": link
+        }),
+    )
+    .await
+    {
+        tracing::error!(%e, "invitation email failed");
+    }
+
+    audit(&s.db, ctx.organization_id, ctx.user_id, "organization.invite.created", "organization_invite", Some(id), json!({"email":email,"role":role})).await;
+    Json(json!({"ok":true,"id":id,"expires_in":"7 days"})).into_response()
+}
+
+pub(crate) async fn accept_invite(
+    State(s): State<AppState>,
+    Query(q): Query<VerifyInput>,
+    headers: HeaderMap,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(_) => return (
+            StatusCode::UNAUTHORIZED,
+            Html("<html><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\"><h1>Sign in first.</h1><p>Open the invitation link again after signing in.</p><a href=\"/login\">Sign in</a></body></html>")
+        ).into_response(),
+    };
+
+    let row = match sqlx::query(
+        "SELECT id,organization_id,role FROM organization_invites
+         WHERE token_hash=$1 AND expires_at>now() AND accepted_at IS NULL
+           AND lower(email)=(SELECT lower(email) FROM users WHERE id=$2)",
+    )
+    .bind(token_hash(&q.token))
+    .bind(ctx.user_id)
+    .fetch_optional(&s.db)
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => return db_error(e),
+    };
+
+    match row {
+        Some(row) => {
+            let invite_id: Uuid = row.get("id");
+            let org: Uuid = row.get("organization_id");
+            let role: String = row.get("role");
+            if let Err(e) = sqlx::query(
+                "INSERT INTO memberships(user_id,organization_id,role) VALUES($1,$2,$3)
+                 ON CONFLICT (user_id,organization_id) DO UPDATE SET role=EXCLUDED.role",
+            )
+            .bind(ctx.user_id).bind(org).bind(&role).execute(&s.db).await {
+                return db_error(e);
+            }
+            let _ = sqlx::query("UPDATE organization_invites SET accepted_at=now() WHERE id=$1")
+                .bind(invite_id).execute(&s.db).await;
+            audit(&s.db, org, ctx.user_id, "organization.invite.accepted", "organization_invite", Some(invite_id), json!({})).await;
+            Html("<html><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\"><h1>Invitation accepted.</h1><p>Your organization access is active.</p><a href=\"/app\">Open Command Center</a></body></html>").into_response()
+        }
+        None => bad("Invitation expired, invalid, or not addressed to the signed-in user."),
+    }
+}
+
 
 pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
     let db_ok=sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
