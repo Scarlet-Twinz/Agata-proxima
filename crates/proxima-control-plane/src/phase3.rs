@@ -1,5 +1,3 @@
-#![rustfmt::skip]
-
 #![allow(clippy::result_large_err)]
 
 use axum::{
@@ -20,7 +18,7 @@ use std::{collections::HashMap, env};
 use uuid::Uuid;
 
 use super::{
-    audit, authenticate, bad, db_error, require_admin, require_write, token_hash, AppState,
+    audit, authenticate, bad, db_error, require_admin, require_write, token_hash, unique_error, AppState,
     AuthContext,
 };
 
@@ -1375,7 +1373,7 @@ fn validate_policy_document(document:&Value)->Result<(),String>{
 
 pub(crate) async fn policy_update(State(s):State<AppState>,Path(id):Path<Uuid>,headers:HeaderMap,Json(input):Json<PolicyPatchInput>)->Response{
     let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()}; if let Err(c)=require_admin(&ctx,&headers){return c.into_response()};
-    let current=match sqlx::query("SELECT name,version,status,document FROM policies WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id).fetch_optional(&s.db).await{Ok(Some(v))=>v,Ok(None)=>(StatusCode::NOT_FOUND,Json(json!({"ok":false,"message":"Policy not found in the active organization."}))).into_response(),Err(e)=>return db_error(e)};
+    let current=match sqlx::query("SELECT name,version,status,document FROM policies WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id).fetch_optional(&s.db).await{Ok(Some(v))=>v,Ok(None)=>return (StatusCode::NOT_FOUND,Json(json!({"ok":false,"message":"Policy not found in the active organization."}))).into_response(),Err(e)=>return db_error(e)};
     let name=input.name.unwrap_or_else(||current.get::<String,_>("name")); let doc=input.document.unwrap_or_else(||current.get::<Value,_>("document")); if let Err(message)=validate_policy_document(&doc){return bad(&message)};
     let status=input.status.unwrap_or_else(||current.get::<String,_>("status")); if !matches!(status.as_str(),"draft"|"active"|"archived"){return bad("Policy status must be draft, active, or archived.")};
     if status=="active" && current.get::<String,_>("status")=="archived"{return bad("Archived policies cannot be reactivated; create a new version.")};
@@ -1388,7 +1386,7 @@ pub(crate) async fn policy_update(State(s):State<AppState>,Path(id):Path<Uuid>,h
 
 pub(crate) async fn policy_new_version(State(s):State<AppState>,Path(id):Path<Uuid>,headers:HeaderMap,Json(input):Json<PolicyPatchInput>)->Response{
     let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()}; if let Err(c)=require_admin(&ctx,&headers){return c.into_response()};
-    let current=match sqlx::query("SELECT name,version,document FROM policies WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id).fetch_optional(&s.db).await{Ok(Some(v))=>v,Ok(None)=>(StatusCode::NOT_FOUND,Json(json!({"ok":false,"message":"Policy not found in the active organization."}))).into_response(),Err(e)=>return db_error(e)};
+    let current=match sqlx::query("SELECT name,version,document FROM policies WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id).fetch_optional(&s.db).await{Ok(Some(v))=>v,Ok(None)=>return (StatusCode::NOT_FOUND,Json(json!({"ok":false,"message":"Policy not found in the active organization."}))).into_response(),Err(e)=>return db_error(e)};
     let doc=input.document.unwrap_or_else(||current.get::<Value,_>("document")); if let Err(message)=validate_policy_document(&doc){return bad(&message)};
     let version=current.get::<i32,_>("version")+1; let new_id=Uuid::new_v4(); let name=input.name.unwrap_or_else(||current.get::<String,_>("name"));
     match sqlx::query("INSERT INTO policies(id,organization_id,name,version,status,document,created_by) VALUES($1,$2,$3,$4,'draft',$5,$6)").bind(new_id).bind(ctx.organization_id).bind(name.trim()).bind(version).bind(&doc).bind(ctx.user_id).execute(&s.db).await{
@@ -1399,7 +1397,7 @@ pub(crate) async fn policy_new_version(State(s):State<AppState>,Path(id):Path<Uu
 
 pub(crate) async fn policy_validate(State(s):State<AppState>,Path(id):Path<Uuid>,headers:HeaderMap)->Response{
     let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};
-    let r=match sqlx::query("SELECT version,status,document FROM policies WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id).fetch_optional(&s.db).await{Ok(Some(v))=>v,Ok(None)=>(StatusCode::NOT_FOUND,Json(json!({"ok":false,"message":"Policy not found in the active organization."}))).into_response(),Err(e)=>return db_error(e)};
+    let r=match sqlx::query("SELECT version,status,document FROM policies WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id).fetch_optional(&s.db).await{Ok(Some(v))=>v,Ok(None)=>return (StatusCode::NOT_FOUND,Json(json!({"ok":false,"message":"Policy not found in the active organization."}))).into_response(),Err(e)=>return db_error(e)};
     match validate_policy_document(&r.get::<Value,_>("document")){Ok(())=>Json(json!({"ok":true,"result":"PASS","version":r.get::<i32,_>("version"),"status":r.get::<String,_>("status")})).into_response(),Err(m)=>Json(json!({"ok":false,"result":"FAIL","message":m})).into_response()}
 }
 
@@ -1415,7 +1413,7 @@ pub(crate) async fn project_list(State(s):State<AppState>,headers:HeaderMap)->Re
 async fn audit_external(db:&sqlx::PgPool,org:Uuid,action:&str,resource_type:&str,resource_id:Option<Uuid>,metadata:Value){
     let correlation_id=Uuid::new_v4().to_string();
     let previous_hash:Option<Vec<u8>>=sqlx::query_scalar("SELECT event_hash FROM audit_events WHERE organization_id=$1 ORDER BY created_at DESC,id DESC LIMIT 1").bind(org).fetch_optional(db).await.unwrap_or(None).flatten();
-    let canonical=format!("{}|{}||{}|{}|{}|{}|{}",previous_hash.as_ref().map(hex::encode).unwrap_or_default(),org,action,resource_type,resource_id.map(|v|v.to_string()).unwrap_or_default(),correlation_id,metadata,"service");
+    let canonical=format!("{}|{}||{}|{}|{}|{}|{}|{}",previous_hash.as_ref().map(hex::encode).unwrap_or_default(),org,action,resource_type,resource_id.map(|v|v.to_string()).unwrap_or_default(),correlation_id,metadata,"service");
     let mut hasher=sha2::Sha256::new(); use sha2::Digest; hasher.update(canonical.as_bytes()); let event_hash=hasher.finalize().to_vec();
     let _=sqlx::query("INSERT INTO audit_events(organization_id,user_id,action,resource_type,resource_id,metadata,correlation_id,previous_hash,event_hash) VALUES($1,NULL,$2,$3,$4,$5,$6,$7,$8)").bind(org).bind(action).bind(resource_type).bind(resource_id).bind(metadata).bind(correlation_id).bind(previous_hash).bind(event_hash).execute(db).await;
 }
