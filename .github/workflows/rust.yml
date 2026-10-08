@@ -80,6 +80,7 @@ jobs:
           PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0007_notifications_email.sql
           PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0008_phase3a_customer_integration.sql
           PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0009_environment_credentials.sql
+          PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0010_audit_tamper_evidence.sql
 
       - name: Phase 3A schema acceptance gate
         env:
