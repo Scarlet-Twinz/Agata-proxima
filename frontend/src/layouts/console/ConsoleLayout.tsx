@@ -105,7 +105,7 @@ export function ConsoleLayout() {
       .catch(() => {
         if (active) setSession(null);
       });
-    api.get<{organization:{name:string;slug:string};organizations:unknown[];user:{display_name?:string;email?:string}}>("/api/v1/settings")
+    api.get<{organization:{id:string;name:string;slug:string};organizations:{id:string;name:string;slug:string;role:string}[];user:{display_name?:string;email?:string}}>("/api/v1/settings")
       .then((settings) => {
         if (!active) return;
         setOrganizationName(settings.organization.name || "Workspace");
@@ -113,7 +113,7 @@ export function ConsoleLayout() {
         setAccountEmail(settings.user.email || "");
       })
       .catch(() => undefined);
-    api.get<{notifications:{read:boolean}[]}>("/api/v1/notifications")
+    api.get<{id:string;key:string;name:string;mode:string;status:string}[]>("/api/v1/environments").then((envs) => { if (active) setEnvironmentOptions(envs); }).catch(() => undefined);\n    api.get<{notifications:{read:boolean}[]}>("/api/v1/notifications")
       .then((result) => {
         if (active) setUnreadNotifications(result.notifications.filter((item) => !item.read).length);
       })
@@ -142,6 +142,17 @@ export function ConsoleLayout() {
       item.label.toLowerCase().includes(query),
     );
   }, [searchQuery]);
+
+  async function switchOrganization(id:string) {
+    if (id===session?.organization_id) { setWorkspaceOpen(false); return; }
+    try { await api.post("/api/v1/auth/switch-organization",{organization_id:id}); setWorkspaceOpen(false); window.location.reload(); } catch {}
+  }
+
+  function selectEnvironment(key:string) {
+    setSelectedEnvironment(key);
+    localStorage.setItem("agata.environment",key);
+    setEnvironmentOpen(false);
+  }
 
   function openSearch() {
     setSearchOpen(true);
@@ -232,18 +243,18 @@ export function ConsoleLayout() {
           </button>
         </div>
 
-        <button className="workspace-switcher" type="button" onClick={() => navigate("/app/settings")}>
-          <span className="workspace-symbol">{organizationInitial}</span>
-
-          {!collapsed && (
-            <span className="workspace-copy">
-              <strong>{organizationName}</strong>
-              <small>Production</small>
-            </span>
-          )}
-
-          {!collapsed && <ChevronDown size={16} />}
-        </button>
+        <div className="workspace-switcher-wrap">
+          <button className="workspace-switcher" type="button" onClick={() => setWorkspaceOpen((value) => !value)} aria-expanded={workspaceOpen}>
+            <span className="workspace-symbol">{organizationInitial}</span>
+            {!collapsed && <span className="workspace-copy"><strong>{organizationName}</strong><small>{environmentOptions.find(e=>e.key===selectedEnvironment)?.name || selectedEnvironment}</small></span>}
+            {!collapsed && <ChevronDown size={16} />}
+          </button>
+          {workspaceOpen && !collapsed && <div className="console-workspace-menu console-workspace-menu--light">
+            <div className="console-workspace-menu-title">Switch organization</div>
+            {organizations.map(org=><button key={org.id} type="button" className={org.name===organizationName?"is-current":""} onClick={()=>void switchOrganization(org.id)}><span className="workspace-symbol">{org.name.trim().slice(0,1).toUpperCase()}</span><span><strong>{org.name}</strong><small>{org.role} · {org.slug}</small></span></button>)}
+            <button type="button" className="console-workspace-manage" onClick={()=>{setWorkspaceOpen(false);navigate("/app/settings")}}>Manage organizations</button>
+          </div>}
+        </div>
 
         <nav className="console-nav">
           <div className="console-nav-group">
@@ -361,51 +372,22 @@ export function ConsoleLayout() {
               <span>/</span>
               <strong>{organizationName}</strong>
               <span>/</span>
-              <span>Production</span>
+              <span>{environmentOptions.find(e=>e.key===selectedEnvironment)?.name || selectedEnvironment}</span>
             </div>
           </div>
 
           <div className="console-topbar-actions">
             <div className="console-environment-wrap">
-              <button
-                className="environment-button"
-                type="button"
-                aria-expanded={environmentOpen}
-                onClick={() => {
-                  setEnvironmentOpen((value) => !value);
-                  setAccountOpen(false);
-                }}
-              >
+              <button className="environment-button" type="button" aria-expanded={environmentOpen} onClick={() => {setEnvironmentOpen((value) => !value);setAccountOpen(false);setWorkspaceOpen(false)}}>
                 <span className="environment-dot" />
-                Production
+                {environmentOptions.find(e=>e.key===selectedEnvironment)?.name || selectedEnvironment}
                 <ChevronDown size={15} />
               </button>
 
-              {environmentOpen && (
-                <div className="console-environment-menu">
-                  <button
-                    className="console-environment-option is-selected"
-                    type="button"
-                    onClick={() => setEnvironmentOpen(false)}
-                  >
-                    <span>
-                      <strong>Production</strong>
-                      <small>Active environment</small>
-                    </span>
-                    <span className="environment-check">✓</span>
-                  </button>
-                  <button
-                    className="console-environment-settings"
-                    type="button"
-                    onClick={() => {
-                      setEnvironmentOpen(false);
-                      navigate("/app/settings");
-                    }}
-                  >
-                    Manage environments
-                  </button>
-                </div>
-              )}
+              {environmentOpen && <div className="console-environment-menu">
+                {environmentOptions.map(env=><button key={env.id} className={env.key===selectedEnvironment?"console-environment-option is-selected":"console-environment-option"} type="button" onClick={()=>selectEnvironment(env.key)}><span><strong>{env.name}</strong><small>{env.mode} · {env.status}</small></span>{env.key===selectedEnvironment&&<span className="environment-check">✓</span>}</button>)}
+                <button className="console-environment-settings" type="button" onClick={()=>{setEnvironmentOpen(false);navigate("/app/environments")}}>Manage environments</button>
+              </div>}}
             </div>
 
             <button
