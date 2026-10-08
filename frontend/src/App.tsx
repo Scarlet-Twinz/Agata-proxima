@@ -17,6 +17,8 @@ import {
 import { NestedResource } from "./pages/console/NestedResource";
 import { SettingsHub } from "./pages/console/SettingsHub";
 import { Notifications } from "./pages/console/Notifications";
+import { Integrations, Environments, DatabaseConnections } from "./pages/console/IntegrationFoundation";
+import { ActionPage } from "./pages/console/ActionPage";
 
 export function App() {
   return (
@@ -30,21 +32,26 @@ export function App() {
         <Route path="security/events/:eventId" element={<NestedResource />} />
 
         <Route path="tenants" element={<Tenants />} />
+        <Route path="tenants/new" element={<ActionPage />} />
         <Route path="tenants/:tenantId" element={<NestedResource />} />
 
         <Route path="policies" element={<Policies />} />
+        <Route path="policies/new" element={<ActionPage />} />
         <Route path="policies/:policyId" element={<NestedResource />} />
 
         <Route path="nodes" element={<Nodes />} />
+        <Route path="nodes/new" element={<ActionPage />} />
         <Route path="nodes/:nodeId" element={<NestedResource />} />
 
         <Route path="deployments" element={<Deployments />} />
+        <Route path="deployments/new" element={<ActionPage />} />
         <Route
           path="deployments/:deploymentId"
           element={<NestedResource />}
         />
 
         <Route path="verification" element={<Verification />} />
+        <Route path="verification/new" element={<ActionPage />} />
         <Route path="verification/:runId" element={<NestedResource />} />
 
         <Route path="audit" element={<Audit />} />
@@ -62,6 +69,7 @@ export function App() {
 
         <Route path="developer" element={<Developer />} />
         <Route path="developer/api-keys" element={<NestedResource />} />
+        <Route path="developer/api-keys/new" element={<ActionPage />} />
         <Route
           path="developer/service-accounts"
           element={<NestedResource />}
@@ -75,6 +83,7 @@ export function App() {
           element={<NestedResource />}
         />
         <Route path="developer/webhooks" element={<NestedResource />} />
+        <Route path="developer/webhooks/new" element={<ActionPage />} />
         <Route path="developer/events" element={<NestedResource />} />
         <Route
           path="developer/environments"
@@ -90,6 +99,9 @@ export function App() {
 
         <Route path="settings" element={<SettingsHub />} />
         <Route path="notifications" element={<Notifications />} />
+        <Route path="integrations" element={<Integrations />} />
+        <Route path="environments" element={<Environments />} />
+        <Route path="database" element={<DatabaseConnections />} />
         <Route
           path="settings/members"
           element={<NestedResource />}
@@ -112,6 +124,7 @@ export function App() {
         <Route path="settings/danger" element={<NestedResource />} />
 
         <Route path="support" element={<Support />} />
+        <Route path="support/new" element={<ActionPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/app" replace />} />
