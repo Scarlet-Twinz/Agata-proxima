@@ -1,6 +1,6 @@
 # Agata Proxima Pricing Proposal
 
-This is a **commercial proposal**, not an instruction to create Stripe Prices yet.
+This is a **commercial proposal**, not an instruction to create Paystack Plans yet.
 
 ## Recommended launch pricing
 
@@ -103,15 +103,15 @@ After the monthly plans are validated, add annual billing at approximately two m
 
 These annual figures are intentionally simple rather than aggressively discounted.
 
-## Stripe boundary
+## Paystack boundary
 
-Only Agata Proxima products should be created in the connected Stripe account.
+Only Agata Proxima products should be created in the connected Paystack account.
 
 Do not modify, rename, reuse or attach Agata customers to the existing unrelated Nexora product.
 
-The Free plan does not need a Stripe recurring Price.
+The Free plan does not need a Paystack recurring Plan.
 
-The first Stripe catalog should contain:
+The first Paystack catalog should contain:
 
 - Agata Proxima Starter — $79/month
 - Agata Proxima Growth — $249/month
@@ -119,4 +119,4 @@ The first Stripe catalog should contain:
 
 Enterprise remains sales-led/custom until a contract-specific billing workflow is defined.
 
-No Stripe Prices should be created from this document until the founder confirms the plan limits and launch prices.
+No Paystack Plans should be created from this document until the founder confirms the plan limits and launch prices.
