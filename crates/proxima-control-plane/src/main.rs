@@ -2752,7 +2752,43 @@ fn internal(message: &str) -> Response {
         .into_response()
 }
 
+fn entitlement_write_error(e: &sqlx::Error) -> Option<Response> {
+    let message = e.as_database_error()?.message();
+
+    if let Some(resource) = message.strip_prefix("AGATA_PLAN_LIMIT: ") {
+        return Some((
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({
+                "ok": false,
+                "error": "plan_limit_reached",
+                "resource": resource,
+                "message": "Plan capacity reached. Upgrade the Agata Proxima plan to continue."
+            })),
+        ).into_response());
+    }
+
+    if message.starts_with("AGATA_SUBSCRIPTION_INACTIVE:") {
+        return Some((
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({
+                "ok": false,
+                "error": "subscription_inactive",
+                "message": "Restore an active Agata Proxima subscription to create resources."
+            })),
+        ).into_response());
+    }
+
+    if message.starts_with("AGATA_ENTITLEMENT_MISSING:") {
+        return Some(service_unavailable("Organization entitlements are not initialized."));
+    }
+
+    None
+}
+
 fn db_error(e: sqlx::Error) -> Response {
+    if let Some(response) = entitlement_write_error(&e) {
+        return response;
+    }
     error!(%e, "control-plane database error");
     internal("Control-plane database error.")
 }
