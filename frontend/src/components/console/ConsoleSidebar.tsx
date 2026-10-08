@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { NavLink, Link } from "react-router-dom";
 import { AgataLogo } from "../brand/AgataLogo";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api } from "../../api/client";
 
 type Organization = { id:string; name:string; slug:string; role:string };
@@ -46,7 +46,7 @@ const security = [
 const organization = [
   { to: "/app/team", label: "Team", icon: Users },
   { to: "/app/billing", label: "Billing", icon: CreditCard },
-  { to: "/app/developer", label: "Developer", icon: KeyRound },
+  { to: "/app/developer", label: "Developer", icon: KeyRound },\n  { to: "/app/database", label: "Database", icon: Network },
 ];
 
 export default function ConsoleSidebar({
