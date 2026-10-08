@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Database, KeyRound, RefreshCw, RotateCw, ShieldCheck } from "lucide-react";
+import { RefreshCw, RotateCw, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "../../api/client";
 
