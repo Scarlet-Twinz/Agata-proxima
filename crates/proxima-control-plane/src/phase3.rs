@@ -937,11 +937,13 @@ pub(crate) async fn team_change_role(
             .await
         {
             Ok(Some(v)) => v,
-            Ok(None) => return (
-                StatusCode::NOT_FOUND,
-                Json(json!({"ok":false,"message":"Member not found."})),
-            )
-                .into_response(),
+            Ok(None) => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(json!({"ok":false,"message":"Member not found."})),
+                )
+                .into_response()
+            }
             Err(e) => return db_error(e),
         };
     let old = target.get::<String, _>("role");
