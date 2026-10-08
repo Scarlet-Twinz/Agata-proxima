@@ -70,19 +70,35 @@ BEGIN
         RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'AGATA_SUBSCRIPTION_INACTIVE: team_seats';
     END IF;
 
-    SELECT count(*)
-      INTO active_members
-      FROM memberships
-     WHERE organization_id = org_id
-       AND (TG_TABLE_NAME <> 'memberships' OR user_id IS DISTINCT FROM NEW.user_id);
+    IF TG_TABLE_NAME = 'memberships' THEN
+        SELECT count(*)
+          INTO active_members
+          FROM memberships
+         WHERE organization_id = org_id
+           AND user_id IS DISTINCT FROM NEW.user_id;
+    ELSE
+        SELECT count(*)
+          INTO active_members
+          FROM memberships
+         WHERE organization_id = org_id;
+    END IF;
 
-    SELECT count(*)
-      INTO pending_invites
-      FROM organization_invites
-     WHERE organization_id = org_id
-       AND accepted_at IS NULL
-       AND expires_at > now()
-       AND (TG_TABLE_NAME <> 'organization_invites' OR id IS DISTINCT FROM NEW.id);
+    IF TG_TABLE_NAME = 'organization_invites' THEN
+        SELECT count(*)
+          INTO pending_invites
+          FROM organization_invites
+         WHERE organization_id = org_id
+           AND accepted_at IS NULL
+           AND expires_at > now()
+           AND id IS DISTINCT FROM NEW.id;
+    ELSE
+        SELECT count(*)
+          INTO pending_invites
+          FROM organization_invites
+         WHERE organization_id = org_id
+           AND accepted_at IS NULL
+           AND expires_at > now();
+    END IF;
 
     total_seats := active_members + pending_invites;
     IF total_seats >= ent.team_seat_limit THEN
