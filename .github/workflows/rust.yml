@@ -82,6 +82,21 @@ jobs:
           PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0009_environment_credentials.sql
           PGDATABASE=proxima_control psql -v ON_ERROR_STOP=1 -f crates/proxima-control-plane/migrations/0010_audit_tamper_evidence.sql
 
+      - name: Control plane startup smoke test
+        env:
+          PROXIMA_CONTROL_DATABASE_URL: postgres://proxima:proxima-dev-only@localhost:5432/proxima_control
+          PROXIMA_CONTROL_BIND: 127.0.0.1:18080
+          PROXIMA_COOKIE_SECURE: "false"
+        run: |
+          set +e
+          timeout 30s cargo run -p proxima-control-plane
+          status=$?
+          set -e
+          if [ "$status" -ne 124 ]; then
+            echo "Control plane failed during startup (exit $status)."
+            exit "$status"
+          fi
+
       - name: Phase 3A schema acceptance gate
         env:
           PGHOST: localhost
