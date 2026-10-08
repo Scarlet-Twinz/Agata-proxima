@@ -21,9 +21,9 @@ grep -Fq 'price:"$79/mo"' "$pricing" || fail "public Starter price is not $79"
 grep -Fq 'price:"$249/mo"' "$pricing" || fail "public Growth price is not $249"
 grep -Fq 'price:"$799/mo"' "$pricing" || fail "public Scale price is not $799"
 grep -Fq 'Free / $79 Starter / $249 Growth / $799 Scale / Enterprise Custom' "$matrix" || fail "entitlement pricing matrix disagrees"
-grep -Fq 'Starter: $79/month' "$proposal" || fail "pricing proposal Starter price disagrees"
-grep -Fq 'Growth: $249/month' "$proposal" || fail "pricing proposal Growth price disagrees"
-grep -Fq 'Scale: $799/month' "$proposal" || fail "pricing proposal Scale price disagrees"
+grep -Fq '| Starter | $79 |' "$proposal" || fail "pricing proposal Starter price disagrees"
+grep -Fq '| Growth | $249 |' "$proposal" || fail "pricing proposal Growth price disagrees"
+grep -Fq '| Scale | $799 |' "$proposal" || fail "pricing proposal Scale price disagrees"
 grep -Fq 'server-side enforcement point and tests' "$contract" || fail "entitlement enforcement contract missing"
 
 if grep -Eq '149_i32|499_i32|1199_i32|\$149/mo|\$499/mo|\$1,199/mo' "$backend" "$pricing"; then
