@@ -28,6 +28,8 @@ required_columns=(
   "audit_events|decision"
   "audit_events|verification_result"
   "audit_events|failure_reason"
+  "audit_events|previous_hash"
+  "audit_events|event_hash"
   "database_connections|password_ciphertext"
 )
 
