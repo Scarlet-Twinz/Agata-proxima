@@ -881,7 +881,20 @@ pub(crate) async fn team_resend_invitation(
         Ok(value) if !value.trim().is_empty() => value.trim_end_matches('/').to_string(),
         _ => return super::service_unavailable("AGATA_PUBLIC_BASE_URL is not configured."),
     };
-    if env::var("RESEND_INVITATION_TEMPLATE_ID").ok().map(|id| super::production::send_template_email(&email,&id,json!({"ORGANIZATION":org,"ROLE":role,"ACTION_URL":format!("{base}/accept-invite?token={token}")}))).map(|future| async move { future.await }).unwrap_or_else(|| Box::pin(async { Err(()) })).await.is_err(){return super::service_unavailable("RESEND_INVITATION_TEMPLATE_ID is not configured or invitation email failed.")}
+    let template_id = match env::var("RESEND_INVITATION_TEMPLATE_ID") {
+        Ok(value) if !value.trim().is_empty() => value,
+        _ => return super::service_unavailable("RESEND_INVITATION_TEMPLATE_ID is not configured."),
+    };
+    if super::production::send_template_email(
+        &email,
+        &template_id,
+        json!({"ORGANIZATION":org,"ROLE":role,"ACTION_URL":format!("{base}/accept-invite?token={token}")}),
+    )
+    .await
+    .is_err()
+    {
+        return super::service_unavailable("Invitation email could not be sent.");
+    }
     audit(
         &s.db,
         ctx.organization_id,
