@@ -27,26 +27,26 @@ The fundamental Proxima Engine security boundary is available on every plan. Pri
 
 ### Free
 
-New organizations start on Free. No Stripe subscription is required.
+New organizations start on Free. No Paystack subscription is required.
 
 ### Paid subscriptions
 
-Stripe is the billing source of truth for paid subscriptions. The Control Plane stores a normalized billing state and derives the organization entitlement record from the verified Stripe Price ID.
+Paystack is the billing source of truth for paid subscriptions. The Control Plane stores a normalized billing state and derives the organization entitlement record from the verified Paystack plan code.
 
-Only these environment-configured Stripe Price IDs are accepted:
+Only these environment-configured Paystack plan codes are accepted:
 
-- `AGATA_STRIPE_STARTER_PRICE_ID`
-- `AGATA_STRIPE_GROWTH_PRICE_ID`
-- `AGATA_STRIPE_SCALE_PRICE_ID`
+- `AGATA_PAYSTACK_STARTER_PRICE_ID`
+- `AGATA_PAYSTACK_GROWTH_PRICE_ID`
+- `AGATA_PAYSTACK_SCALE_PRICE_ID`
 
-A checkout request containing a Price ID that is not one of those three is rejected.
+A checkout request containing a plan code that is not one of those three is rejected.
 
 ### Subscription lifecycle
 
-- Checkout creates a Stripe subscription.
-- Stripe webhook signatures are verified before processing.
-- Stripe event IDs are idempotent.
-- Subscription create/update events set the plan from the verified Agata Price ID.
+- Checkout creates a Paystack subscription.
+- Paystack webhook signatures are verified before processing.
+- Paystack event IDs are idempotent.
+- Subscription create/update events set the plan from the verified Agata plan code.
 - Subscription deletion returns the organization to Free.
 - Payment failure marks the billing state `past_due`; the organization retains its plan during the payment-recovery period.
 - The Control Plane never grants a paid plan merely because a browser says payment succeeded.
@@ -62,7 +62,7 @@ Starter -> Growth -> Scale
 
 by editing a frontend request.
 
-The backend maps the Stripe Price ID to the corresponding plan, and the database stores the resulting entitlement.
+The backend maps the Paystack plan code to the corresponding plan, and the database stores the resulting entitlement.
 
 The Engine's tenant-isolation enforcement remains independent of this billing state.
 
