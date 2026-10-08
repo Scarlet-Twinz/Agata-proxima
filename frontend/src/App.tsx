@@ -70,6 +70,7 @@ export function App() {
         <Route path="developer" element={<Developer />} />
         <Route path="developer/api-keys" element={<NestedResource />} />
         <Route path="developer/api-keys/new" element={<ActionPage />} />
+        <Route path="developer/api-keys/:apiKeyId" element={<NestedResource />} />
         <Route
           path="developer/service-accounts"
           element={<NestedResource />}
@@ -84,6 +85,7 @@ export function App() {
         />
         <Route path="developer/webhooks" element={<NestedResource />} />
         <Route path="developer/webhooks/new" element={<ActionPage />} />
+        <Route path="developer/webhooks/:webhookId" element={<NestedResource />} />
         <Route path="developer/events" element={<NestedResource />} />
         <Route
           path="developer/environments"
