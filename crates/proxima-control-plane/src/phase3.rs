@@ -1294,29 +1294,34 @@ async fn issue_environment_credentials(
 
 
 #[derive(Deserialize)]
+#[rustfmt::skip]
 pub(crate) struct TenantPatchInput {
     pub name: Option<String>,
     pub slug: Option<String>,
     pub isolation_mode: Option<String>,
 }
 #[derive(Deserialize)]
+#[rustfmt::skip]
 pub(crate) struct PolicyPatchInput {
     pub name: Option<String>,
     pub document: Option<Value>,
     pub status: Option<String>,
 }
 #[derive(Deserialize)]
+#[rustfmt::skip]
 pub(crate) struct ContextCredentialInput {
     pub environment_id: Uuid,
     pub tenant_id: Uuid,
 }
 
+#[rustfmt::skip]
 async fn scoped_tenant(db:&sqlx::PgPool,ctx:&AuthContext,id:Uuid)->Result<PgRow,Response>{
     sqlx::query("SELECT id,organization_id,project_id,name,slug,status,isolation_mode,created_at,disabled_at FROM tenants WHERE id=$1 AND organization_id=$2")
         .bind(id).bind(ctx.organization_id).fetch_optional(db).await.map_err(db_error)?
         .ok_or_else(||(StatusCode::NOT_FOUND,Json(json!({"ok":false,"message":"Tenant not found in the active organization."}))).into_response())
 }
 
+#[rustfmt::skip]
 pub(crate) async fn tenant_detail(State(s):State<AppState>,Path(id):Path<Uuid>,headers:HeaderMap)->Response{
     let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};
     match scoped_tenant(&s.db,&ctx,id).await{
@@ -1325,6 +1330,7 @@ pub(crate) async fn tenant_detail(State(s):State<AppState>,Path(id):Path<Uuid>,h
     }
 }
 
+#[rustfmt::skip]
 pub(crate) async fn tenant_update(State(s):State<AppState>,Path(id):Path<Uuid>,headers:HeaderMap,Json(input):Json<TenantPatchInput>)->Response{
     let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()}; if let Err(c)=require_write(&ctx,&headers){return c.into_response()};
     let current=match scoped_tenant(&s.db,&ctx,id).await{Ok(v)=>v,Err(e)=>return e};
@@ -1337,6 +1343,7 @@ pub(crate) async fn tenant_update(State(s):State<AppState>,Path(id):Path<Uuid>,h
     }
 }
 
+#[rustfmt::skip]
 pub(crate) async fn tenant_disable(State(s):State<AppState>,Path(id):Path<Uuid>,headers:HeaderMap)->Response{
     let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()}; if let Err(c)=require_admin(&ctx,&headers){return c.into_response()}; if let Err(e)=scoped_tenant(&s.db,&ctx,id).await{return e};
     match sqlx::query("UPDATE tenants SET status='suspended',disabled_at=now() WHERE id=$1 AND organization_id=$2 AND status='active'").bind(id).bind(ctx.organization_id).execute(&s.db).await{
@@ -1346,6 +1353,7 @@ pub(crate) async fn tenant_disable(State(s):State<AppState>,Path(id):Path<Uuid>,
     }
 }
 
+#[rustfmt::skip]
 pub(crate) async fn tenant_enable(State(s):State<AppState>,Path(id):Path<Uuid>,headers:HeaderMap)->Response{
     let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()}; if let Err(c)=require_admin(&ctx,&headers){return c.into_response()};
     if let Err(e)=scoped_tenant(&s.db,&ctx,id).await{return e};
@@ -1356,6 +1364,7 @@ pub(crate) async fn tenant_enable(State(s):State<AppState>,Path(id):Path<Uuid>,h
     }
 }
 
+#[rustfmt::skip]
 pub(crate) async fn policy_detail(State(s):State<AppState>,Path(id):Path<Uuid>,headers:HeaderMap)->Response{
     let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};
     match sqlx::query("SELECT id,name,version,status,document,created_by,created_at,updated_at FROM policies WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id).fetch_optional(&s.db).await{
@@ -1365,12 +1374,14 @@ pub(crate) async fn policy_detail(State(s):State<AppState>,Path(id):Path<Uuid>,h
     }
 }
 
+#[rustfmt::skip]
 fn validate_policy_document(document:&Value)->Result<(),String>{
     let Some(object)=document.as_object() else{return Err("Policy document must be a JSON object.".into())};
     if object.get("rules").is_none(){return Err("Policy document must define rules explicitly.".into())}
     Ok(())
 }
 
+#[rustfmt::skip]
 pub(crate) async fn policy_update(State(s):State<AppState>,Path(id):Path<Uuid>,headers:HeaderMap,Json(input):Json<PolicyPatchInput>)->Response{
     let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()}; if let Err(c)=require_admin(&ctx,&headers){return c.into_response()};
     let current=match sqlx::query("SELECT name,version,status,document FROM policies WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id).fetch_optional(&s.db).await{Ok(Some(v))=>v,Ok(None)=>return (StatusCode::NOT_FOUND,Json(json!({"ok":false,"message":"Policy not found in the active organization."}))).into_response(),Err(e)=>return db_error(e)};
@@ -1384,6 +1395,7 @@ pub(crate) async fn policy_update(State(s):State<AppState>,Path(id):Path<Uuid>,h
     }
 }
 
+#[rustfmt::skip]
 pub(crate) async fn policy_new_version(State(s):State<AppState>,Path(id):Path<Uuid>,headers:HeaderMap,Json(input):Json<PolicyPatchInput>)->Response{
     let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()}; if let Err(c)=require_admin(&ctx,&headers){return c.into_response()};
     let current=match sqlx::query("SELECT name,version,document FROM policies WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id).fetch_optional(&s.db).await{Ok(Some(v))=>v,Ok(None)=>return (StatusCode::NOT_FOUND,Json(json!({"ok":false,"message":"Policy not found in the active organization."}))).into_response(),Err(e)=>return db_error(e)};
@@ -1395,12 +1407,14 @@ pub(crate) async fn policy_new_version(State(s):State<AppState>,Path(id):Path<Uu
     }
 }
 
+#[rustfmt::skip]
 pub(crate) async fn policy_validate(State(s):State<AppState>,Path(id):Path<Uuid>,headers:HeaderMap)->Response{
     let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};
     let r=match sqlx::query("SELECT version,status,document FROM policies WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id).fetch_optional(&s.db).await{Ok(Some(v))=>v,Ok(None)=>return (StatusCode::NOT_FOUND,Json(json!({"ok":false,"message":"Policy not found in the active organization."}))).into_response(),Err(e)=>return db_error(e)};
     match validate_policy_document(&r.get::<Value,_>("document")){Ok(())=>Json(json!({"ok":true,"result":"PASS","version":r.get::<i32,_>("version"),"status":r.get::<String,_>("status")})).into_response(),Err(m)=>Json(json!({"ok":false,"result":"FAIL","message":m})).into_response()}
 }
 
+#[rustfmt::skip]
 pub(crate) async fn project_list(State(s):State<AppState>,headers:HeaderMap)->Response{
     let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};
     match sqlx::query("SELECT id,name,slug,created_at FROM projects WHERE organization_id=$1 ORDER BY created_at").bind(ctx.organization_id).fetch_all(&s.db).await{
@@ -1410,6 +1424,7 @@ pub(crate) async fn project_list(State(s):State<AppState>,headers:HeaderMap)->Re
 }
 
 
+#[rustfmt::skip]
 async fn audit_external(db:&sqlx::PgPool,org:Uuid,action:&str,resource_type:&str,resource_id:Option<Uuid>,metadata:Value){
     let correlation_id=Uuid::new_v4().to_string();
     let previous_hash:Option<Vec<u8>>=sqlx::query_scalar("SELECT event_hash FROM audit_events WHERE organization_id=$1 ORDER BY created_at DESC,id DESC LIMIT 1").bind(org).fetch_optional(db).await.unwrap_or(None).flatten();
@@ -1418,11 +1433,13 @@ async fn audit_external(db:&sqlx::PgPool,org:Uuid,action:&str,resource_type:&str
     let _=sqlx::query("INSERT INTO audit_events(organization_id,user_id,action,resource_type,resource_id,metadata,correlation_id,previous_hash,event_hash) VALUES($1,NULL,$2,$3,$4,$5,$6,$7,$8)").bind(org).bind(action).bind(resource_type).bind(resource_id).bind(metadata).bind(correlation_id).bind(previous_hash).bind(event_hash).execute(db).await;
 }
 
+#[rustfmt::skip]
 fn bearer(headers:&HeaderMap)->Option<String>{
     let value=headers.get(axum::http::header::AUTHORIZATION)?.to_str().ok()?;
     value.strip_prefix("Bearer ").map(str::trim).filter(|v|!v.is_empty()).map(ToOwned::to_owned)
 }
 
+#[rustfmt::skip]
 pub(crate) async fn create_environment_credential(State(s):State<AppState>,Path((integration_id,environment_id)) : Path<(Uuid,Uuid)>,headers:HeaderMap)->Response{
     let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()}; if let Err(c)=require_admin(&ctx,&headers){return c.into_response()};
     if let Err(e)=scoped_integration(&s.db,&ctx,integration_id).await{return e}; if let Err(e)=scoped_environment(&s.db,&ctx,environment_id).await{return e};
@@ -1433,6 +1450,7 @@ pub(crate) async fn create_environment_credential(State(s):State<AppState>,Path(
     Json(json!({"ok":true,"id":id,"credential":secret,"message":"Environment credential is shown once."})).into_response()
 }
 
+#[rustfmt::skip]
 pub(crate) async fn issue_customer_context(State(s):State<AppState>,headers:HeaderMap,Json(input):Json<ContextCredentialInput>)->Response{
     let credential=match bearer(&headers){Some(v)=>v,None=>return (StatusCode::UNAUTHORIZED,Json(json!({"ok":false,"message":"Bearer environment credential required."}))).into_response()};
     let row=match sqlx::query("SELECT c.id,c.organization_id,c.integration_id,c.environment_id,i.status AS integration_status,e.status AS environment_status FROM environment_integration_credentials c JOIN integrations i ON i.id=c.integration_id AND i.organization_id=c.organization_id JOIN environments e ON e.id=c.environment_id AND e.organization_id=c.organization_id WHERE c.key_hash=$1 AND c.active=true").bind(token_hash(&credential)).fetch_optional(&s.db).await{
