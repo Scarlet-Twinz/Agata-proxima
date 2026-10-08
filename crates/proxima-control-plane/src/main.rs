@@ -2384,8 +2384,7 @@ async fn create_verification(
         }
     }
 
-    if let Err(response) =
-        production::enforce_verification_quota(&s.db, ctx.organization_id).await
+    if let Err(response) = production::enforce_verification_quota(&s.db, ctx.organization_id).await
     {
         return response;
     }
