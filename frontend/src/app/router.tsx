@@ -44,6 +44,7 @@ import { ActionPage } from "../pages/console/ActionPage";
 import { SettingsHub } from "../pages/console/SettingsHub";
 import { Notifications } from "../pages/console/Notifications";
 import { TeamManagement } from "../pages/console/TeamManagement";
+import { Integrations, Environments, DatabaseConnections } from "../pages/console/IntegrationFoundation";
 
 const detailRoutes = [
   "/product/model", "/product/enforcement", "/product/verification", "/product/evidence",
@@ -67,6 +68,9 @@ const consoleResourceRoutes = [
   { path: "audit", element: <Audit /> },
   { path: "security", element: <ConsoleSecurity /> },
   { path: "team", element: <TeamManagement /> },
+  { path: "integrations", element: <Integrations /> },
+  { path: "environments", element: <Environments /> },
+  { path: "database", element: <DatabaseConnections /> },
   { path: "notifications", element: <Notifications /> },
   { path: "billing", element: <Billing /> },
   { path: "settings", element: <SettingsHub /> },
