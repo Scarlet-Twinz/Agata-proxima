@@ -117,10 +117,6 @@ BEGIN
         RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'AGATA_ENTITLEMENT_MISSING: api_requests';
     END IF;
 
-    IF ent.billing_status IN ('canceled', 'unpaid') THEN
-        RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'AGATA_SUBSCRIPTION_INACTIVE: api_requests';
-    END IF;
-
     bucket := date_trunc('minute', now());
     INSERT INTO api_rate_limit_windows(organization_id, window_start, request_count)
     VALUES (target_organization, bucket, 1)
