@@ -196,6 +196,9 @@ async fn main() -> Result<()> {
     ))
     .execute(&db)
     .await?;
+    sqlx::raw_sql(include_str!("../migrations/0009_environment_credentials.sql"))
+        .execute(&db)
+        .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
@@ -353,6 +356,14 @@ async fn main() -> Result<()> {
         .route(
             "/api/v1/integrations/{id}/deactivate",
             post(phase3::deactivate_integration),
+        )
+        .route(
+            "/api/v1/integrations/{integration_id}/environments/{environment_id}/credentials/rotate",
+            post(phase3::rotate_environment_credential),
+        )
+        .route(
+            "/api/v1/integrations/{integration_id}/environments/{environment_id}/credentials/revoke",
+            post(phase3::revoke_environment_credential),
         )
         .route(
             "/api/v1/environments",
