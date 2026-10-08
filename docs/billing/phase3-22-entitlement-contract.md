@@ -26,6 +26,9 @@ Pricing is separate from entitlement limits. A plan code received from a browser
 | Active webhook integrations | 1 | 5 | 20 | 100 | Contract-defined |
 | Verification runs per UTC calendar month | 100 | 1,000 | 10,000 | 100,000 | Contract-defined |
 | Team seats (members + unexpired pending invitations) | 1 | 5 | 15 | 50 | Contract-defined |
+| Active API keys | 1 | 5 | 25 | 100 | Contract-defined |
+| Authenticated API requests per minute | 60 | 300 | 1,000 | 5,000 | Contract-defined |
+| Support level | Community | Standard | Priority | Priority+ | Contract-defined |
 | Audit retention | 7 days | 30 days | 180 days | 365 days | Contract-defined |
 
 ## Feature contract
