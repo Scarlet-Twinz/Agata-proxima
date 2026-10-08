@@ -877,7 +877,7 @@ pub(crate) async fn team_resend_invitation(
         .unwrap_or_else(|_| "http://127.0.0.1:8080".into())
         .trim_end_matches('/')
         .to_string();
-    if let Err(_)=super::production::send_template_email(&email,"0757a210-a372-4a5a-8fca-e642c2fed3da",json!({"ORGANIZATION":org,"ROLE":role,"ACTION_URL":format!("{base}/accept-invite?token={token}")})).await{return super::service_unavailable("Invitation email could not be sent.")};
+    if super::production::send_template_email(&email,"0757a210-a372-4a5a-8fca-e642c2fed3da",json!({"ORGANIZATION":org,"ROLE":role,"ACTION_URL":format!("{base}/accept-invite?token={token}")})).await.is_err(){return super::service_unavailable("Invitation email could not be sent.")}
     audit(
         &s.db,
         ctx.organization_id,
