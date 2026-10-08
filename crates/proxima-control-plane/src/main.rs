@@ -190,9 +190,38 @@ async fn main() -> Result<()> {
     sqlx::raw_sql(include_str!("../migrations/0007_notifications_email.sql"))
         .execute(&db)
         .await?;
+
+    sqlx::raw_sql(include_str!("../migrations/0008_paystack_billing.sql"))
+        .execute(&db)
+        .await?;
+    sqlx::raw_sql(include_str!("../migrations/0009_capacity_enforcement.sql"))
+        .execute(&db)
+        .await?;
+    sqlx::raw_sql(include_str!("../migrations/0010_integration_quotas.sql"))
+        .execute(&db)
+        .await?;
+    sqlx::raw_sql(include_str!("../migrations/0011_verification_quotas.sql"))
+        .execute(&db)
+        .await?;
+    sqlx::raw_sql(include_str!("../migrations/0012_audit_retention.sql"))
+        .execute(&db)
+        .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
+
+    let retention_db = db.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
+        loop {
+            interval.tick().await;
+            match production::purge_expired_audit_events(&retention_db).await {
+                Ok(deleted) if deleted > 0 => info!(deleted, "purged expired audit events"),
+                Ok(_) => {}
+                Err(e) => error!(%e, "audit retention purge failed"),
+            }
+        }
+    });
 
     let state = AppState {
         db,
@@ -2429,10 +2458,29 @@ async fn audit_events(State(s): State<AppState>, headers: HeaderMap) -> Response
         Ok(v) => v,
         Err(c) => return c.into_response(),
     };
+
+    let has_entitlement = match sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM organization_entitlements WHERE organization_id=$1)",
+    )
+    .bind(ctx.organization_id)
+    .fetch_one(&s.db)
+    .await
+    {
+        Ok(value) => value,
+        Err(e) => return db_error(e),
+    };
+    if !has_entitlement {
+        return service_unavailable("Organization entitlements are not initialized.");
+    }
+
     match sqlx::query(
-        "SELECT id,action,resource_type,resource_id,metadata,
-         to_char(created_at,'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS created_at
-         FROM audit_events WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 250"
+        "SELECT a.id,a.action,a.resource_type,a.resource_id,a.metadata,
+         to_char(a.created_at,'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS created_at
+         FROM audit_events a
+         JOIN organization_entitlements e ON e.organization_id=a.organization_id
+         WHERE a.organization_id=$1
+           AND a.created_at >= now() - make_interval(days => e.audit_retention_days)
+         ORDER BY a.created_at DESC LIMIT 250"
     ).bind(ctx.organization_id).fetch_all(&s.db).await {
         Ok(rows) => Json(rows.iter().map(|r| json!({
             "id":r.get::<Uuid,_>("id"), "action":r.get::<String,_>("action"),
