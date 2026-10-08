@@ -11,7 +11,6 @@ The fundamental Proxima Engine security boundary is available on every plan. Pri
 | Nodes | 1 | 2 | 5 | 15 | Custom |
 | Tenants | 3 | 25 | 100 | 500 | Custom |
 | Environments | 1 | 2 | 5 | 50 | Custom |
-| Active webhook integrations | 1 | 5 | 20 | 100 | Custom |
 | Basic verification | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Advanced verification | — | — | ✓ | ✓ | ✓ |
 | Policy management | — | ✓ | ✓ | ✓ | ✓ |
@@ -78,4 +77,4 @@ Implemented backend enforcement currently covers:
 - inactive subscription protection;
 - entitlement inspection through `GET /api/v1/billing/entitlements`.
 
-Integration quotas count enabled outbound webhook integrations. Disabled webhooks do not consume capacity, but re-enabling them is rejected when the plan is already at its limit. Additional UI gating should consume this endpoint rather than inventing its own plan logic.
+Additional UI gating should consume this endpoint rather than inventing its own plan logic.
