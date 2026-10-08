@@ -508,7 +508,7 @@ pub(crate) async fn validate_database_connection(
     if let Err(c) = require_write(&ctx, &headers) {
         return c.into_response();
     };
-    let row=match sqlx::query("SELECT host,port,database_name,username,password_ciphertext,tls_mode FROM database_connections WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id).fetch_optional(&s.db).await{Ok(Some(v))=>v,Ok(None)=>(StatusCode::NOT_FOUND,Json(json!({"ok":false,"message":"Database connection not found."}))).into_response(),Err(e)=>return db_error(e)};
+    let row=match sqlx::query("SELECT host,port,database_name,username,password_ciphertext,tls_mode FROM database_connections WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id).fetch_optional(&s.db).await{Ok(Some(v))=>v,Ok(None)=>return (StatusCode::NOT_FOUND,Json(json!({"ok":false,"message":"Database connection not found."}))).into_response(),Err(e)=>return db_error(e)};
     let secret = match decrypt_secret(
         &s.db,
         row.get::<Vec<u8>, _>("password_ciphertext").as_slice(),
@@ -798,7 +798,7 @@ pub(crate) async fn migration_preflight(
     if let Err(c) = require_admin(&ctx, &headers) {
         return c.into_response();
     };
-    let row=match sqlx::query("SELECT source_environment,target_environment FROM migration_runs WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id).fetch_optional(&s.db).await{Ok(Some(v))=>v,Ok(None)=>(StatusCode::NOT_FOUND,Json(json!({"ok":false,"message":"Migration run not found."}))).into_response(),Err(e)=>return db_error(e)};
+    let row=match sqlx::query("SELECT source_environment,target_environment FROM migration_runs WHERE id=$1 AND organization_id=$2").bind(id).bind(ctx.organization_id).fetch_optional(&s.db).await{Ok(Some(v))=>v,Ok(None)=>return (StatusCode::NOT_FOUND,Json(json!({"ok":false,"message":"Migration run not found."}))).into_response(),Err(e)=>return db_error(e)};
     let source = row.get::<String, _>("source_environment");
     let target = row.get::<String, _>("target_environment");
     let source_exists = sqlx::query(
@@ -858,7 +858,7 @@ pub(crate) async fn team_resend_invitation(
     if let Err(c) = require_admin(&ctx, &headers) {
         return c.into_response();
     };
-    let row=match sqlx::query("SELECT email,role FROM organization_invites WHERE id=$1 AND organization_id=$2 AND accepted_at IS NULL AND expires_at>now()").bind(id).bind(ctx.organization_id).fetch_optional(&s.db).await{Ok(Some(v))=>v,Ok(None)=>(StatusCode::NOT_FOUND,Json(json!({"ok":false,"message":"Pending invitation not found or expired."}))).into_response(),Err(e)=>return db_error(e)};
+    let row=match sqlx::query("SELECT email,role FROM organization_invites WHERE id=$1 AND organization_id=$2 AND accepted_at IS NULL AND expires_at>now()").bind(id).bind(ctx.organization_id).fetch_optional(&s.db).await{Ok(Some(v))=>v,Ok(None)=>return (StatusCode::NOT_FOUND,Json(json!({"ok":false,"message":"Pending invitation not found or expired."}))).into_response(),Err(e)=>return db_error(e)};
     let email = row.get::<String, _>("email");
     let role = row.get::<String, _>("role");
     let token = format!("{}-{}", Uuid::new_v4(), Uuid::new_v4());
@@ -988,7 +988,7 @@ pub(crate) async fn team_remove_member(
     if member_id == ctx.user_id {
         return bad("You cannot remove yourself from the active organization.");
     };
-    let target=match sqlx::query("SELECT role,email FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.user_id=$1 AND m.organization_id=$2").bind(member_id).bind(ctx.organization_id).fetch_optional(&s.db).await{Ok(Some(v))=>v,Ok(None)=>(StatusCode::NOT_FOUND,Json(json!({"ok":false,"message":"Member not found."}))).into_response(),Err(e)=>return db_error(e)};
+    let target=match sqlx::query("SELECT role,email FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.user_id=$1 AND m.organization_id=$2").bind(member_id).bind(ctx.organization_id).fetch_optional(&s.db).await{Ok(Some(v))=>v,Ok(None)=>return (StatusCode::NOT_FOUND,Json(json!({"ok":false,"message":"Member not found."}))).into_response(),Err(e)=>return db_error(e)};
     if target.get::<String, _>("role") == "owner" {
         return (
             StatusCode::FORBIDDEN,
