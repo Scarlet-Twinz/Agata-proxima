@@ -78,7 +78,9 @@ impl Config {
             ));
         }
 
-        let tenant_signing_key = match env::var("PROXIMA_CONTEXT_SIGNING_KEY").or_else(|_| env::var("PROXIMA_TENANT_SIGNING_KEY")) {
+        let tenant_signing_key = match env::var("PROXIMA_CONTEXT_SIGNING_KEY")
+            .or_else(|_| env::var("PROXIMA_TENANT_SIGNING_KEY"))
+        {
             Ok(value) if value.trim().is_empty() => None,
             Ok(value) if value.len() < 32 => {
                 return Err(io::Error::new(
