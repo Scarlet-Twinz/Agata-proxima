@@ -173,14 +173,6 @@ pub(crate) async fn create_integration(
     let id = Uuid::new_v4();
     let cfg = input.configuration.unwrap_or_else(|| json!({}));
     if let Err(e)=sqlx::query("INSERT INTO integrations(id,organization_id,project_id,name,configuration,created_by) VALUES($1,$2,$3,$4,$5,$6)").bind(id).bind(ctx.organization_id).bind(input.project_id).bind(name).bind(cfg).bind(ctx.user_id).execute(&s.db).await{return super::unique_error(e)}
-    let secret = format!("aga_int_{}_{}", id.simple(), Uuid::new_v4().simple());
-    let prefix = secret.chars().take(16).collect::<String>();
-    if let Err(e)=sqlx::query("INSERT INTO integration_credentials(id,integration_id,key_prefix,key_hash) VALUES($1,$2,$3,$4)").bind(Uuid::new_v4()).bind(id).bind(&prefix).bind(token_hash(&secret)).execute(&s.db).await{return db_error(e)}
-    let environment_credentials =
-        match issue_environment_credentials(&s.db, ctx.organization_id, id).await {
-            Ok(value) => value,
-            Err(response) => return response,
-        };
     audit(
         &s.db,
         ctx.organization_id,
@@ -191,7 +183,7 @@ pub(crate) async fn create_integration(
         json!({"mode":"development"}),
     )
     .await;
-    Json(json!({"id":id,"name":name,"status":"active","mode":"development","credential":secret,"environment_credentials":environment_credentials,"message":"Credentials are shown once. Store them securely; Agata never returns the full secret again."})).into_response()
+    Json(json!({"id":id,"name":name,"status":"active","mode":"development","message":"Integration created. Issue a credential for the exact environment where the customer application will run."})).into_response()
 }
 pub(crate) async fn rotate_integration_credential(
     State(s): State<AppState>,
