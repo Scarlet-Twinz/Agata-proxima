@@ -13,6 +13,7 @@ The fundamental Proxima Engine security boundary is available on every plan. Pri
 | Environments | 1 | 2 | 5 | 50 | Custom |
 | Active webhook integrations | 1 | 5 | 20 | 100 | Custom |
 | Verification runs/month | 100 | 1,000 | 10,000 | 100,000 | Contract |
+| Team seats (members + pending invitations) | 1 | 5 | 15 | 50 | Contract |
 | Basic verification | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Advanced verification | — | — | ✓ | ✓ | ✓ |
 | Policy management | — | ✓ | ✓ | ✓ | ✓ |
@@ -79,4 +80,4 @@ Implemented backend enforcement currently covers:
 - inactive subscription protection;
 - entitlement inspection through `GET /api/v1/billing/entitlements`.
 
-Integration quotas count enabled outbound webhook integrations. Disabled webhooks do not consume capacity, but re-enabling them is rejected when the plan is already at its limit. Verification quota is counted across basic and advanced runs, resets at the UTC calendar-month boundary, and is enforced atomically by the database. Advanced verification remains a separate feature gate. Audit history is filtered by the current plan's retention window, and expired records are purged hourly; unresolved entitlement state preserves records until it is repaired. Additional UI gating should consume this endpoint rather than inventing its own plan logic.
+Integration quotas count enabled outbound webhook integrations. Disabled webhooks do not consume capacity, but re-enabling them is rejected when the plan is already at its limit. Verification quota is counted across basic and advanced runs, resets at the UTC calendar-month boundary, and is enforced atomically by the database. Advanced verification remains a separate feature gate. Audit history is filtered by the current plan's retention window, and expired records are purged hourly; unresolved entitlement state preserves records until it is repaired. Active memberships plus unexpired pending invitations consume team seats. Invitation acceptance transfers a reserved seat to membership atomically. Additional UI gating should consume this endpoint rather than inventing its own plan logic.
