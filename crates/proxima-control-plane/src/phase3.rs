@@ -583,7 +583,7 @@ pub(crate) async fn issue_context(
     let exp = chrono::Utc::now().timestamp() + ttl;
     let jti = Uuid::new_v4().to_string();
     let key =
-        match env::var("PROXIMA_CONTEXT_SIGNING_KEY") {
+        match env::var("PROXIMA_CONTEXT_SIGNING_KEY").or_else(|_| env::var("PROXIMA_TENANT_SIGNING_KEY")) {
             Ok(v) if v.len() >= 32 => v,
             _ => return (
                 StatusCode::SERVICE_UNAVAILABLE,
