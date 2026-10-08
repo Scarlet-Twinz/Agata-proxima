@@ -73,11 +73,14 @@ export function ConsoleLayout() {
   });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [environmentOpen, setEnvironmentOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [session, setSession] = useState<Session | null>(null);
   const [organizationName, setOrganizationName] = useState("Workspace");
+  const [environmentOptions, setEnvironmentOptions] = useState<{id:string;key:string;name:string;mode:string;status:string}[]>([]);
+  const [selectedEnvironment, setSelectedEnvironment] = useState(() => localStorage.getItem("agata.environment") || "production");
   const [organizations, setOrganizations] = useState<{id:string;name:string;slug:string;role:string}[]>([]);
   const [accountDisplayName, setAccountDisplayName] = useState("Account");
   const [accountEmail, setAccountEmail] = useState("");
