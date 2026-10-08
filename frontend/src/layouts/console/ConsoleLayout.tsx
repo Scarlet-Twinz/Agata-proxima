@@ -387,7 +387,7 @@ export function ConsoleLayout() {
               {environmentOpen && <div className="console-environment-menu">
                 {environmentOptions.map(env=><button key={env.id} className={env.key===selectedEnvironment?"console-environment-option is-selected":"console-environment-option"} type="button" onClick={()=>selectEnvironment(env.key)}><span><strong>{env.name}</strong><small>{env.mode} · {env.status}</small></span>{env.key===selectedEnvironment&&<span className="environment-check">✓</span>}</button>)}
                 <button className="console-environment-settings" type="button" onClick={()=>{setEnvironmentOpen(false);navigate("/app/environments")}}>Manage environments</button>
-              </div>}}
+              </div>}
             </div>
 
             <button
