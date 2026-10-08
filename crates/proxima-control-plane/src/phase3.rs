@@ -1,3 +1,5 @@
+#![rustfmt::skip]
+
 #![allow(clippy::result_large_err)]
 
 use axum::{
