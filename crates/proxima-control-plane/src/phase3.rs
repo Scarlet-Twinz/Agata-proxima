@@ -176,10 +176,11 @@ pub(crate) async fn create_integration(
     let secret = format!("aga_int_{}_{}", id.simple(), Uuid::new_v4().simple());
     let prefix = secret.chars().take(16).collect::<String>();
     if let Err(e)=sqlx::query("INSERT INTO integration_credentials(id,integration_id,key_prefix,key_hash) VALUES($1,$2,$3,$4)").bind(Uuid::new_v4()).bind(id).bind(&prefix).bind(token_hash(&secret)).execute(&s.db).await{return db_error(e)}
-    let environment_credentials = match issue_environment_credentials(&s.db, ctx.organization_id, id).await {
-        Ok(value) => value,
-        Err(response) => return response,
-    };
+    let environment_credentials =
+        match issue_environment_credentials(&s.db, ctx.organization_id, id).await {
+            Ok(value) => value,
+            Err(response) => return response,
+        };
     audit(
         &s.db,
         ctx.organization_id,
@@ -1101,8 +1102,10 @@ pub(crate) async fn ensure_organization_environments(
     Ok(())
 }
 
-
-pub(crate) async fn environment_credentials(State(s): State<AppState>, headers: HeaderMap) -> Response {
+pub(crate) async fn environment_credentials(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+) -> Response {
     let ctx = match authenticate(&s, &headers).await {
         Ok(value) => value,
         Err(code) => return code.into_response(),
@@ -1238,7 +1241,11 @@ pub(crate) async fn revoke_environment_credential(
             .await;
             Json(json!({"ok":true})).into_response()
         }
-        Ok(_) => (StatusCode::NOT_FOUND,Json(json!({"ok":false,"message":"Active environment credential not found."}))).into_response(),
+        Ok(_) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"ok":false,"message":"Active environment credential not found."})),
+        )
+            .into_response(),
         Err(error) => db_error(error),
     }
 }
