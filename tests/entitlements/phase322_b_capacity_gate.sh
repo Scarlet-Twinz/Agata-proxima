@@ -118,7 +118,7 @@ pass "missing entitlement state fails closed"
 
 # Race two writers against one remaining node slot. The transaction-scoped
 # advisory lock must serialize the count-and-insert check so exactly one wins.
-psql -v ON_ERROR_STOP=1 -d "${test_db}" -c "UPDATE organization_entitlements SET node_limit=1, environment_limit=5 WHERE organization_id='${org_b}'" >/dev/null
+psql -v ON_ERROR_STOP=1 -d "${test_db}" -c "INSERT INTO organization_entitlements(organization_id,node_limit,tenant_limit,environment_limit,billing_status) VALUES('${org_b}',1,10,5,'active') ON CONFLICT(organization_id) DO UPDATE SET node_limit=1,tenant_limit=10,environment_limit=5,billing_status='active'" >/dev/null
 set +e
 psql -v ON_ERROR_STOP=1 -d "${test_db}" -c "INSERT INTO nodes(id,organization_id,name,environment,region) VALUES ('c0000000-0000-4000-8000-000000000005','${org_b}','race-a','production','auto')" >/tmp/phase322-b-race-a.log 2>&1 &
 pid_a=$!
