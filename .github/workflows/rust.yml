@@ -110,5 +110,14 @@ jobs:
           PGDATABASE: postgres
         run: bash tests/entitlements/phase322_b_capacity_gate.sh
 
+      - name: Phase 3.22-C integration quotas
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: proxima
+          PGPASSWORD: proxima-dev-only
+          PGDATABASE: postgres
+        run: bash tests/entitlements/phase322_c_integration_gate.sh
+
       - name: Phase 58-59 repository launch gate
         run: bash tests/launch/phase58_59_repo_gate.sh
