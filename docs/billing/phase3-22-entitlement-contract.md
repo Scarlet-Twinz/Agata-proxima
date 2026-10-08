@@ -24,6 +24,7 @@ Pricing is separate from entitlement limits. A plan code received from a browser
 | Tenants | 3 | 25 | 100 | 500 | Contract-defined |
 | Environments | 1 | 2 | 5 | 50 | Contract-defined |
 | Active webhook integrations | 1 | 5 | 20 | 100 | Contract-defined |
+| Verification runs per UTC calendar month | 100 | 1,000 | 10,000 | 100,000 | Contract-defined |
 | Audit retention | 7 days | 30 days | 180 days | 365 days | Contract-defined |
 
 ## Feature contract
@@ -41,7 +42,7 @@ Pricing is separate from entitlement limits. A plan code received from a browser
 
 1. Node, tenant and environment capacity.
 2. Active outbound webhook integration count. Disabled webhooks do not consume a slot; re-enabling one requires available capacity.
-3. Verification quota and usage period.
+3. Monthly verification quota, tracked in an atomic usage counter per UTC calendar month. The quota applies to basic and advanced verification runs; feature availability for advanced verification is still separately gated.
 4. Audit retention policy.
 5. Team seats and outstanding invitations.
 6. API request rate limits and plan usage quotas (separate controls).

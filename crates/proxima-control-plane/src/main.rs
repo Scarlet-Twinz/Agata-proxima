@@ -2384,6 +2384,11 @@ async fn create_verification(
         }
     }
 
+    if let Err(response) = production::enforce_verification_quota(&s.db, ctx.organization_id).await
+    {
+        return response;
+    }
+
     let id = Uuid::new_v4();
     if let Some(tenant_id) = input.tenant_id {
         let tenant_exists = match sqlx::query_scalar::<_, bool>(
