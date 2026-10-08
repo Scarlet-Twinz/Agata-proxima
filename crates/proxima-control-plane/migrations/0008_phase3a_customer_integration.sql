@@ -87,9 +87,6 @@ UPDATE public.environments
 SET slug = key
 WHERE slug IS NULL;
 
-ALTER TABLE public.environments
-  ALTER COLUMN slug SET NOT NULL;
-
 UPDATE public.environments
 SET mode = CASE key
   WHEN 'production' THEN 'enforcement'
