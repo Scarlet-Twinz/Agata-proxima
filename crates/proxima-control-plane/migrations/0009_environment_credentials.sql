@@ -11,8 +11,7 @@ CREATE TABLE IF NOT EXISTS environment_integration_credentials (
   key_hash bytea NOT NULL UNIQUE,
   created_at timestamptz NOT NULL DEFAULT now(),
   revoked_at timestamptz,
-  active boolean NOT NULL DEFAULT true,
-
+  active boolean NOT NULL DEFAULT true
 );
 
 CREATE INDEX IF NOT EXISTS idx_environment_integration_credentials_org
