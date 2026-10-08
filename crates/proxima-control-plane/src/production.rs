@@ -10,7 +10,7 @@ use jsonwebtoken::jwk::JwkSet;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use sha2::Digest;
+use sha2::{Digest, Sha256};
 use sqlx::Row;
 use std::env;
 use uuid::Uuid;
@@ -695,7 +695,7 @@ pub(crate) async fn portal(State(s):State<AppState>,headers:HeaderMap)->Response
 pub(crate) async fn paystack_webhook(State(s):State<AppState>,headers:HeaderMap,body:String)->Response{
     let signature=match headers.get("x-paystack-signature").and_then(|v|v.to_str().ok()){Some(v)=>v,None=>return StatusCode::BAD_REQUEST.into_response()};let secret=match env::var("PAYSTACK_SECRET_KEY"){Ok(v) if !v.trim().is_empty()=>v,_=>return StatusCode::SERVICE_UNAVAILABLE.into_response()};if !verify_paystack_signature(&body,signature,&secret){return StatusCode::UNAUTHORIZED.into_response();}
     let event:Value=match serde_json::from_str(&body){Ok(v)=>v,Err(_)=>return StatusCode::BAD_REQUEST.into_response()};let event_type=event.get("event").and_then(Value::as_str).unwrap_or_default();if event_type.is_empty(){return StatusCode::BAD_REQUEST.into_response();}let data=event.get("data").cloned().unwrap_or(Value::Null);
-    let key=data.get("id").and_then(Value::as_i64).map(|v|v.to_string()).or_else(||data.get("reference").and_then(Value::as_str).map(ToOwned::to_owned)).unwrap_or_else(||format!("{}:{}",event_type,hex::encode(Digest::digest(body.as_bytes()))));
+    let key=data.get("id").and_then(Value::as_i64).map(|v|v.to_string()).or_else(||data.get("reference").and_then(Value::as_str).map(ToOwned::to_owned)).unwrap_or_else(||format!("{}:{}",event_type,hex::encode(Sha256::digest(body.as_bytes()))));
     let inserted=match sqlx::query("INSERT INTO billing_events(provider,provider_event_id,event_type,payload) VALUES('paystack',$1,$2,$3) ON CONFLICT(provider,provider_event_id) DO NOTHING").bind(&key).bind(event_type).bind(&event).execute(&s.db).await{Ok(v)=>v.rows_affected()==1,Err(e)=>return db_error(e)};if !inserted{return Json(json!({"received":true,"duplicate":true})).into_response();}
     let org=if let Some(v)=data.pointer("/metadata/organization_id").and_then(Value::as_str).and_then(|v|Uuid::parse_str(v).ok()){Some(v)}else if let Some(code)=data.pointer("/customer/customer_code").and_then(Value::as_str).or_else(||data.get("customer_code").and_then(Value::as_str)){sqlx::query("SELECT organization_id FROM billing_accounts WHERE paystack_customer_code=$1").bind(code).fetch_optional(&s.db).await.ok().flatten().map(|r|r.get::<Uuid,_>("organization_id"))}else if let Some(reference)=data.get("reference").and_then(Value::as_str){sqlx::query("SELECT organization_id FROM billing_transactions WHERE provider='paystack' AND reference=$1").bind(reference).fetch_optional(&s.db).await.ok().flatten().map(|r|r.get::<Uuid,_>("organization_id"))}else{None};
     if let Some(org)=org{
