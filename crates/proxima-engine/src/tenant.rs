@@ -240,10 +240,7 @@ fn parse_expiry(value: &str) -> Result<u64, TenantTokenError> {
         .map_err(|_| TenantTokenError::InvalidExpiry)
 }
 
-fn ensure_not_expired(
-    expires_at: u64,
-    now_unix_seconds: u64,
-) -> Result<(), TenantTokenError> {
+fn ensure_not_expired(expires_at: u64, now_unix_seconds: u64) -> Result<(), TenantTokenError> {
     if now_unix_seconds >= expires_at {
         return Err(TenantTokenError::Expired);
     }
