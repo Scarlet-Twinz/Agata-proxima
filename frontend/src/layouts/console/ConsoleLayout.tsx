@@ -110,6 +110,7 @@ export function ConsoleLayout() {
       .then((settings) => {
         if (!active) return;
         setOrganizationName(settings.organization.name || "Workspace");
+        setOrganizations(settings.organizations || []);
         setAccountDisplayName(settings.user.display_name || "Account");
         setAccountEmail(settings.user.email || "");
       })
