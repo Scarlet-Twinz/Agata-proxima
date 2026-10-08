@@ -31,9 +31,11 @@ INSERT INTO organizations(id,name,slug) VALUES
 INSERT INTO projects(id,organization_id,name,slug) VALUES
  ('${project_a}','${org_a}','Production','production'),
  ('${project_b}','${org_b}','Production','production');
-UPDATE organization_entitlements
-   SET node_limit=1, tenant_limit=1, environment_limit=1, billing_status='active'
- WHERE organization_id IN ('${org_a}','${org_b}');
+INSERT INTO organization_entitlements(organization_id,node_limit,tenant_limit,environment_limit,billing_status)
+VALUES ('${org_a}',1,1,1,'active'), ('${org_b}',1,1,1,'active')
+ON CONFLICT (organization_id) DO UPDATE
+SET node_limit=EXCLUDED.node_limit,tenant_limit=EXCLUDED.tenant_limit,
+    environment_limit=EXCLUDED.environment_limit,billing_status=EXCLUDED.billing_status;
 SQL
 
 psql -v ON_ERROR_STOP=1 -d "${test_db}" <<'SQL'
