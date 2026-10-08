@@ -1290,6 +1290,12 @@ pub(crate) async fn accept_invite(
 }
 
 
+pub(crate) async fn purge_expired_audit_events(db: &sqlx::PgPool) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar("SELECT proxima_purge_expired_audit_events()")
+        .fetch_one(db)
+        .await
+}
+
 pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
     let db_ok=sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
     let paystack=env::var("PAYSTACK_SECRET_KEY").map(|v|!v.trim().is_empty()).unwrap_or(false);
