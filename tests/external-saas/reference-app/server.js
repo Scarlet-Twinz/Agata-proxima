@@ -1,5 +1,7 @@
 const http = require("node:http");
+(async () => {
 const { Client } = require("pg");
+const { AgataProxima } = await import("@agata-proxima/sdk");
 
 const HOST = process.env.APP_BIND || "127.0.0.1";
 const PORT = Number(process.env.APP_PORT || 8788);
@@ -68,6 +70,19 @@ const server = http.createServer(async (req, res) => {
       return json(res, 401, { ok: false, error: "x-proxima-tenant-token is required" });
     }
 
+
+    if (req.method === "POST" && url.pathname.startsWith("/context/")) {
+      const tenantId = decodeURIComponent(url.pathname.slice("/context/".length));
+      const controlPlaneUrl = process.env.AGATA_CONTROL_PLANE_URL;
+      const environmentId = process.env.AGATA_ENVIRONMENT_ID;
+      const credential = process.env.AGATA_ENVIRONMENT_CREDENTIAL;
+      if (!controlPlaneUrl || !environmentId || !credential) {
+        return json(res, 503, { ok: false, error: "reference_sdk_not_configured" });
+      }
+      const sdk = new AgataProxima({ controlPlaneUrl, environmentId, credential });
+      const context = await sdk.tenantContext(tenantId);
+      return json(res, 200, { ok: true, context });
+    }
     if (req.method === "GET" && url.pathname === "/records") {
       const requestedTenant = url.searchParams.get("tenant_id");
       const rows = await withDatabase(token, async client => {
@@ -113,3 +128,4 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, HOST, () => {
   console.log(`Agata Proxima external SaaS reference listening on http://${HOST}:${PORT}`);
 });
+\n})();\n
