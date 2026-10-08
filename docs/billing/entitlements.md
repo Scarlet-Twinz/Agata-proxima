@@ -54,8 +54,8 @@ Do not meter individual SQL queries or deliberately degrade the security boundar
 
 When an organization upgrades:
 
-1. Stripe subscription changes.
-2. Stripe webhook updates the organization's billing state.
+1. Paystack subscription changes.
+2. Paystack webhook updates the organization's billing state.
 3. Entitlement resolution reads the verified plan.
 4. Newly unlocked capacity becomes available.
 5. An audit event records the plan transition.
@@ -78,7 +78,7 @@ This prevents billing changes from becoming destructive security events.
 
 ## Billing source of truth
 
-Stripe is authoritative for payment/subscription lifecycle.
+Paystack is authoritative for payment/subscription lifecycle.
 
 Agata's database is authoritative for:
 
@@ -91,7 +91,7 @@ Webhook events are idempotent and append-only in `billing_events`.
 
 ## Free plan
 
-Free is an Agata entitlement, not a Stripe subscription.
+Free is an Agata entitlement, not a Paystack subscription.
 
 A newly created organization receives:
 
@@ -102,7 +102,7 @@ billing_status = active
 
 until it upgrades.
 
-## Stripe catalog
+## Paystack catalog
 
 Do not reuse unrelated products.
 
