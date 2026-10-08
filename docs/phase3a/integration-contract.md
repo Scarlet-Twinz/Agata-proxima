@@ -67,3 +67,7 @@ The control plane issues a short-lived signed context containing:
 The context is HMAC signed with `PROXIMA_CONTEXT_SIGNING_KEY`. Issuances are tracked server-side so replay can be detected.
 
 The control plane is not the data-plane enforcement authority. The Proxima Engine remains authoritative for live tenant enforcement.
+
+## Audit evidence
+
+Each new audit event receives a correlation identifier and an organization-local tamper-evident hash chain. The event hash includes the previous event hash and canonical event fields. Audit metadata must never contain credentials, passwords, signing keys or encryption keys.
