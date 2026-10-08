@@ -1291,8 +1291,6 @@ async fn issue_environment_credentials(
     }
     Ok(issued)
 }
-
-
 #[derive(Deserialize)]
 #[rustfmt::skip]
 pub(crate) struct TenantPatchInput {
