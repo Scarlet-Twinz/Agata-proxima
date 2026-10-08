@@ -98,5 +98,8 @@ jobs:
           bash -n tests/control-plane/api_smoke.sh
           bash -n scripts/proxima-platform.sh
 
+      - name: Phase 3.22-A canonical entitlement contract
+        run: bash tests/entitlements/phase322_a_catalog_gate.sh
+
       - name: Phase 58-59 repository launch gate
         run: bash tests/launch/phase58_59_repo_gate.sh
