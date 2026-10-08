@@ -3,9 +3,9 @@ import { PublicPage } from "../../components/layout/PublicPage";
 
 const plans=[
 {name:"Free",price:"$0",description:"Evaluation and small proofs of concept.",features:["1 node","3 tenants","1 environment","7-day audit retention","Core tenant isolation"]},
-{name:"Starter",price:"$149/mo",description:"First production SaaS deployments.",features:["2 nodes","25 tenants","2 environments","30-day audit retention","Policy management"],featured:true},
-{name:"Growth",price:"$499/mo",description:"Multi-tenant production workloads.",features:["5 nodes","100 tenants","5 environments","180-day audit retention","Advanced verification","Fleet controls","Priority support"]},
-{name:"Scale",price:"$1,199/mo",description:"Larger fleets and security operations.",features:["15 nodes","500 tenants","50 environments","365-day audit retention","Advanced verification","Fleet controls","Priority support","Entra OIDC","Private deployment"]},
+{name:"Starter",price:"$79/mo",description:"First production SaaS deployments.",features:["2 nodes","25 tenants","2 environments","30-day audit retention","Policy management"],featured:true},
+{name:"Growth",price:"$249/mo",description:"Multi-tenant production workloads.",features:["5 nodes","100 tenants","5 environments","180-day audit retention","Advanced verification","Fleet controls","Priority support"]},
+{name:"Scale",price:"$799/mo",description:"Larger fleets and security operations.",features:["15 nodes","500 tenants","50 environments","365-day audit retention","Advanced verification","Fleet controls","Priority support","Entra OIDC","Private deployment"]},
 ];
 
 export function Pricing(){

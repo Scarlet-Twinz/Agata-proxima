@@ -313,9 +313,15 @@ async fn main() -> Result<()> {
         )
         .route("/api/v1/billing/checkout", post(production::checkout))
         .route("/api/v1/billing/portal", post(production::portal))
-        .route("/api/v1/billing/paystack/callback", get(production::paystack_callback))
+        .route(
+            "/api/v1/billing/paystack/callback",
+            get(production::paystack_callback),
+        )
         .route("/api/v1/billing/verify", get(production::billing_verify))
-        .route("/api/v1/webhooks/paystack", post(production::paystack_webhook))
+        .route(
+            "/api/v1/webhooks/paystack",
+            post(production::paystack_webhook),
+        )
         .route(
             "/api/v1/organization/oidc/entra",
             post(production::configure_entra),
