@@ -10,13 +10,13 @@ export function TeamManagement() {
   const [members,setMembers]=useState<Member[]>([]);
   const [invitations,setInvitations]=useState<Invitation[]>([]);
   const [email,setEmail]=useState(""); const [role,setRole]=useState("viewer");
-  const [busy,setBusy]=useState(false); const [loading,setLoading]=useState(true);
+  const [busy,setBusy]=useState(false); const [loading,setLoading]=useState(true); const [organizationId,setOrganizationId]=useState("");
   const [message,setMessage]=useState(""); const [error,setError]=useState("");
 
-  async function load(){setLoading(true);setError("");try{const [m,i]=await Promise.all([api.get<Member[]>("/api/v1/organization/team"),api.get<Invitation[]>("/api/v1/organization/invitations")]);setMembers(m);setInvitations(i)}catch(e){setError(e instanceof Error?e.message:"Unable to load organization access.")}finally{setLoading(false)}}
+  async function load(){setLoading(true);setError("");try{const [m,i,s]=await Promise.all([api.get<Member[]>("/api/v1/organization/team"),api.get<Invitation[]>("/api/v1/organization/invitations"),api.get<{organization:{id:string}}>("/api/v1/settings")]);setMembers(m);setInvitations(i);setOrganizationId(s.organization.id)}catch(e){setError(e instanceof Error?e.message:"Unable to load organization access.")}finally{setLoading(false)}}
   useEffect(()=>{void load()},[]);
 
-  async function invite(event:FormEvent){event.preventDefault();setBusy(true);setError("");setMessage("");try{await api.post("/api/v1/organization/invitations",{email,role});setEmail("");setRole("viewer");setMessage("Invitation sent.");await load()}catch(e){setError(e instanceof Error?e.message:"Unable to send invitation.")}finally{setBusy(false)}}
+  async function invite(event:FormEvent){event.preventDefault();setBusy(true);setError("");setMessage("");try{await api.post("/api/v1/organization/invitations",{organization_id:organizationId,email,role});setEmail("");setRole("viewer");setMessage("Invitation sent.");await load()}catch(e){setError(e instanceof Error?e.message:"Unable to send invitation.")}finally{setBusy(false)}}
   async function action(path:string,success:string){setError("");setMessage("");try{await api.post(path,{});setMessage(success);await load()}catch(e){setError(e instanceof Error?e.message:"The requested access change failed.")}}
   async function changeRole(id:string,next:string){setError("");setMessage("");try{await api.patch("/api/v1/organization/team/"+id+"/role",{role:next});setMessage("Member role updated.");await load()}catch(e){setError(e instanceof Error?e.message:"Unable to change member role.")}}
   async function remove(id:string){setError("");setMessage("");try{await api.delete("/api/v1/organization/team/"+id);setMessage("Member removed from this organization.");await load()}catch(e){setError(e instanceof Error?e.message:"Unable to remove member.")}}
@@ -26,7 +26,7 @@ export function TeamManagement() {
     {message&&<div className="settings-banner">{message}</div>}{error&&<div className="settings-banner settings-banner--error">{error}</div>}
     <div className="resource-section-grid">
       <section className="surface"><span className="eyebrow">INVITE MEMBER</span><h2>Add someone to this organization</h2><p>Invitations are organization-scoped, expire after seven days and can be resent without changing the assigned role.</p>
-        <form onSubmit={invite} className="settings-form"><label>Email address<input type="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="person@company.com"/></label><label>Role<select value={role} onChange={e=>setRole(e.target.value)}><option value="viewer">Viewer</option><option value="operator">Operator</option><option value="admin">Admin</option></select></label><button className="primary-action" type="submit" disabled={busy||!email}><UserPlus size={16}/>{busy?"Sending…":"Send invitation"}</button></form>
+        <form onSubmit={invite} className="settings-form"><label>Email address<input type="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="person@company.com"/></label><label>Role<select value={role} onChange={e=>setRole(e.target.value)}><option value="viewer">Viewer</option><option value="operator">Operator</option><option value="admin">Admin</option></select></label><button className="primary-action" type="submit" disabled={busy||!email||!organizationId}><UserPlus size={16}/>{busy?"Sending…":"Send invitation"}</button></form>
       </section>
       <section className="surface"><span className="eyebrow">ACCESS MODEL</span><h2>Organization roles</h2><p><strong>Owner</strong> controls the organization. <strong>Admin</strong> manages access and settings. <strong>Operator</strong> manages operational resources. <strong>Viewer</strong> has read-oriented access.</p><Link className="public-inline-link" to="/app/team/roles">Review role responsibilities</Link></section>
     </div>
