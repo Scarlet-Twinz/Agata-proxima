@@ -85,11 +85,7 @@ const developerDocs: Record<string,{title:string;intro:string;sections:{title:st
     intro:"A serious infrastructure product needs a command-line path for engineers who work faster outside the browser.",
     sections:[
       {title:"Core workflow",body:"Authenticate → select organization → inspect resources → create/change resources → run verification → inspect evidence."},
-      {title:"Example",body:"The CLI follows the same authenticated resource model as the dashboard.",code:"agata login
-agata tenants list
-agata verification list
-agata verification run
-agata audit list"},
+      {title:"Example",body:"The CLI follows the same authenticated resource model as the dashboard.",code:"agata login\\nagata tenants list\\nagata verification list\\nagata verification run\\nagata audit list"},
     ],
   },
   "/app/developer/terraform": {
@@ -97,11 +93,7 @@ agata audit list"},
     intro:"Infrastructure-as-code should make Proxima configuration reviewable, repeatable and auditable.",
     sections:[
       {title:"Provider direction",body:"The future provider should map explicit Proxima resources rather than becoming a generic database configuration wrapper."},
-      {title:"Resource candidates",body:"These are the initial resource candidates for the provider.",code:"agata_tenant
-agata_policy
-agata_node
-agata_deployment
-agata_webhook"},
+      {title:"Resource candidates",body:"These are the initial resource candidates for the provider.",code:"agata_tenant\\nagata_policy\\nagata_node\\nagata_deployment\\nagata_webhook"},
     ],
   },
   "/app/developer/api-reference": {
