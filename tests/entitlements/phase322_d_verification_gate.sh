@@ -83,6 +83,7 @@ SQL
 pass "quota resets on the UTC calendar-month boundary"
 
 # Missing entitlement state must fail closed.
+psql -v ON_ERROR_STOP=1 -d "${test_db}" -c "DELETE FROM organization_entitlements WHERE organization_id='${org_c}'" >/dev/null
 psql -v ON_ERROR_STOP=1 -d "${test_db}" <<'SQL'
 DO $$
 DECLARE message_text text;

@@ -32,6 +32,7 @@ VALUES ('${org_a}','free','active',7), ('${org_b}','starter','active',30)
 ON CONFLICT (organization_id) DO UPDATE
 SET plan_key=EXCLUDED.plan_key,billing_status=EXCLUDED.billing_status,
     audit_retention_days=EXCLUDED.audit_retention_days;
+DELETE FROM organization_entitlements WHERE organization_id='${org_c}';
 INSERT INTO audit_events(id,organization_id,action,resource_type,metadata,created_at) VALUES
  ('a2000000-0000-4000-8000-000000000001','${org_a}','old-a','test','{}'::jsonb,now()-interval '8 days'),
  ('a2000000-0000-4000-8000-000000000002','${org_a}','recent-a','test','{}'::jsonb,now()-interval '6 days'),

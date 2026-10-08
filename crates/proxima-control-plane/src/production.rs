@@ -126,6 +126,16 @@ fn plan_verification_limit(plan: &str) -> i32 {
     }
 }
 
+fn plan_team_seat_limit(plan: &str) -> i32 {
+    match plan {
+        "starter" => 5,
+        "growth" => 15,
+        "scale" => 50,
+        "enterprise" => i32::MAX,
+        _ => 1,
+    }
+}
+
 #[allow(clippy::result_large_err)]
 pub(crate) async fn enforce_capacity(
     db: &sqlx::PgPool,
@@ -214,6 +224,70 @@ pub(crate) async fn enforce_integration_capacity(
                 "limit": limit,
                 "plan": plan,
                 "message": "Active integration capacity reached. Upgrade the Agata Proxima plan to continue."
+            })),
+        ).into_response());
+    }
+
+    Ok(())
+}
+
+#[allow(clippy::result_large_err)]
+pub(crate) async fn enforce_team_seat_capacity(
+    db: &sqlx::PgPool,
+    organization_id: Uuid,
+    invite_email: Option<&str>,
+) -> Result<(), Response> {
+    let row = sqlx::query(
+        "SELECT team_seat_limit,billing_status,plan_key
+         FROM organization_entitlements WHERE organization_id=$1",
+    )
+    .bind(organization_id)
+    .fetch_optional(db)
+    .await
+    .map_err(db_error)?;
+
+    let row = row.ok_or_else(|| service_unavailable("Organization entitlements are not initialized."))?;
+    let status: String = row.get("billing_status");
+    if matches!(status.as_str(), "canceled" | "unpaid") {
+        return Err((
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({
+                "ok": false,
+                "error": "subscription_inactive",
+                "message": "Restore an active Agata Proxima subscription to add team seats."
+            })),
+        ).into_response());
+    }
+
+    let limit: i32 = row.get("team_seat_limit");
+    let used: i64 = sqlx::query_scalar(
+        "SELECT
+           (SELECT count(*) FROM memberships WHERE organization_id=$1)
+           +
+           (SELECT count(*) FROM organization_invites
+             WHERE organization_id=$1
+               AND accepted_at IS NULL
+               AND expires_at > now()
+               AND ($2::text IS NULL OR lower(email) <> lower($2)))",
+    )
+    .bind(organization_id)
+    .bind(invite_email)
+    .fetch_one(db)
+    .await
+    .map_err(db_error)?;
+
+    if used >= i64::from(limit) {
+        let plan: String = row.get("plan_key");
+        return Err((
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({
+                "ok": false,
+                "error": "plan_limit_reached",
+                "resource": "team_seats",
+                "limit": limit,
+                "used": used,
+                "plan": plan,
+                "message": "Team seat capacity reached. Upgrade the Agata Proxima plan or remove a member/pending invitation."
             })),
         ).into_response());
     }
@@ -396,7 +470,8 @@ pub(crate) async fn plans() -> Response {
         let (nodes,tenants,environments,retention,advanced,fleet,priority,entra,private_deployment)=plan_limits(key);
         let integrations = plan_integration_limit(key);
         let verifications = plan_verification_limit(key);
-        json!({"key":key,"name":name,"monthly_usd":monthly_usd,"description":description,"provider":"paystack","plan_code":plan_code,"checkout_available":key!=&"free"&&key!=&"enterprise"&&paystack_plan_code(key).is_some(),"limits":{"nodes":nodes,"tenants":tenants,"environments":environments,"integrations":integrations,"verifications_per_month":verifications,"audit_retention_days":retention},"features":{"advanced_verification":advanced,"fleet_controls":fleet,"priority_support":priority,"entra_oidc":entra,"private_deployment":private_deployment,"policy_management":key!=&"free"}})
+        let team_seats = plan_team_seat_limit(key);
+        json!({"key":key,"name":name,"monthly_usd":monthly_usd,"description":description,"provider":"paystack","plan_code":plan_code,"checkout_available":key!=&"free"&&key!=&"enterprise"&&paystack_plan_code(key).is_some(),"limits":{"nodes":nodes,"tenants":tenants,"environments":environments,"integrations":integrations,"verifications_per_month":verifications,"team_seats":team_seats,"audit_retention_days":retention},"features":{"advanced_verification":advanced,"fleet_controls":fleet,"priority_support":priority,"entra_oidc":entra,"private_deployment":private_deployment,"policy_management":key!=&"free"}})
     }).collect::<Vec<_>>();
     Json(json!({"currency":"usd","billing_interval":"month","provider":"paystack","plans":plans})).into_response()
 }
@@ -408,7 +483,9 @@ pub(crate) async fn entitlements(State(s): State<AppState>, headers: HeaderMap) 
     };
     match sqlx::query(
         "SELECT plan_key,billing_status,node_limit,tenant_limit,environment_limit,integration_limit,
-                verification_limit_monthly,
+                verification_limit_monthly,team_seat_limit,
+                COALESCE((SELECT count(*) FROM memberships m WHERE m.organization_id=organization_entitlements.organization_id),0)::bigint AS active_team_members,
+                COALESCE((SELECT count(*) FROM organization_invites i WHERE i.organization_id=organization_entitlements.organization_id AND i.accepted_at IS NULL AND i.expires_at>now()),0)::bigint AS pending_team_invites,
                 COALESCE((SELECT used_count FROM organization_verification_usage u
                           WHERE u.organization_id=organization_entitlements.organization_id
                             AND u.period_start=date_trunc('month', now() AT TIME ZONE 'UTC')::date),0)::bigint AS verifications_used,
@@ -429,10 +506,13 @@ pub(crate) async fn entitlements(State(s): State<AppState>, headers: HeaderMap) 
                 "environments": row.get::<i32,_>("environment_limit"),
                 "integrations": row.get::<i32,_>("integration_limit"),
                 "verifications_per_month": row.get::<i32,_>("verification_limit_monthly"),
+                "team_seats": row.get::<i32,_>("team_seat_limit"),
                 "audit_retention_days": row.get::<i32,_>("audit_retention_days")
             },
             "usage": {
-                "verifications_this_month": row.get::<i64,_>("verifications_used")
+                "verifications_this_month": row.get::<i64,_>("verifications_used"),
+                "active_team_members": row.get::<i64,_>("active_team_members"),
+                "pending_team_invites": row.get::<i64,_>("pending_team_invites")
             },
             "features": {
                 "advanced_verification": row.get::<bool,_>("advanced_verification"),
@@ -452,23 +532,24 @@ async fn apply_entitlements(db: &sqlx::PgPool, organization_id: Uuid, plan: &str
     let (nodes, tenants, environments, retention, advanced, fleet, priority, entra, private_deployment) = plan_limits(plan);
     let integrations = plan_integration_limit(plan);
     let verifications = plan_verification_limit(plan);
+    let team_seats = plan_team_seat_limit(plan);
     sqlx::query(
         "INSERT INTO organization_entitlements
             (organization_id,plan_key,billing_status,node_limit,tenant_limit,environment_limit,
-             integration_limit,verification_limit_monthly,audit_retention_days,advanced_verification,
-             fleet_controls,priority_support,entra_oidc,private_deployment,updated_at)
-         VALUES($1,$2,'active',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,now())
+             integration_limit,verification_limit_monthly,team_seat_limit,audit_retention_days,
+             advanced_verification,fleet_controls,priority_support,entra_oidc,private_deployment,updated_at)
+         VALUES($1,$2,'active',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,now())
          ON CONFLICT (organization_id) DO UPDATE SET
             plan_key=EXCLUDED.plan_key,billing_status=EXCLUDED.billing_status,
             node_limit=EXCLUDED.node_limit,tenant_limit=EXCLUDED.tenant_limit,
             environment_limit=EXCLUDED.environment_limit,integration_limit=EXCLUDED.integration_limit,
             verification_limit_monthly=EXCLUDED.verification_limit_monthly,
-            audit_retention_days=EXCLUDED.audit_retention_days,
+            team_seat_limit=EXCLUDED.team_seat_limit,audit_retention_days=EXCLUDED.audit_retention_days,
             advanced_verification=EXCLUDED.advanced_verification,fleet_controls=EXCLUDED.fleet_controls,
             priority_support=EXCLUDED.priority_support,entra_oidc=EXCLUDED.entra_oidc,
             private_deployment=EXCLUDED.private_deployment,updated_at=now()"
     )
-    .bind(organization_id).bind(plan).bind(nodes).bind(tenants).bind(environments).bind(integrations).bind(verifications).bind(retention)
+    .bind(organization_id).bind(plan).bind(nodes).bind(tenants).bind(environments).bind(integrations).bind(verifications).bind(team_seats).bind(retention)
     .bind(advanced).bind(fleet).bind(priority).bind(entra).bind(private_deployment)
     .execute(db).await?;
     Ok(())
@@ -1193,6 +1274,12 @@ pub(crate) async fn invite(
         return bad("A valid email is required.");
     }
 
+    if let Err(response) =
+        enforce_team_seat_capacity(&s.db, ctx.organization_id, Some(&email)).await
+    {
+        return response;
+    }
+
     let token = format!("{}-{}", Uuid::new_v4(), Uuid::new_v4());
     let id = Uuid::new_v4();
     if let Err(e) = sqlx::query(
@@ -1273,15 +1360,44 @@ pub(crate) async fn accept_invite(
             let invite_id: Uuid = row.get("id");
             let org: Uuid = row.get("organization_id");
             let role: String = row.get("role");
+            let mut tx = match s.db.begin().await {
+                Ok(tx) => tx,
+                Err(e) => return db_error(e),
+            };
+
+            let claimed = match sqlx::query(
+                "UPDATE organization_invites SET accepted_at=now()
+                 WHERE id=$1 AND accepted_at IS NULL AND expires_at>now()
+                 RETURNING id",
+            )
+            .bind(invite_id)
+            .fetch_optional(&mut *tx)
+            .await
+            {
+                Ok(v) => v,
+                Err(e) => return db_error(e),
+            };
+            if claimed.is_none() {
+                return bad("Invitation expired, invalid, or already accepted.");
+            }
+
             if let Err(e) = sqlx::query(
                 "INSERT INTO memberships(user_id,organization_id,role) VALUES($1,$2,$3)
                  ON CONFLICT (user_id,organization_id) DO UPDATE SET role=EXCLUDED.role",
             )
-            .bind(ctx.user_id).bind(org).bind(&role).execute(&s.db).await {
+            .bind(ctx.user_id)
+            .bind(org)
+            .bind(&role)
+            .execute(&mut *tx)
+            .await
+            {
                 return db_error(e);
             }
-            let _ = sqlx::query("UPDATE organization_invites SET accepted_at=now() WHERE id=$1")
-                .bind(invite_id).execute(&s.db).await;
+
+            if let Err(e) = tx.commit().await {
+                return db_error(e);
+            }
+
             audit(&s.db, org, ctx.user_id, "organization.invite.accepted", "organization_invite", Some(invite_id), json!({})).await;
             Html("<html><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\"><h1>Invitation accepted.</h1><p>Your organization access is active.</p><a href=\"/app\">Open Command Center</a></body></html>").into_response()
         }
@@ -1381,6 +1497,12 @@ mod tests {
         assert_eq!(super::plan_verification_limit("scale"), 100_000);
         assert_eq!(super::plan_verification_limit("enterprise"), i32::MAX);
         assert_eq!(super::plan_verification_limit("unknown"), 100);
+        assert_eq!(super::plan_team_seat_limit("free"), 1);
+        assert_eq!(super::plan_team_seat_limit("starter"), 5);
+        assert_eq!(super::plan_team_seat_limit("growth"), 15);
+        assert_eq!(super::plan_team_seat_limit("scale"), 50);
+        assert_eq!(super::plan_team_seat_limit("enterprise"), i32::MAX);
+        assert_eq!(super::plan_team_seat_limit("unknown"), 1);
     }
 
     #[test]
