@@ -112,26 +112,13 @@ ALTER TABLE tenants
   ADD COLUMN IF NOT EXISTS organization_id uuid REFERENCES organizations(id) ON DELETE CASCADE,
   ADD COLUMN IF NOT EXISTS disabled_at timestamptz;
 
-DO $
-BEGIN
-  -- Parse the backfill only after the ALTER TABLE above has committed its
-  -- catalog change within the current migration execution context.
-  IF EXISTS (
-    SELECT 1
-    FROM information_schema.columns
-    WHERE table_schema='public'
-      AND table_name='tenants'
-      AND column_name='organization_id'
-  ) THEN
-    EXECUTE $backfill$
-      UPDATE public.tenants AS t
-      SET organization_id = p.organization_id
-      FROM public.projects AS p
-      WHERE p.id = t.project_id
-        AND t.organization_id IS NULL
-    $backfill$;
-  END IF;
-END $;
+-- Backfill the organization scope from the owning project.
+-- This runs after the ALTER TABLE above and remains idempotent for existing rows.
+UPDATE public.tenants AS t
+SET organization_id = p.organization_id
+FROM public.projects AS p
+WHERE p.id = t.project_id
+  AND t.organization_id IS NULL;
 
 ALTER TABLE verification_results
   ADD COLUMN IF NOT EXISTS integration_id uuid REFERENCES integrations(id) ON DELETE SET NULL,
