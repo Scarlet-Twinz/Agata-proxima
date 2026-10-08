@@ -1408,3 +1408,44 @@ pub(crate) async fn project_list(State(s):State<AppState>,headers:HeaderMap)->Re
         Err(e)=>db_error(e)
     }
 }
+
+
+async fn audit_external(db:&sqlx::PgPool,org:Uuid,action:&str,resource_type:&str,resource_id:Option<Uuid>,metadata:Value){
+    let correlation_id=Uuid::new_v4().to_string();
+    let previous_hash:Option<Vec<u8>>=sqlx::query_scalar("SELECT event_hash FROM audit_events WHERE organization_id=$1 ORDER BY created_at DESC,id DESC LIMIT 1").bind(org).fetch_optional(db).await.unwrap_or(None).flatten();
+    let canonical=format!("{}|{}||{}|{}|{}|{}|{}",previous_hash.as_ref().map(hex::encode).unwrap_or_default(),org,action,resource_type,resource_id.map(|v|v.to_string()).unwrap_or_default(),correlation_id,metadata,"service");
+    let mut hasher=sha2::Sha256::new(); use sha2::Digest; hasher.update(canonical.as_bytes()); let event_hash=hasher.finalize().to_vec();
+    let _=sqlx::query("INSERT INTO audit_events(organization_id,user_id,action,resource_type,resource_id,metadata,correlation_id,previous_hash,event_hash) VALUES($1,NULL,$2,$3,$4,$5,$6,$7,$8)").bind(org).bind(action).bind(resource_type).bind(resource_id).bind(metadata).bind(correlation_id).bind(previous_hash).bind(event_hash).execute(db).await;
+}
+
+fn bearer(headers:&HeaderMap)->Option<String>{
+    let value=headers.get(axum::http::header::AUTHORIZATION)?.to_str().ok()?;
+    value.strip_prefix("Bearer ").map(str::trim).filter(|v|!v.is_empty()).map(ToOwned::to_owned)
+}
+
+pub(crate) async fn create_environment_credential(State(s):State<AppState>,Path((integration_id,environment_id)) : Path<(Uuid,Uuid)>,headers:HeaderMap)->Response{
+    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()}; if let Err(c)=require_admin(&ctx,&headers){return c.into_response()};
+    if let Err(e)=scoped_integration(&s.db,&ctx,integration_id).await{return e}; if let Err(e)=scoped_environment(&s.db,&ctx,environment_id).await{return e};
+    let secret=format!("aga_env_{}_{}_{}",integration_id.simple(),environment_id.simple(),Uuid::new_v4().simple()); let prefix=secret.chars().take(20).collect::<String>();
+    if let Err(e)=sqlx::query("UPDATE environment_integration_credentials SET active=false,revoked_at=now() WHERE integration_id=$1 AND environment_id=$2 AND organization_id=$3 AND active=true").bind(integration_id).bind(environment_id).bind(ctx.organization_id).execute(&s.db).await{return db_error(e)};
+    let id=Uuid::new_v4(); if let Err(e)=sqlx::query("INSERT INTO environment_integration_credentials(id,organization_id,integration_id,environment_id,key_prefix,key_hash) VALUES($1,$2,$3,$4,$5,$6)").bind(id).bind(ctx.organization_id).bind(integration_id).bind(environment_id).bind(&prefix).bind(token_hash(&secret)).execute(&s.db).await{return db_error(e)};
+    audit(&s.db,ctx.organization_id,ctx.user_id,"integration.environment_credential.created","environment_integration_credential",Some(id),json!({"integration_id":integration_id,"environment_id":environment_id})).await;
+    Json(json!({"ok":true,"id":id,"credential":secret,"message":"Environment credential is shown once."})).into_response()
+}
+
+pub(crate) async fn issue_customer_context(State(s):State<AppState>,headers:HeaderMap,Json(input):Json<ContextCredentialInput>)->Response{
+    let credential=match bearer(&headers){Some(v)=>v,None=>return (StatusCode::UNAUTHORIZED,Json(json!({"ok":false,"message":"Bearer environment credential required."}))).into_response()};
+    let row=match sqlx::query("SELECT c.id,c.organization_id,c.integration_id,c.environment_id,i.status AS integration_status,e.status AS environment_status FROM environment_integration_credentials c JOIN integrations i ON i.id=c.integration_id AND i.organization_id=c.organization_id JOIN environments e ON e.id=c.environment_id AND e.organization_id=c.organization_id WHERE c.key_hash=$1 AND c.active=true").bind(token_hash(&credential)).fetch_optional(&s.db).await{
+        Ok(Some(v))=>v,Ok(None)=>return (StatusCode::UNAUTHORIZED,Json(json!({"ok":false,"message":"Environment credential is invalid or revoked."}))).into_response(),Err(e)=>return db_error(e)
+    };
+    let org=row.get::<Uuid,_>("organization_id"); let integration=row.get::<Uuid,_>("integration_id"); let environment=row.get::<Uuid,_>("environment_id");
+    if environment!=input.environment_id{return (StatusCode::FORBIDDEN,Json(json!({"ok":false,"message":"Credential is not valid for the requested environment."}))).into_response()};
+    if row.get::<String,_>("integration_status")!="active"||row.get::<String,_>("environment_status")!="active"{return (StatusCode::FORBIDDEN,Json(json!({"ok":false,"message":"Integration or environment is inactive."}))).into_response()};
+    let tenant=match sqlx::query("SELECT status FROM tenants WHERE id=$1 AND organization_id=$2").bind(input.tenant_id).bind(org).fetch_optional(&s.db).await{Ok(Some(v))=>v,Ok(None)=>return (StatusCode::NOT_FOUND,Json(json!({"ok":false,"message":"Tenant does not belong to the credential organization."}))).into_response(),Err(e)=>return db_error(e)};
+    if tenant.get::<String,_>("status")!="active"{return (StatusCode::FORBIDDEN,Json(json!({"ok":false,"message":"Tenant is not active."}))).into_response()};
+    let ttl=300i64; let exp=chrono::Utc::now().timestamp()+ttl; let jti=Uuid::new_v4().to_string(); let key=match env::var("PROXIMA_CONTEXT_SIGNING_KEY"){Ok(v) if v.len()>=32=>v,_=>return (StatusCode::SERVICE_UNAVAILABLE,Json(json!({"ok":false,"message":"PROXIMA_CONTEXT_SIGNING_KEY is not configured."}))).into_response()};
+    let payload=format!("v2.{}.{}.{}.{}.{}.{}",org,input.tenant_id,environment,integration,exp,jti); let mut mac=HmacSha256::new_from_slice(key.as_bytes()).expect("valid HMAC key"); mac.update(payload.as_bytes()); let signature=hex::encode(mac.finalize().into_bytes()); let token=format!("{}.{}",payload,signature);
+    if let Err(e)=sqlx::query("INSERT INTO tenant_context_issuances(jti_hash,organization_id,integration_id,environment_id,tenant_id,expires_at) VALUES($1,$2,$3,$4,$5,to_timestamp($6))").bind(token_hash(&jti)).bind(org).bind(integration).bind(environment).bind(input.tenant_id).bind(exp).execute(&s.db).await{return db_error(e)};
+    audit_external(&s.db,org,"tenant_context.issued","tenant",Some(input.tenant_id),json!({"integration_id":integration,"environment_id":environment,"source":"customer_credential","expires_at":exp})).await;
+    Json(json!({"ok":true,"token":token,"expires_at":exp,"organization_id":org,"integration_id":integration,"environment_id":environment,"tenant_id":input.tenant_id})).into_response()
+}
