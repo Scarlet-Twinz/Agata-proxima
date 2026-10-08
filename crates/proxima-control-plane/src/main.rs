@@ -790,6 +790,10 @@ async fn create_webhook(
         return bad("Webhook endpoint must use HTTPS outside local development.");
     }
 
+    if let Err(response) = production::enforce_integration_capacity(&s.db, ctx.organization_id).await {
+        return response;
+    }
+
     let id = Uuid::new_v4();
     let secret = format!("whsec_{}_{}", id.simple(), Uuid::new_v4().simple());
     let hint = secret
