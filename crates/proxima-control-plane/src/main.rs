@@ -199,6 +199,9 @@ async fn main() -> Result<()> {
     sqlx::raw_sql(include_str!("../migrations/0009_environment_credentials.sql"))
         .execute(&db)
         .await?;
+    sqlx::raw_sql(include_str!("../migrations/0010_audit_tamper_evidence.sql"))
+        .execute(&db)
+        .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
@@ -2797,10 +2800,51 @@ async fn audit(
     resource_id: Option<Uuid>,
     metadata: Value,
 ) {
+    let correlation_id = Uuid::new_v4().to_string();
+    let previous_hash: Option<Vec<u8>> = sqlx::query_scalar(
+        "SELECT event_hash FROM audit_events
+         WHERE organization_id=$1
+         ORDER BY created_at DESC, id DESC
+         LIMIT 1",
+    )
+    .bind(org)
+    .fetch_optional(db)
+    .await
+    .unwrap_or(None);
+    let canonical = format!(
+        "{}|{}|{}|{}|{}|{}|{}|{}",
+        previous_hash
+            .as_ref()
+            .map(hex::encode)
+            .unwrap_or_default(),
+        org,
+        user,
+        action,
+        resource_type,
+        resource_id.map(|value| value.to_string()).unwrap_or_default(),
+        correlation_id,
+        metadata,
+    );
+    let mut hasher = Sha256::new();
+    hasher.update(canonical.as_bytes());
+    let event_hash = hasher.finalize().to_vec();
     let _ = sqlx::query(
-        "INSERT INTO audit_events(organization_id,user_id,action,resource_type,resource_id,metadata)
-         VALUES($1,$2,$3,$4,$5,$6)"
-    ).bind(org).bind(user).bind(action).bind(resource_type).bind(resource_id).bind(metadata).execute(db).await;
+        "INSERT INTO audit_events(
+            organization_id,user_id,action,resource_type,resource_id,metadata,
+            correlation_id,previous_hash,event_hash
+         ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+    )
+    .bind(org)
+    .bind(user)
+    .bind(action)
+    .bind(resource_type)
+    .bind(resource_id)
+    .bind(metadata)
+    .bind(correlation_id)
+    .bind(previous_hash)
+    .bind(event_hash)
+    .execute(db)
+    .await;
 }
 
 fn bad(message: &str) -> Response {
