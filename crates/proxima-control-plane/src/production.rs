@@ -652,6 +652,29 @@ pub(crate) async fn checkout(State(s):State<AppState>,headers:HeaderMap,Json(inp
     Json(json!({"ok":true,"provider":"paystack","checkout_url":url,"access_code":access,"reference":returned})).into_response()
 }
 fn paystack_plan_code_for_input(input:&str)->Option<String>{let v=input.trim();if ["starter","growth","scale"].contains(&v){paystack_plan_code(v)}else{plan_for_code(Some(v)).map(|_|v.to_string())}}
+pub(crate) async fn paystack_callback(
+    State(s): State<AppState>,
+    Query(q): Query<std::collections::HashMap<String,String>>,
+) -> Response {
+    let reference = match q.get("reference").or_else(|| q.get("trxref")) {
+        Some(v) if !v.trim().is_empty() => v.trim().to_string(),
+        _ => return Html("<html><body>Missing Paystack transaction reference.</body></html>").into_response(),
+    };
+    let organization_id = match sqlx::query("SELECT organization_id FROM billing_transactions WHERE provider='paystack' AND reference=$1")
+        .bind(&reference)
+        .fetch_optional(&s.db)
+        .await {
+            Ok(Some(row)) => row.get::<Uuid,_>("organization_id"),
+            Ok(None) => return Html("<html><body>Unknown Paystack transaction.</body></html>").into_response(),
+            Err(e) => return db_error(e),
+        };
+    let _ = verify_paystack_transaction(&s.db, organization_id, &reference).await;
+    let base = env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:8080".into()).trim_end_matches('/').to_string();
+    Html(format!(
+        "<html><head><meta http-equiv=\"refresh\" content=\"0;url={base}/app?billing=complete\"></head><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\">Payment verification complete. Returning to Agata Proxima…</body></html>"
+    )).into_response()
+}
+
 pub(crate) async fn billing_verify(State(s):State<AppState>,headers:HeaderMap,Query(q):Query<std::collections::HashMap<String,String>>)->Response{
     let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};let reference=match q.get("reference").or_else(||q.get("trxref")){Some(v) if !v.trim().is_empty()=>v.trim(),_=>return bad("Paystack transaction reference is required.")};verify_paystack_transaction(&s.db,ctx.organization_id,reference).await
 }
