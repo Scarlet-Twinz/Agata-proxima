@@ -25,6 +25,11 @@ grep -Fq '| Starter | $79 |' "$proposal" || fail "pricing proposal Starter price
 grep -Fq '| Growth | $249 |' "$proposal" || fail "pricing proposal Growth price disagrees"
 grep -Fq '| Scale | $799 |' "$proposal" || fail "pricing proposal Scale price disagrees"
 grep -Fq 'server-side enforcement point and tests' "$contract" || fail "entitlement enforcement contract missing"
+grep -Fq '| Free | $0 |' "$contract" || fail "canonical Free price is missing"
+grep -Fq '"starter" => (2, 25, 2, 30' "$backend" || fail "Starter capacity catalogue disagrees with contract"
+grep -Fq '"growth" => (5, 100, 5, 180' "$backend" || fail "Growth capacity catalogue disagrees with contract"
+grep -Fq '"scale" => (15, 500, 50, 365' "$backend" || fail "Scale capacity catalogue disagrees with contract"
+grep -Fq '"enterprise" => (i32::MAX, i32::MAX, i32::MAX' "$backend" || fail "Enterprise contract provisioning baseline missing"
 
 if grep -Eq '149_i32|499_i32|1199_i32|\$149/mo|\$499/mo|\$1,199/mo' "$backend" "$pricing"; then
   fail "conflicting legacy launch prices remain in backend or public pricing"
