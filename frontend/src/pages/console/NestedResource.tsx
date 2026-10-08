@@ -85,7 +85,11 @@ const developerDocs: Record<string,{title:string;intro:string;sections:{title:st
     intro:"A serious infrastructure product needs a command-line path for engineers who work faster outside the browser.",
     sections:[
       {title:"Core workflow",body:"Authenticate → select organization → inspect resources → create/change resources → run verification → inspect evidence."},
-      {title:"Example",body:"The CLI follows the same authenticated resource model as the dashboard.",code:"agata login\nagata tenants list\nagata verification list\nagata verification run\nagata audit list"},
+      {title:"Example",body:"The CLI follows the same authenticated resource model as the dashboard.",code:"agata login
+agata tenants list
+agata verification list
+agata verification run
+agata audit list"},
     ],
   },
   "/app/developer/terraform": {
@@ -93,7 +97,11 @@ const developerDocs: Record<string,{title:string;intro:string;sections:{title:st
     intro:"Infrastructure-as-code should make Proxima configuration reviewable, repeatable and auditable.",
     sections:[
       {title:"Provider direction",body:"The future provider should map explicit Proxima resources rather than becoming a generic database configuration wrapper."},
-      {title:"Resource candidates",body:"These are the initial resource candidates for the provider.",code:"agata_tenant\nagata_policy\nagata_node\nagata_deployment\nagata_webhook"},
+      {title:"Resource candidates",body:"These are the initial resource candidates for the provider.",code:"agata_tenant
+agata_policy
+agata_node
+agata_deployment
+agata_webhook"},
     ],
   },
   "/app/developer/api-reference": {
@@ -159,10 +167,60 @@ function DeveloperDoc({config,doc}:{config:Config;doc:{title:string;intro:string
 
 function DetailPage({config,id}:{config:Config;id:string}){
   const [record,setRecord]=useState<Record<string,unknown>|null>(null);
-  const [loading,setLoading]=useState(true); const [error,setError]=useState("");
-  useEffect(()=>{let active=true; (async()=>{try{const data=await api.get<unknown>(config.endpoint!);const rows=Array.isArray(data)?data:(data&&typeof data==="object"?Object.values(data as Record<string,unknown>).find(Array.isArray):[]);const found=(Array.isArray(rows)?rows:[]).find((row)=>row&&typeof row==="object"&&String((row as Record<string,unknown>).id)===id) as Record<string,unknown>|undefined;if(active)setRecord(found??null)}catch(e){if(active)setError((e as ApiError)?.message??"Unable to load this resource.")}finally{if(active)setLoading(false)}})();return()=>{active=false}},[config.endpoint,id]);\n  async function runAction(path:string,method:"POST"|"PATCH"|"DELETE",body:unknown={},success:string){setActionBusy(true);setError("");setActionMessage("");try{await api[method.toLowerCase() as "post"|"patch"|"delete"](path,body);setActionMessage(success);const data=await api.get<unknown>(config.endpoint!);const rows=Array.isArray(data)?data:(data&&typeof data==="object"?Object.values(data as Record<string,unknown>).find(Array.isArray):[]);const found=(Array.isArray(rows)?rows:[]).find((row)=>row&&typeof row==="object"&&String((row as Record<string,unknown>).id)===id) as Record<string,unknown>|undefined;setRecord(found??null)}catch(e){setError((e as ApiError)?.message??"The requested action failed.")}finally{setActionBusy(false)}}
+  const [loading,setLoading]=useState(true);
+  const [error,setError]=useState("");
+  const [actionMessage,setActionMessage]=useState("");
+  const [actionBusy,setActionBusy]=useState(false);
+
+  async function loadRecord(){
+    setLoading(true); setError("");
+    try{
+      const data=await api.get<unknown>(config.endpoint!);
+      const rows=Array.isArray(data)?data:(data&&typeof data==="object"?Object.values(data as Record<string,unknown>).find(Array.isArray):[]);
+      const found=(Array.isArray(rows)?rows:[]).find(row=>row&&typeof row==="object"&&String((row as Record<string,unknown>).id)===id) as Record<string,unknown>|undefined;
+      setRecord(found??null);
+    }catch(e){setError((e as ApiError)?.message??"Unable to load this resource.");}
+    finally{setLoading(false);}
+  }
+
+  useEffect(()=>{void loadRecord()},[config.endpoint,id]);
+
+  async function runAction(path:string,method:"POST"|"PATCH"|"DELETE",success:string){
+    setActionBusy(true); setError(""); setActionMessage("");
+    try{
+      if(method==="POST") await api.post(path,{});
+      else if(method==="PATCH") await api.patch(path,{});
+      else await api.delete(path);
+      setActionMessage(success);
+      if(method==="DELETE"){setRecord(null);return;}
+      await loadRecord();
+    }catch(e){setError((e as ApiError)?.message??"The requested action failed.");}
+    finally{setActionBusy(false);}
+  }
+
   const entries=useMemo(()=>record?Object.entries(record).filter(([key])=>key!=="id"):[],[record]);
-  return <ContextShell config={config}><div className="page-heading"><div><span className="eyebrow">{config.eyebrow}</span><h1>{record?.name ? String(record.name) : config.title+" detail"}</h1><p>{config.description}</p></div><div className="heading-actions"><button className="console-refresh-button" onClick={()=>window.location.reload()}><RefreshCw size={15}/> Refresh</button>{config.endpoint==="/api/v1/tenants"&&record?.status==="active"&&<button className="secondary-action" disabled={actionBusy} onClick={()=>void runAction("/api/v1/tenants/"+id+"/disable","POST",{},"Tenant disabled.")}>Disable tenant</button>}{config.endpoint==="/api/v1/tenants"&&record?.status==="suspended"&&<button className="primary-action" disabled={actionBusy} onClick={()=>void runAction("/api/v1/tenants/"+id+"/enable","POST",{},"Tenant enabled.")}>Enable tenant</button>}{config.endpoint==="/api/v1/policies"&&<button className="secondary-action" disabled={actionBusy} onClick={()=>void runAction("/api/v1/policies/"+id+"/validate","POST",{},"Policy validation completed.")}>Validate policy</button>}</d{config.endpoint==="/api/v1/developer/api-keys"&&record?.revoked_at==null&&<button className="secondary-action" disabled={actionBusy} onClick={()=>void runAction("/api/v1/developer/api-keys/"+id,"POST",{},"API key revoked.")}>Revoke API key</button>}{config.endpoint==="/api/v1/developer/webhooks"&&<button className="secondary-action" disabled={actionBusy} onClick={()=>void runAction("/api/v1/developer/webhooks/"+id,"DELETE",{},"Webhook deleted.")}>Delete webhook</button>}</div></div>{actionMessage&&<div className="settings-banner settings-banner--success">{actionMessage}</div>}{loading&&<div className="surface empty-state"><strong>Loading resource…</strong><span>Reading the authenticated control-plane record.</span></div>}{!loading&&error&&<div className="surface empty-state resource-error"><strong>{error}</strong><span>Refresh after confirming the secure session and control plane.</span></div>}{!loading&&!error&&!record&&<div className="surface empty-state"><strong>Resource not found.</strong><span>The record may have been removed or may not belong to this organization.</span></div>}{record&&<><div className="resource-identity"><ShieldCheck size={19}/><div><span>Resource ID</span><strong>{id}</strong></div></div><section className="detail-grid">{entries.map(([key,value])=><div className="surface detail-field" key={key}><span>{key.replaceAll("_"," ")}</span><strong>{typeof value==="object"?JSON.stringify(value,null,2):String(value??"—")}</strong></div>)}</section><div className="context-next"><Link to={config.endpoint ? config.endpoint.replace("/api/v1","/app") : "/app"}>Back to resource</Link><Link to="/app/audit">Open audit <ArrowUpRight size={15}/></Link></div></>}</ContextShell>;
+  const tenantActive=record?.status==="active";
+  const tenantSuspended=record?.status==="suspended";
+  const apiKeyActive=record?.revoked_at==null;
+
+  return <ContextShell config={config}>
+    <div className="page-heading">
+      <div><span className="eyebrow">{config.eyebrow}</span><h1>{record?.name?String(record.name):config.title+" detail"}</h1><p>{config.description}</p></div>
+      <div className="heading-actions">
+        <button className="console-refresh-button" onClick={()=>void loadRecord()} disabled={loading}><RefreshCw size={15}/>{loading?"Refreshing":"Refresh"}</button>
+        {config.endpoint==="/api/v1/tenants"&&tenantActive&&<button className="secondary-action" disabled={actionBusy} onClick={()=>void runAction("/api/v1/tenants/"+id+"/disable","POST","Tenant disabled.")}>Disable tenant</button>}
+        {config.endpoint==="/api/v1/tenants"&&tenantSuspended&&<button className="primary-action" disabled={actionBusy} onClick={()=>void runAction("/api/v1/tenants/"+id+"/enable","POST","Tenant enabled.")}>Enable tenant</button>}
+        {config.endpoint==="/api/v1/policies"&&<button className="secondary-action" disabled={actionBusy} onClick={()=>void runAction("/api/v1/policies/"+id+"/validate","POST","Policy validation completed.")}>Validate policy</button>}
+        {config.endpoint==="/api/v1/developer/api-keys"&&apiKeyActive&&<button className="secondary-action" disabled={actionBusy} onClick={()=>{if(window.confirm("Revoke this API key? Existing clients using it will stop authenticating."))void runAction("/api/v1/developer/api-keys/"+id,"DELETE","API key revoked.")}}>Revoke API key</button>}
+        {config.endpoint==="/api/v1/developer/webhooks"&&<button className="secondary-action" disabled={actionBusy} onClick={()=>{if(window.confirm("Delete this webhook? Its endpoint and delivery configuration will be removed."))void runAction("/api/v1/developer/webhooks/"+id,"DELETE","Webhook deleted.")}}>Delete webhook</button>}
+      </div>
+    </div>
+    {actionMessage&&<div className="settings-banner settings-banner--success">{actionMessage}</div>}
+    {loading&&<div className="surface empty-state"><strong>Loading resource…</strong><span>Reading the authenticated control-plane record.</span></div>}
+    {!loading&&error&&<div className="surface empty-state resource-error"><strong>{error}</strong><span>Refresh after confirming the secure session and control plane.</span></div>}
+    {!loading&&!error&&!record&&<div className="surface empty-state"><strong>{actionMessage||"Resource not found."}</strong><span>{actionMessage?"The resource is no longer present in this organization.":"The record may have been removed or may not belong to this organization."}</span></div>}
+    {record&&<><div className="resource-identity"><ShieldCheck size={19}/><div><span>Resource ID</span><strong>{id}</strong></div></div><section className="detail-grid">{entries.map(([key,value])=><div className="surface detail-field" key={key}><span>{key.replaceAll("_"," ")}</span><strong>{typeof value==="object"?JSON.stringify(value,null,2):String(value??"—")}</strong></div>)}</section><div className="context-next"><Link to={config.detailBase??"/app"}>Back to resource</Link><Link to="/app/audit">Open audit <ArrowUpRight size={15}/></Link></div></>}
+  </ContextShell>;
 }
 
 const teamTabs=[{label:"Members",href:"/app/team"},{label:"Invitations",href:"/app/team/invitations"},{label:"Roles",href:"/app/team/roles"}];
@@ -182,7 +240,8 @@ const baseConfigs:Record<string,Config>={
  "/app/billing/usage":{eyebrow:"BILLING",title:"Usage",description:"See current entitlement limits and resource consumption.",tabs:[{label:"Usage",href:"/app/billing/usage"},{label:"Plans",href:"/app/billing/plans"},{label:"Invoices",href:"/app/billing/invoices"}],endpoint:"/api/v1/billing/entitlements"},
  "/app/billing/plans":{eyebrow:"BILLING",title:"Plans",description:"Compare the commercial catalog against the active workspace entitlement.",tabs:[{label:"Usage",href:"/app/billing/usage"},{label:"Plans",href:"/app/billing/plans"},{label:"Invoices",href:"/app/billing/invoices"}],endpoint:"/api/v1/billing/plans"},
  "/app/billing/invoices":{eyebrow:"BILLING",title:"Invoices",description:"Inspect the billing account and invoice-facing records.",tabs:[{label:"Usage",href:"/app/billing/usage"},{label:"Plans",href:"/app/billing/plans"},{label:"Invoices",href:"/app/billing/invoices"}],endpoint:"/api/v1/billing"},
- "/app/developer/api-keys":{eyebrow:"DEVELOPER",title:"API keys",description:"Create, revoke and inspect organization-scoped machine credentials.",tabs:developerTabs,endpoint:"/api/v1/developer/api-keys",detailBase:"/app/developer/api-keys",createHref:"/app/developer/api-keys/new",createLabel:"Create API key"},\n "/app/developer/webhooks":{eyebrow:"DEVELOPER",title:"Webhooks",description:"Create signed event endpoints and inspect delivery state.",tabs:developerTabs,endpoint:"/api/v1/developer/webhooks",detailBase:"/app/developer/webhooks",createHref:"/app/developer/webhooks/new",createLabel:"Add webhook"},
+ "/app/developer/api-keys":{eyebrow:"DEVELOPER",title:"API keys",description:"Create, revoke and inspect organization-scoped machine credentials.",tabs:developerTabs,endpoint:"/api/v1/developer/api-keys",detailBase:"/app/developer/api-keys",createHref:"/app/developer/api-keys/new",createLabel:"Create API key"},
+ "/app/developer/webhooks":{eyebrow:"DEVELOPER",title:"Webhooks",description:"Create signed event endpoints and inspect delivery state.",tabs:developerTabs,endpoint:"/api/v1/developer/webhooks",detailBase:"/app/developer/webhooks",createHref:"/app/developer/webhooks/new",createLabel:"Add webhook"},
  "/app/developer/webhooks":{eyebrow:"DEVELOPER",title:"Webhooks",description:"Create endpoints, select events and inspect delivery history.",tabs:developerTabs,endpoint:"/api/v1/developer/webhooks",detailBase:"/app/developer/webhooks",createHref:"/app/developer/webhooks/new",createLabel:"Add webhook"},
 };
 
