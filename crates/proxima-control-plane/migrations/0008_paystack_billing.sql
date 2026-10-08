@@ -1,5 +1,5 @@
 -- Paystack billing migration.
--- Keep historical migrations immutable; this migration converts existing billing state safely.
+-- Keep historical migrations immutable; this forward migration converts existing billing state safely.
 
 ALTER TABLE billing_accounts
   ADD COLUMN IF NOT EXISTS provider text NOT NULL DEFAULT 'paystack',
