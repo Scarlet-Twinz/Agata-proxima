@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Agata Proxima Control Plane API",
-    "version": "0.3.1",
+    "version": "0.3.2",
     "description": "Authenticated management plane for organizations, tenants, policies, fleet, deployments, verification, audit and support. The Proxima Engine remains the independent data-plane enforcement authority."
   },
   "servers": [
@@ -690,6 +690,19 @@
           },
           "403": {
             "description": "Organization authorization denied"
+          }
+        }
+      }
+    },
+    "/api/v1/integration-environment-credentials": {
+      "get": {
+        "summary": "List organization-scoped environment credential metadata without secrets",
+        "responses": {
+          "200": {
+            "description": "Environment credential metadata"
+          },
+          "401": {
+            "description": "Authentication required"
           }
         }
       }
