@@ -261,3 +261,13 @@ pub(crate) async fn audit_search(State(s):State<AppState>,headers:HeaderMap,Quer
         Err(e)=>db_error(e)
     }
 }
+
+
+pub(crate) async fn ensure_organization_environments(db:&sqlx::PgPool, organization_id:Uuid)->Result<(),sqlx::Error>{
+    for (key,name,mode) in [("development","Development","development"),("staging","Staging","shadow"),("production","Production","enforcement")] {
+        let project_id:Option<Uuid>=sqlx::query_scalar("SELECT id FROM projects WHERE organization_id=$1 AND slug=$2").bind(organization_id).bind(key).fetch_optional(db).await?;
+        let project_id=match project_id{Some(v)=>v,None=>{let id=Uuid::new_v4();sqlx::query("INSERT INTO projects(id,organization_id,name,slug) VALUES($1,$2,$3,$4)").bind(id).bind(organization_id).bind(name).bind(key).execute(db).await?;id}};
+        sqlx::query("INSERT INTO environments(id,organization_id,project_id,key,name,mode) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(organization_id,key) DO NOTHING").bind(Uuid::new_v4()).bind(organization_id).bind(project_id).bind(key).bind(name).bind(mode).execute(db).await?;
+    }
+    Ok(())
+}
