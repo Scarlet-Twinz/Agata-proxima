@@ -106,6 +106,16 @@ fn plan_limits(plan: &str) -> (i32, i32, i32, i32, bool, bool, bool, bool, bool)
     }
 }
 
+fn plan_integration_limit(plan: &str) -> i32 {
+    match plan {
+        "starter" => 5,
+        "growth" => 20,
+        "scale" => 100,
+        "enterprise" => i32::MAX,
+        _ => 1,
+    }
+}
+
 #[allow(clippy::result_large_err)]
 pub(crate) async fn enforce_capacity(
     db: &sqlx::PgPool,
@@ -144,6 +154,60 @@ pub(crate) async fn enforce_capacity(
             Json(json!({"ok":false,"error":"plan_limit_reached","resource":resource,"limit":limit,"plan":plan,"message":"Plan capacity reached. Upgrade the Agata Proxima plan to continue."}))
         ).into_response());
     }
+    Ok(())
+}
+
+#[allow(clippy::result_large_err)]
+pub(crate) async fn enforce_integration_capacity(
+    db: &sqlx::PgPool,
+    organization_id: Uuid,
+) -> Result<(), Response> {
+    let row = sqlx::query(
+        "SELECT integration_limit,billing_status,plan_key
+         FROM organization_entitlements WHERE organization_id=$1",
+    )
+    .bind(organization_id)
+    .fetch_optional(db)
+    .await
+    .map_err(db_error)?;
+
+    let row = row.ok_or_else(|| service_unavailable("Organization entitlements are not initialized."))?;
+    let status: String = row.get("billing_status");
+    if matches!(status.as_str(), "canceled" | "unpaid") {
+        return Err((
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({
+                "ok": false,
+                "error": "subscription_inactive",
+                "message": "Restore an active Agata Proxima subscription to create integrations."
+            })),
+        ).into_response());
+    }
+
+    let limit: i32 = row.get("integration_limit");
+    let count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM webhooks WHERE organization_id=$1 AND enabled IS TRUE",
+    )
+    .bind(organization_id)
+    .fetch_one(db)
+    .await
+    .map_err(db_error)?;
+
+    if count >= i64::from(limit) {
+        let plan: String = row.get("plan_key");
+        return Err((
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({
+                "ok": false,
+                "error": "plan_limit_reached",
+                "resource": "integrations",
+                "limit": limit,
+                "plan": plan,
+                "message": "Active integration capacity reached. Upgrade the Agata Proxima plan to continue."
+            })),
+        ).into_response());
+    }
+
     Ok(())
 }
 
@@ -261,7 +325,8 @@ pub(crate) async fn plans() -> Response {
     let plans=catalog.iter().map(|(key,name,monthly_usd,description)|{
         let plan_code=paystack_plan_code(key);
         let (nodes,tenants,environments,retention,advanced,fleet,priority,entra,private_deployment)=plan_limits(key);
-        json!({"key":key,"name":name,"monthly_usd":monthly_usd,"description":description,"provider":"paystack","plan_code":plan_code,"checkout_available":key!=&"free"&&key!=&"enterprise"&&paystack_plan_code(key).is_some(),"limits":{"nodes":nodes,"tenants":tenants,"environments":environments,"audit_retention_days":retention},"features":{"advanced_verification":advanced,"fleet_controls":fleet,"priority_support":priority,"entra_oidc":entra,"private_deployment":private_deployment,"policy_management":key!=&"free"}})
+        let integrations = plan_integration_limit(key);
+        json!({"key":key,"name":name,"monthly_usd":monthly_usd,"description":description,"provider":"paystack","plan_code":plan_code,"checkout_available":key!=&"free"&&key!=&"enterprise"&&paystack_plan_code(key).is_some(),"limits":{"nodes":nodes,"tenants":tenants,"environments":environments,"integrations":integrations,"audit_retention_days":retention},"features":{"advanced_verification":advanced,"fleet_controls":fleet,"priority_support":priority,"entra_oidc":entra,"private_deployment":private_deployment,"policy_management":key!=&"free"}})
     }).collect::<Vec<_>>();
     Json(json!({"currency":"usd","billing_interval":"month","provider":"paystack","plans":plans})).into_response()
 }
@@ -272,7 +337,7 @@ pub(crate) async fn entitlements(State(s): State<AppState>, headers: HeaderMap) 
         Err(c) => return c.into_response(),
     };
     match sqlx::query(
-        "SELECT plan_key,billing_status,node_limit,tenant_limit,environment_limit,
+        "SELECT plan_key,billing_status,node_limit,tenant_limit,environment_limit,integration_limit,
                 audit_retention_days,advanced_verification,fleet_controls,priority_support,
                 entra_oidc,private_deployment,updated_at
          FROM organization_entitlements WHERE organization_id=$1",
@@ -288,6 +353,7 @@ pub(crate) async fn entitlements(State(s): State<AppState>, headers: HeaderMap) 
                 "nodes": row.get::<i32,_>("node_limit"),
                 "tenants": row.get::<i32,_>("tenant_limit"),
                 "environments": row.get::<i32,_>("environment_limit"),
+                "integrations": row.get::<i32,_>("integration_limit"),
                 "audit_retention_days": row.get::<i32,_>("audit_retention_days")
             },
             "features": {
@@ -306,21 +372,23 @@ pub(crate) async fn entitlements(State(s): State<AppState>, headers: HeaderMap) 
 
 async fn apply_entitlements(db: &sqlx::PgPool, organization_id: Uuid, plan: &str) -> Result<(), sqlx::Error> {
     let (nodes, tenants, environments, retention, advanced, fleet, priority, entra, private_deployment) = plan_limits(plan);
+    let integrations = plan_integration_limit(plan);
     sqlx::query(
         "INSERT INTO organization_entitlements
             (organization_id,plan_key,billing_status,node_limit,tenant_limit,environment_limit,
-             audit_retention_days,advanced_verification,fleet_controls,priority_support,entra_oidc,
-             private_deployment,updated_at)
-         VALUES($1,$2,'active',$3,$4,$5,$6,$7,$8,$9,$10,$11,now())
+             integration_limit,audit_retention_days,advanced_verification,fleet_controls,priority_support,
+             entra_oidc,private_deployment,updated_at)
+         VALUES($1,$2,'active',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,now())
          ON CONFLICT (organization_id) DO UPDATE SET
             plan_key=EXCLUDED.plan_key,billing_status=EXCLUDED.billing_status,
             node_limit=EXCLUDED.node_limit,tenant_limit=EXCLUDED.tenant_limit,
-            environment_limit=EXCLUDED.environment_limit,audit_retention_days=EXCLUDED.audit_retention_days,
+            environment_limit=EXCLUDED.environment_limit,integration_limit=EXCLUDED.integration_limit,
+            audit_retention_days=EXCLUDED.audit_retention_days,
             advanced_verification=EXCLUDED.advanced_verification,fleet_controls=EXCLUDED.fleet_controls,
             priority_support=EXCLUDED.priority_support,entra_oidc=EXCLUDED.entra_oidc,
             private_deployment=EXCLUDED.private_deployment,updated_at=now()"
     )
-    .bind(organization_id).bind(plan).bind(nodes).bind(tenants).bind(environments).bind(retention)
+    .bind(organization_id).bind(plan).bind(nodes).bind(tenants).bind(environments).bind(integrations).bind(retention)
     .bind(advanced).bind(fleet).bind(priority).bind(entra).bind(private_deployment)
     .execute(db).await?;
     Ok(())
