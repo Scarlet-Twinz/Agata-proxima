@@ -317,7 +317,7 @@ pub(crate) async fn create_environment(
             .fetch_optional(&s.db)
             .await
             .unwrap_or(None);
-    match sqlx::query("INSERT INTO environments(id,organization_id,project_id,key,name,mode,configuration) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(organization_id,key) DO UPDATE SET name=EXCLUDED.name,configuration=EXCLUDED.configuration,updated_at=now()").bind(Uuid::new_v4()).bind(ctx.organization_id).bind(project_id).bind(&input.key).bind(&name).bind(default_mode).bind(input.configuration.unwrap_or_else(||json!({}))).execute(&s.db).await{
+    match sqlx::query("INSERT INTO environments(id,organization_id,project_id,key,slug,name,mode,configuration) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(organization_id,key) DO UPDATE SET slug=EXCLUDED.slug,name=EXCLUDED.name,configuration=EXCLUDED.configuration,updated_at=now()").bind(Uuid::new_v4()).bind(ctx.organization_id).bind(project_id).bind(&input.key).bind(&input.key).bind(&name).bind(default_mode).bind(input.configuration.unwrap_or_else(||json!({}))).execute(&s.db).await{
         Ok(_)=>{audit(&s.db,ctx.organization_id,ctx.user_id,"environment.configured","environment",None,json!({"key":input.key})).await;Json(json!({"ok":true})).into_response()},
         Err(e)=>db_error(e)
     }
@@ -1097,7 +1097,7 @@ pub(crate) async fn ensure_organization_environments(
                 id
             }
         };
-        sqlx::query("INSERT INTO environments(id,organization_id,project_id,key,name,mode) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(organization_id,key) DO NOTHING").bind(Uuid::new_v4()).bind(organization_id).bind(project_id).bind(key).bind(name).bind(mode).execute(db).await?;
+        sqlx::query("INSERT INTO environments(id,organization_id,project_id,key,slug,name,mode) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(organization_id,key) DO UPDATE SET slug=COALESCE(environments.slug,EXCLUDED.slug),name=EXCLUDED.name,mode=EXCLUDED.mode,project_id=EXCLUDED.project_id,updated_at=now()").bind(Uuid::new_v4()).bind(organization_id).bind(project_id).bind(key).bind(key).bind(name).bind(mode).execute(db).await?;
     }
     Ok(())
 }
