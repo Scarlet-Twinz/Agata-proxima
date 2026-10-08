@@ -47,6 +47,118 @@ CREATE TABLE IF NOT EXISTS environments (
   UNIQUE (organization_id, key)
 );
 
+-- Upgrade pre-Phase-3A environment schemas in-place. CREATE TABLE IF NOT EXISTS does not
+-- reconcile an existing table, so older control-plane databases need the Phase 3A columns
+-- and constraints added explicitly before the indexes and seed records below are used.
+ALTER TABLE public.environments
+  ADD COLUMN IF NOT EXISTS organization_id uuid REFERENCES organizations(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS key text,
+  ADD COLUMN IF NOT EXISTS mode text NOT NULL DEFAULT 'development',
+  ADD COLUMN IF NOT EXISTS configuration jsonb NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS deployment_state text NOT NULL DEFAULT 'not_deployed',
+  ADD COLUMN IF NOT EXISTS verification_state text NOT NULL DEFAULT 'not_run',
+  ADD COLUMN IF NOT EXISTS bypass_until timestamptz,
+  ADD COLUMN IF NOT EXISTS bypass_authorized_by uuid REFERENCES users(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
+
+-- The legacy environment model used kind=(development|staging|production) and
+-- status=(active|paused|retired). Translate those values before enforcing the
+-- Phase 3A key/mode/status contract. The table is empty in the current upgrade,
+-- but these updates also make the migration safe for existing legacy rows.
+ALTER TABLE public.environments
+  DROP CONSTRAINT IF EXISTS environments_kind_check,
+  DROP CONSTRAINT IF EXISTS environments_status_check;
+
+UPDATE public.environments
+SET organization_id = p.organization_id
+FROM public.projects AS p
+WHERE public.environments.project_id = p.id
+  AND public.environments.organization_id IS NULL;
+
+UPDATE public.environments
+SET key = CASE
+  WHEN kind IN ('development','staging','production') THEN kind
+  WHEN slug IN ('development','staging','production') THEN slug
+  ELSE 'development'
+END
+WHERE key IS NULL;
+
+UPDATE public.environments
+SET mode = CASE key
+  WHEN 'production' THEN 'enforcement'
+  WHEN 'staging' THEN 'shadow'
+  ELSE 'development'
+END;
+
+UPDATE public.environments
+SET status = CASE status
+  WHEN 'paused' THEN 'suspended'
+  WHEN 'retired' THEN 'decommissioned'
+  ELSE status
+END;
+
+ALTER TABLE public.environments
+  ALTER COLUMN organization_id SET NOT NULL,
+  ALTER COLUMN key SET NOT NULL;
+
+DO $
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.environments'::regclass
+      AND conname = 'environments_key_check'
+  ) THEN
+    ALTER TABLE public.environments
+      ADD CONSTRAINT environments_key_check
+      CHECK (key IN ('development','staging','production'));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.environments'::regclass
+      AND conname = 'environments_mode_check'
+  ) THEN
+    ALTER TABLE public.environments
+      ADD CONSTRAINT environments_mode_check
+      CHECK (mode IN ('development','shadow','enforcement','maintenance'));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.environments'::regclass
+      AND conname = 'environments_status_check'
+  ) THEN
+    ALTER TABLE public.environments
+      ADD CONSTRAINT environments_status_check
+      CHECK (status IN ('active','suspended','decommissioned'));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.environments'::regclass
+      AND conname = 'environments_deployment_state_check'
+  ) THEN
+    ALTER TABLE public.environments
+      ADD CONSTRAINT environments_deployment_state_check
+      CHECK (deployment_state IN ('not_deployed','deploying','healthy','degraded','failed'));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.environments'::regclass
+      AND conname = 'environments_verification_state_check'
+  ) THEN
+    ALTER TABLE public.environments
+      ADD CONSTRAINT environments_verification_state_check
+      CHECK (verification_state IN ('not_run','running','pass','fail','blocked','error','inconclusive'));
+  END IF;
+END $;
+
+-- Match the Phase 3A uniqueness contract. ON CONFLICT (organization_id,key)
+-- can infer this unique index on both fresh and upgraded databases.
+CREATE UNIQUE INDEX IF NOT EXISTS environments_organization_id_key_key
+  ON public.environments(organization_id, key);
+
 CREATE TABLE IF NOT EXISTS database_connections (
   id uuid PRIMARY KEY,
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
