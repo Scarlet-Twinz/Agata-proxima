@@ -1283,6 +1283,12 @@ mod tests {
         assert_eq!(super::plan_limits("growth"), (5, 100, 5, 180, true, true, true, true, false));
         assert_eq!(super::plan_limits("scale"), (15, 500, 50, 365, true, true, true, true, true));
         assert_eq!(super::plan_limits("enterprise"), (i32::MAX, i32::MAX, i32::MAX, 3650, true, true, true, true, true));
+        assert_eq!(super::plan_integration_limit("free"), 1);
+        assert_eq!(super::plan_integration_limit("starter"), 5);
+        assert_eq!(super::plan_integration_limit("growth"), 20);
+        assert_eq!(super::plan_integration_limit("scale"), 100);
+        assert_eq!(super::plan_integration_limit("enterprise"), i32::MAX);
+        assert_eq!(super::plan_integration_limit("unknown"), 1);
     }
 
     #[test]
