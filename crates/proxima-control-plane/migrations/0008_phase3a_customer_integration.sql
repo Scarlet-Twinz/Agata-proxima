@@ -78,7 +78,6 @@ WHERE public.environments.project_id = p.id
 
 UPDATE public.environments
 SET key = CASE
-  WHEN kind IN ('development','staging','production') THEN kind
   WHEN slug IN ('development','staging','production') THEN slug
   ELSE 'development'
 END
