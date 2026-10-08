@@ -1,5 +1,6 @@
 #[rustfmt::skip]
 mod production;
+mod phase3;
 
 use crate::production::service_unavailable;
 
@@ -190,6 +191,9 @@ async fn main() -> Result<()> {
     sqlx::raw_sql(include_str!("../migrations/0007_notifications_email.sql"))
         .execute(&db)
         .await?;
+    sqlx::raw_sql(include_str!("../migrations/0008_phase3a_customer_integration.sql"))
+        .execute(&db)
+        .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
@@ -332,6 +336,25 @@ async fn main() -> Result<()> {
             "/api/v1/organization/invitations/{id}",
             delete(revoke_organization_invitation),
         )
+        .route("/api/v1/integrations", get(phase3::integrations).post(phase3::create_integration))
+        .route("/api/v1/integrations/{id}/credentials/rotate", post(phase3::rotate_integration_credential))
+        .route("/api/v1/integrations/{id}/credentials/revoke", post(phase3::revoke_integration_credential))
+        .route("/api/v1/integrations/{id}/deactivate", post(phase3::deactivate_integration))
+        .route("/api/v1/environments", get(phase3::environments).post(phase3::create_environment))
+        .route("/api/v1/environments/{id}/mode", axum::routing::patch(phase3::set_environment_mode))
+        .route("/api/v1/environments/{id}/bypass", post(phase3::request_environment_bypass))
+        .route("/api/v1/database-connections", get(phase3::database_connections).post(phase3::create_database_connection))
+        .route("/api/v1/database-connections/{id}/validate", post(phase3::validate_database_connection))
+        .route("/api/v1/tenant-context", post(phase3::issue_context))
+        .route("/api/v1/tenant-context/verify", post(phase3::verify_context))
+        .route("/api/v1/tenant-policies", post(phase3::bind_policy))
+        .route("/api/v1/migrations", get(phase3::migrations).post(phase3::create_migration))
+        .route("/api/v1/migrations/{id}/preflight", post(phase3::migration_preflight))
+        .route("/api/v1/organization/invitations/{id}/resend", post(phase3::team_resend_invitation))
+        .route("/api/v1/organization/invitations/reject", post(phase3::team_reject_invitation))
+        .route("/api/v1/organization/team/{member_id}/role", axum::routing::patch(phase3::team_change_role))
+        .route("/api/v1/organization/team/{member_id}", delete(phase3::team_remove_member))
+        .route("/api/v1/audit/search", get(phase3::audit_search))
         .route("/api/v1/production/readiness", get(production::readiness))
         .with_state(state)
         .layer(TraceLayer::new_for_http());
@@ -488,6 +511,10 @@ async fn signup(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Resp
     }
 
     if let Err(e) = tx.commit().await {
+        return db_error(e);
+    }
+
+    if let Err(e) = phase3::ensure_organization_environments(&s.db, organization_id).await {
         return db_error(e);
     }
 
@@ -1949,6 +1976,9 @@ async fn create_organization(
     .execute(&s.db)
     .await
     {
+        return db_error(e);
+    }
+    if let Err(e) = phase3::ensure_organization_environments(&s.db, id).await {
         return db_error(e);
     }
 
