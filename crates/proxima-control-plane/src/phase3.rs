@@ -1423,7 +1423,6 @@ pub(crate) async fn project_list(State(s):State<AppState>,headers:HeaderMap)->Re
     }
 }
 
-
 #[rustfmt::skip]
 async fn audit_external(db:&sqlx::PgPool,org:Uuid,action:&str,resource_type:&str,resource_id:Option<Uuid>,metadata:Value){
     let correlation_id=Uuid::new_v4().to_string();
