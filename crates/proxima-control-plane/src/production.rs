@@ -257,7 +257,7 @@ pub(crate) async fn require_feature(
 }
 
 pub(crate) async fn plans() -> Response {
-    let catalog=[("free","Free",0_i32,"Evaluation and small proofs of concept"),("starter","Starter",149_i32,"First production SaaS deployments"),("growth","Growth",499_i32,"Multi-tenant production workloads"),("scale","Scale",1199_i32,"Larger fleets and security operations"),("enterprise","Enterprise",0_i32,"Contracted enterprise deployments")];
+    let catalog=[("free","Free",0_i32,"Evaluation and small proofs of concept"),("starter","Starter",79_i32,"First production SaaS deployments"),("growth","Growth",249_i32,"Multi-tenant production workloads"),("scale","Scale",799_i32,"Larger fleets and security operations"),("enterprise","Enterprise",0_i32,"Contracted enterprise deployments")];
     let plans=catalog.iter().map(|(key,name,monthly_usd,description)|{
         let plan_code=paystack_plan_code(key);
         let (nodes,tenants,environments,retention,advanced,fleet,priority,entra,private_deployment)=plan_limits(key);
