@@ -49,9 +49,10 @@ DECLARE
 BEGIN
     org_id := NEW.organization_id;
 
-    IF TG_TABLE_NAME = 'organization_invites'
-       AND (NEW.accepted_at IS NOT NULL OR NEW.expires_at <= now()) THEN
-        RETURN NEW;
+    IF TG_TABLE_NAME = 'organization_invites' THEN
+        IF NEW.accepted_at IS NOT NULL OR NEW.expires_at <= now() THEN
+            RETURN NEW;
+        END IF;
     END IF;
 
     PERFORM pg_advisory_xact_lock(hashtextextended(org_id::text || ':team-seat-capacity', 0));
