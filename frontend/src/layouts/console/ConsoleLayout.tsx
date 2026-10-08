@@ -113,7 +113,8 @@ export function ConsoleLayout() {
         setAccountEmail(settings.user.email || "");
       })
       .catch(() => undefined);
-    api.get<{id:string;key:string;name:string;mode:string;status:string}[]>("/api/v1/environments").then((envs) => { if (active) setEnvironmentOptions(envs); }).catch(() => undefined);\n    const refreshNotifications = () => api.get<{notifications:{read:boolean}[]}>("/api/v1/notifications").then((result) => { if (active) setUnreadNotifications(result.notifications.filter((item) => !item.read).length); }).catch(() => undefined);
+    api.get<{id:string;key:string;name:string;mode:string;status:string}[]>("/api/v1/environments").then((envs) => { if (active) setEnvironmentOptions(envs); }).catch(() => undefined);
+    const refreshNotifications = () => api.get<{notifications:{read:boolean}[]}>("/api/v1/notifications").then((result) => { if (active) setUnreadNotifications(result.notifications.filter((item) => !item.read).length); }).catch(() => undefined);
     void refreshNotifications();
     const notificationTimer = window.setInterval(refreshNotifications, 5000);
     return () => {
