@@ -60,6 +60,7 @@ The existing node/tenant/environment and selected feature checks are a foundatio
 - When usage exceeds a downgraded limit, preserve existing data, mark over-entitlement, block further excess creation, and give the organization a remediation path.
 - Failed-payment and cancellation behaviour must follow an explicitly defined recovery/grace policy. Do not treat all billing states as interchangeable.
 - Entitlement transitions must be idempotent and auditable.
+- Audit APIs hide events outside the current plan's retention window immediately; a database cleanup runs hourly to physically purge expired events. If entitlement state is missing, cleanup preserves records rather than guessing a retention policy.
 - Capacity checks must be safe under concurrent creation attempts.
 
 ## Sequential acceptance
