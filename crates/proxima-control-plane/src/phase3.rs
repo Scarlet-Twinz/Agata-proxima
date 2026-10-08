@@ -176,6 +176,10 @@ pub(crate) async fn create_integration(
     let secret = format!("aga_int_{}_{}", id.simple(), Uuid::new_v4().simple());
     let prefix = secret.chars().take(16).collect::<String>();
     if let Err(e)=sqlx::query("INSERT INTO integration_credentials(id,integration_id,key_prefix,key_hash) VALUES($1,$2,$3,$4)").bind(Uuid::new_v4()).bind(id).bind(&prefix).bind(token_hash(&secret)).execute(&s.db).await{return db_error(e)}
+    let environment_credentials = match issue_environment_credentials(&s.db, ctx.organization_id, id).await {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
     audit(
         &s.db,
         ctx.organization_id,
@@ -186,7 +190,7 @@ pub(crate) async fn create_integration(
         json!({"mode":"development"}),
     )
     .await;
-    Json(json!({"id":id,"name":name,"status":"active","mode":"development","credential":secret,"message":"Store this integration credential securely. It is shown once and is never returned again."})).into_response()
+    Json(json!({"id":id,"name":name,"status":"active","mode":"development","credential":secret,"environment_credentials":environment_credentials,"message":"Credentials are shown once. Store them securely; Agata never returns the full secret again."})).into_response()
 }
 pub(crate) async fn rotate_integration_credential(
     State(s): State<AppState>,
@@ -1082,4 +1086,158 @@ pub(crate) async fn ensure_organization_environments(
         sqlx::query("INSERT INTO environments(id,organization_id,project_id,key,name,mode) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(organization_id,key) DO NOTHING").bind(Uuid::new_v4()).bind(organization_id).bind(project_id).bind(key).bind(name).bind(mode).execute(db).await?;
     }
     Ok(())
+}
+
+
+pub(crate) async fn rotate_environment_credential(
+    State(s): State<AppState>,
+    Path((integration_id, environment_id)): Path<(Uuid, Uuid)>,
+    headers: HeaderMap,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(value) => value,
+        Err(code) => return code.into_response(),
+    };
+    if let Err(code) = require_admin(&ctx, &headers) {
+        return code.into_response();
+    }
+    if let Err(error) = scoped_integration(&s.db, &ctx, integration_id).await {
+        return error;
+    }
+    if let Err(error) = scoped_environment(&s.db, &ctx, environment_id).await {
+        return error;
+    }
+    let secret = format!(
+        "aga_env_{}_{}_{}",
+        integration_id.simple(),
+        environment_id.simple(),
+        Uuid::new_v4().simple()
+    );
+    let prefix = secret.chars().take(16).collect::<String>();
+    if let Err(error) = sqlx::query(
+        "UPDATE environment_integration_credentials
+         SET active=false,revoked_at=now()
+         WHERE integration_id=$1 AND environment_id=$2 AND organization_id=$3 AND active=true",
+    )
+    .bind(integration_id)
+    .bind(environment_id)
+    .bind(ctx.organization_id)
+    .execute(&s.db)
+    .await
+    {
+        return db_error(error);
+    }
+    if let Err(error) = sqlx::query(
+        "INSERT INTO environment_integration_credentials
+         (id,organization_id,integration_id,environment_id,key_prefix,key_hash)
+         VALUES($1,$2,$3,$4,$5,$6)",
+    )
+    .bind(Uuid::new_v4())
+    .bind(ctx.organization_id)
+    .bind(integration_id)
+    .bind(environment_id)
+    .bind(&prefix)
+    .bind(token_hash(&secret))
+    .execute(&s.db)
+    .await
+    {
+        return db_error(error);
+    }
+    audit(
+        &s.db,
+        ctx.organization_id,
+        ctx.user_id,
+        "integration.environment_credential.rotated",
+        "integration",
+        Some(integration_id),
+        json!({"environment_id":environment_id}),
+    )
+    .await;
+    Json(json!({"ok":true,"credential":secret,"environment_id":environment_id,"message":"Environment credential rotated and shown once."})).into_response()
+}
+
+pub(crate) async fn revoke_environment_credential(
+    State(s): State<AppState>,
+    Path((integration_id, environment_id)): Path<(Uuid, Uuid)>,
+    headers: HeaderMap,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(value) => value,
+        Err(code) => return code.into_response(),
+    };
+    if let Err(code) = require_admin(&ctx, &headers) {
+        return code.into_response();
+    }
+    if let Err(error) = scoped_integration(&s.db, &ctx, integration_id).await {
+        return error;
+    }
+    match sqlx::query(
+        "UPDATE environment_integration_credentials
+         SET active=false,revoked_at=now()
+         WHERE integration_id=$1 AND environment_id=$2 AND organization_id=$3 AND active=true",
+    )
+    .bind(integration_id)
+    .bind(environment_id)
+    .bind(ctx.organization_id)
+    .execute(&s.db)
+    .await
+    {
+        Ok(result) if result.rows_affected() == 1 => {
+            audit(
+                &s.db,
+                ctx.organization_id,
+                ctx.user_id,
+                "integration.environment_credential.revoked",
+                "integration",
+                Some(integration_id),
+                json!({"environment_id":environment_id}),
+            )
+            .await;
+            Json(json!({"ok":true})).into_response()
+        }
+        Ok(_) => (StatusCode::NOT_FOUND,Json(json!({"ok":false,"message":"Active environment credential not found."}))).into_response(),
+        Err(error) => db_error(error),
+    }
+}
+
+async fn issue_environment_credentials(
+    db: &sqlx::PgPool,
+    organization_id: Uuid,
+    integration_id: Uuid,
+) -> Result<Vec<Value>, Response> {
+    let environments = sqlx::query(
+        "SELECT id,key FROM environments WHERE organization_id=$1 ORDER BY CASE key WHEN 'development' THEN 0 WHEN 'staging' THEN 1 ELSE 2 END",
+    )
+    .bind(organization_id)
+    .fetch_all(db)
+    .await
+    .map_err(db_error)?;
+    let mut issued = Vec::new();
+    for environment in environments {
+        let environment_id = environment.get::<Uuid, _>("id");
+        let key = environment.get::<String, _>("key");
+        let secret = format!(
+            "aga_env_{}_{}_{}",
+            integration_id.simple(),
+            environment_id.simple(),
+            Uuid::new_v4().simple()
+        );
+        let prefix = secret.chars().take(16).collect::<String>();
+        sqlx::query(
+            "INSERT INTO environment_integration_credentials
+             (id,organization_id,integration_id,environment_id,key_prefix,key_hash)
+             VALUES($1,$2,$3,$4,$5,$6)",
+        )
+        .bind(Uuid::new_v4())
+        .bind(organization_id)
+        .bind(integration_id)
+        .bind(environment_id)
+        .bind(&prefix)
+        .bind(token_hash(&secret))
+        .execute(db)
+        .await
+        .map_err(db_error)?;
+        issued.push(json!({"environment_id":environment_id,"environment":key,"credential":secret}));
+    }
+    Ok(issued)
 }
