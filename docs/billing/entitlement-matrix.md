@@ -35,9 +35,9 @@ Paystack is the billing source of truth for paid subscriptions. The Control Plan
 
 Only these environment-configured Paystack plan codes are accepted:
 
-- `AGATA_PAYSTACK_STARTER_PRICE_ID`
-- `AGATA_PAYSTACK_GROWTH_PRICE_ID`
-- `AGATA_PAYSTACK_SCALE_PRICE_ID`
+- `AGATA_PAYSTACK_STARTER_PLAN_CODE`
+- `AGATA_PAYSTACK_GROWTH_PLAN_CODE`
+- `AGATA_PAYSTACK_SCALE_PLAN_CODE`
 
 A checkout request containing a plan code that is not one of those three is rejected.
 
