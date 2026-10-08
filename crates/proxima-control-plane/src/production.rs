@@ -1274,6 +1274,12 @@ pub(crate) async fn invite(
         return bad("A valid email is required.");
     }
 
+    if let Err(response) =
+        enforce_team_seat_capacity(&s.db, ctx.organization_id, Some(&email)).await
+    {
+        return response;
+    }
+
     let token = format!("{}-{}", Uuid::new_v4(), Uuid::new_v4());
     let id = Uuid::new_v4();
     if let Err(e) = sqlx::query(
@@ -1354,15 +1360,44 @@ pub(crate) async fn accept_invite(
             let invite_id: Uuid = row.get("id");
             let org: Uuid = row.get("organization_id");
             let role: String = row.get("role");
+            let mut tx = match s.db.begin().await {
+                Ok(tx) => tx,
+                Err(e) => return db_error(e),
+            };
+
+            let claimed = match sqlx::query(
+                "UPDATE organization_invites SET accepted_at=now()
+                 WHERE id=$1 AND accepted_at IS NULL AND expires_at>now()
+                 RETURNING id",
+            )
+            .bind(invite_id)
+            .fetch_optional(&mut *tx)
+            .await
+            {
+                Ok(v) => v,
+                Err(e) => return db_error(e),
+            };
+            if claimed.is_none() {
+                return bad("Invitation expired, invalid, or already accepted.");
+            }
+
             if let Err(e) = sqlx::query(
                 "INSERT INTO memberships(user_id,organization_id,role) VALUES($1,$2,$3)
                  ON CONFLICT (user_id,organization_id) DO UPDATE SET role=EXCLUDED.role",
             )
-            .bind(ctx.user_id).bind(org).bind(&role).execute(&s.db).await {
+            .bind(ctx.user_id)
+            .bind(org)
+            .bind(&role)
+            .execute(&mut *tx)
+            .await
+            {
                 return db_error(e);
             }
-            let _ = sqlx::query("UPDATE organization_invites SET accepted_at=now() WHERE id=$1")
-                .bind(invite_id).execute(&s.db).await;
+
+            if let Err(e) = tx.commit().await {
+                return db_error(e);
+            }
+
             audit(&s.db, org, ctx.user_id, "organization.invite.accepted", "organization_invite", Some(invite_id), json!({})).await;
             Html("<html><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\"><h1>Invitation accepted.</h1><p>Your organization access is active.</p><a href=\"/app\">Open Command Center</a></body></html>").into_response()
         }
