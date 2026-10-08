@@ -937,7 +937,7 @@ pub(crate) async fn team_change_role(
             .await
         {
             Ok(Some(v)) => v,
-            Ok(None) => (
+            Ok(None) => return (
                 StatusCode::NOT_FOUND,
                 Json(json!({"ok":false,"message":"Member not found."})),
             )
