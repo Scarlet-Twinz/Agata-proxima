@@ -3,7 +3,8 @@ import { RefreshCw, RotateCw, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "../../api/client";
 
-type Integration={id:string;name:string;status:string;mode:string;configuration:Record<string,unknown>;created_at:string};\ntype EnvironmentCredential={id:string;integration_id:string;environment_id:string;environment:string;key_prefix:string;active:boolean;created_at:string};
+type Integration={id:string;name:string;status:string;mode:string;configuration:Record<string,unknown>;created_at:string};
+type EnvironmentCredential={id:string;integration_id:string;environment_id:string;environment:string;key_prefix:string;active:boolean;created_at:string};
 type Environment={id:string;key:string;name:string;mode:string;status:string;deployment_state:string;verification_state:string;bypass_until?:string|null};
 type DbConnection={id:string;environment_id:string;environment:string;host:string;port:number;database:string;username:string;tls_mode:string;status:string;last_health_at?:string|null;last_error?:string|null};
 
