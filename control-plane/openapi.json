@@ -304,32 +304,10 @@
     },
     "/api/v1/integrations": {
       "get": {
-        "summary": "List active-organization customer integrations",
-        "responses": {
-          "200": {
-            "description": "List active-organization customer integrations"
-          },
-          "401": {
-            "description": "Authentication required"
-          },
-          "403": {
-            "description": "Organization authorization denied"
-          }
-        }
+        "summary": "List organization integrations"
       },
       "post": {
-        "summary": "Create an organization-owned integration and one-time credential",
-        "responses": {
-          "200": {
-            "description": "Create an organization-owned integration and one-time credential"
-          },
-          "401": {
-            "description": "Authentication required"
-          },
-          "403": {
-            "description": "Organization authorization denied"
-          }
-        }
+        "summary": "Create organization integration"
       }
     },
     "/api/v1/integrations/{id}/credentials/rotate": {
@@ -382,32 +360,10 @@
     },
     "/api/v1/environments": {
       "get": {
-        "summary": "List Development, Staging and Production environments",
-        "responses": {
-          "200": {
-            "description": "List Development, Staging and Production environments"
-          },
-          "401": {
-            "description": "Authentication required"
-          },
-          "403": {
-            "description": "Organization authorization denied"
-          }
-        }
+        "summary": "List organization environments"
       },
       "post": {
-        "summary": "Configure an environment",
-        "responses": {
-          "200": {
-            "description": "Configure an environment"
-          },
-          "401": {
-            "description": "Authentication required"
-          },
-          "403": {
-            "description": "Organization authorization denied"
-          }
-        }
+        "summary": "Create organization environment"
       }
     },
     "/api/v1/environments/{id}/mode": {
@@ -444,32 +400,10 @@
     },
     "/api/v1/database-connections": {
       "get": {
-        "summary": "List environment PostgreSQL connection health without secrets",
-        "responses": {
-          "200": {
-            "description": "List environment PostgreSQL connection health without secrets"
-          },
-          "401": {
-            "description": "Authentication required"
-          },
-          "403": {
-            "description": "Organization authorization denied"
-          }
-        }
+        "summary": "List customer database boundaries"
       },
       "post": {
-        "summary": "Store and validate an encrypted PostgreSQL environment connection",
-        "responses": {
-          "200": {
-            "description": "Store and validate an encrypted PostgreSQL environment connection"
-          },
-          "401": {
-            "description": "Authentication required"
-          },
-          "403": {
-            "description": "Organization authorization denied"
-          }
-        }
+        "summary": "Configure and validate customer database boundary"
       }
     },
     "/api/v1/database-connections/{id}/validate": {
@@ -490,80 +424,25 @@
     },
     "/api/v1/tenant-context": {
       "post": {
-        "summary": "Issue a short-lived signed identity-to-tenant context",
-        "responses": {
-          "200": {
-            "description": "Issue a short-lived signed identity-to-tenant context"
-          },
-          "401": {
-            "description": "Authentication required"
-          },
-          "403": {
-            "description": "Organization authorization denied"
-          }
-        }
+        "summary": "Issue an authenticated tenant context"
       }
     },
     "/api/v1/tenant-context/verify": {
       "post": {
-        "summary": "Verify signature, expiry, organization and replay state for tenant context",
-        "responses": {
-          "200": {
-            "description": "Verify signature, expiry, organization and replay state for tenant context"
-          },
-          "401": {
-            "description": "Authentication required"
-          },
-          "403": {
-            "description": "Organization authorization denied"
-          }
-        }
+        "summary": "Verify and consume a tenant context through the control plane"
       }
     },
     "/api/v1/tenant-policies": {
       "post": {
-        "summary": "Associate an organization policy with a tenant",
-        "responses": {
-          "200": {
-            "description": "Associate an organization policy with a tenant"
-          },
-          "401": {
-            "description": "Authentication required"
-          },
-          "403": {
-            "description": "Organization authorization denied"
-          }
-        }
+        "summary": "Bind a policy to an organization tenant"
       }
     },
     "/api/v1/migrations": {
       "get": {
-        "summary": "List customer migration runs",
-        "responses": {
-          "200": {
-            "description": "List customer migration runs"
-          },
-          "401": {
-            "description": "Authentication required"
-          },
-          "403": {
-            "description": "Organization authorization denied"
-          }
-        }
+        "summary": "List migration plans"
       },
       "post": {
-        "summary": "Create a rollback-safe customer migration plan",
-        "responses": {
-          "200": {
-            "description": "Create a rollback-safe customer migration plan"
-          },
-          "401": {
-            "description": "Authentication required"
-          },
-          "403": {
-            "description": "Organization authorization denied"
-          }
-        }
+        "summary": "Create migration plan"
       }
     },
     "/api/v1/migrations/{id}/preflight": {
@@ -648,18 +527,7 @@
     },
     "/api/v1/audit/search": {
       "get": {
-        "summary": "Search organization-scoped audit evidence",
-        "responses": {
-          "200": {
-            "description": "Search organization-scoped audit evidence"
-          },
-          "401": {
-            "description": "Authentication required"
-          },
-          "403": {
-            "description": "Organization authorization denied"
-          }
-        }
+        "summary": "Search organization audit evidence"
       }
     },
     "/api/v1/integrations/{integration_id}/environments/{environment_id}/credentials/rotate": {
@@ -705,6 +573,16 @@
             "description": "Authentication required"
           }
         }
+      }
+    },
+    "/api/v1/customer/context": {
+      "post": {
+        "summary": "Exchange an environment credential for short-lived tenant context"
+      }
+    },
+    "/api/v1/projects": {
+      "get": {
+        "summary": "List organization projects"
       }
     }
   },
