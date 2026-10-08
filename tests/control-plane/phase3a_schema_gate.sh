@@ -26,8 +26,8 @@ required_tables=(
   migration_tenant_maps
 )
 
-for table in "\${required_tables[@]}"; do
-  assert_sql "table \${table}" "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='\${table}')" "t"
+for table in "${required_tables[@]}"; do
+  assert_sql "table ${table}" "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='${table}')" "t"
 done
 
 required_columns=(
@@ -46,10 +46,10 @@ required_columns=(
   "database_connections|password_ciphertext"
 )
 
-for pair in "\${required_columns[@]}"; do
-  table="\${pair%%|*}"
-  column="\${pair#*|}"
-  assert_sql "column \${table}.\${column}" "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='\${table}' AND column_name='\${column}')" "t"
+for pair in "${required_columns[@]}"; do
+  table="${pair%%|*}"
+  column="${pair#*|}"
+  assert_sql "column ${table}.${column}" "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='${table}' AND column_name='${column}')" "t"
 done
 
 assert_sql "database password uses bytea ciphertext" "SELECT data_type='bytea' FROM information_schema.columns WHERE table_schema='public' AND table_name='database_connections' AND column_name='password_ciphertext'" "t"
