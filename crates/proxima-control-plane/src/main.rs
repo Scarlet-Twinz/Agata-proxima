@@ -790,7 +790,9 @@ async fn create_webhook(
         return bad("Webhook endpoint must use HTTPS outside local development.");
     }
 
-    if let Err(response) = production::enforce_integration_capacity(&s.db, ctx.organization_id).await {
+    if let Err(response) =
+        production::enforce_integration_capacity(&s.db, ctx.organization_id).await
+    {
         return response;
     }
 
