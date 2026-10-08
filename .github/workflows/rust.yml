@@ -98,6 +98,7 @@ jobs:
           grep -q "AGATA_PUBLIC_BASE_URL" .env.example
           grep -q "STRIPE_SECRET_KEY" .env.example
           grep -q "RESEND_API_KEY" .env.example
+          grep -q "RESEND_INVITATION_TEMPLATE_ID" .env.example
           grep -q "PROXIMA_OIDC_ISSUER" .env.example
           grep -q "AGATA_SECRET_ENCRYPTION_KEY" .env.example
           grep -q "PROXIMA_CONTEXT_SIGNING_KEY" .env.example
