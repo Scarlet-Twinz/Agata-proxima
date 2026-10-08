@@ -44,6 +44,14 @@ required_columns=(
   "audit_events|previous_hash"
   "audit_events|event_hash"
   "database_connections|password_ciphertext"
+  "environments|organization_id"
+  "environments|project_id"
+  "environments|key"
+  "environments|slug"
+  "environments|mode"
+  "environments|status"
+  "environments|deployment_state"
+  "environments|verification_state"
 )
 
 for pair in "${required_columns[@]}"; do
@@ -54,5 +62,6 @@ done
 
 assert_sql "database password uses bytea ciphertext" "SELECT data_type='bytea' FROM information_schema.columns WHERE table_schema='public' AND table_name='database_connections' AND column_name='password_ciphertext'" "t"
 assert_sql "database password plaintext column absent" "SELECT NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='database_connections' AND column_name='password')" "t"
+assert_sql "legacy environment slug is nullable" "SELECT is_nullable='YES' FROM information_schema.columns WHERE table_schema='public' AND table_name='environments' AND column_name='slug'" "t"
 
 echo "Phase 3A schema contract: PASS"
