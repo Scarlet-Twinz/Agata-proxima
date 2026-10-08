@@ -210,9 +210,11 @@ async fn main() -> Result<()> {
     sqlx::raw_sql(include_str!("../migrations/0013_team_seat_quotas.sql"))
         .execute(&db)
         .await?;
-    sqlx::raw_sql(include_str!("../migrations/0014_api_enterprise_support.sql"))
-        .execute(&db)
-        .await?;
+    sqlx::raw_sql(include_str!(
+        "../migrations/0014_api_enterprise_support.sql"
+    ))
+    .execute(&db)
+    .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
@@ -228,7 +230,9 @@ async fn main() -> Result<()> {
                 Err(e) => error!(%e, "audit retention purge failed"),
             }
             match production::purge_expired_api_rate_windows(&retention_db).await {
-                Ok(deleted) if deleted > 0 => info!(deleted, "purged expired API rate-limit windows"),
+                Ok(deleted) if deleted > 0 => {
+                    info!(deleted, "purged expired API rate-limit windows")
+                }
                 Ok(_) => {}
                 Err(e) => error!(%e, "API rate-limit cleanup failed"),
             }
