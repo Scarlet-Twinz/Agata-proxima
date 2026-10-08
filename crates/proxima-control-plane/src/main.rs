@@ -398,6 +398,11 @@ async fn main() -> Result<()> {
             "/api/v1/database-connections/{id}/validate",
             post(phase3::validate_database_connection),
         )
+        .route(
+            "/api/v1/integrations/{integration_id}/environments/{environment_id}/credentials",
+            post(phase3::create_environment_credential),
+        )
+        .route("/api/v1/customer/context", post(phase3::issue_customer_context))
         .route("/api/v1/tenant-context", post(phase3::issue_context))
         .route(
             "/api/v1/tenant-context/verify",
