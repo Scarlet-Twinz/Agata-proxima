@@ -27,6 +27,8 @@ import { AgataLogo } from "../../components/brand/AgataLogo";
 const primaryNavigation = [
   { label: "Overview", href: "/app", icon: Gauge },
   { label: "Security", href: "/app/security", icon: ShieldCheck },
+  { label: "Integrations", href: "/app/integrations", icon: KeyRound },
+  { label: "Environments", href: "/app/environments", icon: SlidersHorizontal },
   { label: "Tenants", href: "/app/tenants", icon: Users },
   { label: "Policies", href: "/app/policies", icon: SlidersHorizontal },
   { label: "Nodes", href: "/app/nodes", icon: Database },
@@ -40,6 +42,7 @@ const primaryNavigation = [
 const platformNavigation = [
   { label: "Developer", href: "/app/developer", icon: KeyRound },
   { label: "Settings", href: "/app/settings", icon: Settings },
+  { label: "Database", href: "/app/database", icon: Database },
   { label: "Support", href: "/app/support", icon: CircleHelp },
 ];
 
@@ -52,6 +55,9 @@ const searchNavigation = [
   { label: "Tenant isolation", href: "/app/security/tenant-isolation", icon: ShieldCheck },
   { label: "Security events", href: "/app/security/events", icon: FileSearch },
   { label: "Developer API keys", href: "/app/developer/api-keys", icon: KeyRound },
+  { label: "Integrations", href: "/app/integrations", icon: KeyRound },
+  { label: "Environments", href: "/app/environments", icon: SlidersHorizontal },
+  { label: "Database connections", href: "/app/database", icon: Database },
   { label: "Developer tenant context", href: "/app/developer/tenant-context", icon: KeyRound },
   { label: "Developer webhooks", href: "/app/developer/webhooks", icon: KeyRound },
   { label: "Developer API reference", href: "/app/developer/api-reference", icon: KeyRound },
