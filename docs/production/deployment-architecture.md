@@ -48,7 +48,7 @@ Configure these service variables in the provider's secret/configuration UI:
 - `PROXIMA_CONTROL_DATABASE_URL` — managed PostgreSQL connection string.
 - `PROXIMA_COOKIE_SECURE=true`.
 - `AGATA_PUBLIC_BASE_URL=https://agataproxima.com`.
-- `RESEND_API_KEY`, the five purpose-specific `RESEND_FROM_*_EMAIL` identities, and `AGATA_SUPPORT_INBOX_EMAIL` after the sending domain is verified. Keep the API key server-side; the support inbox must be an actually monitored mailbox.
+- `RESEND_API_KEY`, the five purpose-specific `RESEND_FROM_*_EMAIL` identities, all six `RESEND_TEMPLATE_*_ID` values, and `AGATA_SUPPORT_INBOX_EMAIL` after the sending domain is verified. Keep the API key server-side; the support inbox must be an actually monitored mailbox. `RESEND_FROM_EMAIL` is only a compatibility fallback.
 - `PAYSTACK_SECRET_KEY` and the three `AGATA_PAYSTACK_*_PLAN_CODE` values after Paystack activation.
 - `PROXIMA_OIDC_CLIENT_ID` and `PROXIMA_OIDC_CLIENT_SECRET` after Microsoft Entra registration. The current implementation derives and validates the issuer from the organization's configured Entra tenant ID; there is no separate `PROXIMA_OIDC_ISSUER` runtime variable.
 
@@ -95,10 +95,10 @@ The production deployment is not accepted until all of the following are evidenc
 - frontend and API domains resolve over HTTPS;
 - frontend API proxy, cookie session and CSRF flow work through `agataproxima.com`;
 - production Control Plane uses the managed database, not localhost or the laptop;
-- migrations 0001–0015 are applied and schema state is verified;
+- migrations 0001–0016 are applied and schema state is verified;
 - `/api/v1/production/readiness` returns `ready`;
 - Paystack checkout and signed webhook round-trip passes;
-- real Entra SSO and Resend delivery pass;
+- real Entra SSO and Resend verification, recovery, invitation, security, billing, and support delivery tests pass;
 - database restore drill and alerting/rollback checks pass;
 - external three-tenant SaaS isolation acceptance and load/security checks pass.
 
