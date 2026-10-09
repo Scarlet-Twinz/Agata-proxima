@@ -16,7 +16,7 @@ use std::env;
 use uuid::Uuid;
 
 use super::{
-    audit, authenticate, bad, create_session, db_error, hash_password, internal, require_admin, require_write, token_hash,
+    audit, authenticate, bad, create_session, db_error, hash_password, internal, require_admin, require_write, token_hash, valid_public_support_email,
     AppState,
 };
 
@@ -2273,7 +2273,7 @@ pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
         "RESEND_TEMPLATE_SUPPORT_REQUEST_RECEIVED_ID",
         "RESEND_TEMPLATE_BILLING_UPDATE_ID",
     ].iter().all(|key| env::var(key).map(|v| !v.trim().is_empty()).unwrap_or(false));
-    let support_inbox = env::var("AGATA_SUPPORT_INBOX_EMAIL").map(|v| !v.trim().is_empty()).unwrap_or(false);
+    let support_inbox = env::var("AGATA_SUPPORT_INBOX_EMAIL").map(|v| valid_public_support_email(v.trim())).unwrap_or(false);
     let base = env::var("AGATA_PUBLIC_BASE_URL").map(|v| !v.trim().is_empty()).unwrap_or(false);
     let oidc = env::var("PROXIMA_OIDC_CLIENT_ID").map(|v| !v.trim().is_empty()).unwrap_or(false)
         && env::var("PROXIMA_OIDC_CLIENT_SECRET").map(|v| !v.trim().is_empty()).unwrap_or(false);
@@ -2331,14 +2331,6 @@ fn sender_address(role: &str) -> anyhow::Result<String> {
         Ok(value) if !value.trim().is_empty() => Ok(value.trim().to_owned()),
         _ => anyhow::bail!("{key} and RESEND_FROM_EMAIL are not configured for the current deployment"),
     }
-}
-
-pub(crate) async fn send_template_email(
-    to: &str,
-    template_id: &str,
-    variables: Value,
-) -> anyhow::Result<()> {
-    send_template_email_as(to, template_id, variables, "notifications").await
 }
 
 pub(crate) async fn send_template_email_as(
