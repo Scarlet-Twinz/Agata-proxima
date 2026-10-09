@@ -1177,7 +1177,7 @@ pub(crate) async fn lemonsqueezy_webhook(State(s):State<AppState>,headers:Header
    let txstatus=if name=="subscription_payment_failed"{"failed"}else{"success"};
    let reference=format!("invoice:{id}");
    let amount=a.get("total_usd").and_then(Value::as_i64);
-   let currency=a.get("currency").and_then(Value::as_str).unwrap_or("USD");
+   let currency="USD";
    if let Err(e)=sqlx::query("INSERT INTO billing_transactions(organization_id,provider,reference,plan_key,plan_code,amount,currency,status,metadata,payload,created_at,updated_at) VALUES($1,'lemonsqueezy',$2,$3,$4,$5,$6,$7,$8,$9,now(),now()) ON CONFLICT(provider,reference) DO UPDATE SET status=EXCLUDED.status,payload=EXCLUDED.payload,updated_at=now()")
     .bind(org).bind(reference).bind(plan).bind(variant_id).bind(amount).bind(currency).bind(txstatus).bind(&event).bind(&event).execute(&s.db).await{return db_error(e);}
   }
