@@ -1151,6 +1151,8 @@ pub(crate) async fn lemonsqueezy_webhook(State(s):State<AppState>,headers:Header
   let local=match sqlx::query("SELECT organization_id,plan_code FROM billing_transactions WHERE provider='lemonsqueezy' AND reference=$1").bind(checkout_reference).fetch_optional(&s.db).await{Ok(v)=>v,Err(e)=>return db_error(e)};
   let local=match local{Some(v)=>v,None=>return StatusCode::FORBIDDEN.into_response()};
   if local.get::<Uuid,_>("organization_id")!=org||local.get::<Option<String>,_>("plan_code").as_deref()!=variant.as_deref(){return StatusCode::FORBIDDEN.into_response();}
+  let initial_status=match a.get("status").and_then(Value::as_str){Some("active")=>"success",Some("on_trial")=>"trialing",_=>"pending"};
+  if let Err(e)=sqlx::query("UPDATE billing_transactions SET status=$1,payload=$2,updated_at=now() WHERE provider='lemonsqueezy' AND reference=$3 AND organization_id=$4").bind(initial_status).bind(&event).bind(checkout_reference).bind(org).execute(&s.db).await{return db_error(e);}
  }
  let plan=variant.as_deref().and_then(|v|plan_for_code(Some(v)));let status=a.get("status").and_then(Value::as_str).unwrap_or_default();
  let period=a.get("renews_at").and_then(Value::as_str).or_else(||a.get("ends_at").and_then(Value::as_str)).and_then(|v|chrono::DateTime::parse_from_rfc3339(v).ok()).map(|v|v.with_timezone(&chrono::Utc));
@@ -1171,9 +1173,13 @@ pub(crate) async fn lemonsqueezy_webhook(State(s):State<AppState>,headers:Header
   }
  }
  if matches!(name,"subscription_payment_success"|"subscription_payment_recovered"|"subscription_payment_failed") {
-  let txstatus=if name=="subscription_payment_failed"{"failed"}else{"success"};
-  if let Some(ref variant_id)=variant {
-   let _=sqlx::query("UPDATE billing_transactions SET status=$1,payload=$2,updated_at=now() WHERE provider='lemonsqueezy' AND organization_id=$3 AND plan_code=$4").bind(txstatus).bind(&event).bind(org).bind(variant_id).execute(&s.db).await;
+  if let (Some(plan),Some(ref variant_id))=(plan,variant.as_ref()) {
+   let txstatus=if name=="subscription_payment_failed"{"failed"}else{"success"};
+   let reference=format!("invoice:{id}");
+   let amount=a.get("total_usd").and_then(Value::as_i64);
+   let currency=a.get("currency").and_then(Value::as_str).unwrap_or("USD");
+   if let Err(e)=sqlx::query("INSERT INTO billing_transactions(organization_id,provider,reference,plan_key,plan_code,amount,currency,status,metadata,payload,created_at,updated_at) VALUES($1,'lemonsqueezy',$2,$3,$4,$5,$6,$7,$8,$9,now(),now()) ON CONFLICT(provider,reference) DO UPDATE SET status=EXCLUDED.status,payload=EXCLUDED.payload,updated_at=now()")
+    .bind(org).bind(reference).bind(plan).bind(variant_id).bind(amount).bind(currency).bind(txstatus).bind(&event).bind(&event).execute(&s.db).await{return db_error(e);}
   }
  }
  if let Err(e)=sqlx::query("UPDATE billing_events SET status='processed',processed_at=now(),processing_started_at=NULL WHERE provider='lemonsqueezy' AND provider_event_id=$1").bind(&event_key).execute(&s.db).await{return db_error(e);}
