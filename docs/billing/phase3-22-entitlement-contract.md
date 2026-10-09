@@ -1,6 +1,6 @@
 # Phase 3.22 — Canonical Entitlement Contract
 
-Status: implementation in progress. This document defines the acceptance contract; it does not claim every workstream is implemented.
+Status: repository implementation complete for workstreams A–H. All eight Phase 3.22 acceptance gates, the full Rust quality suite, PostgreSQL RLS verification, migration verification, OpenAPI generation, and the Phase 58–59 launch gate passed on the Phase 3.22-H pull request. This confirms repository-side acceptance, not live production billing acceptance: deployment still requires valid Paystack credentials and plan codes, the production webhook URL, and a successful real-environment payment round trip.
 
 ## Pricing source of truth
 
