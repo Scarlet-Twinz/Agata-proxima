@@ -718,7 +718,7 @@ async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Respo
     tokio::spawn(async move {
         if let Err(e) = production::send_template_email_as(
             &recipient,
-            "2740537f-79d4-44a1-bbf8-f7913c0be3a0",
+            "new-login-alert",
             json!({
                 "DISPLAY_NAME": escape_template_value(&display_name),
                 "LOGIN_TIME": login_time,
@@ -1712,7 +1712,7 @@ async fn change_email(
 
     if let Err(e) = production::send_template_email_as(
         &email,
-        "091dbdb2-21ed-444f-a209-6f44e55d192d",
+        "verify-email",
         json!({"DISPLAY_NAME":escape_template_value(&display_name),"CODE":code}),
         "no-reply",
     )
@@ -2741,7 +2741,7 @@ async fn create_public_support_request(
     let mut requester_email_status = "failed";
     if let Err(e) = production::send_template_email_as(
         &email,
-        "3ca9fee8-01cd-4d6c-ae75-e0ff7b54034c",
+        "support-request-received",
         json!({
             "DISPLAY_NAME": escape_template_value(stored_name),
             "ORGANIZATION": escape_template_value(&format!("Public inquiry · {topic}")),
@@ -2759,10 +2759,15 @@ async fn create_public_support_request(
 
     let mut support_email_status = "not_configured";
     match env::var("AGATA_SUPPORT_INBOX_EMAIL") {
-        Ok(destination) if !destination.trim().is_empty() => {
+        Ok(destination) if valid_public_support_email(destination.trim()) => {
+            let public_base = env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_default();
+            let support_link = if public_base.trim().is_empty() {
+                "Not configured".to_string()
+            } else {
+                format!("{}/support", public_base.trim_end_matches('/'))
+            };
             let staff_message = format!(
-                "New Agata Proxima public support request\n\nRequest ID: {request_id}\nTopic: {topic}\nName: {stored_name}\nEmail: {email}\nSubject: {subject}\n\nMessage:\n{message}\n\nOpen support: {}/support",
-                env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_| "https://agataproxima.com".to_string()).trim_end_matches('/')
+                "New Agata Proxima public support request\n\nRequest ID: {request_id}\nTopic: {topic}\nName: {stored_name}\nEmail: {email}\nSubject: {subject}\n\nMessage:\n{message}\n\nOpen support: {support_link}"
             );
             match production::send_text_email(
                 destination.trim(),
@@ -2779,7 +2784,11 @@ async fn create_public_support_request(
                 }
             }
         }
-        _ => {
+        Ok(_) => {
+            support_email_status = "failed";
+            tracing::error!(request_id = %request_id, "AGATA_SUPPORT_INBOX_EMAIL is invalid; public request is stored but staff notification was not sent");
+        }
+        Err(_) => {
             tracing::warn!(request_id = %request_id, "AGATA_SUPPORT_INBOX_EMAIL is not configured; public request is stored but staff notification was not sent");
         }
     }
