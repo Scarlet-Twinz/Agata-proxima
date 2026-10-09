@@ -103,6 +103,20 @@ pub(crate) async fn checkout(State(s): State<AppState>, headers: HeaderMap, Json
         match plan_for_variant(requested) { Some(p)=>p, None=>return bad("Select a valid Agata Proxima monthly plan.") }
     };
     let variant_id = match variant_key(plan).and_then(setting) { Some(v)=>v, None=>return production::service_unavailable("The selected plan variant is not configured.") };
+    let expected_price = match plan { "starter"=>14_900_i64, "growth"=>49_900_i64, "scale"=>119_900_i64, _=>return bad("Unsupported paid plan.") };
+    let variant_response = match Client::new().get(format!("https://api.lemonsqueezy.com/v1/variants/{variant_id}"))
+        .bearer_auth(&api_key).header("Accept","application/vnd.api+json").send().await {
+        Ok(r)=>r, Err(e)=>{tracing::error!(%e,"Lemon Squeezy variant lookup failed");return production::service_unavailable("Could not validate the configured plan price.")}
+    };
+    if !variant_response.status().is_success() { let status=variant_response.status(); let body=variant_response.text().await.unwrap_or_default(); return provider_error(status,&body); }
+    let variant:Value=match variant_response.json().await {Ok(v)=>v,Err(e)=>{tracing::error!(%e,"invalid Lemon Squeezy variant response");return production::service_unavailable("Invalid plan response.")}};
+    let attributes=variant.pointer("/data/attributes").cloned().unwrap_or(Value::Null);
+    if attributes.get("price").and_then(Value::as_i64)!=Some(expected_price)
+        || attributes.get("interval").and_then(Value::as_str)!=Some("month")
+        || attributes.get("interval_count").and_then(Value::as_i64)!=Some(1)
+        || attributes.get("is_subscription").and_then(Value::as_bool)!=Some(true) {
+        return (StatusCode::SERVICE_UNAVAILABLE,Json(json!({"ok":false,"error":"lemonsqueezy_variant_mismatch","message":"Configured variant must match the selected monthly USD plan."}))).into_response();
+    }
     let email = match sqlx::query("SELECT email FROM users WHERE id=$1").bind(ctx.user_id).fetch_one(&s.db).await {
         Ok(r)=>r.get::<String,_>("email"), Err(e)=>return db_error(e)
     };
