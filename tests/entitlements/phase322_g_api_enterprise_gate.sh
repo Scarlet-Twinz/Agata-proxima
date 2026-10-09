@@ -110,6 +110,6 @@ grep -Fq 'unknown_feature_entitlement' crates/proxima-control-plane/src/producti
 grep -Fq 'header::AUTHORIZATION' crates/proxima-control-plane/src/main.rs || fail "Bearer API-key authentication is not wired"
 grep -Fq 'production::consume_api_request' crates/proxima-control-plane/src/main.rs || fail "request-rate limiting is not called by authentication"
 grep -Fq 'production::enforce_api_key_capacity' crates/proxima-control-plane/src/main.rs || fail "API-key creation does not enforce its quota"
-grep -Fq 'if plan == "free" || plan == "enterprise"' crates/proxima-control-plane/src/production.rs || fail "Enterprise self-service checkout is not blocked"
+grep -Fq '["starter", "growth", "scale"].contains(&requested)' crates/proxima-control-plane/src/production/lemonsqueezy.rs || fail "Enterprise and Free self-service checkout are not blocked"
 grep -Fq 'support_level' crates/proxima-control-plane/src/production.rs || fail "support-level entitlement is not exposed"
 echo "PASS: Phase 3.22-G API, enterprise, and support checks"
