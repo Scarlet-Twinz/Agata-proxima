@@ -1,6 +1,6 @@
 # Agata Proxima Pricing Proposal
 
-This document records the restored launch-price schedule for Agata Proxima. Do not create or modify Paystack Plans until the configured account plans are checked against these amounts and the founder confirms the live catalog.
+This document records the canonical launch-price schedule for Agata Proxima. The founder has directed that the previous $149 / $499 / $1,199 monthly prices be restored in the repository. This document does not itself create or modify Paystack plans; before live checkout, verify the existing Agata-specific plan codes and amounts in the Paystack account.
 
 ## Recommended launch pricing
 
@@ -38,6 +38,9 @@ Plans differ primarily by scale and operations:
 - 1 Proxima node
 - 3 tenants
 - 1 environment
+- 1 active webhook integration
+- 100 verification runs per UTC calendar month
+- 1 team seat
 - development/evaluation use
 - basic verification
 - 7-day management/audit retention
@@ -47,8 +50,12 @@ Plans differ primarily by scale and operations:
 
 - 2 nodes
 - 25 tenants
-- production deployment
 - 2 environments
+- 5 active webhook integrations
+- 1,000 verification runs per UTC calendar month
+- 5 team seats
+- 5 active API keys and 300 authenticated API requests/minute
+- production deployment
 - policy versioning
 - verification evidence
 - 30-day audit retention
@@ -59,6 +66,10 @@ Plans differ primarily by scale and operations:
 - 5 nodes
 - 100 tenants
 - 5 environments
+- 20 active webhook integrations
+- 10,000 verification runs per UTC calendar month
+- 15 team seats
+- 25 active API keys and 1,000 authenticated API requests/minute
 - fleet/deployment controls
 - advanced verification
 - 180-day audit retention
@@ -69,7 +80,11 @@ Plans differ primarily by scale and operations:
 
 - 15 nodes
 - 500 tenants
-- larger environments
+- 50 environments
+- 100 active webhook integrations
+- 100,000 verification runs per UTC calendar month
+- 50 team seats
+- 100 active API keys and 5,000 authenticated API requests/minute
 - advanced fleet operations
 - 1-year audit retention
 - enterprise identity features
@@ -119,4 +134,4 @@ The first Paystack catalog should contain:
 
 Enterprise remains sales-led/custom until a contract-specific billing workflow is defined.
 
-No Paystack Plans should be created from this document until the founder confirms the plan limits and launch prices.
+Do not change the live Paystack catalog based only on this document. The repository catalogue is now canonical at $149 / $499 / $1,199 per month; verify the actual provider plans, USD settlement eligibility and webhook/payment flow before enabling production checkout.
