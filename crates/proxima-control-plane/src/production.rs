@@ -1078,7 +1078,7 @@ pub(crate) async fn checkout(State(s):State<AppState>,headers:HeaderMap,Json(inp
  let email=match sqlx::query("SELECT email FROM users WHERE id=$1").bind(ctx.user_id).fetch_one(&s.db).await{Ok(r)=>r.get::<String,_>("email"),Err(e)=>return db_error(e)};
  let base=env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_|"http://127.0.0.1:8080".into()).trim_end_matches('/').to_owned();
  let local_reference=Uuid::new_v4().to_string();
- let payload=json!({"data":{"type":"checkouts","attributes":{"checkout_data":{"email":email,"custom":{"organization_id":ctx.organization_id.to_string(),"plan_key":plan,"checkout_reference":local_reference}},"product_options":{"redirect_url":format!("{base}/app?billing=return")}},"relationships":{"store":{"data":{"type":"stores","id":store}},"variant":{"data":{"type":"variants","id":variant}}}}});
+ let payload=json!({"data":{"type":"checkouts","attributes":{"checkout_data":{"email":email,"custom":{"organization_id":ctx.organization_id.to_string(),"plan_key":plan,"checkout_reference":local_reference}},"product_options":{"redirect_url":format!("{base}/api/v1/billing/lemonsqueezy/callback?reference={local_reference}")}},"relationships":{"store":{"data":{"type":"stores","id":store}},"variant":{"data":{"type":"variants","id":variant}}}}});
  let r=match client.post("https://api.lemonsqueezy.com/v1/checkouts").bearer_auth(&key).header("Accept","application/vnd.api+json").header("Content-Type","application/vnd.api+json").json(&payload).send().await{Ok(v)=>v,Err(e)=>return external_error(e)};
  if !r.status().is_success(){return service_unavailable("Lemon Squeezy checkout creation failed.");}
  let body:Value=match r.json().await{Ok(v)=>v,Err(e)=>return external_error(e)};let data=body.get("data").cloned().unwrap_or(Value::Null);let id=data.get("id").and_then(Value::as_str).unwrap_or_default();let url=data.pointer("/attributes/url").and_then(Value::as_str).unwrap_or_default();
@@ -1087,9 +1087,11 @@ pub(crate) async fn checkout(State(s):State<AppState>,headers:HeaderMap,Json(inp
  audit(&s.db,ctx.organization_id,ctx.user_id,"billing.checkout.created","billing_transaction",None,json!({"provider":"lemonsqueezy","checkout_id":id,"plan":plan,"reference":local_reference})).await;
  Json(json!({"ok":true,"provider":"lemonsqueezy","checkout_url":url,"reference":local_reference})).into_response()
 }
-pub(crate) async fn lemonsqueezy_callback()->Response{
+pub(crate) async fn lemonsqueezy_callback(Query(q):Query<std::collections::HashMap<String,String>>)->Response{
  let base=env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_|"http://127.0.0.1:8080".into()).trim_end_matches('/').to_owned();
- Html(format!("<html><head><meta http-equiv=\"refresh\" content=\"0;url={base}/app?billing=return\"></head><body>Return complete. Billing is confirmed only by a verified webhook.</body></html>")).into_response()
+ let reference=q.get("reference").and_then(|v|Uuid::parse_str(v).ok()).map(|v|v.to_string());
+ let destination=match reference{Some(v)=>format!("{base}/app?billing=return&reference={v}"),None=>format!("{base}/app?billing=return")};
+ Html(format!("<html><head><meta http-equiv=\"refresh\" content=\"0;url={destination}\"></head><body>Return complete. Billing is confirmed only by a verified webhook.</body></html>")).into_response()
 }
 pub(crate) async fn billing_verify(State(s):State<AppState>,headers:HeaderMap,Query(q):Query<std::collections::HashMap<String,String>>)->Response{
  let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};if let Err(c)=require_admin(&ctx,&headers){return c.into_response();}
@@ -1113,7 +1115,7 @@ pub(crate) async fn lemonsqueezy_webhook(State(s):State<AppState>,headers:Header
  if name.is_empty()||id.is_empty(){return StatusCode::BAD_REQUEST.into_response();}
  let store=env::var("LEMON_SQUEEZY_STORE_ID").unwrap_or_default();
  if a.get("store_id").and_then(Value::as_i64).map(|v|v.to_string()).as_deref()!=Some(store.trim()){return StatusCode::FORBIDDEN.into_response();}
- if a.get("test_mode").and_then(Value::as_bool).map(|v|v!=lemonsqueezy_test_mode()).unwrap_or(false){return StatusCode::FORBIDDEN.into_response();}
+ if a.get("test_mode").and_then(Value::as_bool)!=Some(lemonsqueezy_test_mode()){return StatusCode::FORBIDDEN.into_response();}
  let event_key=format!("{}:{}:{}",name,id,hex::encode(Sha256::digest(body.as_bytes())));
  let claimed=match sqlx::query("INSERT INTO billing_events(provider,provider_event_id,event_type,payload,status,processing_started_at,attempt_count) VALUES('lemonsqueezy',$1,$2,$3,'processing',now(),1) ON CONFLICT(provider,provider_event_id) DO UPDATE SET status='processing',processing_started_at=now(),attempt_count=billing_events.attempt_count+1,payload=EXCLUDED.payload,event_type=EXCLUDED.event_type WHERE billing_events.status NOT IN ('processed','ignored') AND (billing_events.processing_started_at IS NULL OR billing_events.processing_started_at<now()-interval '1 minute') RETURNING id").bind(&event_key).bind(name).bind(&event).fetch_optional(&s.db).await{Ok(v)=>v.is_some(),Err(e)=>return db_error(e)};
  if !claimed{return Json(json!({"received":true,"duplicate":true})).into_response();}
