@@ -20,6 +20,11 @@ grep -q 'verify_slice' "$provider"
 grep -q 'store_or_mode_mismatch' "$provider"
 grep -q 'checkout_plan_variant_mismatch' "$provider"
 grep -q 'validate_store_and_variant' "$provider"
+grep -q 'products/{product_id}' "$provider"
+grep -q 'checkout_nonce' "$provider"
+grep -q 'variants_configured' "$provider"
+grep -q 'subscription_payment_recovered' "$provider"
+grep -q 'subscription_payment_refunded' "$provider"
 grep -q 'billing_events' "$provider"
 grep -q "provider='lemonsqueezy'" "$provider"
 grep -q 'lemonsqueezy_subscription_id' "$migration"
@@ -29,6 +34,8 @@ grep -q 'LEMONSQUEEZY_SCALE_VARIANT_ID' .env.example
 grep -q 'LEMONSQUEEZY_STORE_ID' .env.example
 grep -q 'LEMONSQUEEZY_API_KEY' crates/proxima-control-plane/.env.example
 grep -q 'LEMONSQUEEZY_WEBHOOK_SECRET' crates/proxima-control-plane/.env.example
+! grep -Eqi 'PAYSTACK_|PAYSTACK_SECRET_KEY|STRIPE_' .env.example crates/proxima-control-plane/.env.example control-plane/openapi.json
+! grep -Eqi 'paystack|stripe' crates/proxima-control-plane/src/production.rs
 grep -q 'lemonsqueezy_credentials' "$production"
 
 echo "PASS: Phase 3.21 Lemon Squeezy billing contract"
