@@ -1053,9 +1053,15 @@ pub(crate) async fn paystack_callback(
             Err(e) => return db_error(e),
         };
     let _ = verify_paystack_transaction(&s.db, organization_id, &reference).await;
+    let verified = match sqlx::query("SELECT status FROM billing_transactions WHERE provider='paystack' AND reference=$1 AND organization_id=$2")
+        .bind(&reference).bind(organization_id).fetch_optional(&s.db).await {
+        Ok(Some(row)) => row.get::<String,_>("status") == "success",
+        _ => false,
+    };
+    let billing_state = if verified { "complete" } else { "verification-pending" };
     let base = env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:8080".into()).trim_end_matches('/').to_string();
     Html(format!(
-        "<html><head><meta http-equiv=\"refresh\" content=\"0;url={base}/app?billing=complete\"></head><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\">Payment verification complete. Returning to Agata Proxima…</body></html>"
+        "<html><head><meta http-equiv=\"refresh\" content=\"0;url={base}/app?billing={billing_state}\"></head><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\">Returning to Agata Proxima. Check billing status before assuming payment was accepted.</body></html>"
     )).into_response()
 }
 
