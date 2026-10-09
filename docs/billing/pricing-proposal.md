@@ -1,15 +1,15 @@
 # Agata Proxima Pricing Proposal
 
-This is a **commercial proposal**, not an instruction to create Paystack Plans yet.
+This document records the restored launch-price schedule for Agata Proxima. Do not create or modify Paystack Plans until the configured account plans are checked against these amounts and the founder confirms the live catalog.
 
 ## Recommended launch pricing
 
 | Plan | Monthly | Position |
 |---|---:|---|
 | Free | $0 | Evaluation, development and small proofs of concept |
-| Starter | $79 | First production SaaS deployments |
-| Growth | $249 | Multi-tenant SaaS teams running meaningful production workloads |
-| Scale | $799 | Larger fleets and security/operations teams |
+| Starter | $149 | First production SaaS deployments |
+| Growth | $499 | Multi-tenant SaaS teams running meaningful production workloads |
+| Scale | $1,199 | Larger fleets and security/operations teams |
 | Enterprise | Custom | Contracted enterprise deployments |
 
 ### Why not $29?
@@ -43,7 +43,7 @@ Plans differ primarily by scale and operations:
 - 7-day management/audit retention
 - community support
 
-### Starter — $79/month
+### Starter — $149/month
 
 - 2 nodes
 - 25 tenants
@@ -54,7 +54,7 @@ Plans differ primarily by scale and operations:
 - 30-day audit retention
 - email support
 
-### Growth — $249/month
+### Growth — $499/month
 
 - 5 nodes
 - 100 tenants
@@ -65,7 +65,7 @@ Plans differ primarily by scale and operations:
 - priority support
 - organization-level identity controls
 
-### Scale — $799/month
+### Scale — $1,199/month
 
 - 15 nodes
 - 500 tenants
@@ -97,9 +97,9 @@ A future usage/overage model can be added after real customer usage data exists.
 
 After the monthly plans are validated, add annual billing at approximately two months free:
 
-- Starter: $790/year
-- Growth: $2,490/year
-- Scale: $7,990/year
+- Starter: $1,490/year
+- Growth: $4,990/year
+- Scale: $11,990/year
 
 These annual figures are intentionally simple rather than aggressively discounted.
 
@@ -113,9 +113,9 @@ The Free plan does not need a Paystack recurring Plan.
 
 The first Paystack catalog should contain:
 
-- Agata Proxima Starter — $79/month
-- Agata Proxima Growth — $249/month
-- Agata Proxima Scale — $799/month
+- Agata Proxima Starter — $149/month
+- Agata Proxima Growth — $499/month
+- Agata Proxima Scale — $1,199/month
 
 Enterprise remains sales-led/custom until a contract-specific billing workflow is defined.
 
