@@ -12,6 +12,8 @@ test -f docs/production/operational-readiness-runbook.md || fail "operational re
 test -f scripts/ops/check-control-plane.sh || fail "Control Plane health/readiness check missing"
 test -f scripts/ops/backup-control-plane.sh || fail "Control Plane backup script missing"
 grep -Fq 'path: "/docs/usage"' frontend/src/app/router.tsx || fail "public usage guide route missing"
+grep -Fq 'paystack_provider_plan_matches_catalog' crates/proxima-control-plane/src/production.rs || fail "Paystack plan preflight missing"
+grep -Fq 'transaction_amount_mismatch' crates/proxima-control-plane/src/production.rs || fail "Paystack amount verification missing"
 test -f tests/external-saas/verify_reference_app.sh || fail "external SaaS acceptance fixture missing"
 
 grep -q 'AGATA_PAYSTACK_STARTER_PLAN_CODE' .env.example || fail "Starter Paystack plan contract missing"
