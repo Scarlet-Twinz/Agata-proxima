@@ -105,6 +105,13 @@ fn expected_paystack_amount_usd(plan: &str) -> Option<i64> {
     }
 }
 
+fn paystack_provider_plan_matches_catalog(data: &Value, plan: &str, expected_code: &str) -> bool {
+    data.get("plan_code").and_then(Value::as_str) == Some(expected_code)
+        && data.get("amount").and_then(Value::as_i64) == expected_paystack_amount_usd(plan)
+        && data.get("currency").and_then(Value::as_str) == Some("USD")
+        && data.get("interval").and_then(Value::as_str) == Some("monthly")
+}
+
 fn paystack_payload_matches_plan_amount_currency(data: &Value, plan: &str) -> bool {
     let amount = data.get("amount")
         .or_else(|| data.pointer("/plan/amount"))
@@ -1024,6 +1031,35 @@ pub(crate) async fn checkout(State(s):State<AppState>,headers:HeaderMap,Json(inp
     if plan == "free" || plan == "enterprise" {
         return bad("Free plans do not use checkout; Enterprise access requires explicit contracted provisioning.");
     }
+
+    // Check the provider-side plan before redirecting a customer to checkout.
+    // A plan code can be misconfigured in the Paystack dashboard; never let that
+    // silently charge a different currency, amount, or interval.
+    let plan_response = match Client::new()
+        .get(format!("https://api.paystack.co/plan/{plan_code}"))
+        .bearer_auth(&secret)
+        .send()
+        .await {
+            Ok(response) => response,
+            Err(error) => return external_error(error),
+        };
+    if !plan_response.status().is_success() {
+        return paystack_error(plan_response).await;
+    }
+    let plan_body: Value = match plan_response.json().await {
+        Ok(value) => value,
+        Err(error) => return external_error(error),
+    };
+    let provider_plan = plan_body.get("data").cloned().unwrap_or(Value::Null);
+    if plan_body.get("status").and_then(Value::as_bool) != Some(true)
+        || !paystack_provider_plan_matches_catalog(&provider_plan, plan, &plan_code) {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({
+            "ok": false,
+            "error": "paystack_plan_configuration_mismatch",
+            "message": "The configured Paystack plan must match the Agata Proxima plan's exact USD amount and monthly interval. Checkout is disabled until the provider plan is corrected."
+        }))).into_response();
+    }
+
     let email=match sqlx::query("SELECT email FROM users WHERE id=$1").bind(ctx.user_id).fetch_one(&s.db).await{Ok(r)=>r.get::<String,_>("email"),Err(e)=>return db_error(e)};
     let base=env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_|"http://127.0.0.1:8080".into()).trim_end_matches('/').to_string();
     let reference=format!("agata-{}-{}",ctx.organization_id.simple(),Uuid::new_v4().simple());
@@ -2237,6 +2273,19 @@ mod tests {
         assert!(!super::paystack_payload_matches_plan_amount_currency(&wrong_currency, "starter"));
         assert!(super::paystack_payload_matches_plan_amount_currency(&nested_plan, "growth"));
         assert!(!super::paystack_payload_matches_plan_amount_currency(&starter, "growth"));
+    }
+
+    #[test]
+    fn paystack_provider_plan_must_match_catalog_before_checkout() {
+        let starter = serde_json::json!({"plan_code":"PLN_starter","amount":14900,"currency":"USD","interval":"monthly"});
+        let wrong_amount = serde_json::json!({"plan_code":"PLN_starter","amount":7900,"currency":"USD","interval":"monthly"});
+        let wrong_currency = serde_json::json!({"plan_code":"PLN_starter","amount":14900,"currency":"NGN","interval":"monthly"});
+        let wrong_interval = serde_json::json!({"plan_code":"PLN_starter","amount":14900,"currency":"USD","interval":"annually"});
+        assert!(super::paystack_provider_plan_matches_catalog(&starter, "starter", "PLN_starter"));
+        assert!(!super::paystack_provider_plan_matches_catalog(&wrong_amount, "starter", "PLN_starter"));
+        assert!(!super::paystack_provider_plan_matches_catalog(&wrong_currency, "starter", "PLN_starter"));
+        assert!(!super::paystack_provider_plan_matches_catalog(&wrong_interval, "starter", "PLN_starter"));
+        assert!(!super::paystack_provider_plan_matches_catalog(&starter, "growth", "PLN_starter"));
     }
 
 }
