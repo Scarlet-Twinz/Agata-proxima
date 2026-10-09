@@ -110,7 +110,7 @@ pub(crate) async fn checkout(State(s): State<AppState>, headers: HeaderMap, Json
     let checkout_payload = json!({
         "data": {"type":"checkouts","attributes":{
             "checkout_data":{"email":email,"custom":{"organization_id":ctx.organization_id.to_string(),"plan":plan}},
-            "product_options":{"redirect_url":format!("{base}/app?billing=return",""),"receipt_button_text":"Return to Agata Proxima","receipt_link_url":format!("{base}/app")},
+            "product_options":{"redirect_url":format!("{base}/app?billing=return"),"receipt_button_text":"Return to Agata Proxima","receipt_link_url":format!("{base}/app")},
             "checkout_options":{"embed":false}
         },"relationships":{"store":{"data":{"type":"stores","id":store_id}},
             "variant":{"data":{"type":"variants","id":variant_id}}}}
