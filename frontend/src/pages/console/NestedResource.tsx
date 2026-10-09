@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ArrowLeft, ArrowUpRight, BookOpen, ChevronRight, ExternalLink, RefreshCw, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, BookOpen, CheckCircle2, ChevronRight, ExternalLink, RefreshCw, Save, ShieldCheck } from "lucide-react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { ResourceSurface } from "../../components/console/ResourceSurface";
 import { api, type ApiError } from "../../api/client";
@@ -157,6 +157,122 @@ function DeveloperDoc({config,doc}:{config:Config;doc:{title:string;intro:string
   return <ContextShell config={config}><div className="page-heading"><div><span className="eyebrow">{config.eyebrow}</span><h1>{doc.title}</h1><p>{doc.intro}</p></div></div>{doc.sections.map(section=><section className="surface context-doc-section" key={section.title}><h2>{section.title}</h2><p>{section.body}</p>{section.code&&<pre className="context-code">{section.code}</pre>}</section>)}<div className="context-next"><Link to="/app/developer/api-reference">Open API reference <ArrowUpRight size={15}/></Link><Link to="/docs">Open public documentation <ExternalLink size={15}/></Link></div></ContextShell>;
 }
 
+const identitySettingsConfig: Config = {
+  eyebrow: "SETTINGS",
+  title: "Enterprise identity",
+  description: "Configure the expected Microsoft Entra tenant for this organization.",
+  tabs: [
+    {label:"Authentication",href:"/app/settings/authentication"},
+    {label:"Enterprise identity",href:"/app/settings/identity"},
+    {label:"Security",href:"/app/settings/security"},
+    {label:"Environments",href:"/app/settings/environments"},
+    {label:"Notifications",href:"/app/settings/notifications"},
+  ],
+};
+
+function EntraIdentitySettings() {
+  const [tenantId,setTenantId] = useState("");
+  const [organizationSlug,setOrganizationSlug] = useState("");
+  const [jitProvisioning,setJitProvisioning] = useState(false);
+  const [configured,setConfigured] = useState(false);
+  const [canManage,setCanManage] = useState(false);
+  const [available,setAvailable] = useState(true);
+  const [loading,setLoading] = useState(true);
+  const [saving,setSaving] = useState(false);
+  const [error,setError] = useState("");
+  const [message,setMessage] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const settings = await api.get<{organization:{slug:string;role:string}}>("/api/v1/settings");
+        if (!active) return;
+        setOrganizationSlug(settings.organization.slug);
+        const manager = ["owner","admin"].includes(settings.organization.role);
+        setCanManage(manager);
+        if (!manager) return;
+        const connection = await api.get<{configured:boolean;tenant_id?:string|null;jit_provisioning?:boolean}>("/api/v1/organization/oidc/entra");
+        if (!active) return;
+        setConfigured(connection.configured);
+        setTenantId(connection.tenant_id ?? "");
+        setJitProvisioning(Boolean(connection.jit_provisioning));
+        setAvailable(true);
+      } catch (err) {
+        if (active) {
+          setAvailable(false);
+          setError(err instanceof Error ? err.message : "Unable to load Microsoft Entra configuration.");
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  async function saveConnection(event: React.FormEvent) {
+    event.preventDefault();
+    setError("");
+    setMessage("");
+    const value = tenantId.trim();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) {
+      setError("Enter a valid Microsoft Entra tenant ID in UUID format.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const result = await api.post<{ok:boolean;tenant_id:string}>("/api/v1/organization/oidc/entra", {
+        tenant_id: value,
+        jit_provisioning: jitProvisioning,
+      });
+      setConfigured(Boolean(result.ok));
+      setTenantId(result.tenant_id || value);
+      setMessage("Microsoft Entra tenant mapping saved. Complete a real sign-in test before treating SSO as production-ready.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save Microsoft Entra configuration.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return <ContextShell config={identitySettingsConfig}>
+    <div className="page-heading">
+      <div><span className="eyebrow">SETTINGS · IDENTITY</span><h1>Microsoft Entra SSO</h1><p>Bind this organization to its expected Microsoft Entra tenant. The client secret is configured in the deployment secret store, never here.</p></div>
+    </div>
+    {message && <div className="settings-banner settings-banner--success"><CheckCircle2 size={16}/>{message}</div>}
+    {error && <div className="settings-banner settings-banner--error">{error}</div>}
+    {loading ? <div className="surface empty-state"><strong>Loading identity configuration…</strong><span>Checking your organization role and SSO settings.</span></div> :
+      !canManage ? <div className="surface empty-state"><ShieldCheck size={24}/><strong>Organization administrator required</strong><span>Only an organization owner or admin can configure enterprise identity.</span></div> :
+      !available ? <div className="surface empty-state"><ShieldCheck size={24}/><strong>SSO configuration unavailable</strong><span>Microsoft Entra SSO requires the Growth plan or higher and the Control Plane must be configured with the app registration's client ID.</span></div> :
+      <>
+        <section className="settings-section">
+          <div className="settings-section-heading"><div><h2>Connection status</h2><p>Configuration state is not the same as successful end-to-end sign-in.</p></div><ShieldCheck size={19}/></div>
+          <div className="settings-readonly"><strong>{configured ? "Tenant mapping configured" : "Not configured yet"}</strong><small>Organization slug: {organizationSlug || "unavailable"}</small></div>
+        </section>
+        <section className="settings-section">
+          <div className="settings-section-heading"><div><h2>Expected Entra tenant</h2><p>Use the Microsoft Entra Directory (tenant) ID for the customer organization, not the Agata application (client) ID.</p></div><ShieldCheck size={19}/></div>
+          <form className="agata-form" onSubmit={saveConnection}>
+            <label className="settings-field"><span>Directory (tenant) ID</span><input value={tenantId} onChange={e=>setTenantId(e.target.value)} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autoComplete="off" required disabled={!canManage}/></label>
+            <label className="settings-toggle"><span><strong>Just-in-time provisioning</strong><small>Allow eligible Entra users to be provisioned into this organization according to the server's configured role policy.</small></span><input type="checkbox" checked={jitProvisioning} onChange={e=>setJitProvisioning(e.target.checked)} disabled={!canManage}/></label>
+            <button className="primary-action" type="submit" disabled={saving || !canManage || !tenantId.trim()}><Save size={15}/>{saving ? "Saving…" : "Save Entra configuration"}</button>
+          </form>
+        </section>
+        <section className="settings-section">
+          <div className="settings-section-heading"><div><h2>Required before live SSO</h2><p>This page stores the organization mapping only.</p></div></div>
+          <ol>
+            <li>Create a multitenant Web app registration in Microsoft Entra ID.</li>
+            <li>Set <code>PROXIMA_OIDC_CLIENT_ID</code> and <code>PROXIMA_OIDC_CLIENT_SECRET</code> in the deployment secret store.</li>
+            <li>Set the browser-facing <code>AGATA_PUBLIC_BASE_URL</code> and route the callback under the same origin.</li>
+            <li>Register <code>/api/v1/auth/oidc/callback</code> as the exact Web redirect URI.</li>
+            <li>Test login, organization mapping, session creation and audit evidence against a real Entra tenant.</li>
+          </ol>
+          <p><a href="https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app?tabs=client-secret" target="_blank" rel="noreferrer">Microsoft's official app registration guide</a></p>
+        </section>
+      </>
+    }
+  </ContextShell>;
+}
+
 function DetailPage({config,id}:{config:Config;id:string}){
   const [record,setRecord]=useState<Record<string,unknown>|null>(null);
   const [loading,setLoading]=useState(true); const [error,setError]=useState("");
@@ -188,6 +304,7 @@ export function NestedResource(){
   const config=baseConfigs[base]??baseConfigs[pathname];
   if(detailId && config?.endpoint) return <DetailPage config={config} id={detailId}/>;
   if(config) return <ContextShell config={config}><ResourceSurface eyebrow={config.eyebrow} title={config.title} description={config.description} endpoint={config.endpoint} detailBase={config.detailBase} createHref={config.createHref} createLabel={config.createLabel}/></ContextShell>;
+  if (pathname === "/app/settings/identity") return <EntraIdentitySettings />;
   const doc=developerDocs[pathname];
   const generic:Config={eyebrow:pathname.startsWith("/app/developer")?"DEVELOPER":"SETTINGS",title:doc?.title??"Workspace detail",description:doc?.intro??"Explore the operational detail behind this workspace area.",tabs:pathname.startsWith("/app/developer")?developerTabs:[{label:"Authentication",href:"/app/settings/authentication"},{label:"Enterprise identity",href:"/app/settings/identity"},{label:"Security",href:"/app/settings/security"},{label:"Environments",href:"/app/settings/environments"},{label:"Notifications",href:"/app/settings/notifications"}]};
   if(doc) return <DeveloperDoc config={generic} doc={doc}/>;
