@@ -98,6 +98,12 @@ jobs:
           grep -q "RESEND_FROM_BILLING_EMAIL" .env.example
           grep -q "RESEND_FROM_NOTIFICATIONS_EMAIL" .env.example
           grep -q "AGATA_SUPPORT_INBOX_EMAIL=" .env.example
+          grep -q "RESEND_TEMPLATE_VERIFY_EMAIL_ID" .env.example
+          grep -q "RESEND_TEMPLATE_PASSWORD_RESET_ID" .env.example
+          grep -q "RESEND_TEMPLATE_ORGANIZATION_INVITATION_ID" .env.example
+          grep -q "RESEND_TEMPLATE_NEW_LOGIN_ALERT_ID" .env.example
+          grep -q "RESEND_TEMPLATE_SUPPORT_REQUEST_RECEIVED_ID" .env.example
+          grep -q "RESEND_TEMPLATE_BILLING_UPDATE_ID" .env.example
           ! grep -q "STRIPE_" .env.example
 
       - name: Control plane operational scripts
