@@ -210,7 +210,10 @@ fn subscription_state(event_type:&str,status:&str,cancelled:bool,period_end:Opti
         if period_end.is_some_and(|end|end>now) { return ("active","non-renewing",true); }
         return ("canceled","canceled",false);
     }
-    if event_type=="subscription_payment_failed" || matches!(status,"past_due"|"unpaid"|"paused") {
+    if status=="unpaid" {
+        return ("unpaid","unpaid",false);
+    }
+    if event_type=="subscription_payment_failed" || matches!(status,"past_due"|"paused") {
         return ("past_due","attention",false);
     }
     if matches!(status,"active"|"on_trial") {
