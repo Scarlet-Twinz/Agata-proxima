@@ -86,19 +86,53 @@ fn provider_error(status: reqwest::StatusCode, body: &str) -> Response {
 
 pub(crate) async fn plans() -> Response {
     let catalog = [
-        ("free", "Free", 0_i32, "Evaluation and small proofs of concept"),
-        ("starter", "Starter", 149_i32, "First production SaaS deployments"),
-        ("growth", "Growth", 499_i32, "Multi-tenant production workloads"),
-        ("scale", "Scale", 1199_i32, "Larger fleets and security operations"),
-        ("enterprise", "Enterprise", 0_i32, "Contracted enterprise deployments"),
+        (
+            "free",
+            "Free",
+            0_i32,
+            "Evaluation and small proofs of concept",
+        ),
+        (
+            "starter",
+            "Starter",
+            149_i32,
+            "First production SaaS deployments",
+        ),
+        (
+            "growth",
+            "Growth",
+            499_i32,
+            "Multi-tenant production workloads",
+        ),
+        (
+            "scale",
+            "Scale",
+            1199_i32,
+            "Larger fleets and security operations",
+        ),
+        (
+            "enterprise",
+            "Enterprise",
+            0_i32,
+            "Contracted enterprise deployments",
+        ),
     ];
     let variants_ok = configured_variants_unique();
     let plans = catalog
         .iter()
         .map(|(key, name, monthly_usd, description)| {
             let plan_code = variant_key(key).and_then(setting);
-            let (nodes, tenants, environments, retention, advanced, fleet, priority, entra, private_deployment) =
-                production::plan_limits(key);
+            let (
+                nodes,
+                tenants,
+                environments,
+                retention,
+                advanced,
+                fleet,
+                priority,
+                entra,
+                private_deployment,
+            ) = production::plan_limits(key);
             let integrations = production::plan_integration_limit(key);
             let verifications = production::plan_verification_limit(key);
             let team_seats = production::plan_team_seat_limit(key);
