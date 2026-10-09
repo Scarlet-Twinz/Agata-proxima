@@ -3306,4 +3306,30 @@ mod tests {
         assert!(verify_password("correct horse battery staple", &hash));
         assert!(!verify_password("wrong password", &hash));
     }
+
+    #[test]
+    fn public_support_email_validation_rejects_malformed_addresses() {
+        assert!(valid_public_support_email("customer@example.com"));
+        assert!(!valid_public_support_email("customer@example"));
+        assert!(!valid_public_support_email("customer@@example.com"));
+        assert!(!valid_public_support_email("customer @example.com"));
+        assert!(!valid_public_support_email("@example.com"));
+        assert!(!valid_public_support_email(&format!("{}@example.com", "a".repeat(250))));
+    }
+
+    #[test]
+    fn public_support_topic_is_allowlisted() {
+        assert!(valid_public_support_topic("security"));
+        assert!(valid_public_support_topic("partnerships"));
+        assert!(valid_public_support_topic("general"));
+        assert!(!valid_public_support_topic("arbitrary-topic"));
+    }
+
+    #[test]
+    fn email_template_values_are_html_escaped() {
+        assert_eq!(
+            escape_template_value("<script>alert('x')</script>"),
+            "&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;"
+        );
+    }
 }
