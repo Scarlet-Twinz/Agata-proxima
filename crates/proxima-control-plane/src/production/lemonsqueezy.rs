@@ -101,7 +101,7 @@ pub(crate) async fn plans() -> Response {
 
 pub(crate) async fn billing_status(State(s): State<AppState>, headers: HeaderMap) -> Response {
     let ctx = match authenticate(&s,&headers).await { Ok(v)=>v,Err(c)=>return c.into_response() };
-    match sqlx::query("SELECT lemonsqueezy_customer_id,lemonsqueezy_subscription_id,lemonsqueezy_variant_id,plan_key,status,current_period_end,cancel_at_period_end FROM billing_accounts WHERE organization_id=$1")
+    match sqlx::query("SELECT lemonsqueezy_customer_id,lemonsqueezy_subscription_id,lemonsqueezy_variant_id,plan_key,status,current_period_end,cancel_at_period_end FROM billing_accounts WHERE organization_id=$1 AND provider='lemonsqueezy'")
         .bind(ctx.organization_id).fetch_optional(&s.db).await {
         Ok(Some(r)) => Json(json!({"configured":true,"provider":"lemonsqueezy","customer_id":r.get::<Option<String>,_>("lemonsqueezy_customer_id"),"subscription_id":r.get::<Option<String>,_>("lemonsqueezy_subscription_id"),"variant_id":r.get::<Option<String>,_>("lemonsqueezy_variant_id"),"plan":r.get::<String,_>("plan_key"),"status":r.get::<String,_>("status"),"current_period_end":r.get::<Option<chrono::DateTime<chrono::Utc>>,_>("current_period_end"),"cancel_at_period_end":r.get::<bool,_>("cancel_at_period_end")})).into_response(),
         Ok(None) => Json(json!({"configured":false,"provider":"lemonsqueezy","plan":"free","status":"active"})).into_response(),
