@@ -63,6 +63,8 @@ AGATA_PUBLIC_BASE_URL=https://<public-control-plane-host>
 
 The expected issuer is derived from the organization's configured Entra tenant ID and validated against the signed ID token; there is no separate `PROXIMA_OIDC_ISSUER` runtime setting in the current implementation.
 
+`AGATA_PUBLIC_BASE_URL` must be the browser-facing origin for the app. In production, the frontend and Control Plane API/callback must share that origin (typically by reverse-proxying `/api/v1/*` to the Rust service), because the callback sets a host-only session cookie and redirects to `/app`. Do not configure the frontend on one origin and the callback on an unrelated API origin without an explicit same-origin proxy/cookie design.
+
 For the multitenant Microsoft Entra deployment, the authority is based on the Microsoft identity platform's `organizations` authority. The application must validate the tenant-specific issuer returned during sign-in rather than assuming every customer has the same issuer.
 
 Microsoft publishes discovery metadata, authorization/token endpoints, and JWKS metadata through the OIDC configuration document.
