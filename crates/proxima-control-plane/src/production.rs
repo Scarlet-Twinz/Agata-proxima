@@ -803,7 +803,7 @@ pub(crate) async fn configure_entra(
          VALUES($1,'microsoft-entra',$2,$3,$4,true,$5,now())
          ON CONFLICT (organization_id) DO UPDATE SET
            provider='microsoft-entra',tenant_id=EXCLUDED.tenant_id,issuer=EXCLUDED.issuer,
-           client_id=EXCLUDED.client_id,enabled=true,updated_at=now()"
+           client_id=EXCLUDED.client_id,enabled=true,jit_provisioning=EXCLUDED.jit_provisioning,updated_at=now()"
     )
     .bind(ctx.organization_id).bind(tenant_id).bind(&issuer).bind(&client_id)
     .bind(input.jit_provisioning.unwrap_or(false))
