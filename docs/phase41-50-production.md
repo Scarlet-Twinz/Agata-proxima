@@ -25,7 +25,7 @@ Production configuration uses `RESEND_API_KEY`, `RESEND_FROM_EMAIL` and `AGATA_P
 
 ## Current billing provider: Paystack
 
-Paystack is the current provider for Agata Proxima. Older Stripe references in historical implementation notes are not the active billing contract.
+Paystack is the active provider for Agata Proxima. The current provider-specific integration and pricing contract is documented in Phase 3.22.
 
 The Control Plane uses environment-configured Agata-specific Paystack plan codes:
 
