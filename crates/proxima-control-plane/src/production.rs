@@ -1804,7 +1804,7 @@ pub(crate) async fn send_verification_email(
         email,
         "091dbdb2-21ed-444f-a209-6f44e55d192d",
         json!({
-            "DISPLAY_NAME": display_name,
+            "DISPLAY_NAME": escape_email_template_value(display_name),
             "CODE": code,
             "ACTION_URL": ""
         }),
@@ -2035,7 +2035,7 @@ pub(crate) async fn request_password_reset(
             &email,
             "d3c046c7-fef6-42f0-931e-d92b6f96cfdf",
             json!({
-                "DISPLAY_NAME": row.get::<String,_>("display_name"),
+                "DISPLAY_NAME": escape_email_template_value(&row.get::<String,_>("display_name")),
                 "ACTION_URL": link
             }),
             "no-reply",
@@ -2148,23 +2148,24 @@ pub(crate) async fn invite(
         .trim_end_matches('/')
         .to_string();
     let link = format!("{base}/accept-invite?token={token}");
-    if let Err(e) = send_template_email_as(
+    let email_result = send_template_email_as(
         &email,
         "0757a210-a372-4a5a-8fca-e642c2fed3da",
         json!({
-            "ORGANIZATION": organization_name,
+            "ORGANIZATION": escape_email_template_value(&organization_name),
             "ROLE": role,
             "ACTION_URL": link
         }),
         "notifications",
     )
-    .await
-    {
-        tracing::error!(%e, "invitation email failed");
-    }
+    .await;
 
-    audit(&s.db, ctx.organization_id, ctx.user_id, "organization.invite.created", "organization_invite", Some(id), json!({"email":email,"role":role})).await;
-    Json(json!({"ok":true,"id":id,"expires_in":"7 days"})).into_response()
+    audit(&s.db, ctx.organization_id, ctx.user_id, "organization.invite.created", "organization_invite", Some(id), json!({"email":email,"role":role,"email_delivery":if email_result.is_ok(){"sent"}else{"failed"}})).await;
+    if let Err(e) = email_result {
+        tracing::error!(%e, invitation_id = %id, "invitation email failed");
+        return service_unavailable("The invitation was recorded, but its email could not be sent. Retry the invitation after checking the email configuration.");
+    }
+    Json(json!({"ok":true,"id":id,"email_delivery":"sent","expires_in":"7 days"})).into_response()
 }
 
 pub(crate) async fn accept_invite(
