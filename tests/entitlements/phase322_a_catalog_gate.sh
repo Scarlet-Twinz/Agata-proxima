@@ -15,12 +15,12 @@ for file in "$backend" "$limits" "$pricing" "$matrix" "$proposal" "$contract"; d
   test -f "$file" || fail "required entitlement contract file missing: $file"
 done
 
-grep -Fq '("starter","Starter",149_i32' "$backend" || fail "backend Starter price is not $149"
-grep -Fq '("growth","Growth",499_i32' "$backend" || fail "backend Growth price is not $499"
-grep -Fq '("scale","Scale",1199_i32' "$backend" || fail "backend Scale price is not $1,199"
-grep -Fq 'price:"$149/mo"' "$pricing" || fail "public Starter price is not $149"
-grep -Fq 'price:"$499/mo"' "$pricing" || fail "public Growth price is not $499"
-grep -Fq 'price:"$1,199/mo"' "$pricing" || fail "public Scale price is not $1,199"
+grep -Fq '("starter","Starter",149_i32' "$backend" || fail "backend Starter price is not \$149"
+grep -Fq '("growth","Growth",499_i32' "$backend" || fail "backend Growth price is not \$499"
+grep -Fq '("scale","Scale",1199_i32' "$backend" || fail "backend Scale price is not \$1,199"
+grep -Fq 'price:"$149/mo"' "$pricing" || fail "public Starter price is not \$149"
+grep -Fq 'price:"$499/mo"' "$pricing" || fail "public Growth price is not \$499"
+grep -Fq 'price:"$1,199/mo"' "$pricing" || fail "public Scale price is not \$1,199"
 grep -Fq 'Starter $149 / Growth $499 / Scale $1,199' "$matrix" || fail "entitlement pricing matrix disagrees"
 grep -Fq '| Environments | 1 | 2 | 5 | 50 | Contract-defined |' "$matrix" || fail "environment quotas disagree with the canonical contract"
 grep -Fq '| Active webhook integrations | 1 | 5 | 20 | 100 | Contract-defined |' "$matrix" || fail "integration quotas disagree with the canonical contract"
