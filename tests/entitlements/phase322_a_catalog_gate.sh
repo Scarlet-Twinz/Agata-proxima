@@ -31,7 +31,7 @@ grep -Fq '"growth" => (5, 100, 5, 180' "$backend" || fail "Growth capacity catal
 grep -Fq '"scale" => (15, 500, 50, 365' "$backend" || fail "Scale capacity catalogue disagrees with contract"
 grep -Fq '"enterprise" => (i32::MAX, i32::MAX, i32::MAX' "$backend" || fail "Enterprise contract provisioning baseline missing"
 
-if grep -Eq '79_i32|249_i32|799_i32|\\$79/mo|\\$249/mo|\\$799/mo' "$backend" "$pricing"; then
+if grep -Eq '(^|[^0-9])(79|249|799)_i32([^0-9]|$)' "$backend" || grep -Fq '$79/mo' "$pricing" || grep -Fq '$249/mo' "$pricing" || grep -Fq '$799/mo' "$pricing"; then
   fail "conflicting superseded launch prices remain in backend or public pricing"
 fi
 
