@@ -381,7 +381,7 @@ async fn main() -> Result<()> {
         )
         .route(
             "/api/v1/organization/oidc/entra",
-            post(production::configure_entra),
+            get(production::entra_status).post(production::configure_entra),
         )
         .route("/api/v1/auth/oidc/start", get(production::entra_start))
         .route(
