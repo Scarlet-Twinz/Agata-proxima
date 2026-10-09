@@ -80,7 +80,15 @@ BEGIN
         RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'AGATA_SUBSCRIPTION_INACTIVE: nodes';
     END IF;
 
-    IF TG_OP = 'INSERT' OR NEW.organization_id IS DISTINCT FROM OLD.organization_id THEN
+    IF TG_OP = 'INSERT' THEN
+        SELECT count(*) INTO existing_nodes
+          FROM nodes
+         WHERE organization_id = NEW.organization_id
+           AND id IS DISTINCT FROM NEW.id;
+        IF existing_nodes >= ent.node_limit THEN
+            RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'AGATA_PLAN_LIMIT: nodes';
+        END IF;
+    ELSIF NEW.organization_id IS DISTINCT FROM OLD.organization_id THEN
         SELECT count(*) INTO existing_nodes
           FROM nodes
          WHERE organization_id = NEW.organization_id
@@ -166,10 +174,11 @@ BEGIN
     IF NEW.enabled IS NOT TRUE THEN
         RETURN NEW;
     END IF;
-    IF TG_OP = 'UPDATE'
-       AND NEW.organization_id = OLD.organization_id
-       AND NEW.enabled IS NOT DISTINCT FROM OLD.enabled THEN
-        RETURN NEW;
+    IF TG_OP = 'UPDATE' THEN
+        IF NEW.organization_id = OLD.organization_id
+           AND NEW.enabled IS NOT DISTINCT FROM OLD.enabled THEN
+            RETURN NEW;
+        END IF;
     END IF;
 
     PERFORM pg_advisory_xact_lock(hashtextextended(NEW.organization_id::text || ':integration-capacity', 0));
@@ -211,10 +220,11 @@ BEGIN
             RETURN NEW;
         END IF;
     ELSE
-        IF TG_OP = 'UPDATE'
-           AND NEW.organization_id = OLD.organization_id
-           AND NEW.user_id = OLD.user_id THEN
-            RETURN NEW;
+        IF TG_OP = 'UPDATE' THEN
+            IF NEW.organization_id = OLD.organization_id
+               AND NEW.user_id = OLD.user_id THEN
+                RETURN NEW;
+            END IF;
         END IF;
     END IF;
 
@@ -263,10 +273,11 @@ BEGIN
     IF NEW.revoked_at IS NOT NULL THEN
         RETURN NEW;
     END IF;
-    IF TG_OP = 'UPDATE'
-       AND NEW.organization_id = OLD.organization_id
-       AND NEW.revoked_at IS NOT DISTINCT FROM OLD.revoked_at THEN
-        RETURN NEW;
+    IF TG_OP = 'UPDATE' THEN
+        IF NEW.organization_id = OLD.organization_id
+           AND NEW.revoked_at IS NOT DISTINCT FROM OLD.revoked_at THEN
+            RETURN NEW;
+        END IF;
     END IF;
 
     PERFORM pg_advisory_xact_lock(hashtextextended(NEW.organization_id::text || ':api-key-capacity', 0));
