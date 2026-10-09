@@ -20,7 +20,14 @@ fn configured_variant(plan: &str) -> Option<String> {
     env::var(key).ok().filter(|v| !v.trim().is_empty())
 }
 fn plan_for_variant(id: &str) -> Option<&'static str> {
-    ["starter", "growth", "scale"].into_iter().find(|p| configured_variant(p).as_deref() == Some(id))
+    let mut matches = ["starter", "growth", "scale"]
+        .into_iter()
+        .filter(|plan| configured_variant(plan).as_deref() == Some(id));
+    let plan = matches.next()?;
+    if matches.next().is_some() {
+        return None;
+    }
+    Some(plan)
 }
 fn configured() -> bool {
     env::var("LEMONSQUEEZY_API_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false)
@@ -68,6 +75,19 @@ async fn validate_store_and_variant(client: &Client, key: &str, store_id: &str, 
     let expected_test_mode = env::var("LEMONSQUEEZY_TEST_MODE").map(|v| v.eq_ignore_ascii_case("true")).unwrap_or(true);
     if attrs.get("test_mode").and_then(Value::as_bool) != Some(expected_test_mode) {
         return Err("Lemon Squeezy variant mode does not match LEMONSQUEEZY_TEST_MODE.");
+    }
+
+    let product_id = attrs.get("product_id").and_then(Value::as_i64)
+        .ok_or("Lemon Squeezy variant does not identify its product.")?;
+    let product_response = api_headers(client.get(format!("https://api.lemonsqueezy.com/v1/products/{product_id}")), key)
+        .send().await.map_err(|_| "Lemon Squeezy product could not be checked.")?;
+    if !product_response.status().is_success() {
+        return Err("The configured Lemon Squeezy product is unavailable.");
+    }
+    let product: Value = product_response.json().await.map_err(|_| "Lemon Squeezy product response was invalid.")?;
+    if product.pointer("/data/attributes/store_id").and_then(Value::as_i64)
+        != store_id.parse::<i64>().ok() {
+        return Err("The configured Lemon Squeezy variant does not belong to the configured store.");
     }
 
     let prices_url = format!("https://api.lemonsqueezy.com/v1/prices?filter%5Bvariant_id%5D={variant_id}");
@@ -181,6 +201,9 @@ pub(crate) async fn portal(State(s):State<AppState>,headers:HeaderMap)->Response
 fn subscription_state(event_type:&str,status:&str,cancelled:bool,period_end:Option<chrono::DateTime<chrono::Utc>>,now:chrono::DateTime<chrono::Utc>)->(&'static str,&'static str,bool) {
     let is_cancelled=cancelled || event_type=="subscription_cancelled" || status=="cancelled";
     if event_type=="subscription_expired" || status=="expired" { return ("canceled","canceled",false); }
+    if event_type=="subscription_payment_refunded" {
+        return ("past_due","attention",false);
+    }
     if is_cancelled {
         if period_end.is_some_and(|end|end>now) { return ("active","non-renewing",true); }
         return ("canceled","canceled",false);
@@ -188,7 +211,10 @@ fn subscription_state(event_type:&str,status:&str,cancelled:bool,period_end:Opti
     if event_type=="subscription_payment_failed" || matches!(status,"past_due"|"unpaid"|"paused") {
         return ("past_due","attention",false);
     }
-    ("active","active",false)
+    if matches!(status,"active"|"on_trial") {
+        return ("active","active",false);
+    }
+    ("unpaid","attention",false)
 }
 
 fn valid_signature(body:&str, signature:&str, secret:&str)->bool {
@@ -341,7 +367,7 @@ mod tests {
         std::env::set_var("LEMONSQUEEZY_SCALE_VARIANT_ID","303");
         assert_eq!(plan_for_variant("202"),Some("growth"));
         std::env::set_var("LEMONSQUEEZY_GROWTH_VARIANT_ID","101");
-        assert_eq!(plan_for_variant("101"),Some("starter"));
+        assert_eq!(plan_for_variant("101"),None);
         std::env::remove_var("LEMONSQUEEZY_STARTER_VARIANT_ID");
         std::env::remove_var("LEMONSQUEEZY_GROWTH_VARIANT_ID");
         std::env::remove_var("LEMONSQUEEZY_SCALE_VARIANT_ID");
