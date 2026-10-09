@@ -136,6 +136,36 @@ fn plan_team_seat_limit(plan: &str) -> i32 {
     }
 }
 
+fn plan_api_key_limit(plan: &str) -> i32 {
+    match plan {
+        "starter" => 5,
+        "growth" => 25,
+        "scale" => 100,
+        "enterprise" => i32::MAX,
+        _ => 1,
+    }
+}
+
+fn plan_api_requests_per_minute(plan: &str) -> i32 {
+    match plan {
+        "starter" => 300,
+        "growth" => 1_000,
+        "scale" => 5_000,
+        "enterprise" => i32::MAX,
+        _ => 60,
+    }
+}
+
+fn plan_support_level(plan: &str) -> &'static str {
+    match plan {
+        "starter" => "standard",
+        "growth" => "priority",
+        "scale" => "priority_plus",
+        "enterprise" => "enterprise_custom",
+        _ => "community",
+    }
+}
+
 #[allow(clippy::result_large_err)]
 pub(crate) async fn enforce_capacity(
     db: &sqlx::PgPool,
@@ -229,6 +259,77 @@ pub(crate) async fn enforce_integration_capacity(
     }
 
     Ok(())
+}
+
+#[allow(clippy::result_large_err)]
+pub(crate) async fn enforce_api_key_capacity(
+    db: &sqlx::PgPool,
+    organization_id: Uuid,
+) -> Result<(), Response> {
+    let row = sqlx::query(
+        "SELECT api_key_limit,billing_status,plan_key
+         FROM organization_entitlements WHERE organization_id=$1",
+    )
+    .bind(organization_id)
+    .fetch_optional(db)
+    .await
+    .map_err(db_error)?;
+
+    let row = row.ok_or_else(|| service_unavailable("Organization entitlements are not initialized."))?;
+    let status: String = row.get("billing_status");
+    if matches!(status.as_str(), "canceled" | "unpaid") {
+        return Err((
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({
+                "ok": false,
+                "error": "subscription_inactive",
+                "message": "Restore an active Agata Proxima subscription to create API keys."
+            })),
+        ).into_response());
+    }
+
+    let limit: i32 = row.get("api_key_limit");
+    let used: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM api_keys WHERE organization_id=$1 AND revoked_at IS NULL",
+    )
+    .bind(organization_id)
+    .fetch_one(db)
+    .await
+    .map_err(db_error)?;
+
+    if used >= i64::from(limit) {
+        let plan: String = row.get("plan_key");
+        return Err((
+            StatusCode::PAYMENT_REQUIRED,
+            Json(json!({
+                "ok": false,
+                "error": "plan_limit_reached",
+                "resource": "api_keys",
+                "limit": limit,
+                "used": used,
+                "plan": plan,
+                "message": "Active API key capacity reached. Revoke an unused key or upgrade the plan."
+            })),
+        ).into_response());
+    }
+
+    Ok(())
+}
+
+pub(crate) async fn consume_api_request(
+    db: &sqlx::PgPool,
+    organization_id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar("SELECT proxima_consume_api_request($1)")
+        .bind(organization_id)
+        .fetch_one(db)
+        .await
+}
+
+pub(crate) async fn purge_expired_api_rate_windows(db: &sqlx::PgPool) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar("SELECT proxima_purge_expired_api_rate_windows()")
+        .fetch_one(db)
+        .await
 }
 
 #[allow(clippy::result_large_err)]
@@ -451,7 +552,16 @@ pub(crate) async fn require_feature(
         "private_deployment" => row.get("private_deployment"),
         // Policy authoring is a management capability and starts at Starter.
         "policy_management" => row.get::<String, _>("plan_key") != "free",
-        _ => return Ok(()),
+        _ => {
+            return Err((
+                StatusCode::FORBIDDEN,
+                Json(json!({
+                    "ok": false,
+                    "error": "unknown_feature_entitlement",
+                    "feature": feature
+                })),
+            ).into_response());
+        },
     };
     if !enabled {
         let plan: String = row.get("plan_key");
@@ -471,7 +581,10 @@ pub(crate) async fn plans() -> Response {
         let integrations = plan_integration_limit(key);
         let verifications = plan_verification_limit(key);
         let team_seats = plan_team_seat_limit(key);
-        json!({"key":key,"name":name,"monthly_usd":monthly_usd,"description":description,"provider":"paystack","plan_code":plan_code,"checkout_available":key!=&"free"&&key!=&"enterprise"&&paystack_plan_code(key).is_some(),"limits":{"nodes":nodes,"tenants":tenants,"environments":environments,"integrations":integrations,"verifications_per_month":verifications,"team_seats":team_seats,"audit_retention_days":retention},"features":{"advanced_verification":advanced,"fleet_controls":fleet,"priority_support":priority,"entra_oidc":entra,"private_deployment":private_deployment,"policy_management":key!=&"free"}})
+        let api_keys = plan_api_key_limit(key);
+        let api_requests = plan_api_requests_per_minute(key);
+        let support = plan_support_level(key);
+        json!({"key":key,"name":name,"monthly_usd":monthly_usd,"description":description,"provider":"paystack","plan_code":plan_code,"checkout_available":key!=&"free"&&key!=&"enterprise"&&paystack_plan_code(key).is_some(),"limits":{"nodes":nodes,"tenants":tenants,"environments":environments,"integrations":integrations,"verifications_per_month":verifications,"team_seats":team_seats,"api_keys":api_keys,"api_requests_per_minute":api_requests,"audit_retention_days":retention},"support_level":support,"features":{"advanced_verification":advanced,"fleet_controls":fleet,"priority_support":priority,"entra_oidc":entra,"private_deployment":private_deployment,"policy_management":key!=&"free"}})
     }).collect::<Vec<_>>();
     Json(json!({"currency":"usd","billing_interval":"month","provider":"paystack","plans":plans})).into_response()
 }
@@ -483,7 +596,8 @@ pub(crate) async fn entitlements(State(s): State<AppState>, headers: HeaderMap) 
     };
     match sqlx::query(
         "SELECT plan_key,billing_status,node_limit,tenant_limit,environment_limit,integration_limit,
-                verification_limit_monthly,team_seat_limit,
+                verification_limit_monthly,team_seat_limit,api_key_limit,api_requests_per_minute,support_level,
+                COALESCE((SELECT request_count FROM api_rate_limit_windows w WHERE w.organization_id=organization_entitlements.organization_id AND w.window_start=date_trunc('minute',now())),0)::bigint AS api_requests_this_minute,
                 COALESCE((SELECT count(*) FROM memberships m WHERE m.organization_id=organization_entitlements.organization_id),0)::bigint AS active_team_members,
                 COALESCE((SELECT count(*) FROM organization_invites i WHERE i.organization_id=organization_entitlements.organization_id AND i.accepted_at IS NULL AND i.expires_at>now()),0)::bigint AS pending_team_invites,
                 COALESCE((SELECT used_count FROM organization_verification_usage u
@@ -507,9 +621,13 @@ pub(crate) async fn entitlements(State(s): State<AppState>, headers: HeaderMap) 
                 "integrations": row.get::<i32,_>("integration_limit"),
                 "verifications_per_month": row.get::<i32,_>("verification_limit_monthly"),
                 "team_seats": row.get::<i32,_>("team_seat_limit"),
+                "api_keys": row.get::<i32,_>("api_key_limit"),
+                "api_requests_per_minute": row.get::<i32,_>("api_requests_per_minute"),
                 "audit_retention_days": row.get::<i32,_>("audit_retention_days")
             },
+            "support_level": row.get::<String,_>("support_level"),
             "usage": {
+                "api_requests_this_minute": row.get::<i64,_>("api_requests_this_minute"),
                 "verifications_this_month": row.get::<i64,_>("verifications_used"),
                 "active_team_members": row.get::<i64,_>("active_team_members"),
                 "pending_team_invites": row.get::<i64,_>("pending_team_invites")
@@ -533,23 +651,29 @@ async fn apply_entitlements(db: &sqlx::PgPool, organization_id: Uuid, plan: &str
     let integrations = plan_integration_limit(plan);
     let verifications = plan_verification_limit(plan);
     let team_seats = plan_team_seat_limit(plan);
+    let api_keys = plan_api_key_limit(plan);
+    let api_requests = plan_api_requests_per_minute(plan);
+    let support = plan_support_level(plan);
     sqlx::query(
         "INSERT INTO organization_entitlements
             (organization_id,plan_key,billing_status,node_limit,tenant_limit,environment_limit,
-             integration_limit,verification_limit_monthly,team_seat_limit,audit_retention_days,
-             advanced_verification,fleet_controls,priority_support,entra_oidc,private_deployment,updated_at)
-         VALUES($1,$2,'active',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,now())
+             integration_limit,verification_limit_monthly,team_seat_limit,api_key_limit,
+             api_requests_per_minute,support_level,audit_retention_days,advanced_verification,
+             fleet_controls,priority_support,entra_oidc,private_deployment,updated_at)
+         VALUES($1,$2,'active',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,now())
          ON CONFLICT (organization_id) DO UPDATE SET
             plan_key=EXCLUDED.plan_key,billing_status=EXCLUDED.billing_status,
             node_limit=EXCLUDED.node_limit,tenant_limit=EXCLUDED.tenant_limit,
             environment_limit=EXCLUDED.environment_limit,integration_limit=EXCLUDED.integration_limit,
             verification_limit_monthly=EXCLUDED.verification_limit_monthly,
-            team_seat_limit=EXCLUDED.team_seat_limit,audit_retention_days=EXCLUDED.audit_retention_days,
+            team_seat_limit=EXCLUDED.team_seat_limit,api_key_limit=EXCLUDED.api_key_limit,
+            api_requests_per_minute=EXCLUDED.api_requests_per_minute,support_level=EXCLUDED.support_level,
+            audit_retention_days=EXCLUDED.audit_retention_days,
             advanced_verification=EXCLUDED.advanced_verification,fleet_controls=EXCLUDED.fleet_controls,
             priority_support=EXCLUDED.priority_support,entra_oidc=EXCLUDED.entra_oidc,
             private_deployment=EXCLUDED.private_deployment,updated_at=now()"
     )
-    .bind(organization_id).bind(plan).bind(nodes).bind(tenants).bind(environments).bind(integrations).bind(verifications).bind(team_seats).bind(retention)
+    .bind(organization_id).bind(plan).bind(nodes).bind(tenants).bind(environments).bind(integrations).bind(verifications).bind(team_seats).bind(api_keys).bind(api_requests).bind(support).bind(retention)
     .bind(advanced).bind(fleet).bind(priority).bind(entra).bind(private_deployment)
     .execute(db).await?;
     Ok(())
@@ -869,6 +993,9 @@ pub(crate) async fn checkout(State(s):State<AppState>,headers:HeaderMap,Json(inp
     let secret=match env::var("PAYSTACK_SECRET_KEY"){Ok(v) if !v.trim().is_empty()=>v,_=>return service_unavailable("Paystack secret is not configured.")};
     let plan_code=match input.price_id.as_deref().and_then(paystack_plan_code_for_input){Some(v)=>v,None=>return bad("Select an Agata Proxima plan before checkout.")};
     let plan=match plan_for_code(Some(&plan_code)){Some(v)=>v,None=>return (StatusCode::FORBIDDEN,Json(json!({"ok":false,"error":"invalid_agata_plan"}))).into_response()};
+    if plan == "free" || plan == "enterprise" {
+        return bad("Free plans do not use checkout; Enterprise access requires explicit contracted provisioning.");
+    }
     let email=match sqlx::query("SELECT email FROM users WHERE id=$1").bind(ctx.user_id).fetch_one(&s.db).await{Ok(r)=>r.get::<String,_>("email"),Err(e)=>return db_error(e)};
     let base=env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_|"http://127.0.0.1:8080".into()).trim_end_matches('/').to_string();
     let reference=format!("agata-{}-{}",ctx.organization_id.simple(),Uuid::new_v4().simple());
@@ -1503,6 +1630,21 @@ mod tests {
         assert_eq!(super::plan_team_seat_limit("scale"), 50);
         assert_eq!(super::plan_team_seat_limit("enterprise"), i32::MAX);
         assert_eq!(super::plan_team_seat_limit("unknown"), 1);
+        assert_eq!(super::plan_api_key_limit("free"), 1);
+        assert_eq!(super::plan_api_key_limit("starter"), 5);
+        assert_eq!(super::plan_api_key_limit("growth"), 25);
+        assert_eq!(super::plan_api_key_limit("scale"), 100);
+        assert_eq!(super::plan_api_key_limit("enterprise"), i32::MAX);
+        assert_eq!(super::plan_api_requests_per_minute("free"), 60);
+        assert_eq!(super::plan_api_requests_per_minute("starter"), 300);
+        assert_eq!(super::plan_api_requests_per_minute("growth"), 1_000);
+        assert_eq!(super::plan_api_requests_per_minute("scale"), 5_000);
+        assert_eq!(super::plan_api_requests_per_minute("enterprise"), i32::MAX);
+        assert_eq!(super::plan_support_level("free"), "community");
+        assert_eq!(super::plan_support_level("starter"), "standard");
+        assert_eq!(super::plan_support_level("growth"), "priority");
+        assert_eq!(super::plan_support_level("scale"), "priority_plus");
+        assert_eq!(super::plan_support_level("enterprise"), "enterprise_custom");
     }
 
     #[test]
