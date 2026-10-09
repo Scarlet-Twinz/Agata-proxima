@@ -236,11 +236,9 @@ async fn main() -> Result<()> {
     ))
     .execute(&db)
     .await?;
-    sqlx::raw_sql(include_str!(
-        "../migrations/0017_lemonsqueezy_billing.sql"
-    ))
-    .execute(&db)
-    .await?;
+    sqlx::raw_sql(include_str!("../migrations/0017_lemonsqueezy_billing.sql"))
+        .execute(&db)
+        .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
@@ -401,11 +399,23 @@ async fn main() -> Result<()> {
             "/api/v1/billing/entitlements",
             get(production::entitlements),
         )
-        .route("/api/v1/billing/checkout", post(billing_lemonsqueezy::checkout))
+        .route(
+            "/api/v1/billing/checkout",
+            post(billing_lemonsqueezy::checkout),
+        )
         .route("/api/v1/billing/portal", post(billing_lemonsqueezy::portal))
-        .route("/api/v1/billing/status", get(billing_lemonsqueezy::billing_status))
-        .route("/api/v1/billing/verify", get(billing_lemonsqueezy::billing_verify))
-        .route("/api/v1/webhooks/lemonsqueezy", post(billing_lemonsqueezy::webhook))
+        .route(
+            "/api/v1/billing/status",
+            get(billing_lemonsqueezy::billing_status),
+        )
+        .route(
+            "/api/v1/billing/verify",
+            get(billing_lemonsqueezy::billing_verify),
+        )
+        .route(
+            "/api/v1/webhooks/lemonsqueezy",
+            post(billing_lemonsqueezy::webhook),
+        )
         .route(
             "/api/v1/organization/oidc/entra",
             get(production::entra_status).post(production::configure_entra),
