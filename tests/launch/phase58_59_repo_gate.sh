@@ -38,6 +38,8 @@ grep -q 'Microsoft Entra identity boundary validation failed' crates/proxima-con
 grep -q 'oidc_login_states' crates/proxima-control-plane/migrations/0004_oidc.sql || fail "OIDC state storage missing"
 grep -q 'user_identities' crates/proxima-control-plane/migrations/0004_oidc.sql || fail "OIDC identity mapping missing"
 grep -Fq 'organization_slug' crates/proxima-control-plane/src/production.rs || fail "SSO start does not resolve organization slug"
+grep -Fq 'organization_slug' control-plane/openapi.json || fail "OpenAPI does not document organization-slug SSO"
+grep -Fq '/api/v1/auth/oidc/callback' control-plane/openapi.json || fail "OpenAPI does not document Entra callback"
 grep -Fq 'Continue with Microsoft Entra' frontend/src/pages/auth/Login.tsx || fail "login page does not expose the Entra SSO flow"
 ! grep -Fq 'SSO is not connected yet' frontend/src/pages/auth/Login.tsx || fail "obsolete disabled SSO button remains"
 
