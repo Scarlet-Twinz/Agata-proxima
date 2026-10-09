@@ -2257,8 +2257,11 @@ pub(crate) async fn purge_expired_audit_events(db: &sqlx::PgPool) -> Result<i64,
 
 pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
     let db_ok = sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
-    let paystack = env::var("PAYSTACK_SECRET_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false);
-    let plans = configured_paystack_plan_codes_unique();
+    let lemonsqueezy = env::var("LEMONSQUEEZY_API_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false)
+        && env::var("LEMONSQUEEZY_WEBHOOK_SECRET").map(|v| !v.trim().is_empty()).unwrap_or(false)
+        && env::var("LEMONSQUEEZY_STORE_ID").map(|v| !v.trim().is_empty()).unwrap_or(false);
+    let plans = ["LEMONSQUEEZY_STARTER_VARIANT_ID","LEMONSQUEEZY_GROWTH_VARIANT_ID","LEMONSQUEEZY_SCALE_VARIANT_ID"]
+        .iter().all(|key| env::var(key).map(|v| !v.trim().is_empty()).unwrap_or(false));
     let resend = env::var("RESEND_API_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false);
     let fallback_from = env::var("RESEND_FROM_EMAIL").map(|v| !v.trim().is_empty()).unwrap_or(false);
     let sender_identities = [
@@ -2281,13 +2284,13 @@ pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
     let oidc = env::var("PROXIMA_OIDC_CLIENT_ID").map(|v| !v.trim().is_empty()).unwrap_or(false)
         && env::var("PROXIMA_OIDC_CLIENT_SECRET").map(|v| !v.trim().is_empty()).unwrap_or(false);
     let email_ready = resend && sender_identities && templates_configured && support_inbox;
-    let all = db_ok && paystack && plans && email_ready && base && oidc;
+    let all = db_ok && lemonsqueezy && plans && email_ready && base && oidc;
     Json(json!({
         "status": if all { "ready" } else { "needs_configuration" },
         "checks": {
             "database": db_ok,
-            "paystack_secret": paystack,
-            "paystack_plans": plans,
+            "lemonsqueezy_credentials": lemonsqueezy,
+            "lemonsqueezy_variants": plans,
             "resend_api_key": resend,
             "resend_fallback_sender": fallback_from,
             "resend_sender_identities": sender_identities,
