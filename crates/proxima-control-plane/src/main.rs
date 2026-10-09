@@ -1,4 +1,6 @@
 #[rustfmt::skip]
+mod lemonsqueezy;
+#[rustfmt::skip]
 mod production;
 
 use crate::production::service_unavailable;
@@ -232,6 +234,11 @@ async fn main() -> Result<()> {
     .await?;
     sqlx::raw_sql(include_str!(
         "../migrations/0016_public_support_requests.sql"
+    ))
+    .execute(&db)
+    .await?;
+    sqlx::raw_sql(include_str!(
+        "../migrations/0017_lemonsqueezy_billing.sql"
     ))
     .execute(&db)
     .await?;
