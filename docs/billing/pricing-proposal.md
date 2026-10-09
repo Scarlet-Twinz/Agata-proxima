@@ -1,6 +1,6 @@
 # Agata Proxima Pricing Proposal
 
-This document records the canonical launch-price schedule for Agata Proxima. The founder has directed that the previous $149 / $499 / $1,199 monthly prices be restored in the repository. This document does not itself create or modify Paystack plans; before live checkout, verify the existing Agata-specific plan codes and amounts in the Paystack account.
+This document records the canonical launch-price schedule for Agata Proxima. The founder has directed that the previous $149 / $499 / $1,199 monthly prices be restored in the repository. This document does not itself create or modify Lemon Squeezy plans; before live checkout, verify the existing Agata-specific plan codes and amounts in the Lemon Squeezy account.
 
 ## Recommended launch pricing
 
@@ -118,15 +118,15 @@ After the monthly plans are validated, add annual billing at approximately two m
 
 These annual figures are intentionally simple rather than aggressively discounted.
 
-## Paystack boundary
+## Lemon Squeezy boundary
 
-Only Agata Proxima products should be created in the connected Paystack account.
+Only Agata Proxima products should be created in the connected Lemon Squeezy account.
 
 Do not modify, rename, reuse or attach Agata customers to the existing unrelated Nexora product.
 
-The Free plan does not need a Paystack recurring Plan.
+The Free plan does not need a Lemon Squeezy recurring Plan.
 
-The first Paystack catalog should contain:
+The first Lemon Squeezy catalog should contain:
 
 - Agata Proxima Starter — $149/month
 - Agata Proxima Growth — $499/month
@@ -134,4 +134,4 @@ The first Paystack catalog should contain:
 
 Enterprise remains sales-led/custom until a contract-specific billing workflow is defined.
 
-Do not change the live Paystack catalog based only on this document. The repository catalogue is now canonical at $149 / $499 / $1,199 per month; verify the actual provider plans, USD settlement eligibility and webhook/payment flow before enabling production checkout.
+Do not change the live Lemon Squeezy catalog based only on this document. The repository catalogue is now canonical at $149 / $499 / $1,199 per month; verify the actual provider plans, USD settlement eligibility and webhook/payment flow before enabling production checkout.
