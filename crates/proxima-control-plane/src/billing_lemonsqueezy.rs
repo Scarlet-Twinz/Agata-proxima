@@ -548,14 +548,38 @@ pub(crate) async fn webhook(
             {
                 return db_error(e);
             }
+            production::send_billing_notice(
+                &s.db,
+                org,
+                &event_key,
+                "Subscription payment confirmed",
+                "Lemon Squeezy confirmed the subscription and Agata Proxima updated this organization's plan entitlements.",
+            )
+            .await;
         }
         "subscription_cancelled" | "subscription_expired" => {
             if let Err(e)=sqlx::query("UPDATE billing_accounts SET status='canceled',cancel_at_period_end=false,updated_at=now() WHERE organization_id=$1 AND provider='lemonsqueezy'").bind(org).execute(&s.db).await{return db_error(e);}
             if let Err(e)=sqlx::query("UPDATE organization_entitlements SET billing_status='canceled',billing_grace_until=NULL,updated_at=now() WHERE organization_id=$1").bind(org).execute(&s.db).await{return db_error(e);}
+            production::send_billing_notice(
+                &s.db,
+                org,
+                &event_key,
+                "Subscription canceled",
+                "Lemon Squeezy reported that the subscription was canceled or expired. Review billing settings for available options.",
+            )
+            .await;
         }
         "subscription_payment_failed" => {
             if let Err(e)=sqlx::query("UPDATE billing_accounts SET status='attention',updated_at=now() WHERE organization_id=$1 AND provider='lemonsqueezy' AND status NOT IN ('canceled','unpaid')").bind(org).execute(&s.db).await{return db_error(e);}
             if let Err(e)=sqlx::query("UPDATE organization_entitlements SET billing_status='past_due',billing_grace_until=COALESCE(billing_grace_until,now()+interval '7 days'),updated_at=now() WHERE organization_id=$1 AND billing_status NOT IN ('canceled','unpaid')").bind(org).execute(&s.db).await{return db_error(e);}
+            production::send_billing_notice(
+                &s.db,
+                org,
+                &event_key,
+                "Subscription payment needs attention",
+                "Lemon Squeezy reported a failed renewal payment. A seven-day recovery period is active; review billing and update the payment method.",
+            )
+            .await;
         }
         _ => {}
     }
