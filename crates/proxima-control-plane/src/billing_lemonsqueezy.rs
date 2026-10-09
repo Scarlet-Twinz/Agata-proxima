@@ -515,8 +515,15 @@ pub(crate) async fn webhook(
                 return Json(json!({"received":true,"ignored":"subscription_not_active"}))
                     .into_response();
             }
-            let cancel_at_period_end = attrs.get("cancelled").and_then(Value::as_bool).unwrap_or(false);
-            let account_status = if cancel_at_period_end { "non-renewing" } else { "active" };
+            let cancel_at_period_end = attrs
+                .get("cancelled")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let account_status = if cancel_at_period_end {
+                "non-renewing"
+            } else {
+                "active"
+            };
             if let Err(e)=sqlx::query("INSERT INTO billing_accounts(organization_id,provider,lemonsqueezy_customer_id,lemonsqueezy_subscription_id,lemonsqueezy_variant_id,plan_key,status,current_period_end,cancel_at_period_end,updated_at) VALUES($1,'lemonsqueezy',$2,$3,$4,$5,$7,$6,$8,now()) ON CONFLICT(organization_id) DO UPDATE SET provider='lemonsqueezy',lemonsqueezy_customer_id=COALESCE(EXCLUDED.lemonsqueezy_customer_id,billing_accounts.lemonsqueezy_customer_id),lemonsqueezy_subscription_id=EXCLUDED.lemonsqueezy_subscription_id,lemonsqueezy_variant_id=EXCLUDED.lemonsqueezy_variant_id,plan_key=EXCLUDED.plan_key,status=EXCLUDED.status,current_period_end=COALESCE(EXCLUDED.current_period_end,billing_accounts.current_period_end),cancel_at_period_end=EXCLUDED.cancel_at_period_end,updated_at=now()")
                 .bind(org).bind(customer_id).bind(subscription_id).bind(variant_id).bind(plan).bind(period_end).bind(account_status).bind(cancel_at_period_end).execute(&s.db).await{return db_error(e);}
             if let Err(e) = production::apply_entitlements(&s.db, org, plan).await {
