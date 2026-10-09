@@ -1,117 +1,97 @@
 # Agata Proxima Entitlement Matrix
 
-Launch pricing is approved at **Free / $149 Starter / $499 Growth / $1,199 Scale / Enterprise Custom**.
+Launch pricing is **Free $0 / Starter $149 / Growth $499 / Scale $1,199 / Enterprise custom**, billed monthly. This file is aligned with `docs/billing/entitlement-matrix.md` and `docs/billing/phase3-22-entitlement-contract.md`.
 
-The fundamental Proxima Engine security boundary is available on every plan. Commercial differentiation is based on capacity, operational controls, retention, identity, support and deployment requirements.
+The fundamental Proxima Engine security boundary is available on every plan. Commercial limits may reject new resource creation or feature use, but must never weaken existing tenant isolation.
 
-## Launch matrix
+## Canonical launch matrix
 
 | Capability | Free | Starter $149 | Growth $499 | Scale $1,199 | Enterprise |
-|---|---:|---:|---:|---:|---|
-| Proxima Engine enforcement | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Tenant-context validation | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Session binding | ✓ | ✓ | ✓ | ✓ | ✓ |
+|---|---:|---:|---:|---:|---:|
+| Proxima Engine enforcement and tenant isolation | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Session binding and tenant-context validation | ✓ | ✓ | ✓ | ✓ | ✓ |
 | PostgreSQL RLS enforcement | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Control-plane-independent enforcement | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Nodes | 1 | 2 | 5 | 15 | Custom |
-| Tenants | 3 | 25 | 100 | 500 | Custom |
-| Environments | 1 | 2 | 5 | Custom | Custom |
-| Policy versioning | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Enforcement continues if Control Plane is offline | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Nodes | 1 | 2 | 5 | 15 | Contract-defined |
+| Tenants | 3 | 25 | 100 | 500 | Contract-defined |
+| Environments | 1 | 2 | 5 | 50 | Contract-defined |
+| Active webhook integrations | 1 | 5 | 20 | 100 | Contract-defined |
+| Verification runs per UTC calendar month | 100 | 1,000 | 10,000 | 100,000 | Contract-defined |
+| Team seats (active members + unexpired pending invitations) | 1 | 5 | 15 | 50 | Contract-defined |
+| Active API keys | 1 | 5 | 25 | 100 | Contract-defined |
+| Authenticated API requests per minute | 60 | 300 | 1,000 | 5,000 | Contract-defined |
+| Audit retention | 7 days | 30 days | 180 days | 365 days | Contract-defined |
 | Basic verification | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Advanced verification/evidence | — | — | ✓ | ✓ | ✓ |
-| Fleet/deployment controls | — | Basic | ✓ | Advanced | Advanced |
-| Audit retention | 7 days | 30 days | 180 days | 1 year | Custom |
-| Organization invitations | — | ✓ | ✓ | ✓ | ✓ |
-| Email support | — | ✓ | ✓ | ✓ | ✓ |
-| Priority support | — | — | ✓ | ✓ | ✓ |
-| Microsoft Entra OIDC | — | — | Optional | ✓ | ✓ |
-| SAML compatibility | — | — | — | — | Available |
-| Dedicated/private deployment | — | — | — | Optional | ✓ |
-| Custom SLA | — | — | — | — | ✓ |
-| Security/compliance requirements | Standard | Standard | Advanced | Advanced | Custom |
+| Policy management | — | ✓ | ✓ | ✓ | ✓ |
+| Fleet/deployment controls | — | ✓ | ✓ | ✓ | Contract-defined |
+| Advanced verification | — | — | ✓ | ✓ | Contract-defined |
+| Priority support | — | — | ✓ | ✓ | Contract-defined |
+| Microsoft Entra OIDC | — | — | ✓ | ✓ | Contract-defined |
+| Private deployment | — | — | — | ✓ | Contract-defined |
+| Custom SLA/compliance/deployment terms | — | — | — | — | Contract-defined |
 
-## Enforcement rule
+Enterprise values are determined by an authorized agreement and provisioning; a client-supplied `enterprise` plan key must not grant Enterprise entitlements. SAML is a potential later compatibility layer and must not be represented as an already accepted production capability.
 
-Plan entitlements must never weaken or disable the Engine's core isolation behavior.
+## Enforcement rules
 
-For example, a Free-plan tenant must not become less isolated because it has exceeded a commercial limit. The system should reject the operation that exceeds the entitlement, while continuing to enforce existing tenant isolation.
+- The Engine's core isolation behavior applies to every plan and does not depend on billing availability.
+- The server and database are authoritative for plan resolution and protected operations. The frontend is not an entitlement authority.
+- Missing or untrusted paid entitlement state fails closed for protected operations.
+- Capacity checks must remain safe under concurrent creation attempts.
+- A downgrade does not delete customer resources or disable isolation. If current usage exceeds the destination plan, preserve existing data, block capacity-increasing writes above the limit, and allow safe remediation.
+- Free is an Agata entitlement and does not require a Paystack subscription.
 
-## Metering dimensions
+## Metering and enforcement contract
 
-The first implementation should meter:
+Phase 3.22-A–H repository acceptance is complete and its targeted gates pass in CI. The implementation covers:
 
-- active Proxima nodes;
-- active tenants;
-- configured environments;
-- audit-retention policy;
-- advanced verification usage;
-- enterprise identity features;
-- deployment/fleet operations.
+1. Node, tenant and environment capacity.
+2. Enabled outbound webhook integration quotas. Disabled integrations do not consume a slot; re-enabling requires capacity.
+3. Verification quotas across basic and advanced verification, counted atomically per UTC calendar month. Advanced verification remains a separate feature gate.
+4. Plan-aware audit filtering and retention. Expired events are hidden according to the active entitlement and cleanup purges expired events hourly. If entitlement state is unresolved, cleanup preserves records rather than guessing.
+5. Team seats and pending invitations. Active memberships plus unexpired invitations reserve seats; accepting an invitation transfers the reservation atomically.
+6. Organization-scoped active API-key caps and authenticated API request rate limits.
+7. Feature gates, Enterprise provisioning restrictions and support-level entitlements.
+8. Billing lifecycle transitions, fixed seven-day failed-renewal grace, cancellation at the recorded period end, downgrade preservation, idempotent webhook processing and regression checks.
 
-Do not meter individual SQL queries or deliberately degrade the security boundary.
-
-## Upgrade behavior
-
-When an organization upgrades:
-
-1. Paystack subscription changes.
-2. Paystack webhook updates the organization's billing state.
-3. Entitlement resolution reads the verified plan.
-4. Newly unlocked capacity becomes available.
-5. An audit event records the plan transition.
-
-## Downgrade behavior
-
-Downgrades must be safe.
-
-If the current state exceeds the destination plan's limits:
-
-- do not delete tenants;
-- do not disable isolation;
-- do not silently delete nodes;
-- mark the organization as **over entitlement**;
-- block creation of additional resources beyond the destination limit;
-- allow the customer to reduce capacity or upgrade again;
-- surface the exact remediation required.
-
-This prevents billing changes from becoming destructive security events.
+Passing repository gates proves the code/test acceptance boundary, not live production provider activation. The production environment still needs a Paystack payment round trip, database rollout, real SSO acceptance and operational verification.
 
 ## Billing source of truth
 
-Paystack is authoritative for payment/subscription lifecycle.
+Paystack is the provider for paid subscription lifecycle. Agata's database stores normalized billing state, organization membership, resolved entitlements and audit history. Signed provider events are processed idempotently. A browser redirect or client-supplied plan value never proves payment.
 
-Agata's database is authoritative for:
+Only the Agata-specific environment-configured plan codes are accepted:
 
-- organization membership;
-- current cached billing state;
-- resolved entitlements;
-- audit history.
+- `AGATA_PAYSTACK_STARTER_PLAN_CODE`
+- `AGATA_PAYSTACK_GROWTH_PLAN_CODE`
+- `AGATA_PAYSTACK_SCALE_PLAN_CODE`
 
-Webhook events are idempotent and append-only in `billing_events`.
+The backend checks each configured provider plan against the canonical USD amount and monthly interval before checkout. Expected amounts in minor units are Starter `14900`, Growth `49900` and Scale `119900`. Transaction verification and signed webhook processing must also validate the expected amount, currency, organization and plan before paid entitlements are applied.
 
-## Free plan
+## Upgrade and downgrade behavior
 
-Free is an Agata entitlement, not a Paystack subscription.
+### Upgrade
 
-A newly created organization receives:
+1. The customer starts checkout for a supported paid plan.
+2. Paystack verifies the transaction and sends its signed webhook.
+3. Agata validates the provider event, amount, currency and Agata plan code.
+4. The billing state and resolved entitlement are updated idempotently.
+5. The plan transition is audited.
 
-```
-plan = free
-billing_status = active
-```
+### Downgrade, failed renewal or cancellation
 
-until it upgrades.
+- Failed renewal enters a fixed seven-day recovery window; repeated failures do not extend it.
+- Non-renewing subscriptions remain active through their recorded period end, then transition to canceled.
+- At grace expiry, new capacity-increasing writes are blocked while existing data remains available for remediation.
+- Downgrades never delete resources automatically or weaken isolation.
+- Completed webhook events are terminal; stale in-progress claims can be retried safely.
 
-## Paystack catalog
+## Provider catalog
 
-Do not reuse unrelated products.
-
-Create only:
+The intended monthly Paystack plans are:
 
 - Agata Proxima Starter — $149/month
 - Agata Proxima Growth — $499/month
 - Agata Proxima Scale — $1,199/month
 
-Enterprise remains custom.
-
-Annual pricing can be added after launch validation.
+Do not reuse unrelated products or change provider plans solely because this document exists. Before enabling live checkout, confirm that the actual Paystack plan codes and amounts match this catalogue and complete a real checkout → signed webhook → entitlement acceptance test. Annual billing is not part of the current active Paystack contract.
