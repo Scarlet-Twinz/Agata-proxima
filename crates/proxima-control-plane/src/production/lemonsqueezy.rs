@@ -143,6 +143,7 @@ pub(crate) async fn checkout(State(s):State<AppState>,headers:HeaderMap,Json(inp
     if let Err(message)=validate_store_and_variant(&client,&key,&store,&variant,plan).await {
         return service_unavailable(message);
     }
+    let checkout_nonce = Uuid::new_v4().to_string();
     let response=match api_headers(client.post("https://api.lemonsqueezy.com/v1/checkouts"),&key)
         .json(&json!({
             "data": {
@@ -152,7 +153,8 @@ pub(crate) async fn checkout(State(s):State<AppState>,headers:HeaderMap,Json(inp
                         "email": email,
                         "custom": {
                             "organization_id": ctx.organization_id.to_string(),
-                            "plan": plan
+                            "plan": plan,
+                            "checkout_nonce": checkout_nonce
                         }
                     },
                     "product_options": {
@@ -173,7 +175,7 @@ pub(crate) async fn checkout(State(s):State<AppState>,headers:HeaderMap,Json(inp
     let reference=body.pointer("/data/id").and_then(Value::as_str).unwrap_or("").to_string();
     if reference.is_empty(){return service_unavailable("Lemon Squeezy did not return a checkout identifier.");}
     if let Err(e)=sqlx::query("INSERT INTO billing_transactions(organization_id,provider,reference,plan_key,plan_code,currency,status,metadata,payload,created_at,updated_at) VALUES($1,'lemonsqueezy',$2,$3,$4,'USD','initialized',$5,$6,now(),now()) ON CONFLICT(provider,reference) DO NOTHING")
-        .bind(ctx.organization_id).bind(&reference).bind(plan).bind(&variant).bind(json!({"organization_id":ctx.organization_id.to_string(),"plan":plan})).bind(&body).execute(&s.db).await {return db_error(e);}
+        .bind(ctx.organization_id).bind(&reference).bind(plan).bind(&variant).bind(json!({"organization_id":ctx.organization_id.to_string(),"plan":plan,"checkout_nonce":checkout_nonce})).bind(&body).execute(&s.db).await {return db_error(e);}
     super::audit(&s.db,ctx.organization_id,ctx.user_id,"billing.checkout.created","billing_transaction",None,json!({"provider":"lemonsqueezy","checkout_id":reference,"plan":plan,"variant_id":variant})).await;
     Json(json!({"ok":true,"provider":"lemonsqueezy","checkout_url":url,"reference":reference,"plan":plan})).into_response()
 }
@@ -311,14 +313,31 @@ pub(crate) async fn webhook(State(s):State<AppState>,headers:HeaderMap,body:Stri
     let portal=incoming_portal.map(str::to_owned).or_else(||existing.as_ref().and_then(|r|r.get::<Option<String>,_>("lemonsqueezy_customer_portal_url")));
     if let Some(plan)=plan {
         if matches!(event_type,"subscription_created"|"subscription_updated"|"subscription_resumed"|"subscription_cancelled"|"subscription_expired"|"subscription_paused"|"subscription_unpaused"|"subscription_payment_success"|"subscription_payment_failed"|"subscription_payment_recovered"|"subscription_payment_refunded") {
+            if event_type=="subscription_created" {
+                let nonce=match custom.get("checkout_nonce").and_then(Value::as_str) {
+                    Some(value) if !value.trim().is_empty()=>value,
+                    _=>{
+                        let _=sqlx::query("UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='lemonsqueezy' AND provider_event_id=$1").bind(&key).execute(&s.db).await;
+                        return Json(json!({"received":true,"ignored":"checkout_nonce_missing"})).into_response();
+                    }
+                };
+                let local_checkout=match sqlx::query("SELECT id FROM billing_transactions WHERE provider='lemonsqueezy' AND organization_id=$1 AND plan_key=$2 AND metadata->>'checkout_nonce'=$3 AND status='initialized'").bind(org).bind(plan).bind(nonce).fetch_optional(&s.db).await {
+                    Ok(value)=>value,
+                    Err(e)=>return db_error(e)
+                };
+                if local_checkout.is_none() {
+                    let _=sqlx::query("UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='lemonsqueezy' AND provider_event_id=$1").bind(&key).execute(&s.db).await;
+                    return Json(json!({"received":true,"ignored":"checkout_transaction_not_found"})).into_response();
+                }
+            }
             if let Err(e)=sqlx::query("INSERT INTO billing_accounts(organization_id,provider,lemonsqueezy_customer_id,lemonsqueezy_subscription_id,lemonsqueezy_variant_id,lemonsqueezy_customer_portal_url,plan_key,status,current_period_end,cancel_at_period_end,updated_at) VALUES($1,'lemonsqueezy',$2,$3,$4,$5,$6,$7,$8,$9,now()) ON CONFLICT(organization_id) DO UPDATE SET provider='lemonsqueezy',lemonsqueezy_customer_id=COALESCE(EXCLUDED.lemonsqueezy_customer_id,billing_accounts.lemonsqueezy_customer_id),lemonsqueezy_subscription_id=EXCLUDED.lemonsqueezy_subscription_id,lemonsqueezy_variant_id=COALESCE(EXCLUDED.lemonsqueezy_variant_id,billing_accounts.lemonsqueezy_variant_id),lemonsqueezy_customer_portal_url=COALESCE(EXCLUDED.lemonsqueezy_customer_portal_url,billing_accounts.lemonsqueezy_customer_portal_url),plan_key=EXCLUDED.plan_key,status=EXCLUDED.status,current_period_end=COALESCE(EXCLUDED.current_period_end,billing_accounts.current_period_end),cancel_at_period_end=EXCLUDED.cancel_at_period_end,updated_at=now()")
                 .bind(org).bind(customer_id).bind(&subscription_id).bind(&variant_id).bind(portal).bind(plan).bind(account_status).bind(period_end).bind(cancel_at_period_end).execute(&s.db).await{return db_error(e);}
             if matches!(effective_status,"active") {if let Err(e)=apply_entitlements(&s.db,org,plan).await{return db_error(e);}}
             else if let Err(e)=sqlx::query("UPDATE organization_entitlements SET billing_status=$1,billing_grace_until=CASE WHEN $1='past_due' THEN now()+interval '7 days' ELSE NULL END,updated_at=now() WHERE organization_id=$2").bind(effective_status).bind(org).execute(&s.db).await{return db_error(e);}
             if event_type=="subscription_created" {
                 let order_id=attrs.get("order_id").and_then(Value::as_i64).map(|v|v.to_string());
-                if let Err(e)=sqlx::query("UPDATE billing_transactions SET lemonsqueezy_subscription_id=$1,lemonsqueezy_order_id=$2,lemonsqueezy_variant_id=$3,payload=$4,updated_at=now() WHERE id=(SELECT id FROM billing_transactions WHERE provider='lemonsqueezy' AND organization_id=$5 AND plan_key=$6 AND status='initialized' ORDER BY created_at DESC LIMIT 1)")
-                    .bind(&subscription_id).bind(order_id).bind(&variant_id).bind(&event).bind(org).bind(plan).execute(&s.db).await{return db_error(e);}
+                if let Err(e)=sqlx::query("UPDATE billing_transactions SET lemonsqueezy_subscription_id=$1,lemonsqueezy_order_id=$2,lemonsqueezy_variant_id=$3,payload=$4,updated_at=now() WHERE provider='lemonsqueezy' AND organization_id=$5 AND plan_key=$6 AND metadata->>'checkout_nonce'=$7 AND status='initialized'")
+                    .bind(&subscription_id).bind(order_id).bind(&variant_id).bind(&event).bind(org).bind(plan).bind(custom.get("checkout_nonce").and_then(Value::as_str).unwrap_or("")).execute(&s.db).await{return db_error(e);}
             }
             if invoice_event {
                 let next_status=match event_type {"subscription_payment_success"|"subscription_payment_recovered"=>"success","subscription_payment_failed"=>"failed","subscription_payment_refunded"=>"refunded",_=>"initialized"};
