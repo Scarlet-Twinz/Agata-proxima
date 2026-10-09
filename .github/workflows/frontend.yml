@@ -47,9 +47,10 @@ jobs:
             }
             if (!(config.headers ?? []).some(rule =>
               rule.source === "/api/(.*)" &&
-              rule.headers?.some(header => header.key === "x-vercel-enable-rewrite-caching" && header.value === "0")
+              rule.headers?.some(header => header.key === "x-vercel-enable-rewrite-caching" && header.value === "0") &&
+              rule.headers?.some(header => header.key.toLowerCase() === "cache-control" && header.value.includes("no-store"))
             )) {
-              throw new Error("Authenticated API proxy caching must be disabled");
+              throw new Error("Authenticated API proxy responses must be non-cacheable");
             }
             console.log("PASS: Vercel API proxy, email routes, SPA fallback and no-cache rule");
           '
