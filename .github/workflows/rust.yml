@@ -118,6 +118,9 @@ jobs:
       - name: Phase 3.23 transactional email
         run: bash tests/launch/phase3_23_resend_email_gate.sh
 
+      - name: Phase 3.22/3.23 Entra OIDC and Resend contract
+        run: bash tests/launch/phase3_22_23_oidc_email_contract.sh
+
       - name: Phase 3.22-A canonical entitlement contract
         run: bash tests/entitlements/phase322_a_catalog_gate.sh
 
