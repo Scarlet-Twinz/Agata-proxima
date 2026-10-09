@@ -13,7 +13,7 @@ This map follows the completed Phase 3.22-A–H repository gates. It separates c
 - [x] Add production operations guidance and on-demand health/backup scripts.
 - [x] Update the OpenAPI contract and developer billing documentation to Paystack.
 
-The above items remain subject to the pull request's full CI acceptance before they are merged.
+CI verifies repository implementation and regression gates; external account setup and runtime acceptance remain separate launch requirements.
 
 ## Remaining work and acceptance criteria
 
