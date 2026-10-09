@@ -2820,7 +2820,7 @@ async fn create_public_support_request(
     }
 
     let message = if support_email_status == "sent" && requester_email_status == "sent" {
-        "Your request was recorded and a confirmation was emailed to you."
+        "Your request was recorded and a confirmation email was queued for delivery."
     } else {
         "Your request was recorded. Keep the request ID for reference and review the delivery statuses below."
     };
