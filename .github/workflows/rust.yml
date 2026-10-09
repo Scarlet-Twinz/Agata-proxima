@@ -89,7 +89,8 @@ jobs:
           grep -q "AGATA_PAYSTACK_SCALE_PLAN_CODE" .env.example
           grep -q "PAYSTACK_SECRET_KEY" .env.example
           grep -q "RESEND_API_KEY" .env.example
-          grep -q "PROXIMA_OIDC_ISSUER" .env.example
+          grep -q "PROXIMA_OIDC_CLIENT_ID" .env.example
+          grep -q "PROXIMA_OIDC_CLIENT_SECRET" .env.example
           grep -q "^RESEND_FROM_EMAIL=$" .env.example
           ! grep -q "STRIPE_" .env.example
 
