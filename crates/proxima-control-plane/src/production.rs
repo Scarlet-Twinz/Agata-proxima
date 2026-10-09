@@ -1041,16 +1041,137 @@ pub(crate) async fn paystack_callback(
 pub(crate) async fn billing_verify(State(s):State<AppState>,headers:HeaderMap,Query(q):Query<std::collections::HashMap<String,String>>)->Response{
     let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};let reference=match q.get("reference").or_else(||q.get("trxref")){Some(v) if !v.trim().is_empty()=>v.trim(),_=>return bad("Paystack transaction reference is required.")};verify_paystack_transaction(&s.db,ctx.organization_id,reference).await
 }
-async fn verify_paystack_transaction(db:&sqlx::PgPool,org:Uuid,reference:&str)->Response{
-    let secret=match env::var("PAYSTACK_SECRET_KEY"){Ok(v) if !v.trim().is_empty()=>v,_=>return service_unavailable("Paystack secret is not configured.")};let response=match Client::new().get(format!("https://api.paystack.co/transaction/verify/{reference}")).bearer_auth(secret).send().await{Ok(v)=>v,Err(e)=>return external_error(e)};if !response.status().is_success(){return paystack_error(response).await;}
-    let body:Value=match response.json().await{Ok(v)=>v,Err(e)=>return external_error(e)};if body.get("status").and_then(Value::as_bool)!=Some(true){return service_unavailable("Paystack transaction verification failed.");}
-    let data=body.get("data").cloned().unwrap_or(Value::Null);let status=data.get("status").and_then(Value::as_str).unwrap_or_default();let metadata_org=data.pointer("/metadata/organization_id").and_then(Value::as_str).and_then(|v|Uuid::parse_str(v).ok());if metadata_org!=Some(org){return (StatusCode::FORBIDDEN,Json(json!({"ok":false,"error":"transaction_organization_mismatch"}))).into_response();}
-    let plan_code=data.pointer("/plan/plan_code").and_then(Value::as_str);let plan=plan_code.and_then(|v|plan_for_code(Some(v))).unwrap_or("free");let amount=data.get("amount").and_then(Value::as_i64);let currency=data.get("currency").and_then(Value::as_str).unwrap_or("USD");
-    if let Err(e)=sqlx::query("UPDATE billing_transactions SET transaction_id=$1,plan_key=$2,plan_code=$3,amount=$4,currency=$5,status=$6,payload=$7,updated_at=now() WHERE provider='paystack' AND reference=$8 AND organization_id=$9").bind(data.get("id").and_then(Value::as_u64).map(|v|v as i64)).bind(plan).bind(plan_code).bind(amount).bind(currency).bind(status).bind(&data).bind(reference).bind(org).execute(db).await{return db_error(e);}
-    if status=="success"{if let Err(e)=apply_entitlements(db,org,plan).await{return db_error(e)}
-    if let Err(e)=sqlx::query("UPDATE billing_accounts SET paystack_plan_code=$1,plan_key=$2,status='active',updated_at=now() WHERE organization_id=$3").bind(plan_code).bind(plan).bind(org).execute(db).await{return db_error(e)}}
-    Json(json!({"ok":true,"verified":status=="success","provider":"paystack","reference":reference,"status":status,"plan":plan})).into_response()
+async fn verify_paystack_transaction(db: &sqlx::PgPool, org: Uuid, reference: &str) -> Response {
+    let local = match sqlx::query(
+        "SELECT plan_key,plan_code FROM billing_transactions
+          WHERE provider='paystack' AND reference=$1 AND organization_id=$2",
+    )
+    .bind(reference)
+    .bind(org)
+    .fetch_optional(db)
+    .await
+    {
+        Ok(Some(row)) => row,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"ok":false,"error":"unknown_local_transaction"}))).into_response(),
+        Err(e) => return db_error(e),
+    };
+
+    let plan: String = local.get("plan_key");
+    let expected_plan_code: Option<String> = local.get("plan_code");
+    if !matches!(plan.as_str(), "starter" | "growth" | "scale") {
+        return (StatusCode::FORBIDDEN, Json(json!({"ok":false,"error":"invalid_local_plan"}))).into_response();
+    }
+
+    let secret = match env::var("PAYSTACK_SECRET_KEY") {
+        Ok(value) if !value.trim().is_empty() => value,
+        _ => return service_unavailable("Paystack secret is not configured."),
+    };
+    let response = match Client::new()
+        .get(format!("https://api.paystack.co/transaction/verify/{reference}"))
+        .bearer_auth(secret)
+        .send()
+        .await
+    {
+        Ok(value) => value,
+        Err(e) => return external_error(e),
+    };
+    if !response.status().is_success() {
+        return paystack_error(response).await;
+    }
+
+    let body: Value = match response.json().await {
+        Ok(value) => value,
+        Err(e) => return external_error(e),
+    };
+    if body.get("status").and_then(Value::as_bool) != Some(true) {
+        return service_unavailable("Paystack transaction verification failed.");
+    }
+
+    let data = body.get("data").cloned().unwrap_or(Value::Null);
+    let status = data.get("status").and_then(Value::as_str).unwrap_or_default();
+    let metadata_org = data
+        .pointer("/metadata/organization_id")
+        .and_then(Value::as_str)
+        .and_then(|value| Uuid::parse_str(value).ok());
+    if metadata_org != Some(org) {
+        return (StatusCode::FORBIDDEN, Json(json!({"ok":false,"error":"transaction_organization_mismatch"}))).into_response();
+    }
+
+    let returned_plan_code = data
+        .pointer("/plan/plan_code")
+        .and_then(Value::as_str)
+        .or_else(|| data.pointer("/subscription/plan/plan_code").and_then(Value::as_str))
+        .or_else(|| data.pointer("/subscription/plan_code").and_then(Value::as_str))
+        .or_else(|| data.get("plan_code").and_then(Value::as_str));
+    if let (Some(expected), Some(returned)) = (expected_plan_code.as_deref(), returned_plan_code) {
+        if expected != returned {
+            return (StatusCode::FORBIDDEN, Json(json!({"ok":false,"error":"transaction_plan_mismatch"}))).into_response();
+        }
+    }
+
+    let amount = data.get("amount").and_then(Value::as_i64);
+    let currency = data.get("currency").and_then(Value::as_str).unwrap_or("USD");
+    let payload = data.clone();
+    let end = data
+        .get("next_payment_date")
+        .and_then(Value::as_str)
+        .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+        .map(|value| value.with_timezone(&chrono::Utc));
+
+    if let Err(e) = sqlx::query(
+        "UPDATE billing_transactions
+            SET transaction_id=$1,plan_key=$2,plan_code=$3,amount=$4,currency=$5,
+                status=$6,payload=$7,updated_at=now()
+          WHERE provider='paystack' AND reference=$8 AND organization_id=$9",
+    )
+    .bind(data.get("id").and_then(Value::as_u64).map(|value| value as i64))
+    .bind(&plan)
+    .bind(expected_plan_code.as_deref())
+    .bind(amount)
+    .bind(currency)
+    .bind(status)
+    .bind(&payload)
+    .bind(reference)
+    .bind(org)
+    .execute(db)
+    .await
+    {
+        return db_error(e);
+    }
+
+    if status == "success" {
+        if let Err(e) = apply_entitlements(db, org, &plan).await {
+            return db_error(e);
+        }
+        if let Err(e) = sqlx::query(
+            "UPDATE billing_accounts
+                SET paystack_plan_code=COALESCE($1,paystack_plan_code),plan_key=$2,
+                    status='active',current_period_end=COALESCE($3,current_period_end),
+                    cancel_at_period_end=false,updated_at=now()
+              WHERE organization_id=$4",
+        )
+        .bind(expected_plan_code.as_deref())
+        .bind(&plan)
+        .bind(end)
+        .bind(org)
+        .execute(db)
+        .await
+        {
+            return db_error(e);
+        }
+    }
+
+    Json(json!({
+        "ok": true,
+        "verified": status == "success",
+        "provider": "paystack",
+        "reference": reference,
+        "status": status,
+        "plan": plan
+    }))
+    .into_response()
 }
+
 pub(crate) async fn portal(State(s):State<AppState>,headers:HeaderMap)->Response{
     let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};if let Err(c)=require_write(&ctx,&headers){return c.into_response();}
     let secret=match env::var("PAYSTACK_SECRET_KEY"){Ok(v) if !v.trim().is_empty()=>v,_=>return service_unavailable("Paystack secret is not configured.")};let code=match sqlx::query("SELECT paystack_subscription_code FROM billing_accounts WHERE organization_id=$1").bind(ctx.organization_id).fetch_optional(&s.db).await{Ok(Some(r))=>r.get::<Option<String>,_>("paystack_subscription_code"),Ok(None)=>None,Err(e)=>return db_error(e)};let code=match code{Some(v)=>v,None=>return bad("No Paystack subscription exists for this organization yet.")};
