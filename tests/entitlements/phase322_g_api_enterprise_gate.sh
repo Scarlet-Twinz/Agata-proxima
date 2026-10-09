@@ -111,6 +111,6 @@ grep -Fq 'header::AUTHORIZATION' crates/proxima-control-plane/src/main.rs || fai
 grep -Fq 'production::consume_api_request' crates/proxima-control-plane/src/main.rs || fail "request-rate limiting is not called by authentication"
 grep -Fq 'production::enforce_api_key_capacity' crates/proxima-control-plane/src/main.rs || fail "API-key creation does not enforce its quota"
 grep -Fq 'contains(&requested)' crates/proxima-control-plane/src/production/lemonsqueezy.rs || fail "Self-service checkout does not use the allowed-plan list"
-grep -Fq 'None=>return bad("Select a valid Agata Proxima monthly plan.")' crates/proxima-control-plane/src/production/lemonsqueezy.rs || fail "Enterprise and Free self-service checkout are not blocked"
+grep -Fq 'plan_for_variant(requested)' crates/proxima-control-plane/src/production/lemonsqueezy.rs || fail "Unknown plans, Free and Enterprise cannot be mapped to self-service checkout"
 grep -Fq 'support_level' crates/proxima-control-plane/src/production.rs || fail "support-level entitlement is not exposed"
 echo "PASS: Phase 3.22-G API, enterprise, and support checks"
