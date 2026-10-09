@@ -2077,13 +2077,13 @@ async fn delete_organization(
     .await
     {
         Ok(Some(value)) => value,
-        Ok(None) => {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(json!({"ok":false,"message":"That organization is not available to this account."})),
-            )
-                .into_response()
-        }
+        Ok(None) => return (
+            StatusCode::NOT_FOUND,
+            Json(
+                json!({"ok":false,"message":"That organization is not available to this account."}),
+            ),
+        )
+            .into_response(),
         Err(error) => return db_error(error),
     };
     if role != "owner" {
@@ -2112,16 +2112,15 @@ async fn delete_organization(
             .into_response();
     }
 
-    let organization_count = match sqlx::query_scalar::<_, i64>(
-        "SELECT count(*) FROM memberships WHERE user_id=$1",
-    )
-    .bind(ctx.user_id)
-    .fetch_one(&mut *tx)
-    .await
-    {
-        Ok(value) => value,
-        Err(error) => return db_error(error),
-    };
+    let organization_count =
+        match sqlx::query_scalar::<_, i64>("SELECT count(*) FROM memberships WHERE user_id=$1")
+            .bind(ctx.user_id)
+            .fetch_one(&mut *tx)
+            .await
+        {
+            Ok(value) => value,
+            Err(error) => return db_error(error),
+        };
     if organization_count <= 1 {
         return (
             StatusCode::CONFLICT,
