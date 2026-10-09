@@ -6,8 +6,7 @@ main="crates/proxima-control-plane/src/main.rs"
 env_example=".env.example"
 control_env="crates/proxima-control-plane/.env.example"
 
-# Microsoft Entra OIDC: callback, state expiry/consumption, nonce, issuer,
-# audience, signature algorithm and signing-key validation must remain present.
+# Microsoft Entra OIDC security invariants.
 grep -q '"/api/v1/auth/oidc/start"' "$main"
 grep -q '"/api/v1/auth/oidc/callback"' "$main"
 grep -q 'oidc_login_states' "$production"
@@ -21,7 +20,7 @@ grep -q 'PROXIMA_OIDC_CLIENT_SECRET' "$production"
 grep -q 'PROXIMA_OIDC_CLIENT_ID' "$production"
 grep -q 'fn oidc_redirect_uri' "$production"
 
-# Transactional email sender routing and configurable template IDs.
+# Sender identities and template IDs must be present in both environment examples.
 for file in "$env_example" "$control_env"; do
   grep -q '^RESEND_API_KEY=' "$file"
   grep -q '^AGATA_SUPPORT_INBOX_EMAIL=' "$file"
@@ -38,18 +37,14 @@ for file in "$env_example" "$control_env"; do
   grep -q '^RESEND_TEMPLATE_BILLING_UPDATE_ID=' "$file"
 done
 
-# No secret or personal support destination may be committed as a default.
-! grep -Eq '^PROXIMA_OIDC_CLIENT_SECRET=.+
-  echo "ERROR: .env.example must not contain a real Entra client secret" >&2; exit 1;
-}
-! grep -q 'anthonyemmanuella297@gmail.com' "$env_example"
-! grep -q 'anthonyemmanuella297@gmail.com' "$control_env"
-
-echo "PASS: Phase 3.22/3.23 Entra OIDC and Resend configuration contract"
- "$env_example" || {
-  echo "ERROR: .env.example must not contain a real Entra client secret" >&2; exit 1;
-}
-! grep -q 'anthonyemmanuella297@gmail.com' "$env_example"
-! grep -q 'anthonyemmanuella297@gmail.com' "$control_env"
+# Examples must not contain a non-empty Entra secret or a personal support destination.
+if grep -Eq '^PROXIMA_OIDC_CLIENT_SECRET=.+$' "$env_example" "$control_env"; then
+  echo "ERROR: environment examples must not contain a real Entra client secret" >&2
+  exit 1
+fi
+if grep -q 'anthonyemmanuella297@gmail.com' "$env_example" "$control_env"; then
+  echo "ERROR: environment examples must not contain a personal support destination" >&2
+  exit 1
+fi
 
 echo "PASS: Phase 3.22/3.23 Entra OIDC and Resend configuration contract"
