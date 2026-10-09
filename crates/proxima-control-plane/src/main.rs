@@ -2782,10 +2782,8 @@ async fn create_public_support_request(
 
     let message = if support_email_status == "sent" && requester_email_status == "sent" {
         "Your request was recorded and a confirmation was emailed to you."
-    } else if support_email_status != "sent" {
-        "Your request was recorded, but the support team could not be notified automatically. Keep your request ID for reference."
     } else {
-        "Your request was recorded, but we could not send a confirmation email. Keep your request ID for reference."
+        "Your request was recorded. Keep the request ID for reference and review the delivery statuses below."
     };
 
     (
