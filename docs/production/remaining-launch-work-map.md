@@ -44,7 +44,7 @@ CI verifies repository implementation and regression gates; external account set
 4. Set `PROXIMA_OIDC_CLIENT_ID`, `PROXIMA_OIDC_CLIENT_SECRET` and `AGATA_PUBLIC_BASE_URL`.
 5. Configure the expected customer Entra tenant ID against that customer's Agata organization.
 6. Run the real end-to-end login, organization mapping, session and audit acceptance test.
-7. Only then enable the SSO button in the login UI.
+7. Complete a real end-to-end sign-in test before declaring SSO production-ready. The login page now exposes the organization-slug flow, and the Settings → Enterprise identity page configures the tenant mapping; these UI surfaces do not replace provider acceptance.
 
 ## Operational approach
 
