@@ -1802,7 +1802,7 @@ pub(crate) async fn send_verification_email(
 
     send_template_email_as(
         email,
-        "091dbdb2-21ed-444f-a209-6f44e55d192d",
+        "verify-email",
         json!({
             "DISPLAY_NAME": escape_email_template_value(display_name),
             "CODE": code,
@@ -2033,7 +2033,7 @@ pub(crate) async fn request_password_reset(
         let link = format!("{base}/reset-password?token={token}");
         if let Err(e) = send_template_email_as(
             &email,
-            "d3c046c7-fef6-42f0-931e-d92b6f96cfdf",
+            "password-reset",
             json!({
                 "DISPLAY_NAME": escape_email_template_value(&row.get::<String,_>("display_name")),
                 "ACTION_URL": link
@@ -2150,7 +2150,7 @@ pub(crate) async fn invite(
     let link = format!("{base}/accept-invite?token={token}");
     let email_result = send_template_email_as(
         &email,
-        "0757a210-a372-4a5a-8fca-e642c2fed3da",
+        "organization-invitation",
         json!({
             "ORGANIZATION": escape_email_template_value(&organization_name),
             "ROLE": role,
@@ -2265,11 +2265,19 @@ pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
         "RESEND_FROM_BILLING_EMAIL",
         "RESEND_FROM_NOTIFICATIONS_EMAIL",
     ].iter().all(|key| env::var(key).map(|v| !v.trim().is_empty()).unwrap_or(false));
+    let templates_configured = [
+        "RESEND_TEMPLATE_VERIFY_EMAIL_ID",
+        "RESEND_TEMPLATE_PASSWORD_RESET_ID",
+        "RESEND_TEMPLATE_ORGANIZATION_INVITATION_ID",
+        "RESEND_TEMPLATE_NEW_LOGIN_ALERT_ID",
+        "RESEND_TEMPLATE_SUPPORT_REQUEST_RECEIVED_ID",
+        "RESEND_TEMPLATE_BILLING_UPDATE_ID",
+    ].iter().all(|key| env::var(key).map(|v| !v.trim().is_empty()).unwrap_or(false));
     let support_inbox = env::var("AGATA_SUPPORT_INBOX_EMAIL").map(|v| !v.trim().is_empty()).unwrap_or(false);
     let base = env::var("AGATA_PUBLIC_BASE_URL").map(|v| !v.trim().is_empty()).unwrap_or(false);
     let oidc = env::var("PROXIMA_OIDC_CLIENT_ID").map(|v| !v.trim().is_empty()).unwrap_or(false)
         && env::var("PROXIMA_OIDC_CLIENT_SECRET").map(|v| !v.trim().is_empty()).unwrap_or(false);
-    let email_ready = resend && sender_identities && support_inbox;
+    let email_ready = resend && sender_identities && templates_configured && support_inbox;
     let all = db_ok && paystack && plans && email_ready && base && oidc;
     Json(json!({
         "status": if all { "ready" } else { "needs_configuration" },
@@ -2280,12 +2288,29 @@ pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
             "resend_api_key": resend,
             "resend_fallback_sender": fallback_from,
             "resend_sender_identities": sender_identities,
+            "resend_templates": templates_configured,
             "support_inbox": support_inbox,
             "public_base_url": base,
             "oidc": oidc,
             "engine_remains_authoritative": true
         }
     })).into_response()
+}
+
+fn configured_template_id(template_key: &str) -> anyhow::Result<String> {
+    let env_key = match template_key {
+        "verify-email" => "RESEND_TEMPLATE_VERIFY_EMAIL_ID",
+        "password-reset" => "RESEND_TEMPLATE_PASSWORD_RESET_ID",
+        "organization-invitation" => "RESEND_TEMPLATE_ORGANIZATION_INVITATION_ID",
+        "new-login-alert" => "RESEND_TEMPLATE_NEW_LOGIN_ALERT_ID",
+        "support-request-received" => "RESEND_TEMPLATE_SUPPORT_REQUEST_RECEIVED_ID",
+        "billing-update" => "RESEND_TEMPLATE_BILLING_UPDATE_ID",
+        _ => anyhow::bail!("Unsupported transactional email template key"),
+    };
+    match env::var(env_key) {
+        Ok(value) if !value.trim().is_empty() => Ok(value.trim().to_owned()),
+        _ => anyhow::bail!("{env_key} is not configured for the current deployment"),
+    }
 }
 
 fn sender_address(role: &str) -> anyhow::Result<String> {
@@ -2318,7 +2343,7 @@ pub(crate) async fn send_template_email(
 
 pub(crate) async fn send_template_email_as(
     to: &str,
-    template_id: &str,
+    template_key: &str,
     variables: Value,
     sender_role: &str,
 ) -> anyhow::Result<()> {
@@ -2327,6 +2352,7 @@ pub(crate) async fn send_template_email_as(
         anyhow::bail!("RESEND_API_KEY is not configured for the current deployment");
     }
     let from = sender_address(sender_role)?;
+    let template_id = configured_template_id(template_key)?;
     let client = Client::builder()
         .timeout(std::time::Duration::from_secs(8))
         .build()?;
@@ -2425,13 +2451,16 @@ async fn send_billing_notice(
         }
     };
 
-    let base = env::var("AGATA_PUBLIC_BASE_URL")
-        .unwrap_or_else(|_| "https://agataproxima.com".to_string())
-        .trim_end_matches('/')
-        .to_string();
+    let base = match env::var("AGATA_PUBLIC_BASE_URL") {
+        Ok(value) if !value.trim().is_empty() => value.trim_end_matches('/').to_string(),
+        _ => {
+            tracing::warn!(%organization_id, "billing email skipped because AGATA_PUBLIC_BASE_URL is not configured");
+            return;
+        }
+    };
     if let Err(e) = send_template_email_as(
         &recipient.0,
-        "0500c270-e1ab-474f-b3d4-288831b73049",
+        "billing-update",
         json!({
             "DISPLAY_NAME": escape_email_template_value(&recipient.1),
             "EVENT_TITLE": escape_email_template_value(title),
