@@ -76,7 +76,7 @@ pub(crate) struct PasswordResetConfirm {
     pub token: String,
     pub password: String,
 }
-fn plan_limits(plan: &str) -> (i32, i32, i32, i32, bool, bool, bool, bool, bool) {
+pub(crate) fn plan_limits(plan: &str) -> (i32, i32, i32, i32, bool, bool, bool, bool, bool) {
     match plan {
         "starter" => (2, 25, 2, 30, false, true, false, false, false),
         "growth" => (5, 100, 5, 180, true, true, true, true, false),
@@ -86,7 +86,7 @@ fn plan_limits(plan: &str) -> (i32, i32, i32, i32, bool, bool, bool, bool, bool)
     }
 }
 
-fn plan_integration_limit(plan: &str) -> i32 {
+pub(crate) fn plan_integration_limit(plan: &str) -> i32 {
     match plan {
         "starter" => 5,
         "growth" => 20,
@@ -96,7 +96,7 @@ fn plan_integration_limit(plan: &str) -> i32 {
     }
 }
 
-fn plan_verification_limit(plan: &str) -> i32 {
+pub(crate) fn plan_verification_limit(plan: &str) -> i32 {
     match plan {
         "starter" => 1_000,
         "growth" => 10_000,
@@ -106,7 +106,7 @@ fn plan_verification_limit(plan: &str) -> i32 {
     }
 }
 
-fn plan_team_seat_limit(plan: &str) -> i32 {
+pub(crate) fn plan_team_seat_limit(plan: &str) -> i32 {
     match plan {
         "starter" => 5,
         "growth" => 15,
@@ -116,7 +116,7 @@ fn plan_team_seat_limit(plan: &str) -> i32 {
     }
 }
 
-fn plan_api_key_limit(plan: &str) -> i32 {
+pub(crate) fn plan_api_key_limit(plan: &str) -> i32 {
     match plan {
         "starter" => 5,
         "growth" => 25,
@@ -126,7 +126,7 @@ fn plan_api_key_limit(plan: &str) -> i32 {
     }
 }
 
-fn plan_api_requests_per_minute(plan: &str) -> i32 {
+pub(crate) fn plan_api_requests_per_minute(plan: &str) -> i32 {
     match plan {
         "starter" => 300,
         "growth" => 1_000,
@@ -136,7 +136,7 @@ fn plan_api_requests_per_minute(plan: &str) -> i32 {
     }
 }
 
-fn plan_support_level(plan: &str) -> &'static str {
+pub(crate) fn plan_support_level(plan: &str) -> &'static str {
     match plan {
         "starter" => "standard",
         "growth" => "priority",
