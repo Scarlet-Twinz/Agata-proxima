@@ -3,7 +3,7 @@
   "info": {
     "title": "Agata Proxima Control Plane API",
     "version": "0.2.0",
-    "description": "Authenticated management plane for organizations, tenants, policies, fleet, deployments, verification, audit, support and Paystack billing. The Proxima Engine remains the independent data-plane enforcement authority."
+    "description": "Authenticated management plane for organizations, tenants, policies, fleet, deployments, verification, audit, support and Lemon Squeezy billing. The Proxima Engine remains the independent data-plane enforcement authority."
   },
   "servers": [
     {
