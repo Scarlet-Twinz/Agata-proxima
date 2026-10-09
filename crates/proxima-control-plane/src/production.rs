@@ -1682,27 +1682,28 @@ pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
     let db_ok = sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
     let lemonsqueezy = env::var("LEMON_SQUEEZY_API_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false) && env::var("LEMON_SQUEEZY_STORE_ID").map(|v| !v.trim().is_empty()).unwrap_or(false) && env::var("LEMON_SQUEEZY_WEBHOOK_SECRET").map(|v| !v.trim().is_empty()).unwrap_or(false);
     let plans = configured_lemonsqueezy_variants_unique();
-    let resend = env::var("RESEND_API_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false);
-    let fallback_from = env::var("RESEND_FROM_EMAIL").map(|v| !v.trim().is_empty()).unwrap_or(false);
-    let sender_identities = [
-        "RESEND_FROM_NO_REPLY_EMAIL",
-        "RESEND_FROM_SUPPORT_EMAIL",
-        "RESEND_FROM_SECURITY_EMAIL",
-        "RESEND_FROM_BILLING_EMAIL",
-        "RESEND_FROM_NOTIFICATIONS_EMAIL",
-    ].iter().all(|key| env::var(key).map(|v| !v.trim().is_empty()).unwrap_or(false));
-    let templates_configured = [
-        "RESEND_TEMPLATE_VERIFY_EMAIL_ID",
-        "RESEND_TEMPLATE_PASSWORD_RESET_ID",
-        "RESEND_TEMPLATE_ORGANIZATION_INVITATION_ID",
-        "RESEND_TEMPLATE_NEW_LOGIN_ALERT_ID",
-        "RESEND_TEMPLATE_SUPPORT_REQUEST_RECEIVED_ID",
-        "RESEND_TEMPLATE_BILLING_UPDATE_ID",
-    ].iter().all(|key| env::var(key).map(|v| !v.trim().is_empty()).unwrap_or(false));
+    let configured = |key: &str| env::var(key).map(|value| !value.trim().is_empty()).unwrap_or(false);
+    let resend = configured("RESEND_API_KEY");
+    let fallback_from = configured("RESEND_FROM_EMAIL");
+    let sender_no_reply = configured("RESEND_FROM_NO_REPLY_EMAIL") || fallback_from;
+    let sender_support = configured("RESEND_FROM_SUPPORT_EMAIL") || fallback_from;
+    let sender_security = configured("RESEND_FROM_SECURITY_EMAIL") || fallback_from;
+    let sender_billing = configured("RESEND_FROM_BILLING_EMAIL") || fallback_from;
+    let sender_notifications = configured("RESEND_FROM_NOTIFICATIONS_EMAIL") || fallback_from;
+    let template_verify = configured("RESEND_TEMPLATE_VERIFY_EMAIL_ID");
+    let template_password_reset = configured("RESEND_TEMPLATE_PASSWORD_RESET_ID");
+    let template_invitation = configured("RESEND_TEMPLATE_ORGANIZATION_INVITATION_ID");
+    let template_login_alert = configured("RESEND_TEMPLATE_NEW_LOGIN_ALERT_ID");
+    let template_support_received = configured("RESEND_TEMPLATE_SUPPORT_REQUEST_RECEIVED_ID");
+    let template_billing_update = configured("RESEND_TEMPLATE_BILLING_UPDATE_ID");
+    let sender_identities = sender_no_reply && sender_support && sender_security && sender_billing && sender_notifications;
+    let templates_configured = template_verify && template_password_reset && template_invitation
+        && template_login_alert && template_support_received && template_billing_update;
     let support_inbox = env::var("AGATA_SUPPORT_INBOX_EMAIL").map(|v| valid_public_support_email(v.trim())).unwrap_or(false);
-    let base = env::var("AGATA_PUBLIC_BASE_URL").map(|v| !v.trim().is_empty()).unwrap_or(false);
-    let oidc = env::var("PROXIMA_OIDC_CLIENT_ID").map(|v| !v.trim().is_empty()).unwrap_or(false)
-        && env::var("PROXIMA_OIDC_CLIENT_SECRET").map(|v| !v.trim().is_empty()).unwrap_or(false);
+    let base = configured("AGATA_PUBLIC_BASE_URL");
+    let oidc_client_id = configured("PROXIMA_OIDC_CLIENT_ID");
+    let oidc_client_secret = configured("PROXIMA_OIDC_CLIENT_SECRET");
+    let oidc = oidc_client_id && oidc_client_secret;
     let email_ready = resend && sender_identities && templates_configured && support_inbox;
     let all = db_ok && lemonsqueezy && plans && email_ready && base && oidc;
     Json(json!({
@@ -1714,9 +1715,22 @@ pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
             "resend_api_key": resend,
             "resend_fallback_sender": fallback_from,
             "resend_sender_identities": sender_identities,
+            "resend_sender_no_reply": sender_no_reply,
+            "resend_sender_support": sender_support,
+            "resend_sender_security": sender_security,
+            "resend_sender_billing": sender_billing,
+            "resend_sender_notifications": sender_notifications,
             "resend_templates": templates_configured,
+            "resend_template_verify_email": template_verify,
+            "resend_template_password_reset": template_password_reset,
+            "resend_template_organization_invitation": template_invitation,
+            "resend_template_new_login_alert": template_login_alert,
+            "resend_template_support_request_received": template_support_received,
+            "resend_template_billing_update": template_billing_update,
             "support_inbox": support_inbox,
             "public_base_url": base,
+            "oidc_client_id": oidc_client_id,
+            "oidc_client_secret": oidc_client_secret,
             "oidc": oidc,
             "engine_remains_authoritative": true
         }
