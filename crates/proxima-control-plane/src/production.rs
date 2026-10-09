@@ -564,22 +564,6 @@ pub(crate) async fn require_feature(
     Ok(())
 }
 
-pub(crate) async fn plans() -> Response {
-    let catalog=[("free","Free",0_i32,"Evaluation and small proofs of concept"),("starter","Starter",149_i32,"First production SaaS deployments"),("growth","Growth",499_i32,"Multi-tenant production workloads"),("scale","Scale",1199_i32,"Larger fleets and security operations"),("enterprise","Enterprise",0_i32,"Contracted enterprise deployments")];
-    let plans=catalog.iter().map(|(key,name,monthly_usd,description)|{
-        let plan_code=paystack_plan_code(key);
-        let (nodes,tenants,environments,retention,advanced,fleet,priority,entra,private_deployment)=plan_limits(key);
-        let integrations = plan_integration_limit(key);
-        let verifications = plan_verification_limit(key);
-        let team_seats = plan_team_seat_limit(key);
-        let api_keys = plan_api_key_limit(key);
-        let api_requests = plan_api_requests_per_minute(key);
-        let support = plan_support_level(key);
-        json!({"key":key,"name":name,"monthly_usd":monthly_usd,"description":description,"provider":"paystack","plan_code":plan_code,"checkout_available":key!=&"free"&&key!=&"enterprise"&&paystack_plan_code(key).is_some()&&configured_paystack_plan_codes_unique(),"limits":{"nodes":nodes,"tenants":tenants,"environments":environments,"integrations":integrations,"verifications_per_month":verifications,"team_seats":team_seats,"api_keys":api_keys,"api_requests_per_minute":api_requests,"audit_retention_days":retention},"support_level":support,"features":{"advanced_verification":advanced,"fleet_controls":fleet,"priority_support":priority,"entra_oidc":entra,"private_deployment":private_deployment,"policy_management":key!=&"free"}})
-    }).collect::<Vec<_>>();
-    Json(json!({"currency":"usd","billing_interval":"month","provider":"paystack","plans":plans})).into_response()
-}
-
 pub(crate) async fn entitlements(State(s): State<AppState>, headers: HeaderMap) -> Response {
     let ctx = match authenticate(&s, &headers).await {
         Ok(v) => v,
