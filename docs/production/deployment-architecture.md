@@ -11,7 +11,7 @@ Use the following first deployment path to preserve the existing React frontend 
 - **Database:** a separate managed PostgreSQL project, with TLS, access restrictions, automated recovery capability and a production connection string. Neon is one compatible option; verify its current restore window and usage costs before selecting a plan.
 - **Engine:** deploy separately to the customer/database environment where it can securely reach the protected PostgreSQL service. Do not treat the Control Plane host as the Engine's trust boundary.
 
-This is a recommendation, not a claim that these accounts or resources already exist. Railway's current Hobby plan has a $5/month base subscription and usage charges beyond included credit; Vercel Hobby is listed at $0. Neon usage depends on compute, storage and recovery retention. Review the providers' current prices and required payment method before enabling paid services.
+This is a recommendation, not a claim that these accounts or resources already exist. **Do not use Vercel Hobby for the commercial production SaaS:** Vercel's current Terms limit Hobby to personal or non-commercial use. Use Vercel Pro (currently listed at $20/month) or select a different host whose terms permit commercial deployment. Railway Hobby has a $5/month base subscription and usage charges beyond included credit; Neon usage depends on compute, storage and recovery retention. These are provider list prices checked on 9 October 2026, not a quote for your exact workload. Review current prices and required payment methods before enabling paid services.
 
 ## Why the API is proxied through the frontend origin
 
