@@ -2789,6 +2789,7 @@ async fn create_public_support_request(
                 &format!("[Agata Proxima] {topic}: {subject}"),
                 &staff_message,
                 "support",
+                &email,
             )
             .await
             {
