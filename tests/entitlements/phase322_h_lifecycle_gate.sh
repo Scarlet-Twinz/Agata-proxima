@@ -185,21 +185,21 @@ status_d=$(psql -v ON_ERROR_STOP=1 -d "${test_db}" -Atc "SELECT e.billing_status
 pass "payment-failure grace and non-renewing period end are reconciled correctly"
 
 # Event claiming: processed events are terminal, active claims are not stolen,
-# and stale processing claims can be retried after five minutes.
+# and stale processing claims can be retried after one minute.
 psql -v ON_ERROR_STOP=1 -d "${test_db}" <<'SQL'
 INSERT INTO billing_events(provider,provider_event_id,event_type,payload,status,attempt_count)
-VALUES ('lemonsqueezy','subscription_payment_success:42','charge.success','{}'::jsonb,'processed',1),
-       ('lemonsqueezy','subscription_payment_failed:43','invoice.payment_failed','{}'::jsonb,'processing',1),
-       ('lemonsqueezy','subscription_updated:44','subscription.enable','{}'::jsonb,'processing',1);
+VALUES ('lemonsqueezy','subscription_payment_success:42','subscription_payment_success','{}'::jsonb,'processed',1),
+       ('lemonsqueezy','subscription_payment_failed:43','subscription_payment_failed','{}'::jsonb,'processing',1),
+       ('lemonsqueezy','subscription_updated:44','subscription_updated','{}'::jsonb,'processing',1);
 UPDATE billing_events SET processing_started_at=now()
- WHERE provider_event_id='invoice.payment_failed:43';
+ WHERE provider_event_id='subscription_payment_failed:43';
 UPDATE billing_events SET processing_started_at=now()-interval '6 minutes'
- WHERE provider_event_id='subscription.enable:44';
+ WHERE provider_event_id='subscription_updated:44';
 INSERT INTO billing_events(provider,provider_event_id,event_type,payload,status)
-VALUES ('lemonsqueezy','subscription.enable:42','subscription.enable','{}'::jsonb,'processed');
+VALUES ('lemonsqueezy','subscription_updated:42','subscription.enable','{}'::jsonb,'processed');
 SQL
-processed_claim=$(psql -v ON_ERROR_STOP=1 -d "${test_db}" -Atqc "INSERT INTO billing_events(provider,provider_event_id,event_type,payload,status,processing_started_at,attempt_count) VALUES('lemonsqueezy','charge.success:42','charge.success','{}'::jsonb,'processing',now(),1) ON CONFLICT(provider,provider_event_id) DO UPDATE SET status='processing',processing_started_at=now(),attempt_count=billing_events.attempt_count+1,payload=EXCLUDED.payload,event_type=EXCLUDED.event_type WHERE billing_events.status NOT IN ('processed','ignored') AND (billing_events.processing_started_at IS NULL OR billing_events.processing_started_at < now()-interval '1 minute') RETURNING id")
-active_claim=$(psql -v ON_ERROR_STOP=1 -d "${test_db}" -Atqc "INSERT INTO billing_events(provider,provider_event_id,event_type,payload,status,processing_started_at,attempt_count) VALUES('lemonsqueezy','invoice.payment_failed:43','invoice.payment_failed','{}'::jsonb,'processing',now(),1) ON CONFLICT(provider,provider_event_id) DO UPDATE SET status='processing',processing_started_at=now(),attempt_count=billing_events.attempt_count+1,payload=EXCLUDED.payload,event_type=EXCLUDED.event_type WHERE billing_events.status NOT IN ('processed','ignored') AND (billing_events.processing_started_at IS NULL OR billing_events.processing_started_at < now()-interval '5 minutes') RETURNING id")
+processed_claim=$(psql -v ON_ERROR_STOP=1 -d "${test_db}" -Atqc "INSERT INTO billing_events(provider,provider_event_id,event_type,payload,status,processing_started_at,attempt_count) VALUES('lemonsqueezy','subscription_payment_success:42','charge.success','{}'::jsonb,'processing',now(),1) ON CONFLICT(provider,provider_event_id) DO UPDATE SET status='processing',processing_started_at=now(),attempt_count=billing_events.attempt_count+1,payload=EXCLUDED.payload,event_type=EXCLUDED.event_type WHERE billing_events.status NOT IN ('processed','ignored') AND (billing_events.processing_started_at IS NULL OR billing_events.processing_started_at < now()-interval '1 minute') RETURNING id")
+active_claim=$(psql -v ON_ERROR_STOP=1 -d "${test_db}" -Atqc "INSERT INTO billing_events(provider,provider_event_id,event_type,payload,status,processing_started_at,attempt_count) VALUES('lemonsqueezy','invoice.payment_failed:43','invoice.payment_failed','{}'::jsonb,'processing',now(),1) ON CONFLICT(provider,provider_event_id) DO UPDATE SET status='processing',processing_started_at=now(),attempt_count=billing_events.attempt_count+1,payload=EXCLUDED.payload,event_type=EXCLUDED.event_type WHERE billing_events.status NOT IN ('processed','ignored') AND (billing_events.processing_started_at IS NULL OR billing_events.processing_started_at < now()-interval '1 minute') RETURNING id")
 stale_claim=$(psql -v ON_ERROR_STOP=1 -d "${test_db}" -Atqc "INSERT INTO billing_events(provider,provider_event_id,event_type,payload,status,processing_started_at,attempt_count) VALUES('lemonsqueezy','subscription.enable:44','subscription.enable','{}'::jsonb,'processing',now(),1) ON CONFLICT(provider,provider_event_id) DO UPDATE SET status='processing',processing_started_at=now(),attempt_count=billing_events.attempt_count+1,payload=EXCLUDED.payload,event_type=EXCLUDED.event_type WHERE billing_events.status NOT IN ('processed','ignored') AND (billing_events.processing_started_at IS NULL OR billing_events.processing_started_at < now()-interval '5 minutes') RETURNING id")
 [[ -z "$processed_claim" ]] || fail "processed webhook event was claimed again"
 [[ -z "$active_claim" ]] || fail "recent in-progress webhook event was claimed concurrently"
