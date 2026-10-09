@@ -33,25 +33,25 @@ The fundamental Proxima Engine security boundary is available on every plan. Pri
 
 ### Free
 
-New organizations start on Free. No Paystack subscription is required.
+New organizations start on Free. No Lemon Squeezy subscription is required.
 
 ### Paid subscriptions
 
-Paystack is the billing source of truth for paid subscriptions. The Control Plane stores a normalized billing state and derives the organization entitlement record from the verified Paystack plan code.
+Lemon Squeezy is the billing source of truth for paid subscriptions. The Control Plane stores a normalized billing state and derives the organization entitlement record from the verified Lemon Squeezy plan code.
 
-Only these environment-configured Paystack plan codes are accepted:
+Only these environment-configured Lemon Squeezy plan codes are accepted:
 
-- `AGATA_PAYSTACK_STARTER_PLAN_CODE`
-- `AGATA_PAYSTACK_GROWTH_PLAN_CODE`
-- `AGATA_PAYSTACK_SCALE_PLAN_CODE`
+- `LEMONSQUEEZY_STARTER_VARIANT_ID`
+- `LEMONSQUEEZY_GROWTH_VARIANT_ID`
+- `LEMONSQUEEZY_SCALE_VARIANT_ID`
 
 A checkout request containing a plan code that is not one of those three is rejected.
 
 ### Subscription lifecycle
 
-- Checkout creates a Paystack subscription.
-- Paystack webhook signatures are verified before processing.
-- Paystack event IDs are idempotent.
+- Checkout creates a Lemon Squeezy subscription.
+- Lemon Squeezy webhook signatures are verified before processing.
+- Lemon Squeezy event IDs are idempotent.
 - Subscription create/update events set the plan from the verified Agata plan code.
 - Subscription deletion returns the organization to Free.
 - Payment failure marks the billing state `past_due`; the organization retains its plan during the payment-recovery period.
@@ -68,7 +68,7 @@ Starter -> Growth -> Scale
 
 by editing a frontend request.
 
-The backend maps the Paystack plan code to the corresponding plan, and the database stores the resulting entitlement.
+The backend maps the Lemon Squeezy plan code to the corresponding plan, and the database stores the resulting entitlement.
 
 The Engine's tenant-isolation enforcement remains independent of this billing state.
 
