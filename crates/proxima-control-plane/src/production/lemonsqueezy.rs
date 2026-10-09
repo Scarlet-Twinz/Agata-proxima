@@ -122,7 +122,12 @@ pub(crate) async fn plans() -> Response {
     let catalog = [("free","Free",0_i32,"Evaluation and small proofs of concept"),("starter","Starter",149_i32,"First production SaaS deployments"),("growth","Growth",499_i32,"Multi-tenant production workloads"),("scale","Scale",1199_i32,"Larger fleets and security operations"),("enterprise","Enterprise",0_i32,"Contracted enterprise deployments")];
     let plans = catalog.iter().map(|(key,name,monthly_usd,description)| {
         let (nodes,tenants,environments,retention,advanced,fleet,priority,entra,private_deployment)=super::plan_limits(key);
-        json!({"key":key,"name":name,"monthly_usd":monthly_usd,"description":description,"provider":"lemonsqueezy","variant_id":configured_variant(key),"checkout_available":configured() && ["starter","growth","scale"].contains(key),"limits":{"nodes":nodes,"tenants":tenants,"environments":environments,"audit_retention_days":retention},"support_level":super::plan_support_level(key),"features":{"advanced_verification":advanced,"fleet_controls":fleet,"priority_support":priority,"entra_oidc":entra,"private_deployment":private_deployment,"policy_management":key!=&"free"}})
+        let integrations=super::plan_integration_limit(key);
+        let verifications=super::plan_verification_limit(key);
+        let team_seats=super::plan_team_seat_limit(key);
+        let api_keys=super::plan_api_key_limit(key);
+        let api_requests=super::plan_api_requests_per_minute(key);
+        json!({"key":key,"name":name,"monthly_usd":monthly_usd,"description":description,"provider":"lemonsqueezy","variant_id":configured_variant(key),"checkout_available":configured() && ["starter","growth","scale"].contains(key),"limits":{"nodes":nodes,"tenants":tenants,"environments":environments,"integrations":integrations,"verifications_per_month":verifications,"team_seats":team_seats,"api_keys":api_keys,"api_requests_per_minute":api_requests,"audit_retention_days":retention},"support_level":super::plan_support_level(key),"features":{"advanced_verification":advanced,"fleet_controls":fleet,"priority_support":priority,"entra_oidc":entra,"private_deployment":private_deployment,"policy_management":key!="free"}})
     }).collect::<Vec<_>>();
     Json(json!({"currency":"usd","billing_interval":"month","provider":"lemonsqueezy","plans":plans})).into_response()
 }
