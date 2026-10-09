@@ -53,7 +53,7 @@ Pricing is separate from entitlement limits. A plan code received from a browser
 7. Feature entitlements, including identity and private deployment.
 8. Support level and any contract-specific SLA.
 
-The initial node/tenant/environment and selected feature checks were only a foundation. The completed Phase 3.22-A–H repository work now supplies server-side enforcement and targeted acceptance gates for all eight dimensions; the passing repository gates do not substitute for live production-provider acceptance.
+The initial node/tenant/environment and selected feature checks were only a foundation. The completed Phase 3.22-A–H repository work now supplies a server-side enforcement point and tests for each of the eight dimensions, with targeted acceptance gates; the passing repository gates do not substitute for live production-provider acceptance.
 
 ## Lifecycle rules
 
