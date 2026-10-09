@@ -95,7 +95,7 @@ pub(crate) async fn checkout(State(s):State<AppState>,headers:HeaderMap,Json(inp
     let body:Value=match response.json().await {Ok(v)=>v,Err(e)=>return external_error(e)};
     let url=body.pointer("/data/attributes/url").and_then(Value::as_str).unwrap_or("");
     if url.is_empty() || !url.starts_with("https://") {return service_unavailable("Lemon Squeezy did not return a secure checkout URL.");}
-    let reference=body.pointer("/data/id").and_then(Value::as_str).unwrap_or_else(||"").to_string();
+    let reference=body.pointer("/data/id").and_then(Value::as_str).unwrap_or("").to_string();
     if reference.is_empty(){return service_unavailable("Lemon Squeezy did not return a checkout identifier.");}
     if let Err(e)=sqlx::query("INSERT INTO billing_transactions(organization_id,provider,reference,plan_key,plan_code,currency,status,metadata,payload,created_at,updated_at) VALUES($1,'lemonsqueezy',$2,$3,$4,'USD','initialized',$5,$6,now(),now()) ON CONFLICT(provider,reference) DO NOTHING")
         .bind(ctx.organization_id).bind(&reference).bind(plan).bind(&variant).bind(json!({"organization_id":ctx.organization_id.to_string(),"plan":plan})).bind(&body).execute(&s.db).await {return db_error(e);}
@@ -171,6 +171,15 @@ pub(crate) async fn webhook(State(s):State<AppState>,headers:HeaderMap,body:Stri
             if matches!(effective_status,"active") {if let Err(e)=apply_entitlements(&s.db,org,plan).await{return db_error(e);}}
             else if let Err(e)=sqlx::query("UPDATE organization_entitlements SET billing_status=$1,billing_grace_until=CASE WHEN $1='past_due' THEN now()+interval '7 days' ELSE NULL END,updated_at=now() WHERE organization_id=$2").bind(effective_status).bind(org).execute(&s.db).await{return db_error(e);}
             if let Err(e)=sqlx::query("UPDATE billing_transactions SET status=CASE WHEN $1='subscription_payment_success' THEN 'success' WHEN $1='subscription_payment_failed' THEN 'failed' ELSE status END,payload=$2,updated_at=now() WHERE provider='lemonsqueezy' AND organization_id=$3 AND plan_key=$4 AND status='initialized'").bind(event_type).bind(&event).bind(org).bind(plan).execute(&s.db).await{return db_error(e);}
+            let (title, details) = match event_type {
+                "subscription_payment_success" => ("Subscription payment received", "Your Lemon Squeezy subscription payment was received and your plan is active."),
+                "subscription_payment_failed" => ("Subscription payment needs attention", "A Lemon Squeezy subscription payment failed. Review your payment method to avoid interruption."),
+                "subscription_cancelled" => ("Subscription cancelled", "Your Lemon Squeezy subscription was cancelled. Review your billing page for the current access period."),
+                "subscription_expired" => ("Subscription expired", "Your Lemon Squeezy subscription has expired."),
+                "subscription_created" => ("Subscription activated", "Your Lemon Squeezy subscription is active."),
+                _ => ("Subscription updated", "Your Lemon Squeezy subscription details have changed."),
+            };
+            super::send_billing_notice(&s.db, org, &key, title, details).await;
         }
     }
     if let Err(e)=sqlx::query("UPDATE billing_events SET status='processed',processed_at=now(),processing_started_at=NULL WHERE provider='lemonsqueezy' AND provider_event_id=$1").bind(&key).execute(&s.db).await{return db_error(e);}
