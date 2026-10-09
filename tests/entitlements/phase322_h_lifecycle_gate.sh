@@ -218,6 +218,8 @@ grep -Fq 'paystack_provider_plan_matches_catalog' crates/proxima-control-plane/s
 grep -Fq 'paystack_plan_configuration_mismatch' crates/proxima-control-plane/src/production.rs || fail "checkout does not fail closed on provider plan mismatch"
 grep -Fq 'paystack_success_payload_must_match_usd_amount_and_plan' crates/proxima-control-plane/src/production.rs || fail "USD amount/currency regression tests are missing"
 grep -Fq 'paystack_provider_plan_must_match_catalog_before_checkout' crates/proxima-control-plane/src/production.rs || fail "provider plan configuration regression tests are missing"
+grep -Fq 'configured_paystack_plan_codes_unique' crates/proxima-control-plane/src/production.rs || fail "missing or duplicate Paystack plan codes are not rejected"
+grep -Fq 'paystack_plan_codes_must_be_present_and_unique' crates/proxima-control-plane/src/production.rs || fail "plan-code uniqueness regression tests are missing"
 grep -Fq 'unknown_local_transaction' crates/proxima-control-plane/src/production.rs || fail "verification does not require a server-stored transaction"
 grep -Fq 'billing_grace_until=COALESCE(billing_grace_until,now()+interval' crates/proxima-control-plane/src/production.rs || fail "payment failure does not establish a fixed grace window"
 grep -Fq 'mark_paystack_event_ignored' crates/proxima-control-plane/src/production.rs || fail "unknown webhook states are not handled safely"
