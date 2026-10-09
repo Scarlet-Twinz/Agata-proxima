@@ -205,6 +205,21 @@ pub(crate) async fn webhook(State(s):State<AppState>,headers:HeaderMap,body:Stri
     let customer_id=attrs.get("customer_id").and_then(Value::as_i64).map(|v|v.to_string());
     let variant_id=attrs.get("variant_id").and_then(Value::as_i64).map(|v|v.to_string());
     let plan=variant_id.as_deref().and_then(plan_for_variant);
+    let expected_store=env::var("LEMONSQUEEZY_STORE_ID").unwrap_or_default();
+    let received_store=attrs.get("store_id").and_then(Value::as_i64).map(|v|v.to_string()).unwrap_or_default();
+    let expected_test_mode=env::var("LEMONSQUEEZY_TEST_MODE").map(|v|v.eq_ignore_ascii_case("true")).unwrap_or(true);
+    let received_test_mode=attrs.get("test_mode").and_then(Value::as_bool);
+    let custom_plan=custom.get("plan").and_then(Value::as_str);
+    if received_store != expected_store || received_test_mode != Some(expected_test_mode) {
+        let _=sqlx::query("UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='lemonsqueezy' AND provider_event_id=$1").bind(&key).execute(&s.db).await;
+        return Json(json!({"received":true,"ignored":"store_or_mode_mismatch"})).into_response();
+    }
+    if let (Some(expected),Some(received))=(plan,custom_plan) {
+        if expected != received {
+            let _=sqlx::query("UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='lemonsqueezy' AND provider_event_id=$1").bind(&key).execute(&s.db).await;
+            return Json(json!({"received":true,"ignored":"checkout_plan_variant_mismatch"})).into_response();
+        }
+    }
     let existing_org=if org_from_custom.is_none(){match sqlx::query("SELECT organization_id FROM billing_accounts WHERE provider='lemonsqueezy' AND lemonsqueezy_subscription_id=$1").bind(subscription_id).fetch_optional(&s.db).await{Ok(v)=>v.map(|r|r.get::<Uuid,_>("organization_id")),Err(e)=>return db_error(e)}}else{None};
     let org=match org_from_custom.or(existing_org){Some(v)=>v,None=>{
         let _=sqlx::query("UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='lemonsqueezy' AND provider_event_id=$1").bind(&key).execute(&s.db).await;
