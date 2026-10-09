@@ -16,7 +16,7 @@ Required components:
 6. **Monitoring and alerting** for liveness, readiness, database failures, webhook failures and email delivery.
 7. **Recovery path** that can restore a backup to an isolated database and redeploy a previous known-good image.
 
-The frontend and backend may be hosted separately. The exact provider and production database must be selected and verified before deployment; do not pretend a local database or repository URL is a hosted production service.
+The frontend and backend may be hosted separately. The exact provider and production database must be selected and verified before deployment; do not pretend a local database or repository URL is a hosted production service. The browser-facing app origin and Control Plane API/OIDC callback must be same-origin (normally via a reverse proxy) so the session cookie is set for the origin that serves the React frontend.
 
 ## 2. Local vs hosted database
 
