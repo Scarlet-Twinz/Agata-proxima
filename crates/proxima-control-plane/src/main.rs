@@ -2666,14 +2666,23 @@ async fn create_public_support_request(
     if !valid_public_support_email(&email) {
         return bad("Enter a valid email address.");
     }
-    if name.len() > 120 {
-        return bad("Name must be 120 characters or fewer.");
+    if name.len() > 120 || name.chars().any(char::is_control) {
+        return bad("Name must be 120 characters or fewer and cannot contain control characters.");
     }
-    if subject.chars().count() < 4 || subject.chars().count() > 200 {
-        return bad("Subject must be between 4 and 200 characters.");
+    if subject.chars().count() < 4
+        || subject.chars().count() > 200
+        || subject.chars().any(char::is_control)
+    {
+        return bad("Subject must be between 4 and 200 characters and cannot contain line breaks.");
     }
     if message.chars().count() < 10 || message.chars().count() > 10_000 {
         return bad("Message must be between 10 and 10,000 characters.");
+    }
+    if message
+        .chars()
+        .any(|character| character.is_control() && !matches!(character, '\n' | '\r' | '\t'))
+    {
+        return bad("Message contains unsupported control characters.");
     }
     if !valid_public_support_topic(&topic) {
         return bad("Choose a valid support topic.");
@@ -2759,6 +2768,9 @@ async fn create_public_support_request(
 
     let mut support_email_status = "not_configured";
     match env::var("AGATA_SUPPORT_INBOX_EMAIL") {
+        Ok(destination) if destination.trim().is_empty() => {
+            tracing::warn!(request_id = %request_id, "AGATA_SUPPORT_INBOX_EMAIL is empty; public request is stored but staff notification was not sent");
+        }
         Ok(destination) if valid_public_support_email(destination.trim()) => {
             let public_base = env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_default();
             let support_link = if public_base.trim().is_empty() {
