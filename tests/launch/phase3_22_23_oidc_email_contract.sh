@@ -39,7 +39,14 @@ for file in "$env_example" "$control_env"; do
 done
 
 # No secret or personal support destination may be committed as a default.
-! grep -Eq 'PROXIMA_OIDC_CLIENT_SECRET=(?!$).+' "$env_example" 2>/dev/null || {
+! grep -Eq '^PROXIMA_OIDC_CLIENT_SECRET=.+
+  echo "ERROR: .env.example must not contain a real Entra client secret" >&2; exit 1;
+}
+! grep -q 'anthonyemmanuella297@gmail.com' "$env_example"
+! grep -q 'anthonyemmanuella297@gmail.com' "$control_env"
+
+echo "PASS: Phase 3.22/3.23 Entra OIDC and Resend configuration contract"
+ "$env_example" || {
   echo "ERROR: .env.example must not contain a real Entra client secret" >&2; exit 1;
 }
 ! grep -q 'anthonyemmanuella297@gmail.com' "$env_example"
