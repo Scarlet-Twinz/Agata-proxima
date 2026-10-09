@@ -838,6 +838,9 @@ pub(crate) async fn entra_start(
     } else {
         return bad("organization_slug is required.");
     };
+    if let Err(response) = require_feature(&s.db, organization_id, "entra_oidc").await {
+        return response;
+    }
     let connection = match sqlx::query(
         "SELECT tenant_id,issuer,client_id,jit_provisioning FROM organization_oidc_connections
          WHERE organization_id=$1 AND provider='microsoft-entra' AND enabled=true"
@@ -896,6 +899,9 @@ pub(crate) async fn entra_callback(
     let organization_id: Uuid = state_row.get("organization_id");
     let expected_nonce: String = state_row.get("nonce");
     let _ = sqlx::query("DELETE FROM oidc_login_states WHERE state_hash=$1").bind(&state_hash).execute(&s.db).await;
+    if let Err(response) = require_feature(&s.db, organization_id, "entra_oidc").await {
+        return response;
+    }
 
     let connection = match sqlx::query(
         "SELECT tenant_id,issuer,client_id FROM organization_oidc_connections
