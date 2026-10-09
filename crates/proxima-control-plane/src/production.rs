@@ -1057,6 +1057,7 @@ pub(crate) async fn checkout(State(s):State<AppState>,headers:HeaderMap,Json(inp
  let store=match env::var("LEMON_SQUEEZY_STORE_ID"){Ok(v)if !v.trim().is_empty()&&v.chars().all(|c|c.is_ascii_digit())=>v,_=>return service_unavailable("Lemon Squeezy store ID is not configured.")};
  if !configured_lemonsqueezy_variants_unique(){return service_unavailable("Lemon Squeezy monthly variant IDs must be configured and unique.");}
  let plan=match input.price_id.as_deref(){Some(v)if ["starter","growth","scale"].contains(&v.trim())=>v.trim(),Some(v)=>match plan_for_code(Some(v.trim())){Some(p)=>p,None=>return bad("Select a valid Agata Proxima plan.")},None=>return bad("Select a plan before checkout.")};
+ if plan == "free" || plan == "enterprise" { return bad("Free and Enterprise plans do not use self-service checkout."); }
  let variant=lemon_variant_id(plan).unwrap();
  let client=Client::new();
  let store_response=match client.get(format!("https://api.lemonsqueezy.com/v1/stores/{store}")).bearer_auth(&key).header("Accept","application/vnd.api+json").send().await{Ok(v)=>v,Err(e)=>return external_error(e)};
