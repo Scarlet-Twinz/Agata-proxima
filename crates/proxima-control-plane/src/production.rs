@@ -1483,7 +1483,7 @@ pub(crate) async fn paystack_webhook(
             if let Some(reference) = reference {
                 let _ = sqlx::query(
                     "UPDATE billing_transactions SET status='failed',payload=$1,updated_at=now()
-                      WHERE provider='paystack' AND reference=$2 AND organization_id=$3",
+                      WHERE provider='paystack' AND reference=$2 AND organization_id=$3 AND status <> 'success'",
                 )
                 .bind(&data)
                 .bind(reference)
@@ -1555,7 +1555,7 @@ pub(crate) async fn paystack_webhook(
                 .or_else(|| data.pointer("/transaction/reference").and_then(Value::as_str));
             if let Some(reference) = refund_reference {
                 if let Err(e) = sqlx::query(
-                    "UPDATE billing_transactions SET refund_status=$1,payload=$2,updated_at=now()
+                    "UPDATE billing_transactions SET refund_status=$1,refund_payload=$2,updated_at=now()
                       WHERE provider='paystack' AND reference=$3 AND organization_id=$4",
                 )
                 .bind(event_type.trim_start_matches("refund."))
