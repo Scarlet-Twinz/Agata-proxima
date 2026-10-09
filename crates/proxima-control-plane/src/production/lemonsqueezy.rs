@@ -1,5 +1,5 @@
 use super::{apply_entitlements, authenticate, bad, db_error, external_error, require_admin, service_unavailable, AppState};
-use axum::{extract::{Query, State}, http::{HeaderMap, StatusCode}, response::{Html, IntoResponse, Response}, Json};
+use axum::{extract::{Query, State}, http::{HeaderMap, StatusCode}, response::{IntoResponse, Response}, Json};
 use hmac::{Hmac, Mac};
 use reqwest::Client;
 use serde_json::{json, Value};
