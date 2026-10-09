@@ -49,7 +49,7 @@ export function UsageGuide() {
                   </section>
                 ))}
                 <h2 id="billing">Plans, quotas and billing</h2>
-                <p>The canonical monthly prices are Starter $149, Growth $499 and Scale $1,199, with Free at $0 and Enterprise custom. Paid checkout uses Paystack USD plans. Confirm the account, plan codes, exact prices, USD settlement and signed webhook round trip before enabling live billing.</p>
+                <p>The canonical monthly prices are Starter $149, Growth $499 and Scale $1,199, with Free at $0 and Enterprise custom. Paid checkout uses Paystack USD plans. The backend checks each configured plan code, amount and monthly interval before checkout, then validates the transaction and signed webhook. Confirm USD settlement and the real payment round trip before enabling live billing.</p>
                 <ul>
                   <li>Free: 1 node, 3 tenants, 1 environment, 1 active integration, 100 verifications per month and 1 team seat.</li>
                   <li>Starter: 2 nodes, 25 tenants, 2 environments, 5 integrations, 1,000 verifications per month and 5 seats.</li>
