@@ -86,47 +86,57 @@ fn provider_error(status: reqwest::StatusCode, body: &str) -> Response {
 
 pub(crate) async fn plans() -> Response {
     let catalog = [
-        (
-            "free",
-            "Free",
-            0_i32,
-            "Evaluation and small proofs of concept",
-        ),
-        (
-            "starter",
-            "Starter",
-            149_i32,
-            "First production SaaS deployments",
-        ),
-        (
-            "growth",
-            "Growth",
-            499_i32,
-            "Multi-tenant production workloads",
-        ),
-        (
-            "scale",
-            "Scale",
-            1199_i32,
-            "Larger fleets and security operations",
-        ),
-        (
-            "enterprise",
-            "Enterprise",
-            0_i32,
-            "Contracted enterprise deployments",
-        ),
+        ("free", "Free", 0_i32, "Evaluation and small proofs of concept"),
+        ("starter", "Starter", 149_i32, "First production SaaS deployments"),
+        ("growth", "Growth", 499_i32, "Multi-tenant production workloads"),
+        ("scale", "Scale", 1199_i32, "Larger fleets and security operations"),
+        ("enterprise", "Enterprise", 0_i32, "Contracted enterprise deployments"),
     ];
     let variants_ok = configured_variants_unique();
     let plans = catalog
         .iter()
         .map(|(key, name, monthly_usd, description)| {
+            let plan_code = variant_key(key).and_then(setting);
+            let (nodes, tenants, environments, retention, advanced, fleet, priority, entra, private_deployment) =
+                production::plan_limits(key);
+            let integrations = production::plan_integration_limit(key);
+            let verifications = production::plan_verification_limit(key);
+            let team_seats = production::plan_team_seat_limit(key);
+            let api_keys = production::plan_api_key_limit(key);
+            let api_requests = production::plan_api_requests_per_minute(key);
+            let support = production::plan_support_level(key);
             let checkout_available = ["starter", "growth", "scale"].contains(key)
                 && variants_ok
                 && setting("LEMONSQUEEZY_STORE_ID").is_some();
-            json!({"key":key,"name":name,"monthly_usd":monthly_usd,"description":description,
-            "provider":"lemonsqueezy","checkout_available":checkout_available,
-            "limits":{},"features":{}})
+            json!({
+                "key": key,
+                "name": name,
+                "monthly_usd": monthly_usd,
+                "description": description,
+                "provider": "lemonsqueezy",
+                "plan_code": plan_code,
+                "checkout_available": checkout_available,
+                "limits": {
+                    "nodes": nodes,
+                    "tenants": tenants,
+                    "environments": environments,
+                    "integrations": integrations,
+                    "verifications_per_month": verifications,
+                    "team_seats": team_seats,
+                    "api_keys": api_keys,
+                    "api_requests_per_minute": api_requests,
+                    "audit_retention_days": retention
+                },
+                "support_level": support,
+                "features": {
+                    "advanced_verification": advanced,
+                    "fleet_controls": fleet,
+                    "priority_support": priority,
+                    "entra_oidc": entra,
+                    "private_deployment": private_deployment,
+                    "policy_management": *key != "free"
+                }
+            })
         })
         .collect::<Vec<_>>();
     Json(json!({"currency":"usd","billing_interval":"month","provider":"lemonsqueezy","plans":plans})).into_response()
