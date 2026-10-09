@@ -520,6 +520,15 @@ pub(crate) async fn webhook(
             if let Err(e) = production::apply_entitlements(&s.db, org, plan).await {
                 return db_error(e);
             }
+            if let Err(e) = sqlx::query("UPDATE billing_transactions SET status='success',payload=$1,updated_at=now() WHERE id=(SELECT id FROM billing_transactions WHERE provider='lemonsqueezy' AND organization_id=$2 AND plan_key=$3 AND status='initialized' ORDER BY created_at DESC LIMIT 1)")
+                .bind(&event)
+                .bind(org)
+                .bind(plan)
+                .execute(&s.db)
+                .await
+            {
+                return db_error(e);
+            }
         }
         "subscription_cancelled" | "subscription_expired" => {
             if let Err(e)=sqlx::query("UPDATE billing_accounts SET status='canceled',cancel_at_period_end=false,updated_at=now() WHERE organization_id=$1 AND provider='lemonsqueezy'").bind(org).execute(&s.db).await{return db_error(e);}
