@@ -119,8 +119,7 @@ pub(crate) async fn webhook(State(s):State<AppState>,headers:HeaderMap,body:Stri
     let data=event.get("data").cloned().unwrap_or(Value::Null);
     let subscription_id=data.get("id").and_then(Value::as_str).unwrap_or("");
     if event_type.is_empty() || subscription_id.is_empty(){return StatusCode::BAD_REQUEST.into_response();}
-    let key=event.pointer("/meta/webhook_id").and_then(Value::as_str).map(str::to_owned)
-        .unwrap_or_else(||format!("{}:{}",event_type,hex::encode(Sha256::digest(body.as_bytes()))));
+    let key=format!("{}:{}",event_type,hex::encode(Sha256::digest(body.as_bytes())));
     let claimed=match sqlx::query("INSERT INTO billing_events(provider,provider_event_id,event_type,payload,status,processing_started_at,attempt_count) VALUES('lemonsqueezy',$1,$2,$3,'processing',now(),1) ON CONFLICT(provider,provider_event_id) DO UPDATE SET status='processing',processing_started_at=now(),attempt_count=billing_events.attempt_count+1,payload=EXCLUDED.payload,event_type=EXCLUDED.event_type WHERE billing_events.status NOT IN ('processed','ignored') AND (billing_events.processing_started_at IS NULL OR billing_events.processing_started_at<now()-interval '5 minutes') RETURNING id")
         .bind(&key).bind(event_type).bind(&event).fetch_optional(&s.db).await {Ok(v)=>v.is_some(),Err(e)=>return db_error(e)};
     if !claimed{return Json(json!({"received":true,"duplicate":true})).into_response();}
@@ -144,7 +143,7 @@ pub(crate) async fn webhook(State(s):State<AppState>,headers:HeaderMap,body:Stri
     let ends=attrs.get("ends_at").and_then(Value::as_str).and_then(|v|chrono::DateTime::parse_from_rfc3339(v).ok()).map(|v|v.with_timezone(&chrono::Utc));
     let cancel=attrs.get("cancelled").and_then(Value::as_bool).unwrap_or(false) || event_type=="subscription_cancelled";
     let portal=attrs.pointer("/urls/customer_portal").and_then(Value::as_str);
-    let effective_status=match status {"active"|"on_trial"=>"active","past_due"|"unpaid"=>"past_due","cancelled"|"expired"=>"canceled",_=>if event_type=="subscription_payment_failed"{"past_due"}else{"active"}};
+    let effective_status=if event_type=="subscription_cancelled" || event_type=="subscription_expired" { "canceled" } else if event_type=="subscription_payment_failed" { "past_due" } else { match status {"active"|"on_trial"=>"active","past_due"|"unpaid"=>"past_due","cancelled"|"expired"=>"canceled",_=>"active"} };
     if let Some(plan)=plan {
         if matches!(event_type,"subscription_created"|"subscription_updated"|"subscription_resumed"|"subscription_cancelled"|"subscription_expired"|"subscription_paused"|"subscription_unpaused"|"subscription_payment_success"|"subscription_payment_failed") {
             if let Err(e)=sqlx::query("INSERT INTO billing_accounts(organization_id,provider,lemonsqueezy_customer_id,lemonsqueezy_subscription_id,lemonsqueezy_variant_id,lemonsqueezy_customer_portal_url,plan_key,status,current_period_end,cancel_at_period_end,updated_at) VALUES($1,'lemonsqueezy',$2,$3,$4,$5,$6,$7,$8,$9,now()) ON CONFLICT(organization_id) DO UPDATE SET provider='lemonsqueezy',lemonsqueezy_customer_id=COALESCE(EXCLUDED.lemonsqueezy_customer_id,billing_accounts.lemonsqueezy_customer_id),lemonsqueezy_subscription_id=EXCLUDED.lemonsqueezy_subscription_id,lemonsqueezy_variant_id=EXCLUDED.lemonsqueezy_variant_id,lemonsqueezy_customer_portal_url=COALESCE(EXCLUDED.lemonsqueezy_customer_portal_url,billing_accounts.lemonsqueezy_customer_portal_url),plan_key=EXCLUDED.plan_key,status=EXCLUDED.status,current_period_end=COALESCE(EXCLUDED.current_period_end,billing_accounts.current_period_end),cancel_at_period_end=EXCLUDED.cancel_at_period_end,updated_at=now()")
