@@ -96,6 +96,26 @@ fn paystack_plan_code(plan: &str) -> Option<String> {
     env::var(key).ok().filter(|v|!v.trim().is_empty())
 }
 
+fn paystack_plan_codes_unique(starter: Option<&str>, growth: Option<&str>, scale: Option<&str>) -> bool {
+    match (starter, growth, scale) {
+        (Some(starter), Some(growth), Some(scale)) =>
+            !starter.trim().is_empty()
+                && !growth.trim().is_empty()
+                && !scale.trim().is_empty()
+                && starter != growth
+                && starter != scale
+                && growth != scale,
+        _ => false,
+    }
+}
+
+fn configured_paystack_plan_codes_unique() -> bool {
+    let starter = paystack_plan_code("starter");
+    let growth = paystack_plan_code("growth");
+    let scale = paystack_plan_code("scale");
+    paystack_plan_codes_unique(starter.as_deref(), growth.as_deref(), scale.as_deref())
+}
+
 fn expected_paystack_amount_usd(plan: &str) -> Option<i64> {
     match plan {
         "starter" => Some(14_900),
@@ -618,7 +638,7 @@ pub(crate) async fn plans() -> Response {
         let api_keys = plan_api_key_limit(key);
         let api_requests = plan_api_requests_per_minute(key);
         let support = plan_support_level(key);
-        json!({"key":key,"name":name,"monthly_usd":monthly_usd,"description":description,"provider":"paystack","plan_code":plan_code,"checkout_available":key!=&"free"&&key!=&"enterprise"&&paystack_plan_code(key).is_some(),"limits":{"nodes":nodes,"tenants":tenants,"environments":environments,"integrations":integrations,"verifications_per_month":verifications,"team_seats":team_seats,"api_keys":api_keys,"api_requests_per_minute":api_requests,"audit_retention_days":retention},"support_level":support,"features":{"advanced_verification":advanced,"fleet_controls":fleet,"priority_support":priority,"entra_oidc":entra,"private_deployment":private_deployment,"policy_management":key!=&"free"}})
+        json!({"key":key,"name":name,"monthly_usd":monthly_usd,"description":description,"provider":"paystack","plan_code":plan_code,"checkout_available":key!=&"free"&&key!=&"enterprise"&&paystack_plan_code(key).is_some()&&configured_paystack_plan_codes_unique(),"limits":{"nodes":nodes,"tenants":tenants,"environments":environments,"integrations":integrations,"verifications_per_month":verifications,"team_seats":team_seats,"api_keys":api_keys,"api_requests_per_minute":api_requests,"audit_retention_days":retention},"support_level":support,"features":{"advanced_verification":advanced,"fleet_controls":fleet,"priority_support":priority,"entra_oidc":entra,"private_deployment":private_deployment,"policy_management":key!=&"free"}})
     }).collect::<Vec<_>>();
     Json(json!({"currency":"usd","billing_interval":"month","provider":"paystack","plans":plans})).into_response()
 }
@@ -1026,6 +1046,9 @@ pub(crate) async fn billing_status(State(s): State<AppState>, headers: HeaderMap
 pub(crate) async fn checkout(State(s):State<AppState>,headers:HeaderMap,Json(input):Json<CheckoutInput>)->Response{
     let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};if let Err(c)=require_admin(&ctx,&headers){return c.into_response();}
     let secret=match env::var("PAYSTACK_SECRET_KEY"){Ok(v) if !v.trim().is_empty()=>v,_=>return service_unavailable("Paystack secret is not configured.")};
+    if !configured_paystack_plan_codes_unique() {
+        return service_unavailable("Agata Proxima Paystack plan codes must all be configured and unique before checkout.");
+    }
     let plan_code=match input.price_id.as_deref().and_then(paystack_plan_code_for_input){Some(v)=>v,None=>return bad("Select an Agata Proxima plan before checkout.")};
     let plan=match plan_for_code(Some(&plan_code)){Some(v)=>v,None=>return (StatusCode::FORBIDDEN,Json(json!({"ok":false,"error":"invalid_agata_plan"}))).into_response()};
     if plan == "free" || plan == "enterprise" {
@@ -2135,7 +2158,7 @@ pub(crate) async fn purge_expired_audit_events(db: &sqlx::PgPool) -> Result<i64,
 pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
     let db_ok=sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
     let paystack=env::var("PAYSTACK_SECRET_KEY").map(|v|!v.trim().is_empty()).unwrap_or(false);
-    let plans=["AGATA_PAYSTACK_STARTER_PLAN_CODE","AGATA_PAYSTACK_GROWTH_PLAN_CODE","AGATA_PAYSTACK_SCALE_PLAN_CODE"].iter().all(|k|env::var(k).map(|v|!v.trim().is_empty()).unwrap_or(false));
+    let plans=configured_paystack_plan_codes_unique();
     let resend=env::var("RESEND_API_KEY").map(|v|!v.is_empty()).unwrap_or(false);let from=env::var("RESEND_FROM_EMAIL").map(|v|!v.is_empty()).unwrap_or(false);let base=env::var("AGATA_PUBLIC_BASE_URL").map(|v|!v.is_empty()).unwrap_or(false);let oidc=env::var("PROXIMA_OIDC_CLIENT_ID").map(|v|!v.is_empty()).unwrap_or(false)&&env::var("PROXIMA_OIDC_CLIENT_SECRET").map(|v|!v.is_empty()).unwrap_or(false);let all=db_ok&&paystack&&plans&&resend&&from&&base&&oidc;
     Json(json!({"status":if all{"ready"}else{"needs_configuration"},"checks":{"database":db_ok,"paystack_secret":paystack,"paystack_plans":plans,"resend_api_key":resend,"resend_from":from,"public_base_url":base,"oidc":oidc,"engine_remains_authoritative":true}})).into_response()
 }
@@ -2252,6 +2275,14 @@ mod tests {
     fn paystack_signature_round_trip(){let payload=r#"{"event":"charge.success","data":{"reference":"ref_test"}}"#;let secret="sk_test";let mut mac=HmacSha512::new_from_slice(secret.as_bytes()).unwrap();mac.update(payload.as_bytes());let signature=hex::encode(mac.finalize().into_bytes());assert!(verify_paystack_signature(payload,&signature,secret));}
     #[test]
     fn invalid_paystack_signature_is_rejected(){assert!(!verify_paystack_signature("payload","invalid","sk_test"));}
+
+    #[test]
+    fn paystack_plan_codes_must_be_present_and_unique() {
+        assert!(super::paystack_plan_codes_unique(Some("PLN_starter"), Some("PLN_growth"), Some("PLN_scale")));
+        assert!(!super::paystack_plan_codes_unique(Some("PLN_same"), Some("PLN_same"), Some("PLN_scale")));
+        assert!(!super::paystack_plan_codes_unique(Some("PLN_starter"), None, Some("PLN_scale")));
+        assert!(!super::paystack_plan_codes_unique(Some(""), Some("PLN_growth"), Some("PLN_scale")));
+    }
 
     #[test]
     fn canonical_paystack_usd_amounts_are_exact_minor_units() {
