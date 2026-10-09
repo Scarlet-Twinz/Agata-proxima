@@ -24,6 +24,7 @@ fn plan_for_variant(id: &str) -> Option<&'static str> {
 }
 fn configured() -> bool {
     env::var("LEMONSQUEEZY_API_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false)
+        && env::var("LEMONSQUEEZY_WEBHOOK_SECRET").map(|v| !v.trim().is_empty()).unwrap_or(false)
         && env::var("LEMONSQUEEZY_STORE_ID").map(|v| !v.trim().is_empty()).unwrap_or(false)
         && ["starter","growth","scale"].iter().all(|p| configured_variant(p).is_some())
         && {
