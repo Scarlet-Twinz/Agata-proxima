@@ -2760,7 +2760,7 @@ async fn create_public_support_request(
             "SUBJECT": escape_template_value(&subject),
             "REQUEST_ID": request_id.to_string()
         }),
-        "no-reply",
+        "support",
     )
     .await
     {
