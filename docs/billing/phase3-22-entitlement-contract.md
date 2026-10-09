@@ -98,12 +98,23 @@ The initial node/tenant/environment and selected feature checks were only a foun
 
 ## Remaining work after 3.22-A–H
 
-These are external activation or separate product-readiness gates, not unfinished A–H repository acceptance gates:
+These are production activation or separate product-readiness gates, not unfinished A–H repository acceptance gates.
 
-1. **Paystack live activation:** verify account plan amounts and plan codes; configure production credentials and the webhook endpoint in the deployment secret store; perform a real payment round trip. Never place secret values in source control or chat.
-2. **Production database rollout:** apply the migrations in order, confirm schema state, and run deployed smoke/rollback checks without destructively resetting customer data.
-3. **Microsoft Entra SSO:** not end-to-end accepted yet. The repository has OIDC groundwork, but production app registration, the exact HTTPS callback, credentials, organization mapping and a real Entra sign-in test remain separate gates.
-4. **Usage documentation:** finish `/docs/usage` as a practical guide with prerequisites, setup, first workspace, nodes/tenants/environments, verification, integrations, seats/invitations, billing, API use and troubleshooting—not just a placeholder page.
-5. **Hosted-service readiness:** verify deployment automation, secret management, observability/alerts, backup and restore, load testing, and external SaaS acceptance in the actual target environment.
+### Repository work completed after the A–H gates
 
-The public pricing and server catalogue are now aligned to **Free $0, Starter $149/month, Growth $499/month, Scale $1,199/month, Enterprise custom**. The annual figures in the proposal are a derived ten-month billing schedule and must not be treated as active Paystack plans unless separately configured and verified.
+- The practical guide exists at `docs/usage.md` and is published at `/docs/usage`.
+- The login page now has an organization-slug-based Microsoft Entra SSO start flow, and organization owners/admins can configure the expected Entra tenant ID in Settings.
+- Paystack checkout preflights the configured provider plans for exact plan code, USD currency, monthly interval and amount. Transaction verification and signed success webhooks must match the expected plan and amount before paid entitlements are granted.
+- Production runbooks, on-demand database backup/health scripts, a production readiness endpoint and a scheduled GitHub Actions liveness probe are in the repository.
+- The repository's Rust and frontend workflows have passed for the usage guide, Paystack acceptance changes and SSO UI integration. The latest main-branch Phase 58–59 launch workflow should still be checked after its run completes.
+
+### External tasks that remain
+
+1. **Paystack live activation:** verify business approval, international payment enablement and (if USD settlement is required) the verified payout account; configure production credentials and the webhook endpoint in the deployment secret store; confirm the actual three plan codes; perform a real payment round trip, renewal failure/recovery and cancellation tests. Never place secret values in source control or chat.
+2. **Production hosting and database rollout:** provision the actual public HTTPS frontend/Control Plane and a separate managed PostgreSQL database; confirm the deployed service is not using local Compose or the developer laptop; apply migrations 0001–0015 in order and run deployed smoke/rollback checks without destructively resetting customer data.
+3. **Microsoft Entra SSO acceptance:** the repository UI start flow and organization tenant mapping form now exist, but production SSO is not yet accepted. Create the multitenant Entra app registration, add the exact public HTTPS callback, securely configure the client ID/secret and public base URL, then test organization mapping, session creation and audit events end to end.
+4. **Production email:** verify the Agata-owned Resend sending domain, configure the API key and sender in the deployment secret store, and test verification, reset and invitation emails.
+5. **Operational readiness:** configure the production URL secret for the scheduled GitHub Actions smoke probe; run the manual readiness workflow; enable managed database backups/PITR, restore to an isolated database and record measured RPO/RTO; configure database/API/payment/email/backup alerts and test rollback.
+6. **Runtime security and launch acceptance:** run the external three-tenant SaaS acceptance harness against the deployed service, load/performance tests and an independent security assessment. Complete incident ownership and status-page readiness before launch.
+
+The public pricing and server catalogue are aligned to **Free $0, Starter $149/month, Growth $499/month, Scale $1,199/month, Enterprise custom**. Annual figures in the proposal are a derived ten-month billing schedule and must not be treated as active Paystack plans unless separately configured and verified.
