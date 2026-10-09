@@ -38,6 +38,10 @@ for file in "$env_example" "$control_env"; do
 done
 
 ! grep -q 'webhooks/paystack' "$main"
+! grep -qi 'paystack\|stripe' "$production"
+! grep -qi 'paystack\|stripe' docs/developer-guide.md
+! grep -qi 'paystack\|stripe' docs/production/deployment-architecture.md
+! grep -qi 'paystack\|stripe' docs/production/operational-readiness-runbook.md
 ! grep -q 'PAYSTACK_SECRET_KEY' "$env_example"
 ! grep -q 'AGATA_PAYSTACK_' "$env_example"
 ! grep -q 'STRIPE_' "$env_example"
