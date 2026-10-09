@@ -1,0 +1,55 @@
+# Agata Proxima — Remaining Launch Work Map
+
+This map follows the completed Phase 3.22-A–H repository gates. It separates code work that can be completed in GitHub from tasks that require the founder's Paystack/Entra accounts or a real production environment. It does not mark an external task complete because documentation or code exists.
+
+## Completed repository work
+
+- [x] Restore canonical monthly prices: Free $0, Starter $149, Growth $499, Scale $1,199, Enterprise custom.
+- [x] Implement Phase 3.22-A–H entitlement controls and acceptance gates.
+- [x] Add Paystack provider-plan preflight: plan code, USD currency, monthly interval and exact amount must match before checkout starts.
+- [x] Verify transaction amount, currency, organization and plan code before paid entitlements are applied.
+- [x] Add regression tests for wrong amount/currency/provider plan and prevent the callback from displaying successful billing completion unless the local transaction is verified.
+- [x] Add the practical usage guide at `docs/usage.md` and public route `/docs/usage`.
+- [x] Add production operations guidance and on-demand health/backup scripts.
+- [x] Update the OpenAPI contract and developer billing documentation to Paystack.
+
+The above items remain subject to the pull request's full CI acceptance before they are merged.
+
+## Remaining work and acceptance criteria
+
+| Track | Primary owner | Dependency | Definition of done |
+|---|---|---|---|
+| Paystack USD account and plan setup | Founder/account owner, then repository verification | Paystack business approval; USD payout account if USD settlement is required | USD collections enabled; USD settlement account verified; three Agata plan codes point to monthly USD plans at $149/$499/$1,199; test checkout → signed webhook → correct entitlement; test renewal failure/recovery/cancellation. |
+| Microsoft Entra SSO | Founder creates app registration; repository/deployment work completes integration | Public HTTPS Control Plane callback URL | Multitenant Web app registered; exact callback set; client ID and secret safely configured; organization Entra tenant ID bound; real login creates the correct Agata session and audit event; login button enabled only after acceptance. |
+| Production hosting and database | Account owner selects/creates hosting; implementation/configuration follows | Stable public backend URL and managed database | Control Plane container is deployed; database is not the developer laptop/local Compose database; TLS, restricted access and production configuration are verified; migrations 0001–0015 and smoke tests pass. |
+| Production email | Founder/domain owner plus deployment configuration | Agata-owned domain and Resend access | Sending domain DNS is verified; production sender and API key configured in secret store; verification, password reset and invitations are delivered in a real test. |
+| Operational readiness | Repository scripts/runbooks plus hosting configuration | Production deployment and database | Health/readiness probes alert correctly; automated backups/PITR enabled; restore drill to an isolated database records RPO/RTO; alerting and rollback are tested. |
+| External SaaS/security acceptance | Engineering + security reviewer | Deployed Control Plane, Engine and customer-like test app | Three-tenant acceptance verifies tenant-local operations, rejects cross-tenant reads/writes, checks expired context, and records evidence; load testing and independent security assessment are completed. |
+| Launch sign-off | Founder and engineering | All tracks above | No critical open launch gates; runbooks and incident ownership are clear; production launch checklist has evidence for every item. |
+
+## Paystack setup sequence
+
+1. Complete Paystack business activation and request international payments if not already enabled.
+2. Confirm whether the business needs payouts in USD or only wants to charge international customers. Paystack documents different payout requirements for those cases.
+3. If USD payouts are required for a Nigeria-based business, obtain and verify the required Zenith Bank USD domiciliary account in Paystack.
+4. In Paystack, create or inspect only the three Agata Proxima monthly USD plans. Do not reuse unrelated plans.
+5. Configure the three plan-code environment variables in the deployment secret store.
+6. Deploy the code with the new plan preflight and run a real payment round trip before allowing customers to subscribe.
+
+## Microsoft Entra SSO sequence
+
+1. Register the Agata Proxima application in Microsoft Entra ID as a multitenant Web application.
+2. Wait until the public Control Plane HTTPS URL is known, then register the exact callback: `https://<control-plane-host>/api/v1/auth/oidc/callback`.
+3. Create a client secret and store it only in the deployment secret store.
+4. Set `PROXIMA_OIDC_CLIENT_ID`, `PROXIMA_OIDC_CLIENT_SECRET` and `AGATA_PUBLIC_BASE_URL`.
+5. Configure the expected customer Entra tenant ID against that customer's Agata organization.
+6. Run the real end-to-end login, organization mapping, session and audit acceptance test.
+7. Only then enable the SSO button in the login UI.
+
+## Operational approach
+
+The local Compose database is for development. Production must use a separately provisioned managed database. The operations runbook and scripts provide an initial operational baseline, but monitoring, backup policy, restore evidence, alerts and rollback still need to be configured and tested in the selected hosting environment.
+
+## Launch rule
+
+Do not declare production ready while any required external acceptance item is unchecked. Keep the Engine as the data-plane authority and never bypass it to recover Control Plane availability.
