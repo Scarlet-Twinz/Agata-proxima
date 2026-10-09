@@ -53,7 +53,6 @@ Use an Agata-owned sending domain and verify its DNS records before relying on p
 
 ### Microsoft Entra OIDC
 
-- `PROXIMA_OIDC_ISSUER`
 - `PROXIMA_OIDC_CLIENT_ID`
 - `PROXIMA_OIDC_CLIENT_SECRET`
 
