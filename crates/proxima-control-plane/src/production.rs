@@ -1173,7 +1173,7 @@ pub(crate) async fn lemonsqueezy_webhook(State(s):State<AppState>,headers:Header
   }
  }
  if matches!(name,"subscription_payment_success"|"subscription_payment_recovered"|"subscription_payment_failed") {
-  if let (Some(plan),Some(ref variant_id))=(plan,variant.as_ref()) {
+  if let (Some(plan),Some(variant_id))=(plan,variant.as_deref()) {
    let txstatus=if name=="subscription_payment_failed"{"failed"}else{"success"};
    let reference=format!("invoice:{id}");
    let amount=a.get("total_usd").and_then(Value::as_i64);
