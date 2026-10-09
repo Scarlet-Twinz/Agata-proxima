@@ -4,14 +4,14 @@ Status: repository implementation complete for workstreams A–H. All eight Phas
 
 ## Pricing source of truth
 
-The launch pricing approved in the existing billing proposal is:
+The restored launch pricing is recorded as follows. Before live activation, verify that each configured Paystack plan code resolves to a plan whose amount matches this schedule:
 
 | Plan | Monthly price | Checkout |
 |---|---:|---|
 | Free | $0 | No payment provider subscription |
-| Starter | $79 | Paystack recurring plan |
-| Growth | $249 | Paystack recurring plan |
-| Scale | $799 | Paystack recurring plan |
+| Starter | $149 | Paystack recurring plan |
+| Growth | $499 | Paystack recurring plan |
+| Scale | $1,199 | Paystack recurring plan |
 | Enterprise | Custom | Authorized, contract-managed provisioning |
 
 Pricing is separate from entitlement limits. A plan code received from a browser is never sufficient evidence to grant a plan.
@@ -53,7 +53,7 @@ Pricing is separate from entitlement limits. A plan code received from a browser
 7. Feature entitlements, including identity and private deployment.
 8. Support level and any contract-specific SLA.
 
-The existing node/tenant/environment and selected feature checks are a foundation, not proof that all eight dimensions are enforced. Each dimension must have a server-side enforcement point and tests before Phase 3.22 is complete.
+The initial node/tenant/environment and selected feature checks were only a foundation. The completed Phase 3.22-A–H repository work now supplies a server-side enforcement point and tests for each of the eight dimensions, with targeted acceptance gates; the passing repository gates do not substitute for live production-provider acceptance.
 
 ## Lifecycle rules
 
@@ -81,3 +81,29 @@ The existing node/tenant/environment and selected feature checks are a foundatio
 - F — Team seats and invitations
 - G — API quotas, feature gates, enterprise provisioning and support entitlements
 - H — Lifecycle, downgrade, adversarial and regression acceptance
+
+
+## Phase 3.22-A–H completion map
+
+| Workstream | Scope | Repository status | What remains for live production |
+|---|---|---|---|
+| 3.22-A | Canonical plan catalogue, prices and entitlement contract | **Complete** — catalogue consistency gate | Confirm the actual Paystack Starter/Growth/Scale plans match the restored $149/$499/$1,199 monthly prices before enabling live checkout. |
+| 3.22-B | Node, tenant and environment limits; concurrent-write safety | **Complete** — database capacity and concurrency gate | Apply/verify migrations in the production database and run acceptance checks against the deployed service. |
+| 3.22-C | Active webhook integration quotas | **Complete** — enabled/disabled and capacity gate | Verify quota behavior through the deployed API and production database. |
+| 3.22-D | UTC-calendar-month verification quotas | **Complete** — atomic usage and quota gate | Verify monthly usage accounting with a real deployed verification flow. |
+| 3.22-E | Plan-aware audit retention and hourly cleanup | **Complete** — retention/filter/cleanup gate | Verify the production scheduler runs and retention behavior is observable in the hosted environment. |
+| 3.22-F | Team seats, pending invitations and atomic acceptance | **Complete** — seat reservation gate | Verify invite/acceptance flow with real users in the deployed environment. |
+| 3.22-G | API keys and request limits, feature entitlements, enterprise provisioning and support tiers | **Complete** — API/enterprise/support gate | Verify configured production auth, API-key lifecycle, rate limits and authorized enterprise provisioning. |
+| 3.22-H | Billing lifecycle, grace periods, downgrade preservation, idempotency and adversarial regressions | **Complete** — lifecycle gate and regression suite | Complete real Paystack checkout → signed webhook → entitlement transition tests, including renewal failure, recovery, cancellation and downgrade. |
+
+## Remaining work after 3.22-A–H
+
+These are external activation or separate product-readiness gates, not unfinished A–H repository acceptance gates:
+
+1. **Paystack live activation:** verify account plan amounts and plan codes; configure production credentials and the webhook endpoint in the deployment secret store; perform a real payment round trip. Never place secret values in source control or chat.
+2. **Production database rollout:** apply the migrations in order, confirm schema state, and run deployed smoke/rollback checks without destructively resetting customer data.
+3. **Microsoft Entra SSO:** not end-to-end accepted yet. The repository has OIDC groundwork, but production app registration, the exact HTTPS callback, credentials, organization mapping and a real Entra sign-in test remain separate gates.
+4. **Usage documentation:** finish `/docs/usage` as a practical guide with prerequisites, setup, first workspace, nodes/tenants/environments, verification, integrations, seats/invitations, billing, API use and troubleshooting—not just a placeholder page.
+5. **Hosted-service readiness:** verify deployment automation, secret management, observability/alerts, backup and restore, load testing, and external SaaS acceptance in the actual target environment.
+
+The public pricing and server catalogue are now aligned to **Free $0, Starter $149/month, Growth $499/month, Scale $1,199/month, Enterprise custom**. The annual figures in the proposal are a derived ten-month billing schedule and must not be treated as active Paystack plans unless separately configured and verified.

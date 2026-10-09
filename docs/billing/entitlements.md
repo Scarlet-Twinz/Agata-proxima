@@ -1,12 +1,12 @@
 # Agata Proxima Entitlement Matrix
 
-Launch pricing is approved at **Free / $79 Starter / $249 Growth / $799 Scale / Enterprise Custom**.
+Launch pricing is approved at **Free / $149 Starter / $499 Growth / $1,199 Scale / Enterprise Custom**.
 
 The fundamental Proxima Engine security boundary is available on every plan. Commercial differentiation is based on capacity, operational controls, retention, identity, support and deployment requirements.
 
 ## Launch matrix
 
-| Capability | Free | Starter $79 | Growth $249 | Scale $799 | Enterprise |
+| Capability | Free | Starter $149 | Growth $499 | Scale $1,199 | Enterprise |
 |---|---:|---:|---:|---:|---|
 | Proxima Engine enforcement | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Tenant-context validation | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -108,9 +108,9 @@ Do not reuse unrelated products.
 
 Create only:
 
-- Agata Proxima Starter — $79/month
-- Agata Proxima Growth — $249/month
-- Agata Proxima Scale — $799/month
+- Agata Proxima Starter — $149/month
+- Agata Proxima Growth — $499/month
+- Agata Proxima Scale — $1,199/month
 
 Enterprise remains custom.
 

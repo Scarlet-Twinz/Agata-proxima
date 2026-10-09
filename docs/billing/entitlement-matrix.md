@@ -2,7 +2,7 @@
 
 The fundamental Proxima Engine security boundary is available on every plan. Pricing controls capacity and management capabilities, not isolation strength.
 
-| Capability | Free | Starter $79 | Growth $249 | Scale $799 | Enterprise |
+| Capability | Free | Starter $149 | Growth $499 | Scale $1,199 | Enterprise |
 |---|---:|---:|---:|---:|---:|
 | Proxima tenant isolation | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Session binding | ✓ | ✓ | ✓ | ✓ | ✓ |
