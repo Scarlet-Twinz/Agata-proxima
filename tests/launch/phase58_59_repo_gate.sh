@@ -7,12 +7,18 @@ pass() { echo "PASS: $1"; }
 test -f crates/proxima-control-plane/migrations/0004_oidc.sql || fail "OIDC migration missing"
 test -f docs/phase51-57-final-verification.md || fail "Phase 51-57 verification record missing"
 test -f docs/production-readiness.md || fail "production readiness record missing"
+test -f docs/usage.md || fail "practical usage guide missing"
+test -f docs/production/operational-readiness-runbook.md || fail "operational readiness runbook missing"
+test -f scripts/ops/check-control-plane.sh || fail "Control Plane health/readiness check missing"
+test -f scripts/ops/backup-control-plane.sh || fail "Control Plane backup script missing"
+grep -Fq 'path: "/docs/usage"' frontend/src/app/router.tsx || fail "public usage guide route missing"
 test -f tests/external-saas/verify_reference_app.sh || fail "external SaaS acceptance fixture missing"
 
 grep -q 'AGATA_PAYSTACK_STARTER_PLAN_CODE' .env.example || fail "Starter Paystack plan contract missing"
 grep -q 'AGATA_PAYSTACK_GROWTH_PLAN_CODE' .env.example || fail "Growth Paystack plan contract missing"
 grep -q 'AGATA_PAYSTACK_SCALE_PLAN_CODE' .env.example || fail "Scale Paystack plan contract missing"
 ! grep -q 'STRIPE_' .env.example || fail "legacy Stripe billing variables remain"
+! grep -qi 'Stripe webhooks' docs/developer-guide.md || fail "developer guide still documents the superseded billing provider"
 
 grep -q 'checkout_url' crates/proxima-control-plane/src/production.rs || fail "checkout response contract missing"
 grep -q 'portal_url' crates/proxima-control-plane/src/production.rs || fail "portal response contract missing"
