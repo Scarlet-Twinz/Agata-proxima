@@ -4,22 +4,23 @@ set -euo pipefail
 fail() { echo "FAIL: $1" >&2; exit 1; }
 pass() { echo "PASS: $1"; }
 
-backend="crates/proxima-control-plane/src/production.rs"
+backend="crates/proxima-control-plane/src/production/lemonsqueezy.rs"
+limits="crates/proxima-control-plane/src/production.rs"
 pricing="frontend/src/pages/public/Pricing.tsx"
 matrix="docs/billing/entitlements.md"
 proposal="docs/billing/pricing-proposal.md"
 contract="docs/billing/phase3-22-entitlement-contract.md"
 
-for file in "$backend" "$pricing" "$matrix" "$proposal" "$contract"; do
+for file in "$backend" "$limits" "$pricing" "$matrix" "$proposal" "$contract"; do
   test -f "$file" || fail "required entitlement contract file missing: $file"
 done
 
-grep -Fq '("starter","Starter",149_i32' "$backend" || fail "backend Starter price is not $149"
-grep -Fq '("growth","Growth",499_i32' "$backend" || fail "backend Growth price is not $499"
-grep -Fq '("scale","Scale",1199_i32' "$backend" || fail "backend Scale price is not $1,199"
-grep -Fq 'price:"$149/mo"' "$pricing" || fail "public Starter price is not $149"
-grep -Fq 'price:"$499/mo"' "$pricing" || fail "public Growth price is not $499"
-grep -Fq 'price:"$1,199/mo"' "$pricing" || fail "public Scale price is not $1,199"
+grep -Fq '("starter","Starter",149_i32' "$backend" || fail "backend Starter price is not \$149"
+grep -Fq '("growth","Growth",499_i32' "$backend" || fail "backend Growth price is not \$499"
+grep -Fq '("scale","Scale",1199_i32' "$backend" || fail "backend Scale price is not \$1,199"
+grep -Fq 'price:"$149/mo"' "$pricing" || fail "public Starter price is not \$149"
+grep -Fq 'price:"$499/mo"' "$pricing" || fail "public Growth price is not \$499"
+grep -Fq 'price:"$1,199/mo"' "$pricing" || fail "public Scale price is not \$1,199"
 grep -Fq 'Starter $149 / Growth $499 / Scale $1,199' "$matrix" || fail "entitlement pricing matrix disagrees"
 grep -Fq '| Environments | 1 | 2 | 5 | 50 | Contract-defined |' "$matrix" || fail "environment quotas disagree with the canonical contract"
 grep -Fq '| Active webhook integrations | 1 | 5 | 20 | 100 | Contract-defined |' "$matrix" || fail "integration quotas disagree with the canonical contract"
@@ -32,10 +33,10 @@ grep -Fq '| Growth | $499 |' "$proposal" || fail "pricing proposal Growth price 
 grep -Fq '| Scale | $1,199 |' "$proposal" || fail "pricing proposal Scale price disagrees"
 grep -Fq 'server-side enforcement point and tests' "$contract" || fail "entitlement enforcement contract missing"
 grep -Fq '| Free | $0 |' "$contract" || fail "canonical Free price is missing"
-grep -Fq '"starter" => (2, 25, 2, 30' "$backend" || fail "Starter capacity catalogue disagrees with contract"
-grep -Fq '"growth" => (5, 100, 5, 180' "$backend" || fail "Growth capacity catalogue disagrees with contract"
-grep -Fq '"scale" => (15, 500, 50, 365' "$backend" || fail "Scale capacity catalogue disagrees with contract"
-grep -Fq '"enterprise" => (i32::MAX, i32::MAX, i32::MAX' "$backend" || fail "Enterprise contract provisioning baseline missing"
+grep -Fq '"starter" => (2, 25, 2, 30' "$limits" || fail "Starter capacity catalogue disagrees with contract"
+grep -Fq '"growth" => (5, 100, 5, 180' "$limits" || fail "Growth capacity catalogue disagrees with contract"
+grep -Fq '"scale" => (15, 500, 50, 365' "$limits" || fail "Scale capacity catalogue disagrees with contract"
+grep -Fq '"enterprise" => (i32::MAX, i32::MAX, i32::MAX' "$limits" || fail "Enterprise contract provisioning baseline missing"
 
 if grep -Eq '(^|[^0-9])(79|249|799)_i32([^0-9]|$)' "$backend" || grep -Fq '$79/mo' "$pricing" || grep -Fq '$249/mo' "$pricing" || grep -Fq '$799/mo' "$pricing"; then
   fail "conflicting superseded launch prices remain in backend or public pricing"
@@ -47,7 +48,7 @@ for file in "$matrix" "$proposal" "$contract" "docs/usage.md" "docs/billing/enti
   fi
 done
 
-grep -Fq 'Paystack is the active billing provider' "docs/usage.md" || fail "usage guide does not identify Paystack as the active provider"
+grep -Fq 'Lemon Squeezy is the active billing provider' "docs/usage.md" || fail "usage guide does not identify Lemon Squeezy as the active provider"
 grep -Fq 'Microsoft Entra ID (OpenID Connect/OIDC)' "docs/usage.md" || fail "usage guide does not document the SSO provider"
 
 pass "canonical pricing agrees across backend, public pricing and billing docs"

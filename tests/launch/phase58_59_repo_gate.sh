@@ -16,8 +16,8 @@ test -f .github/workflows/production-smoke.yml || fail "production smoke monitor
 grep -Fq 'cron: "*/15 * * * *"' .github/workflows/production-smoke.yml || fail "production liveness monitor is not scheduled"
 grep -Fq 'scripts/ops/check-control-plane.sh' .github/workflows/production-smoke.yml || fail "manual production readiness check is missing"
 grep -Fq 'path: "/docs/usage"' frontend/src/app/router.tsx || fail "public usage guide route missing"
-grep -Fq 'paystack_provider_plan_matches_catalog' crates/proxima-control-plane/src/production.rs || fail "Paystack plan preflight missing"
-grep -Fq 'transaction_amount_mismatch' crates/proxima-control-plane/src/production.rs || fail "Paystack amount verification missing"
+grep -Fq 'configured_variant' crates/proxima-control-plane/src/production/lemonsqueezy.rs || fail "Lemon Squeezy variant mapping missing"
+grep -Fq 'verify_slice' crates/proxima-control-plane/src/production/lemonsqueezy.rs || fail "Lemon Squeezy webhook signature verification missing"
 test -f tests/external-saas/verify_reference_app.sh || fail "external SaaS acceptance fixture missing"
 test -f frontend/vercel.json || fail "Vercel same-origin proxy configuration missing"
 
@@ -27,9 +27,11 @@ grep -Fq '"destination": "https://api.agataproxima.com/api/:path*"' frontend/ver
 grep -Fq '"destination": "/index.html"' frontend/vercel.json || fail "SPA route fallback missing"
 grep -Fq '"value": "0"' frontend/vercel.json || fail "external rewrite cache bypass missing"
 
-grep -q 'AGATA_PAYSTACK_STARTER_PLAN_CODE' .env.example || fail "Starter Paystack plan contract missing"
-grep -q 'AGATA_PAYSTACK_GROWTH_PLAN_CODE' .env.example || fail "Growth Paystack plan contract missing"
-grep -q 'AGATA_PAYSTACK_SCALE_PLAN_CODE' .env.example || fail "Scale Paystack plan contract missing"
+grep -q 'LEMONSQUEEZY_STARTER_VARIANT_ID' .env.example || fail "Starter Lemon Squeezy variant contract missing"
+grep -q 'LEMONSQUEEZY_GROWTH_VARIANT_ID' .env.example || fail "Growth Lemon Squeezy variant contract missing"
+grep -q 'LEMONSQUEEZY_SCALE_VARIANT_ID' .env.example || fail "Scale Lemon Squeezy variant contract missing"
+grep -q 'LEMONSQUEEZY_API_KEY' .env.example || fail "Lemon Squeezy API key contract missing"
+grep -q 'LEMONSQUEEZY_WEBHOOK_SECRET' .env.example || fail "Lemon Squeezy webhook secret contract missing"
 ! grep -q 'STRIPE_' .env.example || fail "legacy Stripe billing variables remain"
 ! grep -qi 'Stripe webhooks' docs/developer-guide.md || fail "developer guide still documents the superseded billing provider"
 ! grep -qi 'Stripe' docs/phase41-50-production.md docs/phase51-57-final-verification.md docs/phase58-59-launch-gate.md docs/production/phase55-deployment-runbook.md docs/production-readiness.md docs/production/operational-readiness-runbook.md docs/production/remaining-launch-work-map.md docs/usage.md docs/billing/entitlements.md docs/billing/entitlement-matrix.md docs/billing/pricing-proposal.md || fail "active billing documentation still references Stripe"
@@ -37,8 +39,8 @@ grep -Fq 'Starter $149 / Growth $499 / Scale $1,199' docs/billing/entitlements.m
 grep -Fq 'Verifications/month' docs/usage.md || grep -Fq 'Verification runs per UTC calendar month' docs/usage.md || fail "usage guide is missing verification quota guidance"
 grep -Fq 'USD' docs/usage.md || fail "usage guide is missing USD billing guidance"
 
-grep -q 'checkout_url' crates/proxima-control-plane/src/production.rs || fail "checkout response contract missing"
-grep -q 'portal_url' crates/proxima-control-plane/src/production.rs || fail "portal response contract missing"
+grep -q 'checkout_url' crates/proxima-control-plane/src/production/lemonsqueezy.rs || fail "checkout response contract missing"
+grep -q 'portal_url' crates/proxima-control-plane/src/production/lemonsqueezy.rs || fail "portal response contract missing"
 grep -q 'd.checkout_url' crates/proxima-control-plane/web/app.html || fail "Billing UI checkout response handling missing"
 grep -q 'd.portal_url' crates/proxima-control-plane/web/app.html || fail "Billing UI portal response handling missing"
 

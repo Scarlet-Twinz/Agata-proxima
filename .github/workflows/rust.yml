@@ -84,10 +84,12 @@ jobs:
       - name: Production environment contract
         run: |
           grep -q "AGATA_PUBLIC_BASE_URL" .env.example
-          grep -q "AGATA_PAYSTACK_STARTER_PLAN_CODE" .env.example
-          grep -q "AGATA_PAYSTACK_GROWTH_PLAN_CODE" .env.example
-          grep -q "AGATA_PAYSTACK_SCALE_PLAN_CODE" .env.example
-          grep -q "PAYSTACK_SECRET_KEY" .env.example
+          grep -q "LEMONSQUEEZY_API_KEY" .env.example
+          grep -q "LEMONSQUEEZY_STORE_ID" .env.example
+          grep -q "LEMONSQUEEZY_STARTER_VARIANT_ID" .env.example
+          grep -q "LEMONSQUEEZY_GROWTH_VARIANT_ID" .env.example
+          grep -q "LEMONSQUEEZY_SCALE_VARIANT_ID" .env.example
+          grep -q "LEMONSQUEEZY_WEBHOOK_SECRET" .env.example
           grep -q "RESEND_API_KEY" .env.example
           grep -q "PROXIMA_OIDC_CLIENT_ID" .env.example
           grep -q "PROXIMA_OIDC_CLIENT_SECRET" .env.example
@@ -114,6 +116,9 @@ jobs:
           test -f docs/usage.md
           test -f docs/production/operational-readiness-runbook.md
           ! grep -qi 'Stripe webhooks' docs/developer-guide.md
+
+      - name: Phase 3.21 Lemon Squeezy billing
+        run: bash tests/launch/phase3_21_lemonsqueezy_billing_gate.sh
 
       - name: Phase 3.23 transactional email
         run: bash tests/launch/phase3_23_resend_email_gate.sh
