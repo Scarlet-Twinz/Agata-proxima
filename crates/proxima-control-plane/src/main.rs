@@ -236,6 +236,11 @@ async fn main() -> Result<()> {
     ))
     .execute(&db)
     .await?;
+    sqlx::raw_sql(include_str!(
+        "../migrations/0017_lemonsqueezy_billing.sql"
+    ))
+    .execute(&db)
+    .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
@@ -390,7 +395,7 @@ async fn main() -> Result<()> {
             "/api/v1/auth/password-reset/confirm",
             post(production::reset_password),
         )
-        .route("/api/v1/billing", get(production::billing_status))
+        .route("/api/v1/billing", get(billing_lemonsqueezy::billing_status))
         .route("/api/v1/billing/plans", get(billing_lemonsqueezy::plans))
         .route(
             "/api/v1/billing/entitlements",
