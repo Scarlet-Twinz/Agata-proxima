@@ -1760,7 +1760,7 @@ pub(crate) async fn send_verification_email(
     .execute(db)
     .await?;
 
-    send_template_email(
+    send_template_email_as(
         email,
         "091dbdb2-21ed-444f-a209-6f44e55d192d",
         json!({
@@ -1768,6 +1768,7 @@ pub(crate) async fn send_verification_email(
             "CODE": code,
             "ACTION_URL": ""
         }),
+        "no-reply",
     )
     .await
 }
@@ -1990,13 +1991,14 @@ pub(crate) async fn request_password_reset(
             .trim_end_matches('/')
             .to_string();
         let link = format!("{base}/reset-password?token={token}");
-        if let Err(e) = send_template_email(
+        if let Err(e) = send_template_email_as(
             &email,
             "d3c046c7-fef6-42f0-931e-d92b6f96cfdf",
             json!({
                 "DISPLAY_NAME": row.get::<String,_>("display_name"),
                 "ACTION_URL": link
             }),
+            "no-reply",
         )
         .await
         {
@@ -2106,7 +2108,7 @@ pub(crate) async fn invite(
         .trim_end_matches('/')
         .to_string();
     let link = format!("{base}/accept-invite?token={token}");
-    if let Err(e) = send_template_email(
+    if let Err(e) = send_template_email_as(
         &email,
         "0757a210-a372-4a5a-8fca-e642c2fed3da",
         json!({
@@ -2114,6 +2116,7 @@ pub(crate) async fn invite(
             "ROLE": role,
             "ACTION_URL": link
         }),
+        "notifications",
     )
     .await
     {
@@ -2209,11 +2212,59 @@ pub(crate) async fn purge_expired_audit_events(db: &sqlx::PgPool) -> Result<i64,
 }
 
 pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
-    let db_ok=sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
-    let paystack=env::var("PAYSTACK_SECRET_KEY").map(|v|!v.trim().is_empty()).unwrap_or(false);
-    let plans=configured_paystack_plan_codes_unique();
-    let resend=env::var("RESEND_API_KEY").map(|v|!v.is_empty()).unwrap_or(false);let from=env::var("RESEND_FROM_EMAIL").map(|v|!v.is_empty()).unwrap_or(false);let base=env::var("AGATA_PUBLIC_BASE_URL").map(|v|!v.is_empty()).unwrap_or(false);let oidc=env::var("PROXIMA_OIDC_CLIENT_ID").map(|v|!v.is_empty()).unwrap_or(false)&&env::var("PROXIMA_OIDC_CLIENT_SECRET").map(|v|!v.is_empty()).unwrap_or(false);let all=db_ok&&paystack&&plans&&resend&&from&&base&&oidc;
-    Json(json!({"status":if all{"ready"}else{"needs_configuration"},"checks":{"database":db_ok,"paystack_secret":paystack,"paystack_plans":plans,"resend_api_key":resend,"resend_from":from,"public_base_url":base,"oidc":oidc,"engine_remains_authoritative":true}})).into_response()
+    let db_ok = sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
+    let paystack = env::var("PAYSTACK_SECRET_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false);
+    let plans = configured_paystack_plan_codes_unique();
+    let resend = env::var("RESEND_API_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false);
+    let fallback_from = env::var("RESEND_FROM_EMAIL").map(|v| !v.trim().is_empty()).unwrap_or(false);
+    let sender_identities = [
+        "RESEND_FROM_NO_REPLY_EMAIL",
+        "RESEND_FROM_SUPPORT_EMAIL",
+        "RESEND_FROM_SECURITY_EMAIL",
+        "RESEND_FROM_BILLING_EMAIL",
+        "RESEND_FROM_NOTIFICATIONS_EMAIL",
+    ].iter().all(|key| env::var(key).map(|v| !v.trim().is_empty()).unwrap_or(false));
+    let support_inbox = env::var("AGATA_SUPPORT_INBOX_EMAIL").map(|v| !v.trim().is_empty()).unwrap_or(false);
+    let base = env::var("AGATA_PUBLIC_BASE_URL").map(|v| !v.trim().is_empty()).unwrap_or(false);
+    let oidc = env::var("PROXIMA_OIDC_CLIENT_ID").map(|v| !v.trim().is_empty()).unwrap_or(false)
+        && env::var("PROXIMA_OIDC_CLIENT_SECRET").map(|v| !v.trim().is_empty()).unwrap_or(false);
+    let email_ready = resend && sender_identities && support_inbox;
+    let all = db_ok && paystack && plans && email_ready && base && oidc;
+    Json(json!({
+        "status": if all { "ready" } else { "needs_configuration" },
+        "checks": {
+            "database": db_ok,
+            "paystack_secret": paystack,
+            "paystack_plans": plans,
+            "resend_api_key": resend,
+            "resend_fallback_sender": fallback_from,
+            "resend_sender_identities": sender_identities,
+            "support_inbox": support_inbox,
+            "public_base_url": base,
+            "oidc": oidc,
+            "engine_remains_authoritative": true
+        }
+    })).into_response()
+}
+
+fn sender_address(role: &str) -> anyhow::Result<String> {
+    let key = match role {
+        "no-reply" => "RESEND_FROM_NO_REPLY_EMAIL",
+        "support" => "RESEND_FROM_SUPPORT_EMAIL",
+        "security" => "RESEND_FROM_SECURITY_EMAIL",
+        "billing" => "RESEND_FROM_BILLING_EMAIL",
+        "notifications" => "RESEND_FROM_NOTIFICATIONS_EMAIL",
+        _ => anyhow::bail!("Unsupported transactional email sender role"),
+    };
+    if let Ok(value) = env::var(key) {
+        if !value.trim().is_empty() {
+            return Ok(value.trim().to_owned());
+        }
+    }
+    match env::var("RESEND_FROM_EMAIL") {
+        Ok(value) if !value.trim().is_empty() => Ok(value.trim().to_owned()),
+        _ => anyhow::bail!("{key} and RESEND_FROM_EMAIL are not configured for the current deployment"),
+    }
 }
 
 pub(crate) async fn send_template_email(
@@ -2221,11 +2272,20 @@ pub(crate) async fn send_template_email(
     template_id: &str,
     variables: Value,
 ) -> anyhow::Result<()> {
+    send_template_email_as(to, template_id, variables, "notifications").await
+}
+
+pub(crate) async fn send_template_email_as(
+    to: &str,
+    template_id: &str,
+    variables: Value,
+    sender_role: &str,
+) -> anyhow::Result<()> {
     let key = env::var("RESEND_API_KEY")?;
-    let from = match env::var("RESEND_FROM_EMAIL") {
-        Ok(v) if !v.trim().is_empty() => v,
-        _ => anyhow::bail!("RESEND_FROM_EMAIL is not configured for the current deployment"),
-    };
+    if key.trim().is_empty() {
+        anyhow::bail!("RESEND_API_KEY is not configured for the current deployment");
+    }
+    let from = sender_address(sender_role)?;
     let response = Client::new()
         .post("https://api.resend.com/emails")
         .bearer_auth(key)
@@ -2242,7 +2302,37 @@ pub(crate) async fn send_template_email(
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        anyhow::bail!("Resend returned {status}: {body}");
+        anyhow::bail!("Resend returned {status}: {}", body.chars().take(500).collect::<String>());
+    }
+    Ok(())
+}
+
+pub(crate) async fn send_text_email(
+    to: &str,
+    subject: &str,
+    text: &str,
+    sender_role: &str,
+) -> anyhow::Result<()> {
+    let key = env::var("RESEND_API_KEY")?;
+    if key.trim().is_empty() {
+        anyhow::bail!("RESEND_API_KEY is not configured for the current deployment");
+    }
+    let from = sender_address(sender_role)?;
+    let response = Client::new()
+        .post("https://api.resend.com/emails")
+        .bearer_auth(key)
+        .json(&json!({
+            "from": from,
+            "to": [to],
+            "subject": subject,
+            "text": text
+        }))
+        .send()
+        .await?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        anyhow::bail!("Resend returned {status}: {}", body.chars().take(500).collect::<String>());
     }
     Ok(())
 }
