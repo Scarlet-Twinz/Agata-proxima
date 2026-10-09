@@ -151,7 +151,7 @@ http://127.0.0.1:8080/api/v1/auth/oidc/callback
 
 Record the Application (client) ID and create a client secret. Store the secret only in your deployment secret store. Runtime configuration uses `PROXIMA_OIDC_CLIENT_ID`, `PROXIMA_OIDC_CLIENT_SECRET` and the exact `AGATA_PUBLIC_BASE_URL`. An organization owner/admin configures the customer's Entra tenant ID from **Settings → Advanced configuration → Enterprise identity** (backed by `GET/POST /api/v1/organization/oidc/entra`). On the login page, choose **Continue with SSO**, enter the organization's slug, and continue to Microsoft. The backend resolves that slug to the configured organization before creating OIDC state; it also retains the UUID-based `organization_id` query for administrative/testing workflows.
 
-The UI can now initiate the flow, but successful SSO is not production-accepted until a real Entra registration, exact callback, tenant/organization mapping, session creation and audit event have passed end to end. See `docs/identity/microsoft-entra-oidc.md`.
+The Entra feature is available on Growth and above; the backend checks entitlement at both login start and callback, including after a plan downgrade. The UI can initiate the flow, but successful SSO is not production-accepted until a real Entra registration, exact callback, tenant/organization mapping, session creation and audit event have passed end to end. See `docs/identity/microsoft-entra-oidc.md`.
 
 ## 10. Troubleshooting
 
