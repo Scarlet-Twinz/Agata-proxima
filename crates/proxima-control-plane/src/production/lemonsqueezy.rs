@@ -29,15 +29,23 @@ fn plan_for_variant(id: &str) -> Option<&'static str> {
     }
     Some(plan)
 }
+pub(crate) fn variants_configured() -> bool {
+    let ids: Vec<String> = ["starter","growth","scale"].iter().filter_map(|p| configured_variant(p)).collect();
+    ids.len() == 3 && ids.iter().collect::<std::collections::HashSet<_>>().len() == 3
+}
+
+pub(crate) fn test_mode_configured() -> bool {
+    env::var("LEMONSQUEEZY_TEST_MODE")
+        .map(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "true" | "false"))
+        .unwrap_or(true)
+}
+
 fn configured() -> bool {
     env::var("LEMONSQUEEZY_API_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false)
         && env::var("LEMONSQUEEZY_WEBHOOK_SECRET").map(|v| !v.trim().is_empty()).unwrap_or(false)
         && env::var("LEMONSQUEEZY_STORE_ID").map(|v| !v.trim().is_empty()).unwrap_or(false)
-        && ["starter","growth","scale"].iter().all(|p| configured_variant(p).is_some())
-        && {
-            let ids: Vec<String> = ["starter","growth","scale"].iter().filter_map(|p| configured_variant(p)).collect();
-            ids.len() == 3 && ids.iter().collect::<std::collections::HashSet<_>>().len() == 3
-        }
+        && variants_configured()
+        && test_mode_configured()
 }
 fn api_client() -> anyhow::Result<Client> {
     Ok(Client::builder().timeout(std::time::Duration::from_secs(15)).build()?)
