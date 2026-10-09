@@ -44,6 +44,8 @@ grep -Fq 'Continue with Microsoft Entra' frontend/src/pages/auth/Login.tsx || fa
 grep -Fq 'EntraIdentitySettings' frontend/src/pages/console/NestedResource.tsx || fail "organization Entra settings UI missing"
 grep -Fq 'entra_status' crates/proxima-control-plane/src/production.rs || fail "organization Entra status API missing"
 grep -Fq 'jit_provisioning=EXCLUDED.jit_provisioning' crates/proxima-control-plane/src/production.rs || fail "Entra provisioning preference is not saved on update"
+oidc_feature_checks=$(grep -Fc 'require_feature(&s.db, organization_id, "entra_oidc")' crates/proxima-control-plane/src/production.rs || true)
+[[ "$oidc_feature_checks" -ge 2 ]] || fail "Entra plan feature is not enforced at both OIDC start and callback"
 ! grep -Fq 'SSO is not connected yet' frontend/src/pages/auth/Login.tsx || fail "obsolete disabled SSO button remains"
 
 grep -q 'control_plane_coupling.*non_authoritative' crates/proxima-control-plane/src/main.rs || fail "control-plane non-authoritative health contract missing"
