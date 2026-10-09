@@ -85,7 +85,8 @@ fn lemon_variant_id(plan: &str) -> Option<String> {
     env::var(key).ok().map(|v|v.trim().to_owned()).filter(|v|!v.is_empty()&&v.chars().all(|c|c.is_ascii_digit()))
 }
 fn plan_for_code(id: Option<&str>) -> Option<&'static str> {
-    for p in ["starter","growth","scale"] { if lemon_variant_id(p).as_deref()==id { return Some(match p{"starter"=>"starter","growth"=>"growth",_=>"scale"}); } } None
+    let id = id?;
+    for p in ["starter","growth","scale"] { if lemon_variant_id(p).as_deref()==Some(id) { return Some(match p{"starter"=>"starter","growth"=>"growth",_=>"scale"}); } } None
 }
 fn configured_lemonsqueezy_variants_unique()->bool {
     let v=[lemon_variant_id("starter"),lemon_variant_id("growth"),lemon_variant_id("scale")];
