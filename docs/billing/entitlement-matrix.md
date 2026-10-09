@@ -37,22 +37,22 @@ New organizations start on Free. No Lemon Squeezy subscription is required.
 
 ### Paid subscriptions
 
-Lemon Squeezy is the billing source of truth for paid subscriptions. The Control Plane stores a normalized billing state and derives the organization entitlement record from the verified Lemon Squeezy plan code.
+Lemon Squeezy is the billing source of truth for paid subscriptions. The Control Plane stores a normalized billing state and derives the organization entitlement record from the verified Lemon Squeezy variant ID.
 
-Only these environment-configured Lemon Squeezy plan codes are accepted:
+Only these environment-configured Lemon Squeezy variant IDs are accepted:
 
 - `LEMON_SQUEEZY_STARTER_VARIANT_ID`
 - `LEMON_SQUEEZY_GROWTH_VARIANT_ID`
 - `LEMON_SQUEEZY_SCALE_VARIANT_ID`
 
-A checkout request containing a plan code that is not one of those three is rejected.
+A checkout request that does not resolve to one of the three configured plan keys or variant IDs is rejected.
 
 ### Subscription lifecycle
 
 - Checkout creates a Lemon Squeezy subscription.
 - Lemon Squeezy webhook signatures are verified before processing.
 - Lemon Squeezy event IDs are idempotent.
-- Subscription create/update events set the plan from the verified Agata plan code.
+- Subscription create/update events set the plan from the locally correlated checkout reference and configured variant ID.
 - Subscription deletion returns the organization to Free.
 - Payment failure marks the billing state `past_due`; the organization retains its plan during the payment-recovery period.
 - The Control Plane never grants a paid plan merely because a browser says payment succeeded.
@@ -68,7 +68,7 @@ Starter -> Growth -> Scale
 
 by editing a frontend request.
 
-The backend maps the Lemon Squeezy plan code to the corresponding plan, and the database stores the resulting entitlement.
+The backend maps the configured Lemon Squeezy variant ID to the corresponding plan, and the database stores the resulting entitlement.
 
 The Engine's tenant-isolation enforcement remains independent of this billing state.
 
