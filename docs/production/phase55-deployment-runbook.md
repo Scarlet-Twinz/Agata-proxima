@@ -36,6 +36,8 @@ Use a deployment secret store, not a committed `.env` file. Do not paste secret 
 - `AGATA_PAYSTACK_GROWTH_PLAN_CODE`
 - `AGATA_PAYSTACK_SCALE_PLAN_CODE`
 
+Set `AGATA_PUBLIC_BASE_URL` to the browser-facing app origin. In production, route `/api/v1/*`, the OIDC callback and health/readiness endpoints from that origin to the Rust Control Plane (for example, through a same-origin reverse proxy). The OIDC callback sets a host-only session cookie and redirects to `/app`; a separate frontend/backend origin without an explicit cookie/proxy design will break sign-in.
+
 Before enabling checkout, verify that the configured Paystack plans are Agata Proxima plans with the canonical monthly prices:
 
 - Starter — $149/month
