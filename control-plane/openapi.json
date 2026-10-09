@@ -234,34 +234,81 @@
     },
     "/api/v1/organization/oidc/entra": {
       "post": {
-        "summary": "Configure Microsoft Entra OIDC for the current organization",
+        "summary": "Configure Microsoft Entra OIDC for the authenticated organization",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "tenant_id"
+                ],
+                "properties": {
+                  "tenant_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Customer Microsoft Entra tenant ID."
+                  },
+                  "jit_provisioning": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Allow just-in-time user provisioning into this organization."
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "OIDC connection configured"
+            "description": "Entra connection configured"
+          },
+          "400": {
+            "description": "Invalid Entra tenant ID"
           },
           "403": {
-            "description": "Plan or role does not permit enterprise SSO"
+            "description": "Owner/admin role or plan feature required"
+          },
+          "503": {
+            "description": "Client ID or database unavailable"
           }
         }
       }
     },
     "/api/v1/auth/oidc/start": {
       "get": {
-        "security": [],
+        "summary": "Start Microsoft Entra OIDC login for an organization",
         "parameters": [
+          {
+            "name": "organization_slug",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Organization slug shown on the login SSO form."
+          },
           {
             "name": "organization_id",
             "in": "query",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string",
               "format": "uuid"
-            }
+            },
+            "description": "UUID-based alternative for controlled administrative/testing workflows."
           }
         ],
         "responses": {
           "200": {
-            "description": "Authorization URL returned"
+            "description": "Authorization URL to Microsoft Entra ID"
+          },
+          "400": {
+            "description": "Organization slug/ID missing or SSO not configured"
+          },
+          "503": {
+            "description": "OIDC configuration or database unavailable"
           }
         }
       }
