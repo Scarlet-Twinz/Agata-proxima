@@ -9,6 +9,7 @@ test -f docs/phase51-57-final-verification.md || fail "Phase 51-57 verification 
 test -f docs/production-readiness.md || fail "production readiness record missing"
 test -f docs/usage.md || fail "practical usage guide missing"
 test -f docs/production/operational-readiness-runbook.md || fail "operational readiness runbook missing"
+test -f docs/production/remaining-launch-work-map.md || fail "remaining launch work map missing"
 test -f scripts/ops/check-control-plane.sh || fail "Control Plane health/readiness check missing"
 test -f scripts/ops/backup-control-plane.sh || fail "Control Plane backup script missing"
 grep -Fq 'path: "/docs/usage"' frontend/src/app/router.tsx || fail "public usage guide route missing"
