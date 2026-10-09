@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowLeft, ArrowUpRight, BookOpen, CheckCircle2, ChevronRight, ExternalLink, RefreshCw, Save, ShieldCheck } from "lucide-react";
-import { Link, useLocation, useParams } from "react-router-dom";
+import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { ResourceSurface } from "../../components/console/ResourceSurface";
 import { api, type ApiError } from "../../api/client";
 
@@ -297,11 +297,141 @@ const baseConfigs:Record<string,Config>={
  "/app/developer/webhooks":{eyebrow:"DEVELOPER",title:"Webhooks",description:"Create endpoints, select events and inspect delivery history.",tabs:developerTabs,endpoint:"/api/v1/developer/webhooks",detailBase:"/app/developer/webhooks",createHref:"/app/developer/webhooks/new",createLabel:"Add webhook"},
 };
 
+type BillingPlan = {
+  key: string;
+  name: string;
+  monthly_usd: number;
+  description: string;
+  checkout_available: boolean;
+  limits: Record<string, number>;
+  features: Record<string, boolean>;
+  support_level: string;
+};
+type BillingCatalog = { currency: string; billing_interval: string; provider: string; plans: BillingPlan[] };
+type BillingAccount = { configured: boolean; provider: string; plan: string; status: string; subscription_id?: string | null; current_period_end?: string | null; cancel_at_period_end?: boolean };
+type BillingVerification = { verified: boolean; status: string; plan: string };
+
+function BillingPlans() {
+  const [searchParams] = useSearchParams();
+  const billingReturn = searchParams.get("billing");
+  const checkoutReference = searchParams.get("reference");
+  const [catalog, setCatalog] = useState<BillingCatalog | null>(null);
+  const [account, setAccount] = useState<BillingAccount | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busyPlan, setBusyPlan] = useState("");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setError("");
+      try {
+        const [plans, current] = await Promise.all([
+          api.get<BillingCatalog>("/api/v1/billing/plans"),
+          api.get<BillingAccount>("/api/v1/billing"),
+        ]);
+        if (cancelled) return;
+        setCatalog(plans);
+        setAccount(current);
+        if (billingReturn === "return" && checkoutReference) {
+          try {
+            const verification = await api.get<BillingVerification>(`/api/v1/billing/verify?reference=${encodeURIComponent(checkoutReference)}`);
+            if (!cancelled) {
+              setNotice(verification.verified
+                ? "Payment confirmed. Your plan status has been refreshed."
+                : "Checkout returned successfully. We are waiting for the signed billing confirmation; paid access will update automatically once verified.");
+              const refreshed = await api.get<BillingAccount>("/api/v1/billing");
+              if (!cancelled) setAccount(refreshed);
+            }
+          } catch {
+            if (!cancelled) setNotice("Checkout returned. Billing confirmation is still processing; please refresh shortly.");
+          }
+        }
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Unable to load billing plans.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void load();
+    return () => { cancelled = true; };
+  }, [billingReturn, checkoutReference]);
+
+  async function startCheckout(plan: BillingPlan) {
+    setBusyPlan(plan.key);
+    setError("");
+    setNotice("");
+    try {
+      const result = await api.post<{ checkout_url: string }>("/api/v1/billing/checkout", { price_id: plan.key });
+      if (!result.checkout_url || !result.checkout_url.startsWith("https://")) throw new Error("The billing provider did not return a secure checkout URL.");
+      window.location.assign(result.checkout_url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to start secure checkout.");
+      setBusyPlan("");
+    }
+  }
+
+  async function openPortal() {
+    setBusyPlan("portal");
+    setError("");
+    try {
+      const result = await api.post<{ portal_url: string }>("/api/v1/billing/portal", {});
+      if (!result.portal_url || !result.portal_url.startsWith("https://")) throw new Error("The customer portal is not available yet.");
+      window.location.assign(result.portal_url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to open the billing portal.");
+      setBusyPlan("");
+    }
+  }
+
+  const money = (amount: number) => amount === 0 ? "Free" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(amount);
+  const labelForFeature = (key: string) => key.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  const currentPlan = account?.plan ?? "free";
+
+  return <div className="resource-page billing-plans-page">
+    <div className="page-heading">
+      <div><span className="eyebrow">BILLING · LEMON SQUEEZY</span><h1>Plans and billing</h1><p>Choose a monthly plan. Agata verifies the configured provider variant and confirms paid access only from a signed webhook.</p></div>
+      {account?.subscription_id && <button type="button" className="console-refresh-button" onClick={() => void openPortal()} disabled={busyPlan !== ""}>{busyPlan === "portal" ? "Opening portal…" : "Manage subscription"}</button>}
+    </div>
+    {account && <section className="surface billing-current-plan">
+      <div><span className="eyebrow">CURRENT WORKSPACE PLAN</span><h2>{currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1)}</h2><p>Status: <strong>{account.status}</strong>{account.current_period_end ? ` · Period ends ${new Date(account.current_period_end).toLocaleDateString()}` : ""}{account.cancel_at_period_end ? " · Cancellation scheduled" : ""}</p></div>
+      <span className={account.status === "active" || account.status === "non-renewing" ? "console-status console-status--active" : "console-status console-status--pending"}>{account.status}</span>
+    </section>}
+    {notice && <div className="settings-banner settings-banner--success" role="status">{notice}</div>}
+    {error && <div className="settings-banner settings-banner--error" role="alert">{error}</div>}
+    {loading && <div className="empty-state"><strong>Loading billing catalog…</strong><span>Reading the live plan catalog and workspace subscription.</span></div>}
+    {!loading && !error && catalog && <div className="billing-plan-grid">
+      {catalog.plans.map((plan) => {
+        const isCurrent = currentPlan === plan.key && account?.configured && ["active", "non-renewing", "attention", "past_due"].includes(account.status);
+        const isEnterprise = plan.key === "enterprise";
+        const isFree = plan.key === "free";
+        return <section className={`surface billing-plan-card ${isCurrent ? "billing-plan-card--current" : ""}`} key={plan.key}>
+          <div className="billing-plan-card-heading"><span className="eyebrow">{plan.key.toUpperCase()}</span>{isCurrent && <span className="console-status console-status--active">Current plan</span>}</div>
+          <h2>{plan.name}</h2>
+          <p className="billing-plan-description">{plan.description}</p>
+          <div className="billing-plan-price"><strong>{isEnterprise ? "Custom" : money(plan.monthly_usd)}</strong>{!isEnterprise && plan.monthly_usd > 0 && <span>/ month</span>}</div>
+          <div className="billing-plan-detail"><strong>{plan.limits.nodes ?? "—"}</strong><span>nodes</span><strong>{plan.limits.tenants ?? "—"}</strong><span>tenants</span><strong>{plan.limits.integrations ?? "—"}</strong><span>integrations</span></div>
+          <div className="billing-plan-features"><strong>Included capabilities</strong><ul>{Object.entries(plan.features).filter(([, enabled]) => enabled).map(([key]) => <li key={key}>{labelForFeature(key)}</li>)}<li>{labelForFeature(plan.support_level)} support</li></ul></div>
+          {isEnterprise
+            ? <Link className="primary-action" to="/contact">Contact sales <ArrowUpRight size={15}/></Link>
+            : isFree
+              ? <button type="button" className="primary-action" disabled>{isCurrent ? "Current free plan" : "Free tier"}</button>
+              : <button type="button" className="primary-action" onClick={() => void startCheckout(plan)} disabled={!plan.checkout_available || isCurrent || busyPlan !== ""}>{busyPlan === plan.key ? "Preparing checkout…" : isCurrent ? "Current plan" : plan.checkout_available ? `Choose ${plan.name}` : "Checkout not configured"}</button>}
+        </section>;
+      })}
+    </div>}
+    {!loading && catalog && !catalog.plans.some((plan) => plan.checkout_available) && <div className="empty-state"><strong>Checkout is not configured yet.</strong><span>The server needs the Lemon Squeezy Test Mode API key, store ID, webhook secret, and three unique monthly variant IDs before paid checkout is enabled.</span></div>}
+  </div>;
+}
+
 export function NestedResource(){
   const {pathname}=useLocation(); const params=useParams();
   const detailId=params.tenantId??params.policyId??params.nodeId??params.deploymentId??params.runId??params.eventId??params.apiKeyId??params.webhookId;
   const base=detailId?pathname.replace(/\/[^/]+$/,""):pathname;
   const config=baseConfigs[base]??baseConfigs[pathname];
+  if(pathname === "/app/billing/plans" && config) return <ContextShell config={config}><BillingPlans /></ContextShell>;
   if(detailId && config?.endpoint) return <DetailPage config={config} id={detailId}/>;
   if(config) return <ContextShell config={config}><ResourceSurface eyebrow={config.eyebrow} title={config.title} description={config.description} endpoint={config.endpoint} detailBase={config.detailBase} createHref={config.createHref} createLabel={config.createLabel}/></ContextShell>;
   if (pathname === "/app/settings/identity") return <EntraIdentitySettings />;
