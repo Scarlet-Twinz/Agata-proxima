@@ -42,7 +42,7 @@ This checklist separates repository implementation from external production acce
 - [x] Verification / Audit / Security / Infrastructure
 - [x] Developer / Support surfaces
 - [x] Lemon Squeezy billing entitlement model, plan catalogue and repository integration contract
-- [ ] Live Lemon Squeezy activation — verify Agata plan codes and amounts, configure production secret and webhook, then complete a real payment round trip
+- [ ] Live Lemon Squeezy activation — verify Agata variant IDs, store currency and amounts, configure production secret and webhook, then complete a real payment round trip
 - [ ] Production email delivery — waiting for Agata-owned sending domain verification and a real delivery test
 - [ ] Customer-facing status page
 - [ ] Practical `/docs/usage` guide covering setup, first workspace, nodes, tenants, environments, verification, integrations, seats/invitations, billing, API use and troubleshooting
@@ -61,7 +61,7 @@ The canonical monthly prices are:
 | Scale | $1,199 |
 | Enterprise | Custom |
 
-Free requires no Lemon Squeezy subscription. Paid checkout must use the configured Agata-specific Lemon Squeezy plan codes, and the live provider plan amounts must match this table before checkout is enabled.
+Free requires no Lemon Squeezy subscription. Paid checkout must use the configured Agata-specific Lemon Squeezy variant IDs, and the store currency and live variant amounts must match this table before checkout is enabled.
 
 ## Phase 3.22-A–H acceptance state
 
