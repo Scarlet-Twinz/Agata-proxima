@@ -2054,7 +2054,7 @@ async fn delete_organization(
 ) -> Response {
     let ctx = match authenticate(&s, &headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into_response(),
     };
     if ctx.api_key {
         return StatusCode::FORBIDDEN.into_response();
