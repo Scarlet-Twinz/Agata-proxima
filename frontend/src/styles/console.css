@@ -1294,3 +1294,35 @@ a {
 :root[data-theme="dark"] .create-organization-form input{background:#0a141c}
 :root[data-theme="dark"] .notification-item:hover{background:#111e2a;border-color:#36516a}
 @media(max-width:650px){.email-confirm-row,.create-organization-form{flex-direction:column;align-items:stretch}.email-confirm-row .primary-action{align-self:flex-start}.notification-item{grid-template-columns:36px minmax(0,1fr)}.notification-item>svg:last-child{display:none}}
+
+/* Lemon Squeezy plan selection and secure checkout states */
+.billing-plans-page .page-heading { align-items: center; }
+.billing-current-plan { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:20px; margin-bottom:16px; }
+.billing-current-plan h2 { margin:5px 0; color:var(--text); font-size:18px; }
+.billing-current-plan p { margin:0; color:var(--muted); font-size:12px; }
+.billing-plan-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin:16px 0 20px; align-items:stretch; }
+.billing-plan-card { display:flex; flex-direction:column; gap:13px; min-width:0; padding:20px; }
+.billing-plan-card--current { border-color:rgba(23,107,255,.55); box-shadow:0 0 0 2px rgba(23,107,255,.07); }
+.billing-plan-card-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:20px; }
+.billing-plan-card h2 { margin:0; color:var(--text); font-size:20px; letter-spacing:-.02em; }
+.billing-plan-description { min-height:36px; margin:0; color:var(--muted); font-size:12px; line-height:1.55; }
+.billing-plan-price { display:flex; align-items:baseline; gap:6px; padding:5px 0 10px; border-bottom:1px solid var(--console-border); }
+.billing-plan-price strong { color:var(--text); font-size:30px; letter-spacing:-.04em; }
+.billing-plan-price span { color:var(--muted); font-size:12px; }
+.billing-plan-detail { display:grid; grid-template-columns:auto 1fr; gap:6px 12px; padding:12px; background:var(--console-bg); border-radius:9px; font-size:12px; }
+.billing-plan-detail strong { color:var(--text); text-align:right; }
+.billing-plan-detail span { color:var(--muted); }
+.billing-plan-features { flex:1; color:var(--muted); font-size:12px; }
+.billing-plan-features>strong { color:var(--text); }
+.billing-plan-features ul { display:grid; gap:7px; margin:10px 0 4px; padding-left:18px; }
+.billing-plan-features li { line-height:1.4; }
+.billing-plan-card .primary-action { width:100%; justify-content:center; border:0; cursor:pointer; text-decoration:none; }
+.billing-plan-card .primary-action:disabled { opacity:.55; box-shadow:none; cursor:not-allowed; }
+.billing-plans-page .settings-banner { margin-bottom:14px; }
+@media(max-width:1050px) { .billing-plan-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:680px) {
+  .billing-plan-grid { grid-template-columns:minmax(0,1fr); }
+  .billing-current-plan { align-items:flex-start; flex-direction:column; }
+  .billing-plan-description { min-height:0; }
+}
+
