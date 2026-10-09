@@ -31,7 +31,7 @@ CI verifies repository implementation and regression gates; external account set
 
 1. Complete Lemon Squeezy business activation and request international payments if not already enabled.
 2. Confirm whether the business needs payouts in USD or only wants to charge international customers. Lemon Squeezy documents different payout requirements for those cases.
-3. If USD payouts are required for a Nigeria-based business, obtain and verify the required Zenith Bank USD domiciliary account in Lemon Squeezy.
+3. Confirm Lemon Squeezy's supported-country, payout and identity-verification requirements for the account owner. Do not assume a particular Nigerian bank is required; verify the current requirements in the provider dashboard.
 4. In Lemon Squeezy, create or inspect only the three Agata Proxima monthly USD plans. Do not reuse unrelated plans.
 5. Configure the three plan-code environment variables in the deployment secret store.
 6. Deploy the code with the new plan preflight and run a real payment round trip before allowing customers to subscribe.
