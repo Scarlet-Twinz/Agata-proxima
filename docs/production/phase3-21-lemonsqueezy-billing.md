@@ -22,6 +22,7 @@ Set these values only in the Control Plane's server-side environment:
 - `LEMONSQUEEZY_GROWTH_VARIANT_ID`
 - `LEMONSQUEEZY_SCALE_VARIANT_ID`
 - `LEMONSQUEEZY_WEBHOOK_SECRET`
+- `LEMONSQUEEZY_TEST_MODE=true` for Test Mode (the safe default; set to `false` only when intentionally switching to live-mode keys and live variants)
 
 Keep the existing Resend and Microsoft Entra variables. Do not overwrite the user's existing `.env`; add only missing variables after pulling and reviewing the diff. Never commit or paste API keys or webhook secrets into chat.
 
@@ -33,7 +34,7 @@ Keep the existing Resend and Microsoft Entra variables. Do not overwrite the use
 | Growth | USD $499 | Monthly | `LEMONSQUEEZY_GROWTH_VARIANT_ID` |
 | Scale | USD $1,199 | Monthly | `LEMONSQUEEZY_SCALE_VARIANT_ID` |
 
-The three variant IDs must be present and distinct before checkout is enabled. Free and Enterprise do not use self-service checkout.
+The three variant IDs must be present and distinct before checkout is enabled. Before checkout is created, the backend verifies that the store currency is USD, the selected variant is published and matches the configured Test/Live mode, and its current Price object is a standard monthly subscription at the exact expected amount with no setup fee. Free and Enterprise do not use self-service checkout.
 
 ## Webhook safety
 
