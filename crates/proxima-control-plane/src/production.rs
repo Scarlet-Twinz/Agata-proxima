@@ -1800,6 +1800,7 @@ pub(crate) async fn send_text_email(
     subject: &str,
     text: &str,
     sender_role: &str,
+    reply_to: &str,
 ) -> anyhow::Result<()> {
     let key = env::var("RESEND_API_KEY")?;
     if key.trim().is_empty() {
@@ -1815,6 +1816,7 @@ pub(crate) async fn send_text_email(
         .json(&json!({
             "from": from,
             "to": [to],
+            "reply_to": [reply_to],
             "subject": subject,
             "text": text
         }))
