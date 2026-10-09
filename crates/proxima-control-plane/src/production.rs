@@ -1056,26 +1056,396 @@ pub(crate) async fn portal(State(s):State<AppState>,headers:HeaderMap)->Response
     let secret=match env::var("PAYSTACK_SECRET_KEY"){Ok(v) if !v.trim().is_empty()=>v,_=>return service_unavailable("Paystack secret is not configured.")};let code=match sqlx::query("SELECT paystack_subscription_code FROM billing_accounts WHERE organization_id=$1").bind(ctx.organization_id).fetch_optional(&s.db).await{Ok(Some(r))=>r.get::<Option<String>,_>("paystack_subscription_code"),Ok(None)=>None,Err(e)=>return db_error(e)};let code=match code{Some(v)=>v,None=>return bad("No Paystack subscription exists for this organization yet.")};
     let response=match Client::new().get(format!("https://api.paystack.co/subscription/{code}/manage/link")).bearer_auth(secret).send().await{Ok(r)=>r,Err(e)=>return external_error(e)};if !response.status().is_success(){return paystack_error(response).await;}let body:Value=match response.json().await{Ok(v)=>v,Err(e)=>return external_error(e)};let url=body.pointer("/data/link").and_then(Value::as_str).unwrap_or_default();if url.is_empty(){return service_unavailable("Paystack did not return a subscription management URL.");}Json(json!({"ok":true,"provider":"paystack","portal_url":url})).into_response()
 }
-pub(crate) async fn paystack_webhook(State(s):State<AppState>,headers:HeaderMap,body:String)->Response{
-    let signature=match headers.get("x-paystack-signature").and_then(|v|v.to_str().ok()){Some(v)=>v,None=>return StatusCode::BAD_REQUEST.into_response()};let secret=match env::var("PAYSTACK_SECRET_KEY"){Ok(v) if !v.trim().is_empty()=>v,_=>return StatusCode::SERVICE_UNAVAILABLE.into_response()};if !verify_paystack_signature(&body,signature,&secret){return StatusCode::UNAUTHORIZED.into_response();}
-    let event:Value=match serde_json::from_str(&body){Ok(v)=>v,Err(_)=>return StatusCode::BAD_REQUEST.into_response()};let event_type=event.get("event").and_then(Value::as_str).unwrap_or_default();if event_type.is_empty(){return StatusCode::BAD_REQUEST.into_response();}let data=event.get("data").cloned().unwrap_or(Value::Null);
-    let key=data.get("id").and_then(Value::as_i64).map(|v|v.to_string()).or_else(||data.get("reference").and_then(Value::as_str).map(ToOwned::to_owned)).unwrap_or_else(||format!("{}:{}",event_type,hex::encode(Sha256::digest(body.as_bytes()))));
-    let inserted=match sqlx::query("INSERT INTO billing_events(provider,provider_event_id,event_type,payload) VALUES('paystack',$1,$2,$3) ON CONFLICT(provider,provider_event_id) DO NOTHING").bind(&key).bind(event_type).bind(&event).execute(&s.db).await{Ok(v)=>v.rows_affected()==1,Err(e)=>return db_error(e)};if !inserted{return Json(json!({"received":true,"duplicate":true})).into_response();}
-    let org=if let Some(v)=data.pointer("/metadata/organization_id").and_then(Value::as_str).and_then(|v|Uuid::parse_str(v).ok()){Some(v)}else if let Some(code)=data.pointer("/customer/customer_code").and_then(Value::as_str).or_else(||data.get("customer_code").and_then(Value::as_str)){sqlx::query("SELECT organization_id FROM billing_accounts WHERE paystack_customer_code=$1").bind(code).fetch_optional(&s.db).await.ok().flatten().map(|r|r.get::<Uuid,_>("organization_id"))}else if let Some(reference)=data.get("reference").and_then(Value::as_str){sqlx::query("SELECT organization_id FROM billing_transactions WHERE provider='paystack' AND reference=$1").bind(reference).fetch_optional(&s.db).await.ok().flatten().map(|r|r.get::<Uuid,_>("organization_id"))}else{None};
-    if let Some(org)=org{
-        let plan_code=data.pointer("/plan/plan_code").and_then(Value::as_str).or_else(||data.pointer("/subscription/plan/plan_code").and_then(Value::as_str)).or_else(||data.pointer("/subscription/plan_code").and_then(Value::as_str)).or_else(||data.get("plan_code").and_then(Value::as_str));let plan=plan_code.and_then(|v|plan_for_code(Some(v))).unwrap_or("free");
-        match event_type{
-            "charge.success"|"subscription.create"|"subscription.enable"=>{let customer=data.pointer("/customer/customer_code").and_then(Value::as_str).or_else(||data.get("customer_code").and_then(Value::as_str));let subscription=data.get("subscription_code").and_then(Value::as_str).or_else(||data.pointer("/subscription/subscription_code").and_then(Value::as_str));let end=data.get("next_payment_date").and_then(Value::as_str).and_then(|v|chrono::DateTime::parse_from_rfc3339(v).ok()).map(|v|v.with_timezone(&chrono::Utc));if let Err(e)=sqlx::query("INSERT INTO billing_accounts(organization_id,paystack_customer_code,paystack_subscription_code,paystack_plan_code,plan_key,status,current_period_end,cancel_at_period_end,updated_at) VALUES($1,$2,$3,$4,$5,'active',$6,false,now()) ON CONFLICT(organization_id) DO UPDATE SET paystack_customer_code=COALESCE(EXCLUDED.paystack_customer_code,billing_accounts.paystack_customer_code),paystack_subscription_code=COALESCE(EXCLUDED.paystack_subscription_code,billing_accounts.paystack_subscription_code),paystack_plan_code=COALESCE(EXCLUDED.paystack_plan_code,billing_accounts.paystack_plan_code),plan_key=EXCLUDED.plan_key,status='active',current_period_end=EXCLUDED.current_period_end,cancel_at_period_end=false,updated_at=now()").bind(org).bind(customer).bind(subscription).bind(plan_code).bind(plan).bind(end).execute(&s.db).await{return db_error(e)}
-    if let Err(e)=apply_entitlements(&s.db,org,plan).await{return db_error(e)}}
-            "invoice.payment_failed"|"subscription.disable"|"subscription.not_renew"=>{let st=if event_type=="subscription.disable"{"canceled"}else if event_type=="subscription.not_renew"{"non-renewing"}else{"attention"};if let Err(e)=sqlx::query("UPDATE billing_accounts SET status=$1,cancel_at_period_end=$2,updated_at=now() WHERE organization_id=$3").bind(st).bind(event_type=="subscription.not_renew").bind(org).execute(&s.db).await{return db_error(e)}
-            if event_type!="subscription.not_renew"{if let Err(e)=sqlx::query("UPDATE organization_entitlements SET billing_status=$1,updated_at=now() WHERE organization_id=$2").bind(st).bind(org).execute(&s.db).await{return db_error(e)}}}
-            "subscription.expiring_cards"=>{let _=sqlx::query("UPDATE billing_accounts SET status='attention',updated_at=now() WHERE organization_id=$1").bind(org).execute(&s.db).await;}
-            "refund.pending"|"refund.processing"|"refund.processed"|"refund.failed"|"refund.needs-attention"=>{if let Some(reference)=data.get("reference").and_then(Value::as_str){let _=sqlx::query("UPDATE billing_transactions SET refund_status=$1,updated_at=now() WHERE provider='paystack' AND reference=$2 AND organization_id=$3").bind(event_type.trim_start_matches("refund.")).bind(reference).bind(org).execute(&s.db).await;}}
-            _=>{}
+async fn mark_paystack_event_ignored(
+    db: &sqlx::PgPool,
+    key: &str,
+    reason: &str,
+) -> Response {
+    let _ = sqlx::query(
+        "UPDATE billing_events
+            SET status='ignored',processed_at=now(),processing_started_at=NULL
+          WHERE provider='paystack' AND provider_event_id=$1",
+    )
+    .bind(key)
+    .execute(db)
+    .await;
+    Json(json!({"received":true,"ignored":reason})).into_response()
+}
+
+pub(crate) async fn paystack_webhook(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    body: String,
+) -> Response {
+    let signature = match headers.get("x-paystack-signature").and_then(|v| v.to_str().ok()) {
+        Some(value) => value,
+        None => return StatusCode::BAD_REQUEST.into_response(),
+    };
+    let secret = match env::var("PAYSTACK_SECRET_KEY") {
+        Ok(value) if !value.trim().is_empty() => value,
+        _ => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
+    };
+    if !verify_paystack_signature(&body, signature, &secret) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    let event: Value = match serde_json::from_str(&body) {
+        Ok(value) => value,
+        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
+    };
+    let event_type = event.get("event").and_then(Value::as_str).unwrap_or_default();
+    if event_type.is_empty() {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+    let data = event.get("data").cloned().unwrap_or(Value::Null);
+    let key = event
+        .get("id")
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+        .or_else(|| event.get("id").and_then(Value::as_i64).map(|v| v.to_string()))
+        .or_else(|| {
+            data.get("id")
+                .and_then(Value::as_i64)
+                .map(|v| format!("{event_type}:{v}"))
+        })
+        .or_else(|| {
+            data.get("reference")
+                .and_then(Value::as_str)
+                .map(|v| format!("{event_type}:{v}"))
+        })
+        .unwrap_or_else(|| {
+            format!(
+                "{event_type}:{}",
+                hex::encode(Sha256::digest(body.as_bytes()))
+            )
+        });
+
+    let claimed = match sqlx::query(
+        "INSERT INTO billing_events
+            (provider,provider_event_id,event_type,payload,status,processing_started_at,attempt_count)
+         VALUES('paystack',$1,$2,$3,'processing',now(),1)
+         ON CONFLICT(provider,provider_event_id) DO UPDATE
+            SET status='processing',processing_started_at=now(),
+                attempt_count=billing_events.attempt_count+1,
+                payload=EXCLUDED.payload,event_type=EXCLUDED.event_type
+          WHERE billing_events.status NOT IN ('processed','ignored')
+            AND (billing_events.processing_started_at IS NULL
+                 OR billing_events.processing_started_at < now()-interval '5 minutes')
+         RETURNING id",
+    )
+    .bind(&key)
+    .bind(event_type)
+    .bind(&event)
+    .fetch_optional(&s.db)
+    .await
+    {
+        Ok(value) => value.is_some(),
+        Err(e) => return db_error(e),
+    };
+    if !claimed {
+        return Json(json!({"received":true,"duplicate":true})).into_response();
+    }
+
+    let reference = data.get("reference").and_then(Value::as_str);
+    let transaction = if let Some(reference) = reference {
+        match sqlx::query(
+            "SELECT organization_id,plan_key,plan_code
+               FROM billing_transactions
+              WHERE provider='paystack' AND reference=$1",
+        )
+        .bind(reference)
+        .fetch_optional(&s.db)
+        .await
+        {
+            Ok(value) => value,
+            Err(e) => return db_error(e),
+        }
+    } else {
+        None
+    };
+
+    let metadata_org = data
+        .pointer("/metadata/organization_id")
+        .and_then(Value::as_str)
+        .and_then(|value| Uuid::parse_str(value).ok());
+    let transaction_org = transaction.as_ref().map(|row| row.get::<Uuid, _>("organization_id"));
+    if let (Some(metadata_org), Some(transaction_org)) = (metadata_org, transaction_org) {
+        if metadata_org != transaction_org {
+            return mark_paystack_event_ignored(&s.db, &key, "transaction_organization_mismatch").await;
         }
     }
-    let _=sqlx::query("UPDATE billing_events SET status='processed',processed_at=now() WHERE provider='paystack' AND provider_event_id=$1").bind(&key).execute(&s.db).await;
-    Json(json!({"received":true})).into_response()
+
+    let customer_code = data
+        .pointer("/customer/customer_code")
+        .and_then(Value::as_str)
+        .or_else(|| data.get("customer_code").and_then(Value::as_str));
+    let subscription_code = data
+        .get("subscription_code")
+        .and_then(Value::as_str)
+        .or_else(|| data.pointer("/subscription/subscription_code").and_then(Value::as_str));
+
+    let customer_org = if metadata_org.is_none() && transaction_org.is_none() {
+        if let Some(code) = customer_code {
+            match sqlx::query(
+                "SELECT organization_id FROM billing_accounts WHERE paystack_customer_code=$1",
+            )
+            .bind(code)
+            .fetch_optional(&s.db)
+            .await
+            {
+                Ok(value) => value.map(|row| row.get::<Uuid, _>("organization_id")),
+                Err(e) => return db_error(e),
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let subscription_org = if metadata_org.is_none() && transaction_org.is_none() && customer_org.is_none() {
+        if let Some(code) = subscription_code {
+            match sqlx::query(
+                "SELECT organization_id FROM billing_accounts WHERE paystack_subscription_code=$1",
+            )
+            .bind(code)
+            .fetch_optional(&s.db)
+            .await
+            {
+                Ok(value) => value.map(|row| row.get::<Uuid, _>("organization_id")),
+                Err(e) => return db_error(e),
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let org = match metadata_org.or(transaction_org).or(customer_org).or(subscription_org) {
+        Some(value) => value,
+        None => return mark_paystack_event_ignored(&s.db, &key, "organization_not_resolved").await,
+    };
+
+    let payload_plan_code = data
+        .pointer("/plan/plan_code")
+        .and_then(Value::as_str)
+        .or_else(|| data.pointer("/subscription/plan/plan_code").and_then(Value::as_str))
+        .or_else(|| data.pointer("/subscription/plan_code").and_then(Value::as_str))
+        .or_else(|| data.get("plan_code").and_then(Value::as_str));
+
+    let transaction_plan = transaction.as_ref().map(|row| row.get::<String, _>("plan_key"));
+    let transaction_plan_code = transaction
+        .as_ref()
+        .and_then(|row| row.get::<Option<String>, _>("plan_code"));
+
+    if let (Some(expected), Some(received)) =
+        (transaction_plan_code.as_deref(), payload_plan_code)
+    {
+        if expected != received {
+            return mark_paystack_event_ignored(&s.db, &key, "transaction_plan_code_mismatch").await;
+        }
+    }
+
+    let event_plan = transaction_plan
+        .as_deref()
+        .or_else(|| payload_plan_code.and_then(|code| plan_for_code(Some(code))));
+    let event_plan_code = transaction_plan_code
+        .as_deref()
+        .or(payload_plan_code);
+
+    match event_type {
+        "charge.success" | "subscription.create" | "subscription.enable" => {
+            if event_type == "charge.success" && transaction.is_none() {
+                return mark_paystack_event_ignored(&s.db, &key, "successful_charge_without_local_transaction").await;
+            }
+            let plan = match event_plan {
+                Some("starter") => "starter",
+                Some("growth") => "growth",
+                Some("scale") => "scale",
+                _ => return mark_paystack_event_ignored(&s.db, &key, "unknown_or_non_self_service_plan").await,
+            };
+
+            if let Some(reference) = reference {
+                if event_type == "charge.success" {
+                    if let Err(e) = sqlx::query(
+                        "UPDATE billing_transactions
+                            SET transaction_id=$1,status='success',payload=$2,updated_at=now()
+                          WHERE provider='paystack' AND reference=$3 AND organization_id=$4",
+                    )
+                    .bind(data.get("id").and_then(Value::as_u64).map(|value| value as i64))
+                    .bind(&data)
+                    .bind(reference)
+                    .bind(org)
+                    .execute(&s.db)
+                    .await
+                    {
+                        return db_error(e);
+                    }
+                }
+            }
+
+            let end = data
+                .get("next_payment_date")
+                .and_then(Value::as_str)
+                .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+                .map(|value| value.with_timezone(&chrono::Utc));
+
+            if let Err(e) = sqlx::query(
+                "INSERT INTO billing_accounts
+                    (organization_id,paystack_customer_code,paystack_subscription_code,paystack_plan_code,
+                     plan_key,status,current_period_end,cancel_at_period_end,updated_at)
+                 VALUES($1,$2,$3,$4,$5,'active',$6,false,now())
+                 ON CONFLICT(organization_id) DO UPDATE SET
+                    paystack_customer_code=COALESCE(EXCLUDED.paystack_customer_code,billing_accounts.paystack_customer_code),
+                    paystack_subscription_code=COALESCE(EXCLUDED.paystack_subscription_code,billing_accounts.paystack_subscription_code),
+                    paystack_plan_code=COALESCE(EXCLUDED.paystack_plan_code,billing_accounts.paystack_plan_code),
+                    plan_key=EXCLUDED.plan_key,status='active',
+                    current_period_end=COALESCE(EXCLUDED.current_period_end,billing_accounts.current_period_end),
+                    cancel_at_period_end=false,updated_at=now()",
+            )
+            .bind(org)
+            .bind(customer_code)
+            .bind(subscription_code)
+            .bind(event_plan_code)
+            .bind(plan)
+            .bind(end)
+            .execute(&s.db)
+            .await
+            {
+                return db_error(e);
+            }
+            if let Err(e) = apply_entitlements(&s.db, org, plan).await {
+                return db_error(e);
+            }
+        }
+        "invoice.payment_failed" => {
+            if let Err(e) = sqlx::query(
+                "UPDATE billing_accounts SET status='attention',updated_at=now()
+                  WHERE organization_id=$1 AND status NOT IN ('canceled','unpaid')",
+            )
+            .bind(org)
+            .execute(&s.db)
+            .await
+            {
+                return db_error(e);
+            }
+            if let Err(e) = sqlx::query(
+                "UPDATE organization_entitlements
+                    SET billing_status='past_due',
+                        billing_grace_until=COALESCE(billing_grace_until,now()+interval '7 days'),
+                        updated_at=now()
+                  WHERE organization_id=$1 AND billing_status NOT IN ('canceled','unpaid')",
+            )
+            .bind(org)
+            .execute(&s.db)
+            .await
+            {
+                return db_error(e);
+            }
+            if let Some(reference) = reference {
+                let _ = sqlx::query(
+                    "UPDATE billing_transactions SET status='failed',payload=$1,updated_at=now()
+                      WHERE provider='paystack' AND reference=$2 AND organization_id=$3",
+                )
+                .bind(&data)
+                .bind(reference)
+                .bind(org)
+                .execute(&s.db)
+                .await;
+            }
+        }
+        "subscription.disable" => {
+            if let Err(e) = sqlx::query(
+                "UPDATE billing_accounts SET status='canceled',cancel_at_period_end=false,updated_at=now()
+                  WHERE organization_id=$1",
+            )
+            .bind(org)
+            .execute(&s.db)
+            .await
+            {
+                return db_error(e);
+            }
+            if let Err(e) = sqlx::query(
+                "UPDATE organization_entitlements
+                    SET billing_status='canceled',billing_grace_until=NULL,updated_at=now()
+                  WHERE organization_id=$1",
+            )
+            .bind(org)
+            .execute(&s.db)
+            .await
+            {
+                return db_error(e);
+            }
+        }
+        "subscription.not_renew" => {
+            let end = data
+                .get("next_payment_date")
+                .and_then(Value::as_str)
+                .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+                .map(|value| value.with_timezone(&chrono::Utc));
+            if let Err(e) = sqlx::query(
+                "UPDATE billing_accounts
+                    SET status='non-renewing',cancel_at_period_end=true,
+                        current_period_end=COALESCE($1,current_period_end),updated_at=now()
+                  WHERE organization_id=$2",
+            )
+            .bind(end)
+            .bind(org)
+            .execute(&s.db)
+            .await
+            {
+                return db_error(e);
+            }
+        }
+        "subscription.expiring_cards" => {
+            if let Err(e) = sqlx::query(
+                "UPDATE billing_accounts SET status='attention',updated_at=now()
+                  WHERE organization_id=$1 AND status NOT IN ('canceled','unpaid')",
+            )
+            .bind(org)
+            .execute(&s.db)
+            .await
+            {
+                return db_error(e);
+            }
+        }
+        "refund.pending" | "refund.processing" | "refund.processed" | "refund.failed" | "refund.needs-attention" => {
+            let refund_reference = data
+                .get("reference")
+                .and_then(Value::as_str)
+                .or_else(|| data.get("transaction_reference").and_then(Value::as_str))
+                .or_else(|| data.pointer("/transaction/reference").and_then(Value::as_str));
+            if let Some(reference) = refund_reference {
+                if let Err(e) = sqlx::query(
+                    "UPDATE billing_transactions SET refund_status=$1,payload=$2,updated_at=now()
+                      WHERE provider='paystack' AND reference=$3 AND organization_id=$4",
+                )
+                .bind(event_type.trim_start_matches("refund."))
+                .bind(&data)
+                .bind(reference)
+                .bind(org)
+                .execute(&s.db)
+                .await
+                {
+                    return db_error(e);
+                }
+            }
+        }
+        _ => {}
+    }
+
+    if let Err(e) = sqlx::query(
+        "UPDATE billing_events SET status='processed',processed_at=now(),processing_started_at=NULL
+          WHERE provider='paystack' AND provider_event_id=$1",
+    )
+    .bind(&key)
+    .execute(&s.db)
+    .await
+    {
+        return db_error(e);
+    }
+    Json(json!({"received":true,"processed":true})).into_response()
 }
 
 pub(crate) async fn send_verification_email(
