@@ -6,6 +6,9 @@ ALTER TABLE billing_events
   ADD COLUMN IF NOT EXISTS processing_started_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0);
 
+ALTER TABLE billing_transactions
+  ADD COLUMN IF NOT EXISTS refund_payload JSONB;
+
 CREATE OR REPLACE FUNCTION proxima_reconcile_billing_lifecycle()
 RETURNS BIGINT
 LANGUAGE plpgsql
@@ -42,7 +45,7 @@ BEGIN
       FROM billing_accounts b
      WHERE b.organization_id=e.organization_id
        AND b.status='canceled'
-       AND e.billing_status NOT IN ('canceled','unpaid');
+       AND e.billing_status <> 'canceled';
     GET DIAGNOSTICS changed = ROW_COUNT;
     transitioned := transitioned + changed;
 
