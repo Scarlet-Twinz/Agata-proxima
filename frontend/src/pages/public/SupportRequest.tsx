@@ -43,9 +43,9 @@ const contextMap: Record<string, { subject: string; message: string; title: stri
 
 type SupportRequestResponse = {
   ok: boolean;
-  request_id: string;
-  requester_email_status: "sent" | "failed";
-  support_email_status: "sent" | "failed" | "not_configured";
+  request_id?: string;
+  requester_email_status?: "sent" | "failed";
+  support_email_status?: "sent" | "failed" | "not_configured";
   message: string;
 };
 
@@ -202,11 +202,11 @@ export function SupportRequest() {
               {result && (
                 <div className="public-request-note" role="status" aria-live="polite">
                   <p>{result.message}</p>
-                  <p><strong>Request ID:</strong> {result.request_id}</p>
-                  {result.requester_email_status !== "sent" && (
+                  {result.request_id && <p><strong>Request ID:</strong> {result.request_id}</p>}
+                  {result.requester_email_status && result.requester_email_status !== "sent" && (
                     <p>We could not send a confirmation email. Please keep the request ID for reference.</p>
                   )}
-                  {result.support_email_status !== "sent" && (
+                  {result.support_email_status && result.support_email_status !== "sent" && (
                     <p>Our support team has not received an email notification yet. Your request is saved, but follow-up may be delayed.</p>
                   )}
                 </div>
