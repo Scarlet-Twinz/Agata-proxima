@@ -12,6 +12,7 @@ import { Security } from "../pages/public/Security";
 import { Trust } from "../pages/public/Trust";
 import { Company } from "../pages/public/Company";
 import { Docs } from "../pages/public/Docs";
+import { UsageGuide } from "../pages/public/UsageGuide";
 import { Changelog } from "../pages/public/Changelog";
 import { Status } from "../pages/public/Status";
 import { FAQ } from "../pages/public/FAQ";
@@ -125,6 +126,7 @@ export const router = createBrowserRouter([
       { path: "/trust", element: <Trust /> },
       { path: "/company", element: <Company /> },
       { path: "/docs", element: <Docs /> },
+      { path: "/docs/usage", element: <UsageGuide /> },
       { path: "/changelog", element: <Changelog /> },
       { path: "/status", element: <Status /> },
       { path: "/faq", element: <FAQ /> },
