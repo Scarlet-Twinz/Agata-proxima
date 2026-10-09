@@ -338,7 +338,7 @@ pub(crate) async fn webhook(State(s):State<AppState>,headers:HeaderMap,body:Stri
     let (effective_status,account_status,cancel_at_period_end)=if invoice_event {
         let prior_status=existing.as_ref().map(|r|r.get::<String,_>("status")).unwrap_or_else(||"active".to_owned());
         let prior_cancel=existing.as_ref().map(|r|r.get::<bool,_>("cancel_at_period_end")).unwrap_or(false);
-        if event_type=="subscription_payment_failed" {
+        if matches!(event_type,"subscription_payment_failed"|"subscription_payment_refunded") {
             ("past_due",if prior_status=="non-renewing"{"non-renewing"}else{"attention"},prior_cancel)
         } else {
             ("active",if prior_status=="non-renewing"{"non-renewing"}else{"active"},prior_cancel)
