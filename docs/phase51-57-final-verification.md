@@ -22,7 +22,7 @@ This document records the repository-side completion boundary for Phases 51–57
 | Scale | $1,199 |
 | Enterprise | Custom |
 
-The Free plan does not require a Lemon Squeezy subscription. Paid checkout uses the Agata-specific environment-configured Lemon Squeezy plan codes. Before live activation, verify the configured provider plan amounts and codes against this table. Do not create, modify or enable provider plans solely from documentation.
+The Free plan does not require a Lemon Squeezy subscription. Paid checkout resolves the Starter, Growth, and Scale plan keys to the configured Lemon Squeezy variant IDs. The server validates store currency, product/variant publication, mode, monthly interval, and exact amount before checkout. Verify the actual Test Mode variants against this table; do not create or enable live variants solely from documentation.
 
 ## What repository CI can prove
 
