@@ -50,7 +50,7 @@ Configure these service variables in the provider's secret/configuration UI:
 - `AGATA_PUBLIC_BASE_URL=https://agataproxima.com`.
 - `RESEND_API_KEY` and `RESEND_FROM_EMAIL` after the sender domain is verified.
 - `PAYSTACK_SECRET_KEY` and the three `AGATA_PAYSTACK_*_PLAN_CODE` values after Paystack activation.
-- `PROXIMA_OIDC_ISSUER`, `PROXIMA_OIDC_CLIENT_ID` and `PROXIMA_OIDC_CLIENT_SECRET` after Microsoft Entra registration.
+- `PROXIMA_OIDC_CLIENT_ID` and `PROXIMA_OIDC_CLIENT_SECRET` after Microsoft Entra registration. The current implementation derives and validates the issuer from the organization's configured Entra tenant ID; there is no separate `PROXIMA_OIDC_ISSUER` runtime variable.
 
 Do not store any secret in Git, Vercel's public build variables, or this documentation. The Control Plane applies its versioned database migrations at startup; verify migration logs and readiness after the first deploy.
 
