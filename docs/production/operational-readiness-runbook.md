@@ -14,7 +14,7 @@ Required components:
 2. **Rust Control Plane container** on a managed container host with a stable public HTTPS origin.
 3. **Managed PostgreSQL** for the Control Plane, with automated backups, encryption/TLS and restricted network access.
 4. **Proxima Engine nodes** deployed close to the protected PostgreSQL systems. The Engine remains the data-plane enforcement authority.
-5. **Secret store** for database credentials, Paystack, Resend and Entra credentials.
+5. **Secret store** for database credentials, Lemon Squeezy, Resend and Entra credentials.
 6. **Monitoring and alerting** for liveness, readiness, database failures, webhook failures and email delivery.
 7. **Recovery path** that can restore a backup to an isolated database and redeploy a previous known-good image.
 
