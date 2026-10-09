@@ -38,7 +38,7 @@ Security guarantees will be documented against an explicit threat model. Proxima
 
 ## Status
 
-The repository now includes the Proxima Engine, a durable Control Plane, a public React frontend, the Phase 3.22-A–H entitlement enforcement workstreams, Paystack billing integration, Microsoft Entra OIDC groundwork, operational runbooks and acceptance gates. Repository CI has passed for the canonical entitlement gates. Live provider activation and production operational acceptance remain separate launch gates.
+The repository now includes the Proxima Engine, a durable Control Plane, a public React frontend, the Phase 3.22-A–H entitlement enforcement workstreams, Lemon Squeezy billing integration, Microsoft Entra OIDC groundwork, operational runbooks and acceptance gates. Repository CI has passed for the canonical entitlement gates. Live provider activation and production operational acceptance remain separate launch gates.
 
 The current engine establishes a verified tenant context, maps it to a PostgreSQL role, brokers the PostgreSQL authentication/startup exchange, and then enters the normal query stream only after PostgreSQL reports a ready session.
 
@@ -58,7 +58,7 @@ The 25–40 platform layer adds an authenticated, durable control plane with org
 - [Deployment architecture](docs/production/deployment-architecture.md) — prepared Vercel frontend, container API, managed PostgreSQL and same-origin routing path.
 - [Operational readiness runbook](docs/production/operational-readiness-runbook.md) — health, backups, restore drills, monitoring and incident response.
 - [Production smoke workflow](.github/workflows/production-smoke.yml) — scheduled liveness checks and a manual full-readiness gate once the public URL is configured.
-- [Remaining launch work map](docs/production/remaining-launch-work-map.md) — Paystack USD, Microsoft Entra SSO, hosting and production acceptance.
+- [Remaining launch work map](docs/production/remaining-launch-work-map.md) — Lemon Squeezy Test Mode validation, Microsoft Entra SSO, hosting and production acceptance.
 - [OpenAPI contract](control-plane/openapi.json) — machine-readable Control Plane API.
 
 ## License
