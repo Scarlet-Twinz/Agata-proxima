@@ -38,6 +38,57 @@ fn api_headers(req: reqwest::RequestBuilder, key: &str) -> reqwest::RequestBuild
     req.bearer_auth(key).header("Accept", "application/vnd.api+json").header("Content-Type", "application/vnd.api+json")
 }
 
+fn expected_monthly_price(plan: &str) -> Option<i64> {
+    match plan {
+        "starter" => Some(14_900),
+        "growth" => Some(49_900),
+        "scale" => Some(119_900),
+        _ => None,
+    }
+}
+
+async fn validate_store_and_variant(client: &Client, key: &str, store_id: &str, variant_id: &str, plan: &str) -> Result<(), &'static str> {
+    let store_response = api_headers(client.get(format!("https://api.lemonsqueezy.com/v1/stores/{store_id}")), key)
+        .send().await.map_err(|_| "Lemon Squeezy store could not be checked.")?;
+    if !store_response.status().is_success() { return Err("Lemon Squeezy store ID or API key is invalid."); }
+    let store: Value = store_response.json().await.map_err(|_| "Lemon Squeezy store response was invalid.")?;
+    if store.pointer("/data/attributes/currency").and_then(Value::as_str) != Some("USD") {
+        return Err("The configured Lemon Squeezy store must use USD as its currency.");
+    }
+
+    let variant_response = api_headers(client.get(format!("https://api.lemonsqueezy.com/v1/variants/{variant_id}")), key)
+        .send().await.map_err(|_| "Lemon Squeezy variant could not be checked.")?;
+    if !variant_response.status().is_success() { return Err("The configured Lemon Squeezy variant is unavailable."); }
+    let variant: Value = variant_response.json().await.map_err(|_| "Lemon Squeezy variant response was invalid.")?;
+    let attrs = variant.pointer("/data/attributes").ok_or("Lemon Squeezy variant attributes are missing.")?;
+    if attrs.get("status").and_then(Value::as_str) != Some("published") {
+        return Err("The configured Lemon Squeezy variant must be published.");
+    }
+    let expected_test_mode = env::var("LEMONSQUEEZY_TEST_MODE").map(|v| v.eq_ignore_ascii_case("true")).unwrap_or(true);
+    if attrs.get("test_mode").and_then(Value::as_bool) != Some(expected_test_mode) {
+        return Err("Lemon Squeezy variant mode does not match LEMONSQUEEZY_TEST_MODE.");
+    }
+
+    let prices_url = format!("https://api.lemonsqueezy.com/v1/prices?filter%5Bvariant_id%5D={variant_id}");
+    let prices_response = api_headers(client.get(prices_url), key).send().await
+        .map_err(|_| "Lemon Squeezy price could not be checked.")?;
+    if !prices_response.status().is_success() { return Err("Lemon Squeezy price lookup failed."); }
+    let prices: Value = prices_response.json().await.map_err(|_| "Lemon Squeezy price response was invalid.")?;
+    let price = prices.get("data").and_then(Value::as_array).and_then(|v|v.first())
+        .ok_or("The configured Lemon Squeezy variant has no price.")?;
+    let price_attrs = price.get("attributes").ok_or("Lemon Squeezy price attributes are missing.")?;
+    if price_attrs.get("category").and_then(Value::as_str) != Some("subscription")
+        || price_attrs.get("scheme").and_then(Value::as_str) != Some("standard")
+        || price_attrs.get("unit_price").and_then(Value::as_i64) != expected_monthly_price(plan)
+        || price_attrs.get("renewal_interval_unit").and_then(Value::as_str) != Some("month")
+        || price_attrs.get("renewal_interval_quantity").and_then(Value::as_i64) != Some(1)
+        || price_attrs.get("setup_fee_enabled").and_then(Value::as_bool) == Some(true)
+    {
+        return Err("The Lemon Squeezy variant must be a standard monthly USD subscription at the exact Agata plan price with no setup fee.");
+    }
+    Ok(())
+}
+
 pub(crate) async fn plans() -> Response {
     let catalog = [("free","Free",0_i32,"Evaluation and small proofs of concept"),("starter","Starter",149_i32,"First production SaaS deployments"),("growth","Growth",499_i32,"Multi-tenant production workloads"),("scale","Scale",1199_i32,"Larger fleets and security operations"),("enterprise","Enterprise",0_i32,"Contracted enterprise deployments")];
     let plans = catalog.iter().map(|(key,name,monthly_usd,description)| {
@@ -68,6 +119,9 @@ pub(crate) async fn checkout(State(s):State<AppState>,headers:HeaderMap,Json(inp
     let key=env::var("LEMONSQUEEZY_API_KEY").unwrap();
     let email=match sqlx::query("SELECT email FROM users WHERE id=$1").bind(ctx.user_id).fetch_one(&s.db).await {Ok(r)=>r.get::<String,_>("email"),Err(e)=>return db_error(e)};
     let client=match api_client(){Ok(c)=>c,Err(e)=>return external_error(e)};
+    if let Err(message)=validate_store_and_variant(&client,&key,&store,&variant,plan).await {
+        return service_unavailable(message);
+    }
     let response=match api_headers(client.post("https://api.lemonsqueezy.com/v1/checkouts"),&key)
         .json(&json!({
             "data": {
