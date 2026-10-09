@@ -3,7 +3,7 @@
   "info": {
     "title": "Agata Proxima Control Plane API",
     "version": "0.2.0",
-    "description": "Authenticated management plane for organizations, tenants, policies, fleet, deployments, verification, audit and support. The Proxima Engine remains the independent data-plane enforcement authority."
+    "description": "Authenticated management plane for organizations, tenants, policies, fleet, deployments, verification, audit, support and Paystack billing. The Proxima Engine remains the independent data-plane enforcement authority."
   },
   "servers": [
     {
@@ -236,24 +236,46 @@
       "post": {
         "summary": "Configure Microsoft Entra OIDC for the current organization",
         "responses": {
-          "200": {"description": "OIDC connection configured"},
-          "403": {"description": "Plan or role does not permit enterprise SSO"}
+          "200": {
+            "description": "OIDC connection configured"
+          },
+          "403": {
+            "description": "Plan or role does not permit enterprise SSO"
+          }
         }
       }
     },
     "/api/v1/auth/oidc/start": {
       "get": {
         "security": [],
-        "parameters": [{"name":"organization_id","in":"query","required":true,"schema":{"type":"string","format":"uuid"}}],
-        "responses": {"200": {"description":"Authorization URL returned"}}
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorization URL returned"
+          }
+        }
       }
     },
     "/api/v1/auth/oidc/callback": {
       "get": {
         "security": [],
         "responses": {
-          "200": {"description":"SSO session established"},
-          "400": {"description":"Identity validation failed"}
+          "200": {
+            "description": "SSO session established"
+          },
+          "400": {
+            "description": "Identity validation failed"
+          }
         }
       }
     },
@@ -276,6 +298,399 @@
           },
           "401": {
             "description": "Authentication required"
+          }
+        }
+      }
+    },
+    "/api/v1/billing": {
+      "get": {
+        "summary": "Get current organization billing state",
+        "responses": {
+          "200": {
+            "description": "Billing state and current plan"
+          },
+          "401": {
+            "description": "Authentication required"
+          }
+        }
+      }
+    },
+    "/api/v1/billing/checkout": {
+      "post": {
+        "summary": "Initialize Paystack USD checkout for a paid Agata plan",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "price_id"
+                ],
+                "properties": {
+                  "price_id": {
+                    "type": "string",
+                    "enum": [
+                      "starter",
+                      "growth",
+                      "scale"
+                    ],
+                    "description": "Agata Proxima plan key. The server resolves the configured plan code."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Paystack checkout URL and local transaction reference"
+          },
+          "400": {
+            "description": "Invalid plan"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Plan is not permitted"
+          },
+          "503": {
+            "description": "Paystack is not configured or unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/billing/portal": {
+      "post": {
+        "summary": "Get Paystack subscription management URL",
+        "responses": {
+          "200": {
+            "description": "Paystack portal URL"
+          },
+          "400": {
+            "description": "No subscription exists"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "503": {
+            "description": "Paystack is not configured or unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/billing/verify": {
+      "get": {
+        "summary": "Verify a locally stored Paystack transaction",
+        "parameters": [
+          {
+            "name": "reference",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "trxref",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verified status and plan; paid entitlements are applied only when the provider transaction matches the expected USD amount and plan code"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Organization, plan, currency or amount mismatch"
+          },
+          "404": {
+            "description": "Unknown local transaction"
+          }
+        }
+      }
+    },
+    "/api/v1/billing/paystack/callback": {
+      "get": {
+        "summary": "Paystack hosted checkout callback",
+        "security": [],
+        "parameters": [
+          {
+            "name": "reference",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "trxref",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Redirects to the app with verified or verification-pending billing state"
+          },
+          "404": {
+            "description": "Unknown local transaction"
+          }
+        }
+      }
+    },
+    "/api/v1/webhooks/paystack": {
+      "post": {
+        "summary": "Receive signed Paystack webhook events",
+        "security": [],
+        "parameters": [
+          {
+            "name": "x-paystack-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "event",
+                  "data"
+                ],
+                "properties": {
+                  "event": {
+                    "type": "string"
+                  },
+                  "data": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Event accepted, processed, ignored safely or identified as duplicate"
+          },
+          "400": {
+            "description": "Malformed event or missing signature"
+          },
+          "401": {
+            "description": "Invalid Paystack signature"
+          },
+          "503": {
+            "description": "Paystack secret or database unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/production/readiness": {
+      "get": {
+        "summary": "Report required production configuration checks",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Readiness status and non-secret configuration check results"
+          }
+        }
+      }
+    },
+    "/api/v1/developer/api-keys": {
+      "get": {
+        "summary": "List organization API keys",
+        "responses": {
+          "200": {
+            "description": "Organization API keys"
+          },
+          "401": {
+            "description": "Authentication required"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create an organization API key",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "API key created; secret material is only returned at creation"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "402": {
+            "description": "Plan key limit reached"
+          }
+        }
+      }
+    },
+    "/api/v1/developer/api-keys/{id}": {
+      "delete": {
+        "summary": "Revoke an API key",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "API key revoked"
+          },
+          "404": {
+            "description": "API key not found"
+          }
+        }
+      }
+    },
+    "/api/v1/developer/webhooks": {
+      "get": {
+        "summary": "List organization webhooks",
+        "responses": {
+          "200": {
+            "description": "Webhook integrations"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a webhook integration",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "endpoint_url",
+                  "events"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "endpoint_url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "events": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook integration created"
+          },
+          "402": {
+            "description": "Active integration quota reached"
+          }
+        }
+      }
+    },
+    "/api/v1/developer/webhooks/{id}": {
+      "get": {
+        "summary": "Get webhook details",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook detail"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a webhook integration",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook deleted"
+          }
+        }
+      }
+    },
+    "/api/v1/developer/webhooks/{id}/deliveries": {
+      "get": {
+        "summary": "List webhook deliveries",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook delivery history"
           }
         }
       }
