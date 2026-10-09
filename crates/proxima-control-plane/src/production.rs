@@ -1172,14 +1172,19 @@ pub(crate) async fn lemonsqueezy_webhook(State(s):State<AppState>,headers:Header
    if let Err(e)=sqlx::query("UPDATE organization_entitlements SET billing_status='canceled',billing_grace_until=NULL,updated_at=now() WHERE organization_id=$1").bind(org).execute(&s.db).await{return db_error(e);}
   }
  }
- if matches!(name,"subscription_payment_success"|"subscription_payment_recovered"|"subscription_payment_failed") {
+ if matches!(name,"subscription_payment_success"|"subscription_payment_recovered"|"subscription_payment_failed"|"subscription_payment_refunded") {
   if let (Some(plan),Some(variant_id))=(plan,variant.as_deref()) {
-   let txstatus=if name=="subscription_payment_failed"{"failed"}else{"success"};
+   let txstatus=match name {
+    "subscription_payment_failed"=>"failed",
+    "subscription_payment_refunded"=>"refunded",
+    _=>"success"
+   };
+   let refund_status=if txstatus=="refunded"{Some("refunded")}else{None};
    let reference=format!("invoice:{id}");
    let amount=a.get("total_usd").and_then(Value::as_i64);
-   let currency="USD";
-   if let Err(e)=sqlx::query("INSERT INTO billing_transactions(organization_id,provider,reference,plan_key,plan_code,amount,currency,status,metadata,payload,created_at,updated_at) VALUES($1,'lemonsqueezy',$2,$3,$4,$5,$6,$7,$8,$9,now(),now()) ON CONFLICT(provider,reference) DO UPDATE SET status=EXCLUDED.status,payload=EXCLUDED.payload,updated_at=now()")
-    .bind(org).bind(reference).bind(plan).bind(variant_id).bind(amount).bind(currency).bind(txstatus).bind(&event).bind(&event).execute(&s.db).await{return db_error(e);}
+   let currency=a.get("currency").and_then(Value::as_str).unwrap_or("USD");
+   if let Err(e)=sqlx::query("INSERT INTO billing_transactions(organization_id,provider,reference,plan_key,plan_code,amount,currency,status,refund_status,metadata,payload,created_at,updated_at) VALUES($1,'lemonsqueezy',$2,$3,$4,$5,$6,$7,$8,$9,$10,now(),now()) ON CONFLICT(provider,reference) DO UPDATE SET status=EXCLUDED.status,refund_status=COALESCE(EXCLUDED.refund_status,billing_transactions.refund_status),payload=EXCLUDED.payload,updated_at=now()")
+    .bind(org).bind(reference).bind(plan).bind(variant_id).bind(amount).bind(currency).bind(txstatus).bind(refund_status).bind(&event).bind(&event).execute(&s.db).await{return db_error(e);}
   }
  }
  if let Err(e)=sqlx::query("UPDATE billing_events SET status='processed',processed_at=now(),processing_started_at=NULL WHERE provider='lemonsqueezy' AND provider_event_id=$1").bind(&event_key).execute(&s.db).await{return db_error(e);}
@@ -1188,6 +1193,7 @@ pub(crate) async fn lemonsqueezy_webhook(State(s):State<AppState>,headers:Header
   "subscription_payment_success"=>Some(("Subscription payment received","Your subscription payment was received successfully.")),
   "subscription_payment_failed"=>Some(("Subscription payment failed","The latest subscription payment failed. Please update your payment method in the customer portal.")),
   "subscription_payment_recovered"=>Some(("Subscription payment recovered","Your subscription payment issue has been resolved.")),
+  "subscription_payment_refunded"=>Some(("Subscription payment refunded","A subscription payment was refunded. Your billing history has been updated; review your subscription status and customer portal for current details.")),
   "subscription_cancelled"=>Some(("Subscription cancellation scheduled","Your subscription was cancelled and access follows the provider's subscription period.")),
   "subscription_expired"=>Some(("Subscription expired","Your subscription has expired. Review your plan to restore paid access.")),
   _=>None
