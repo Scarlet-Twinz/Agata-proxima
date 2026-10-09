@@ -46,6 +46,7 @@ Subscribe at minimum to:
 - `subscription_payment_success`
 - `subscription_payment_failed`
 - `subscription_payment_recovered`
+- `subscription_payment_refunded`
 
 Use the same signing secret in `LEMON_SQUEEZY_WEBHOOK_SECRET`. The server validates the HMAC-SHA256 `X-Signature` over the exact raw request body before parsing the event. Store ID and Test/Live mode are checked before event processing. Duplicate delivery is recorded idempotently. Subscription events must map to an organization and one of the configured variants before paid entitlements are changed.
 
