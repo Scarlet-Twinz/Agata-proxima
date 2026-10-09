@@ -1123,6 +1123,19 @@ pub(crate) async fn lemonsqueezy_webhook(State(s):State<AppState>,headers:Header
  let txstatus=if matches!(name,"subscription_payment_success"|"order_created"){"success"}else if name=="subscription_payment_failed"{"failed"}else{"updated"};
  let _=sqlx::query("UPDATE billing_transactions SET status=$1,payload=$2,updated_at=now() WHERE provider='lemonsqueezy' AND organization_id=$3 AND plan_code=COALESCE($4,plan_code)").bind(txstatus).bind(&event).bind(org).bind(variant.as_deref()).execute(&s.db).await;
  if let Err(e)=sqlx::query("UPDATE billing_events SET status='processed',processed_at=now(),processing_started_at=NULL WHERE provider='lemonsqueezy' AND provider_event_id=$1").bind(&event_key).execute(&s.db).await{return db_error(e);}
+ let notice=match name{
+  "subscription_created"=>Some(("Subscription activated","Your Agata Proxima subscription is active.")),
+  "subscription_payment_success"=>Some(("Subscription payment received","Your subscription payment was received successfully.")),
+  "subscription_payment_failed"=>Some(("Subscription payment failed","The latest subscription payment failed. Please update your payment method in the customer portal.")),
+  "subscription_payment_recovered"=>Some(("Subscription payment recovered","Your subscription payment issue has been resolved.")),
+  "subscription_cancelled"=>Some(("Subscription cancellation scheduled","Your subscription was cancelled and access follows the provider's subscription period.")),
+  "subscription_expired"=>Some(("Subscription expired","Your subscription has expired. Review your plan to restore paid access.")),
+  _=>None
+ };
+ if let Some((title,details))=notice{
+  let db=s.db.clone();let reference=event_key.clone();
+  tokio::spawn(async move{send_billing_notice(&db,org,&reference,title,details).await;});
+ }
  Json(json!({"received":true,"processed":true,"event":name})).into_response()
 }
 pub(crate) async fn send_verification_email(
