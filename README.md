@@ -55,6 +55,7 @@ The 25–40 platform layer adds an authenticated, durable control plane with org
 - [Phase 3.22 entitlement contract](docs/billing/phase3-22-entitlement-contract.md) — pricing, quotas and A–H acceptance map.
 - [Microsoft Entra SSO runbook](docs/identity/microsoft-entra-oidc.md) — OIDC configuration and remaining activation gates.
 - [Production deployment runbook](docs/production/phase55-deployment-runbook.md) — production environment requirements.
+- [Deployment architecture](docs/production/deployment-architecture.md) — prepared Vercel frontend, container API, managed PostgreSQL and same-origin routing path.
 - [Operational readiness runbook](docs/production/operational-readiness-runbook.md) — health, backups, restore drills, monitoring and incident response.
 - [Production smoke workflow](.github/workflows/production-smoke.yml) — scheduled liveness checks and a manual full-readiness gate once the public URL is configured.
 - [Remaining launch work map](docs/production/remaining-launch-work-map.md) — Paystack USD, Microsoft Entra SSO, hosting and production acceptance.
