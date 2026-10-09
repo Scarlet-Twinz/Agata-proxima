@@ -215,6 +215,11 @@ async fn main() -> Result<()> {
     ))
     .execute(&db)
     .await?;
+    sqlx::raw_sql(include_str!(
+        "../migrations/0015_billing_lifecycle_downgrade.sql"
+    ))
+    .execute(&db)
+    .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
@@ -235,6 +240,13 @@ async fn main() -> Result<()> {
                 }
                 Ok(_) => {}
                 Err(e) => error!(%e, "API rate-limit cleanup failed"),
+            }
+            match production::reconcile_billing_lifecycle(&retention_db).await {
+                Ok(transitioned) if transitioned > 0 => {
+                    info!(transitioned, "reconciled expired billing lifecycle states")
+                }
+                Ok(_) => {}
+                Err(e) => error!(%e, "billing lifecycle reconciliation failed"),
             }
         }
     });

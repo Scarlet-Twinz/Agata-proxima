@@ -65,6 +65,8 @@ The existing node/tenant/environment and selected feature checks are a foundatio
 - Failed-payment and cancellation behaviour must follow an explicitly defined recovery/grace policy. Do not treat all billing states as interchangeable.
 - Entitlement transitions must be idempotent and auditable.
 - Audit APIs hide events outside the current plan's retention window immediately; a database cleanup runs hourly to physically purge expired events. If entitlement state is missing, cleanup preserves records rather than guessing a retention policy.
+- Failed renewal enters a fixed seven-day grace window; repeated failures do not extend it. At expiry, creation of new resources is blocked while existing data remains available for remediation. Non-renewing subscriptions remain active through the recorded period end, then transition to canceled.
+- Downgrades never delete or revoke existing resources automatically. They block capacity-increasing writes and preserve safe disable, revoke, move, and remediation operations. Webhook events are idempotent; recent in-progress events are not double-processed, while stale claims can be retried.
 - Capacity checks must be safe under concurrent creation attempts.
 
 ## Sequential acceptance
