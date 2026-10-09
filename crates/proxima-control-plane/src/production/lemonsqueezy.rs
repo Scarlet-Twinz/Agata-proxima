@@ -69,7 +69,27 @@ pub(crate) async fn checkout(State(s):State<AppState>,headers:HeaderMap,Json(inp
     let email=match sqlx::query("SELECT email FROM users WHERE id=$1").bind(ctx.user_id).fetch_one(&s.db).await {Ok(r)=>r.get::<String,_>("email"),Err(e)=>return db_error(e)};
     let client=match api_client(){Ok(c)=>c,Err(e)=>return external_error(e)};
     let response=match api_headers(client.post("https://api.lemonsqueezy.com/v1/checkouts"),&key)
-        .json(&json!({"data":{"type":"checkouts","attributes":{"checkout_data":{"email":email,"custom":{"organization_id":ctx.organization_id.to_string(),"plan":plan}},"product_options":{"redirect_url":format!("{}/app?billing=return",env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_|"http://127.0.0.1:8080".into()).trim_end_matches('/'))}},"relationships":{"store":{"data":{"type":"stores","id":store}},"variant":{"data":{"type":"variants","id":variant}}}}))
+        .json(&json!({
+            "data": {
+                "type": "checkouts",
+                "attributes": {
+                    "checkout_data": {
+                        "email": email,
+                        "custom": {
+                            "organization_id": ctx.organization_id.to_string(),
+                            "plan": plan
+                        }
+                    },
+                    "product_options": {
+                        "redirect_url": format!("{}/app?billing=return", env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:8080".into()).trim_end_matches('/'))
+                    }
+                },
+                "relationships": {
+                    "store": { "data": { "type": "stores", "id": store } },
+                    "variant": { "data": { "type": "variants", "id": variant } }
+                }
+            }
+        }))
         .send().await {Ok(v)=>v,Err(e)=>return external_error(e)};
     if !response.status().is_success() {return (StatusCode::BAD_GATEWAY,Json(json!({"ok":false,"error":"lemonsqueezy_checkout_creation_failed","message":"Lemon Squeezy could not create a checkout. Verify the test-mode store and variant configuration."}))).into_response();}
     let body:Value=match response.json().await {Ok(v)=>v,Err(e)=>return external_error(e)};
