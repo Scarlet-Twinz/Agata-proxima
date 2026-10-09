@@ -993,7 +993,7 @@ pub(crate) async fn checkout(State(s):State<AppState>,headers:HeaderMap,Json(inp
     let secret=match env::var("PAYSTACK_SECRET_KEY"){Ok(v) if !v.trim().is_empty()=>v,_=>return service_unavailable("Paystack secret is not configured.")};
     let plan_code=match input.price_id.as_deref().and_then(paystack_plan_code_for_input){Some(v)=>v,None=>return bad("Select an Agata Proxima plan before checkout.")};
     let plan=match plan_for_code(Some(&plan_code)){Some(v)=>v,None=>return (StatusCode::FORBIDDEN,Json(json!({"ok":false,"error":"invalid_agata_plan"}))).into_response()};
-    if matches!(plan.as_str(), "free" | "enterprise") {
+    if plan == "free" || plan == "enterprise" {
         return bad("Free plans do not use checkout; Enterprise access requires explicit contracted provisioning.");
     }
     let email=match sqlx::query("SELECT email FROM users WHERE id=$1").bind(ctx.user_id).fetch_one(&s.db).await{Ok(r)=>r.get::<String,_>("email"),Err(e)=>return db_error(e)};
