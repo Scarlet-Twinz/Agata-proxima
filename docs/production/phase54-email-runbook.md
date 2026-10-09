@@ -22,9 +22,16 @@ Configure these server-side environment variables to use the five purpose-specif
 2. Set the five sender environment variables above on the deployed Control Plane service.
 3. Set `AGATA_PUBLIC_BASE_URL=https://agataproxima.com` only when the public HTTPS deployment is live.
 4. Set `AGATA_SUPPORT_INBOX_EMAIL` to an inbox that the support operator can actually read. Do not set it to `support@agataproxima.com` until inbound mail is configured for that address.
-5. Verify the DNS records shown in Resend for the exact domain. The current account reports DKIM and SPF as verified.
-6. Publish a DMARC TXT record at `_dmarc.agataproxima.com` after checking the domain's existing DNS policy. Do not overwrite an existing DMARC policy blindly; begin with an appropriate monitoring policy and review aggregate reports before enforcement.
-7. Keep tracking settings intentional. Open/click tracking are currently disabled in Resend, which is appropriate for security-sensitive transactional messages.
+5. Set the published Resend template IDs from `.env.example` in the Control Plane environment:
+   - `RESEND_TEMPLATE_VERIFY_EMAIL_ID`
+   - `RESEND_TEMPLATE_PASSWORD_RESET_ID`
+   - `RESEND_TEMPLATE_ORGANIZATION_INVITATION_ID`
+   - `RESEND_TEMPLATE_NEW_LOGIN_ALERT_ID`
+   - `RESEND_TEMPLATE_SUPPORT_REQUEST_RECEIVED_ID`
+   - `RESEND_TEMPLATE_BILLING_UPDATE_ID`
+6. Verify the DNS records shown in Resend for the exact domain. The current account reports DKIM and SPF as verified.
+7. Publish a DMARC TXT record at `_dmarc.agataproxima.com` after checking the domain's existing DNS policy. Do not overwrite an existing DMARC policy blindly; begin with an appropriate monitoring policy and review aggregate reports before enforcement.
+8. Keep tracking settings intentional. Open/click tracking are currently disabled in Resend, which is appropriate for security-sensitive transactional messages.
 
 ## Implemented flows
 
