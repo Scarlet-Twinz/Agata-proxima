@@ -171,4 +171,5 @@ The Entra feature is available on Growth and above; the backend checks entitleme
 - `docs/billing/phase3-22-entitlement-contract.md` — A–H completion map and full entitlement contract.
 - `docs/production/phase55-deployment-runbook.md` — deployment configuration.
 - `docs/production/operational-readiness-runbook.md` — backup, monitoring and incident procedures.
+- `docs/production/deployment-architecture.md` — recommended Vercel/API-host/managed-PostgreSQL deployment path.
 - `control-plane/openapi.json` — machine-readable API contract.
