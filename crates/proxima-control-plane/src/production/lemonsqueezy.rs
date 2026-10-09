@@ -294,7 +294,13 @@ pub(crate) async fn webhook(State(s):State<AppState>,headers:HeaderMap,body:Stri
     }
     if !invoice_event {
         if let (Some(variant),Some(plan))=(variant_id.as_deref(),plan) {
-            if configured_variant(plan).as_deref()!=Some(variant){return StatusCode::UNPROCESSABLE_ENTITY.into_response();}
+            if configured_variant(plan).as_deref()!=Some(variant) {
+                let _=sqlx::query("UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='lemonsqueezy' AND provider_event_id=$1").bind(&key).execute(&s.db).await;
+                return Json(json!({"received":true,"ignored":"variant_plan_mismatch"})).into_response();
+            }
+        } else {
+            let _=sqlx::query("UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='lemonsqueezy' AND provider_event_id=$1").bind(&key).execute(&s.db).await;
+            return Json(json!({"received":true,"ignored":"unrecognized_variant"})).into_response();
         }
     }
     let status=attrs.get("status").and_then(Value::as_str).unwrap_or("");
