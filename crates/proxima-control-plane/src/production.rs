@@ -332,6 +332,12 @@ pub(crate) async fn purge_expired_api_rate_windows(db: &sqlx::PgPool) -> Result<
         .await
 }
 
+pub(crate) async fn reconcile_billing_lifecycle(db: &sqlx::PgPool) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar("SELECT proxima_reconcile_billing_lifecycle()")
+        .fetch_one(db)
+        .await
+}
+
 #[allow(clippy::result_large_err)]
 pub(crate) async fn enforce_team_seat_capacity(
     db: &sqlx::PgPool,
@@ -596,7 +602,7 @@ pub(crate) async fn entitlements(State(s): State<AppState>, headers: HeaderMap) 
     };
     match sqlx::query(
         "SELECT plan_key,billing_status,node_limit,tenant_limit,environment_limit,integration_limit,
-                verification_limit_monthly,team_seat_limit,api_key_limit,api_requests_per_minute,support_level,
+                verification_limit_monthly,team_seat_limit,api_key_limit,api_requests_per_minute,support_level,billing_grace_until,
                 COALESCE((SELECT request_count FROM api_rate_limit_windows w WHERE w.organization_id=organization_entitlements.organization_id AND w.window_start=date_trunc('minute',now())),0)::bigint AS api_requests_this_minute,
                 COALESCE((SELECT count(*) FROM memberships m WHERE m.organization_id=organization_entitlements.organization_id),0)::bigint AS active_team_members,
                 COALESCE((SELECT count(*) FROM organization_invites i WHERE i.organization_id=organization_entitlements.organization_id AND i.accepted_at IS NULL AND i.expires_at>now()),0)::bigint AS pending_team_invites,
@@ -626,6 +632,7 @@ pub(crate) async fn entitlements(State(s): State<AppState>, headers: HeaderMap) 
                 "audit_retention_days": row.get::<i32,_>("audit_retention_days")
             },
             "support_level": row.get::<String,_>("support_level"),
+            "billing_grace_until": row.get::<Option<chrono::DateTime<chrono::Utc>>,_>("billing_grace_until"),
             "usage": {
                 "api_requests_this_minute": row.get::<i64,_>("api_requests_this_minute"),
                 "verifications_this_month": row.get::<i64,_>("verifications_used"),
@@ -671,7 +678,7 @@ async fn apply_entitlements(db: &sqlx::PgPool, organization_id: Uuid, plan: &str
             audit_retention_days=EXCLUDED.audit_retention_days,
             advanced_verification=EXCLUDED.advanced_verification,fleet_controls=EXCLUDED.fleet_controls,
             priority_support=EXCLUDED.priority_support,entra_oidc=EXCLUDED.entra_oidc,
-            private_deployment=EXCLUDED.private_deployment,updated_at=now()"
+            private_deployment=EXCLUDED.private_deployment,billing_grace_until=NULL,updated_at=now()"
     )
     .bind(organization_id).bind(plan).bind(nodes).bind(tenants).bind(environments).bind(integrations).bind(verifications).bind(team_seats).bind(api_keys).bind(api_requests).bind(support).bind(retention)
     .bind(advanced).bind(fleet).bind(priority).bind(entra).bind(private_deployment)
