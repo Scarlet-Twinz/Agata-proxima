@@ -38,7 +38,7 @@ CI verifies repository implementation and regression gates; external account set
 
 ## Microsoft Entra SSO sequence
 
-1. Register the Agata Proxima application in Microsoft Entra ID as a multitenant Web application.
+1. Register the Agata Proxima application in Microsoft Entra ID as a multitenant Web application using [Microsoft's official app-registration guide](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app?tabs=client-secret).
 2. Wait until the public Control Plane HTTPS URL is known, then register the exact callback: `https://<control-plane-host>/api/v1/auth/oidc/callback`.
 3. Create a client secret and store it only in the deployment secret store.
 4. Set `PROXIMA_OIDC_CLIENT_ID`, `PROXIMA_OIDC_CLIENT_SECRET` and `AGATA_PUBLIC_BASE_URL`.
