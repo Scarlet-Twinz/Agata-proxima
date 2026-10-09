@@ -67,15 +67,19 @@ export default function Login() {
       return;
     }
     setSsoBusy(true);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 12_000);
     try {
       const response = await fetch(`/api/v1/auth/oidc/start?organization_slug=${encodeURIComponent(slug)}`, {
         method: "GET",
         credentials: "include",
+        cache: "no-store",
         headers: { Accept: "application/json" },
+        signal: controller.signal,
       });
       const body = await response.json().catch(() => ({})) as { authorization_url?: unknown; message?: unknown };
       if (!response.ok || typeof body.authorization_url !== "string") {
-        throw new Error(typeof body.message === "string" ? body.message : "Microsoft Entra SSO is not configured for this organization.");
+        throw new Error(typeof body.message === "string" ? body.message : `Microsoft Entra SSO could not start (HTTP ${response.status}). Check this organization's SSO configuration and entitlement.`);
       }
       const authorizationUrl = new URL(body.authorization_url);
       if (authorizationUrl.origin !== "https://login.microsoftonline.com") {
@@ -83,8 +87,14 @@ export default function Login() {
       }
       window.location.assign(authorizationUrl.toString());
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to start Microsoft Entra SSO.");
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError("The Control Plane did not respond to the SSO start request within 12 seconds. Check the backend terminal and this organization's Entra configuration.");
+      } else {
+        setError(err instanceof Error ? err.message : "Unable to start Microsoft Entra SSO.");
+      }
       setSsoBusy(false);
+    } finally {
+      window.clearTimeout(timeout);
     }
   }
 
