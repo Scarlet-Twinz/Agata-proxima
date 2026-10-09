@@ -49,7 +49,7 @@ Configure these service variables in the provider's secret/configuration UI:
 - `PROXIMA_COOKIE_SECURE=true`.
 - `AGATA_PUBLIC_BASE_URL=https://agataproxima.com`.
 - `RESEND_API_KEY`, the five purpose-specific `RESEND_FROM_*_EMAIL` identities, all six `RESEND_TEMPLATE_*_ID` values, and `AGATA_SUPPORT_INBOX_EMAIL` after the sending domain is verified. Keep the API key server-side; the support inbox must be an actually monitored mailbox. `RESEND_FROM_EMAIL` is only a compatibility fallback.
-- `PAYSTACK_SECRET_KEY` and the three `AGATA_PAYSTACK_*_PLAN_CODE` values after Paystack activation.
+- `LEMONSQUEEZY_API_KEY`, `LEMONSQUEEZY_STORE_ID`, the three `LEMONSQUEEZY_*_VARIANT_ID` values and `LEMONSQUEEZY_WEBHOOK_SECRET` after Lemon Squeezy Test Mode products and webhook are configured. Keep these values in the backend secret store.
 - `PROXIMA_OIDC_CLIENT_ID` and `PROXIMA_OIDC_CLIENT_SECRET` after Microsoft Entra registration. The current implementation derives and validates the issuer from the organization's configured Entra tenant ID; there is no separate `PROXIMA_OIDC_ISSUER` runtime variable.
 
 Do not store any secret in Git, Vercel's public build variables, or this documentation. The Control Plane applies its versioned database migrations at startup; verify migration logs and readiness after the first deploy.
@@ -73,10 +73,10 @@ Do not invent a CNAME target; copy the one provided by the actual host dashboard
 
 The API hostname must be live before the frontend is promoted. Do not send customers to a deployment while the rewrite destination is unavailable.
 
-### 5. Finish SSO and Paystack provider setup
+### 5. Finish SSO and Lemon Squeezy provider setup
 
 - **SSO:** set the Microsoft Entra Web redirect URI to `https://agataproxima.com/api/v1/auth/oidc/callback`, matching the frontend-origin proxy. Set the exact public base URL and provider credentials in the Control Plane's secret store, then test a real login.
-- **Paystack:** set the production webhook URL to `https://api.agataproxima.com/api/v1/webhooks/paystack`. Confirm the three provider plan codes resolve to USD monthly plans of $149, $499 and $1,199. Test checkout, signed webhook, transaction verification, renewal failure/recovery and cancellation.
+- **Lemon Squeezy:** configure the webhook endpoint at `https://api.agataproxima.com/api/v1/webhooks/lemonsqueezy` when the API is deployed. Begin with Test Mode; use the store ID and three monthly USD variant IDs for Starter ($149), Growth ($499) and Scale ($1,199). Test checkout, signed webhook, duplicate delivery, renewal failure/recovery, cancellation and entitlement reconciliation before live activation.
 - **Email:** verify the Agata-owned Resend sending domain and test verification, password-reset and invitation delivery.
 
 ### 6. Turn on monitoring and recovery
