@@ -279,7 +279,18 @@ pub(crate) async fn webhook(State(s):State<AppState>,headers:HeaderMap,body:Stri
                 .bind(org).bind(customer_id).bind(&subscription_id).bind(&variant_id).bind(portal).bind(plan).bind(account_status).bind(period_end).bind(cancel_at_period_end).execute(&s.db).await{return db_error(e);}
             if matches!(effective_status,"active") {if let Err(e)=apply_entitlements(&s.db,org,plan).await{return db_error(e);}}
             else if let Err(e)=sqlx::query("UPDATE organization_entitlements SET billing_status=$1,billing_grace_until=CASE WHEN $1='past_due' THEN now()+interval '7 days' ELSE NULL END,updated_at=now() WHERE organization_id=$2").bind(effective_status).bind(org).execute(&s.db).await{return db_error(e);}
-            if let Err(e)=sqlx::query("UPDATE billing_transactions SET status=CASE WHEN $1='subscription_payment_success' THEN 'success' WHEN $1='subscription_payment_failed' THEN 'failed' ELSE status END,payload=$2,updated_at=now() WHERE provider='lemonsqueezy' AND organization_id=$3 AND plan_key=$4 AND status='initialized'").bind(event_type).bind(&event).bind(org).bind(plan).execute(&s.db).await{return db_error(e);}
+            if event_type=="subscription_created" {
+                let order_id=attrs.get("order_id").and_then(Value::as_i64).map(|v|v.to_string());
+                if let Err(e)=sqlx::query("UPDATE billing_transactions SET lemonsqueezy_subscription_id=$1,lemonsqueezy_order_id=$2,lemonsqueezy_variant_id=$3,payload=$4,updated_at=now() WHERE id=(SELECT id FROM billing_transactions WHERE provider='lemonsqueezy' AND organization_id=$5 AND plan_key=$6 AND status='initialized' ORDER BY created_at DESC LIMIT 1)")
+                    .bind(&subscription_id).bind(order_id).bind(&variant_id).bind(&event).bind(org).bind(plan).execute(&s.db).await{return db_error(e);}
+            }
+            if invoice_event {
+                let next_status=match event_type {"subscription_payment_success"|"subscription_payment_recovered"=>"success","subscription_payment_failed"=>"failed","subscription_payment_refunded"=>"refunded",_=>"initialized"};
+                if next_status!="initialized" {
+                    if let Err(e)=sqlx::query("UPDATE billing_transactions SET status=$1,payload=$2,updated_at=now() WHERE provider='lemonsqueezy' AND organization_id=$3 AND lemonsqueezy_subscription_id=$4")
+                        .bind(next_status).bind(&event).bind(org).bind(&subscription_id).execute(&s.db).await{return db_error(e);}
+                }
+            }
             let (title, details) = match event_type {
                 "subscription_payment_success" => ("Subscription payment received", "Your Lemon Squeezy subscription payment was received and your plan is active."),
                 "subscription_payment_failed" => ("Subscription payment needs attention", "A Lemon Squeezy subscription payment failed. Review your payment method to avoid interruption."),
