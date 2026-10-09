@@ -20,7 +20,7 @@ use super::{
     AppState,
 };
 
-type HmacSha512 = Hmac<sha2::Sha512>;
+
 
 #[derive(Deserialize)]
 pub(crate) struct CheckoutInput {
@@ -1627,8 +1627,8 @@ pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
         "status": if all { "ready" } else { "needs_configuration" },
         "checks": {
             "database": db_ok,
-            "paystack_secret": paystack,
-            "paystack_plans": plans,
+            "lemonsqueezy_configured": lemonsqueezy,
+            "lemonsqueezy_variants": plans,
             "resend_api_key": resend,
             "resend_fallback_sender": fallback_from,
             "resend_sender_identities": sender_identities,
