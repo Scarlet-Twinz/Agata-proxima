@@ -1072,14 +1072,15 @@ pub(crate) async fn checkout(State(s):State<AppState>,headers:HeaderMap,Json(inp
  if product_store.as_deref()!=Some(store.as_str())||product_attrs.get("status").and_then(Value::as_str)!=Some("published")||product_attrs.get("test_mode").and_then(Value::as_bool).map(|v|v==lemonsqueezy_test_mode())!=Some(true){return service_unavailable("The selected Lemon Squeezy variant must belong to the configured store and mode, and its product must be published.");}
  let email=match sqlx::query("SELECT email FROM users WHERE id=$1").bind(ctx.user_id).fetch_one(&s.db).await{Ok(r)=>r.get::<String,_>("email"),Err(e)=>return db_error(e)};
  let base=env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_|"http://127.0.0.1:8080".into()).trim_end_matches('/').to_owned();
- let payload=json!({"data":{"type":"checkouts","attributes":{"checkout_data":{"email":email,"custom":{"organization_id":ctx.organization_id.to_string(),"plan_key":plan}},"product_options":{"redirect_url":format!("{base}/app?billing=return")}},"relationships":{"store":{"data":{"type":"stores","id":store}},"variant":{"data":{"type":"variants","id":variant}}}}});
+ let local_reference=Uuid::new_v4().to_string();
+ let payload=json!({"data":{"type":"checkouts","attributes":{"checkout_data":{"email":email,"custom":{"organization_id":ctx.organization_id.to_string(),"plan_key":plan,"checkout_reference":local_reference}},"product_options":{"redirect_url":format!("{base}/app?billing=return")}},"relationships":{"store":{"data":{"type":"stores","id":store}},"variant":{"data":{"type":"variants","id":variant}}}}});
  let r=match client.post("https://api.lemonsqueezy.com/v1/checkouts").bearer_auth(&key).header("Accept","application/vnd.api+json").header("Content-Type","application/vnd.api+json").json(&payload).send().await{Ok(v)=>v,Err(e)=>return external_error(e)};
  if !r.status().is_success(){return service_unavailable("Lemon Squeezy checkout creation failed.");}
  let body:Value=match r.json().await{Ok(v)=>v,Err(e)=>return external_error(e)};let data=body.get("data").cloned().unwrap_or(Value::Null);let id=data.get("id").and_then(Value::as_str).unwrap_or_default();let url=data.pointer("/attributes/url").and_then(Value::as_str).unwrap_or_default();
  if id.is_empty()||!url.starts_with("https://"){return service_unavailable("Lemon Squeezy returned no valid checkout URL.");}
- if let Err(e)=sqlx::query("INSERT INTO billing_transactions(organization_id,provider,reference,provider_checkout_id,plan_key,plan_code,currency,status,metadata,payload,created_at,updated_at) VALUES($1,'lemonsqueezy',$2,$2,$3,$4,'USD','initialized',$5,$6,now(),now()) ON CONFLICT(provider,reference) DO NOTHING").bind(ctx.organization_id).bind(id).bind(plan).bind(&variant).bind(&payload).bind(&body).execute(&s.db).await{return db_error(e);}
- audit(&s.db,ctx.organization_id,ctx.user_id,"billing.checkout.created","billing_transaction",None,json!({"provider":"lemonsqueezy","checkout_id":id,"plan":plan})).await;
- Json(json!({"ok":true,"provider":"lemonsqueezy","checkout_url":url,"reference":id})).into_response()
+ if let Err(e)=sqlx::query("INSERT INTO billing_transactions(organization_id,provider,reference,provider_checkout_id,plan_key,plan_code,currency,status,metadata,payload,created_at,updated_at) VALUES($1,'lemonsqueezy',$2,$3,$4,$5,'USD','initialized',$6,$7,now(),now()) ON CONFLICT(provider,reference) DO NOTHING").bind(ctx.organization_id).bind(&local_reference).bind(id).bind(plan).bind(&variant).bind(&payload).bind(&body).execute(&s.db).await{return db_error(e);}
+ audit(&s.db,ctx.organization_id,ctx.user_id,"billing.checkout.created","billing_transaction",None,json!({"provider":"lemonsqueezy","checkout_id":id,"plan":plan,"reference":local_reference})).await;
+ Json(json!({"ok":true,"provider":"lemonsqueezy","checkout_url":url,"reference":local_reference})).into_response()
 }
 pub(crate) async fn lemonsqueezy_callback()->Response{
  let base=env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_|"http://127.0.0.1:8080".into()).trim_end_matches('/').to_owned();
@@ -1116,7 +1117,15 @@ pub(crate) async fn lemonsqueezy_webhook(State(s):State<AppState>,headers:Header
  let cust=a.get("customer_id").and_then(Value::as_i64).map(|v|v.to_string());
  let resolved=if let Some(v)=org{Some(v)}else if let Some(ref v)=sub{match sqlx::query("SELECT organization_id FROM billing_accounts WHERE lemonsqueezy_subscription_id=$1").bind(v).fetch_optional(&s.db).await{Ok(r)=>r.map(|x|x.get::<Uuid,_>("organization_id")),Err(e)=>return db_error(e)}}else if let Some(ref v)=cust{match sqlx::query("SELECT organization_id FROM billing_accounts WHERE lemonsqueezy_customer_id=$1").bind(v).fetch_optional(&s.db).await{Ok(r)=>r.map(|x|x.get::<Uuid,_>("organization_id")),Err(e)=>return db_error(e)}}else{None};
  let org=match resolved{Some(v)=>v,None=>{let _=sqlx::query("UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='lemonsqueezy' AND provider_event_id=$1").bind(&event_key).execute(&s.db).await;return Json(json!({"received":true,"ignored":"organization_not_resolved"})).into_response();}};
- let variant=a.get("variant_id").and_then(Value::as_i64).map(|v|v.to_string());let plan=variant.as_deref().and_then(|v|plan_for_code(Some(v)));let status=a.get("status").and_then(Value::as_str).unwrap_or_default();
+ let variant=a.get("variant_id").and_then(Value::as_i64).map(|v|v.to_string());
+ if name=="subscription_created" {
+  let checkout_reference=event.pointer("/meta/custom_data/checkout_reference").and_then(Value::as_str);
+  let checkout_reference=match checkout_reference{Some(v)=>v,None=>return StatusCode::FORBIDDEN.into_response()};
+  let local=match sqlx::query("SELECT organization_id,plan_code FROM billing_transactions WHERE provider='lemonsqueezy' AND reference=$1").bind(checkout_reference).fetch_optional(&s.db).await{Ok(v)=>v,Err(e)=>return db_error(e)};
+  let local=match local{Some(v)=>v,None=>return StatusCode::FORBIDDEN.into_response()};
+  if local.get::<Uuid,_>("organization_id")!=org||local.get::<Option<String>,_>("plan_code").as_deref()!=variant.as_deref(){return StatusCode::FORBIDDEN.into_response();}
+ }
+ let plan=variant.as_deref().and_then(|v|plan_for_code(Some(v)));let status=a.get("status").and_then(Value::as_str).unwrap_or_default();
  let period=a.get("renews_at").or_else(||a.get("ends_at")).and_then(Value::as_str).and_then(|v|chrono::DateTime::parse_from_rfc3339(v).ok()).map(|v|v.with_timezone(&chrono::Utc));
  let payment_failed=name=="subscription_payment_failed"||matches!(status,"past_due"|"unpaid");
  let active=!payment_failed&&(matches!(status,"active"|"on_trial")||matches!(name,"subscription_created"|"subscription_payment_success"|"subscription_resumed"|"subscription_payment_recovered"));
