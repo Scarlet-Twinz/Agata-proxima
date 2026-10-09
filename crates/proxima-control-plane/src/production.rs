@@ -735,6 +735,40 @@ async fn apply_entitlements(db: &sqlx::PgPool, organization_id: Uuid, plan: &str
 }
 
 
+pub(crate) async fn entra_status(State(s): State<AppState>, headers: HeaderMap) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(value) => value,
+        Err(response) => return response.into_response(),
+    };
+    if !matches!(ctx.role.as_str(), "owner" | "admin") {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    if let Err(response) = require_feature(&s.db, ctx.organization_id, "entra_oidc").await {
+        return response;
+    }
+
+    match sqlx::query(
+        "SELECT tenant_id,enabled,jit_provisioning FROM organization_oidc_connections
+         WHERE organization_id=$1 AND provider='microsoft-entra'"
+    ).bind(ctx.organization_id).fetch_optional(&s.db).await {
+        Ok(Some(row)) => Json(json!({
+            "ok": true,
+            "provider": "microsoft-entra",
+            "configured": row.get::<bool, _>("enabled"),
+            "tenant_id": row.get::<Uuid, _>("tenant_id"),
+            "jit_provisioning": row.get::<bool, _>("jit_provisioning")
+        })).into_response(),
+        Ok(None) => Json(json!({
+            "ok": true,
+            "provider": "microsoft-entra",
+            "configured": false,
+            "tenant_id": null,
+            "jit_provisioning": false
+        })).into_response(),
+        Err(error) => db_error(error),
+    }
+}
+
 pub(crate) async fn configure_entra(
     State(s): State<AppState>,
     headers: HeaderMap,
