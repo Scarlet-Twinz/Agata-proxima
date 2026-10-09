@@ -97,7 +97,7 @@ The production deployment is not accepted until all of the following are evidenc
 - production Control Plane uses the managed database, not localhost or the laptop;
 - migrations 0001–0016 are applied and schema state is verified;
 - `/api/v1/production/readiness` returns `ready`;
-- Paystack checkout and signed webhook round-trip passes;
+- Lemon Squeezy Test Mode checkout and signed webhook round-trip passes;
 - real Entra SSO and Resend verification, recovery, invitation, security, billing, and support delivery tests pass;
 - database restore drill and alerting/rollback checks pass;
 - external three-tenant SaaS isolation acceptance and load/security checks pass.
