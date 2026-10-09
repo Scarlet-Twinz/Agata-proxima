@@ -22,6 +22,10 @@ grep -q 'AGATA_PAYSTACK_GROWTH_PLAN_CODE' .env.example || fail "Growth Paystack 
 grep -q 'AGATA_PAYSTACK_SCALE_PLAN_CODE' .env.example || fail "Scale Paystack plan contract missing"
 ! grep -q 'STRIPE_' .env.example || fail "legacy Stripe billing variables remain"
 ! grep -qi 'Stripe webhooks' docs/developer-guide.md || fail "developer guide still documents the superseded billing provider"
+! grep -qi 'Stripe' docs/phase41-50-production.md docs/phase51-57-final-verification.md docs/phase58-59-launch-gate.md docs/production/phase55-deployment-runbook.md docs/production-readiness.md docs/production/operational-readiness-runbook.md docs/production/remaining-launch-work-map.md docs/usage.md docs/billing/entitlements.md docs/billing/entitlement-matrix.md docs/billing/pricing-proposal.md || fail "active billing documentation still references Stripe"
+grep -Fq 'Starter $149 / Growth $499 / Scale $1,199' docs/billing/entitlements.md || fail "canonical entitlement prices are missing"
+grep -Fq 'Verifications per month' docs/usage.md || grep -Fq 'Verification runs per UTC calendar month' docs/usage.md || fail "usage guide is missing verification quota guidance"
+grep -Fq 'USD' docs/usage.md || fail "usage guide is missing USD billing guidance"
 
 grep -q 'checkout_url' crates/proxima-control-plane/src/production.rs || fail "checkout response contract missing"
 grep -q 'portal_url' crates/proxima-control-plane/src/production.rs || fail "portal response contract missing"
