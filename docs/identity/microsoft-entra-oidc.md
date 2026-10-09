@@ -63,6 +63,8 @@ AGATA_PUBLIC_BASE_URL=https://<public-control-plane-host>
 
 The expected issuer is derived from the organization's configured Entra tenant ID and validated against the signed ID token; there is no separate `PROXIMA_OIDC_ISSUER` runtime setting in the current implementation.
 
+`AGATA_PUBLIC_BASE_URL` must be the browser-facing origin for the app. In production, the frontend and Control Plane API/callback must share that origin (typically by reverse-proxying `/api/v1/*` to the Rust service), because the callback sets a host-only session cookie and redirects to `/app`. Do not configure the frontend on one origin and the callback on an unrelated API origin without an explicit same-origin proxy/cookie design.
+
 For the multitenant Microsoft Entra deployment, the authority is based on the Microsoft identity platform's `organizations` authority. The application must validate the tenant-specific issuer returned during sign-in rather than assuming every customer has the same issuer.
 
 Microsoft publishes discovery metadata, authorization/token endpoints, and JWKS metadata through the OIDC configuration document.
@@ -79,16 +81,17 @@ SSO must not blindly create a Proxima organization from an arbitrary email addre
 
 The production implementation should bind the authenticated Entra tenant ID to a Proxima organization/identity connection. The sequence is:
 
-1. Organization owner enables Entra SSO.
-2. Agata stores the expected Entra tenant identifier for that organization.
-3. The user completes the Entra authorization-code flow.
-4. Agata validates the token issuer, audience, signature, expiry and tenant identity.
-5. Agata maps the external subject to the existing Proxima user/membership.
-6. If JIT provisioning is enabled for that organization, the user is provisioned with the organization's configured default role.
-7. A normal Agata session is created.
-8. The event is written to the append-only audit log.
+1. An organization owner/admin opens Settings → Advanced configuration → Enterprise identity.
+2. The owner/admin saves the expected Entra tenant identifier for that organization; Agata stores it in the OIDC connection record.
+3. On the login page, the user enters the organization's slug; the SSO start endpoint resolves it to the organization with an enabled Entra connection. The UUID-based `organization_id` query remains available for controlled administrative/testing workflows.
+4. The user completes the Entra authorization-code flow.
+5. Agata validates the token issuer, audience, signature, expiry and tenant identity.
+6. Agata maps the external subject to the existing Proxima user/membership.
+7. If JIT provisioning is enabled for that organization, the user is provisioned with the organization's configured default role.
+8. A normal Agata session is created.
+9. The event is written to the append-only audit log.
 
-This prevents an authenticated Microsoft account from selecting an arbitrary Agata organization.
+This prevents an authenticated Microsoft account from selecting an arbitrary Agata organization. The backend also checks the organization's Entra entitlement when starting the flow and again at callback time, so a downgrade cannot use an already-started login to bypass the plan gate.
 
 ## Production credential handling
 
@@ -98,7 +101,7 @@ Use the deployment platform's secret store. For production, Microsoft also docum
 
 ## What is deliberately waiting
 
-The runtime SSO callback is **not being declared production-ready before the public deployment exists**.
+The login UI can initiate the OIDC flow, but the runtime SSO callback is **not being declared production-ready before the public deployment and real Entra acceptance exist**.
 
 The remaining activation gates are:
 

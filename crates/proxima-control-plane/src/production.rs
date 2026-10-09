@@ -735,6 +735,40 @@ async fn apply_entitlements(db: &sqlx::PgPool, organization_id: Uuid, plan: &str
 }
 
 
+pub(crate) async fn entra_status(State(s): State<AppState>, headers: HeaderMap) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(value) => value,
+        Err(response) => return response.into_response(),
+    };
+    if !matches!(ctx.role.as_str(), "owner" | "admin") {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    if let Err(response) = require_feature(&s.db, ctx.organization_id, "entra_oidc").await {
+        return response;
+    }
+
+    match sqlx::query(
+        "SELECT tenant_id,enabled,jit_provisioning FROM organization_oidc_connections
+         WHERE organization_id=$1 AND provider='microsoft-entra'"
+    ).bind(ctx.organization_id).fetch_optional(&s.db).await {
+        Ok(Some(row)) => Json(json!({
+            "ok": true,
+            "provider": "microsoft-entra",
+            "configured": row.get::<bool, _>("enabled"),
+            "tenant_id": row.get::<Uuid, _>("tenant_id"),
+            "jit_provisioning": row.get::<bool, _>("jit_provisioning")
+        })).into_response(),
+        Ok(None) => Json(json!({
+            "ok": true,
+            "provider": "microsoft-entra",
+            "configured": false,
+            "tenant_id": null,
+            "jit_provisioning": false
+        })).into_response(),
+        Err(error) => db_error(error),
+    }
+}
+
 pub(crate) async fn configure_entra(
     State(s): State<AppState>,
     headers: HeaderMap,
@@ -769,7 +803,7 @@ pub(crate) async fn configure_entra(
          VALUES($1,'microsoft-entra',$2,$3,$4,true,$5,now())
          ON CONFLICT (organization_id) DO UPDATE SET
            provider='microsoft-entra',tenant_id=EXCLUDED.tenant_id,issuer=EXCLUDED.issuer,
-           client_id=EXCLUDED.client_id,enabled=true,updated_at=now()"
+           client_id=EXCLUDED.client_id,enabled=true,jit_provisioning=EXCLUDED.jit_provisioning,updated_at=now()"
     )
     .bind(ctx.organization_id).bind(tenant_id).bind(&issuer).bind(&client_id)
     .bind(input.jit_provisioning.unwrap_or(false))
@@ -787,10 +821,26 @@ pub(crate) async fn entra_start(
     State(s): State<AppState>,
     Query(q): Query<std::collections::HashMap<String,String>>,
 ) -> Response {
-    let organization_id = match q.get("organization_id").and_then(|v| Uuid::parse_str(v).ok()) {
-        Some(v) => v,
-        None => return bad("organization_id is required."),
+    let organization_id = if let Some(raw_id) = q.get("organization_id") {
+        match Uuid::parse_str(raw_id) {
+            Ok(value) => value,
+            Err(_) => return bad("organization_id must be a UUID."),
+        }
+    } else if let Some(slug) = q.get("organization_slug").map(|value| value.trim()).filter(|value| !value.is_empty()) {
+        match sqlx::query("SELECT id FROM organizations WHERE lower(slug)=lower($1)")
+            .bind(slug)
+            .fetch_optional(&s.db)
+            .await {
+                Ok(Some(row)) => row.get::<Uuid, _>("id"),
+                Ok(None) => return bad("Microsoft Entra SSO is not configured for this organization."),
+                Err(error) => return db_error(error),
+            }
+    } else {
+        return bad("organization_slug is required.");
     };
+    if let Err(response) = require_feature(&s.db, organization_id, "entra_oidc").await {
+        return response;
+    }
     let connection = match sqlx::query(
         "SELECT tenant_id,issuer,client_id,jit_provisioning FROM organization_oidc_connections
          WHERE organization_id=$1 AND provider='microsoft-entra' AND enabled=true"
@@ -849,6 +899,9 @@ pub(crate) async fn entra_callback(
     let organization_id: Uuid = state_row.get("organization_id");
     let expected_nonce: String = state_row.get("nonce");
     let _ = sqlx::query("DELETE FROM oidc_login_states WHERE state_hash=$1").bind(&state_hash).execute(&s.db).await;
+    if let Err(response) = require_feature(&s.db, organization_id, "entra_oidc").await {
+        return response;
+    }
 
     let connection = match sqlx::query(
         "SELECT tenant_id,issuer,client_id FROM organization_oidc_connections

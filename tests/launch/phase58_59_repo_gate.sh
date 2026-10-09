@@ -37,6 +37,16 @@ grep -q 'identity.entra.configured' crates/proxima-control-plane/src/production.
 grep -q 'Microsoft Entra identity boundary validation failed' crates/proxima-control-plane/src/production.rs || fail "Entra boundary validation missing"
 grep -q 'oidc_login_states' crates/proxima-control-plane/migrations/0004_oidc.sql || fail "OIDC state storage missing"
 grep -q 'user_identities' crates/proxima-control-plane/migrations/0004_oidc.sql || fail "OIDC identity mapping missing"
+grep -Fq 'organization_slug' crates/proxima-control-plane/src/production.rs || fail "SSO start does not resolve organization slug"
+grep -Fq 'organization_slug' control-plane/openapi.json || fail "OpenAPI does not document organization-slug SSO"
+grep -Fq '/api/v1/auth/oidc/callback' control-plane/openapi.json || fail "OpenAPI does not document Entra callback"
+grep -Fq 'Continue with Microsoft Entra' frontend/src/pages/auth/Login.tsx || fail "login page does not expose the Entra SSO flow"
+grep -Fq 'EntraIdentitySettings' frontend/src/pages/console/NestedResource.tsx || fail "organization Entra settings UI missing"
+grep -Fq 'entra_status' crates/proxima-control-plane/src/production.rs || fail "organization Entra status API missing"
+grep -Fq 'jit_provisioning=EXCLUDED.jit_provisioning' crates/proxima-control-plane/src/production.rs || fail "Entra provisioning preference is not saved on update"
+oidc_feature_checks=$(grep -Fc 'require_feature(&s.db, organization_id, "entra_oidc")' crates/proxima-control-plane/src/production.rs || true)
+[[ "$oidc_feature_checks" -ge 2 ]] || fail "Entra plan feature is not enforced at both OIDC start and callback"
+! grep -Fq 'SSO is not connected yet' frontend/src/pages/auth/Login.tsx || fail "obsolete disabled SSO button remains"
 
 grep -q 'control_plane_coupling.*non_authoritative' crates/proxima-control-plane/src/main.rs || fail "control-plane non-authoritative health contract missing"
 grep -q 'engine_continues_enforcement' crates/proxima-control-plane/src/main.rs || fail "engine independence contract missing"

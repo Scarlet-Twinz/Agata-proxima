@@ -20,7 +20,7 @@ CI verifies repository implementation and regression gates; external account set
 | Track | Primary owner | Dependency | Definition of done |
 |---|---|---|---|
 | Paystack USD account and plan setup | Founder/account owner, then repository verification | Paystack business approval; USD payout account if USD settlement is required | USD collections enabled; USD settlement account verified; three Agata plan codes point to monthly USD plans at $149/$499/$1,199; test checkout → signed webhook → correct entitlement; test renewal failure/recovery/cancellation. |
-| Microsoft Entra SSO | Founder creates app registration; repository/deployment work completes integration | Public HTTPS Control Plane callback URL | Multitenant Web app registered; exact callback set; client ID and secret safely configured; organization Entra tenant ID bound; real login creates the correct Agata session and audit event; login button enabled only after acceptance. |
+| Microsoft Entra SSO | Founder creates app registration; repository/deployment work completes integration | Public HTTPS Control Plane callback URL | Multitenant Web app registered; exact callback set; client ID and secret safely configured; organization Entra tenant ID bound; real login creates the correct Agata session and audit event. The UI start flow exists, but SSO is not production-accepted until the real end-to-end test passes. |
 | Production hosting and database | Account owner selects/creates hosting; implementation/configuration follows | Stable public backend URL and managed database | Control Plane container is deployed; database is not the developer laptop/local Compose database; TLS, restricted access and production configuration are verified; migrations 0001–0015 and smoke tests pass. |
 | Production email | Founder/domain owner plus deployment configuration | Agata-owned domain and Resend access | Sending domain DNS is verified; production sender and API key configured in secret store; verification, password reset and invitations are delivered in a real test. |
 | Operational readiness | Repository scripts/runbooks plus hosting configuration | Production deployment and database | Health/readiness probes alert correctly; automated backups/PITR enabled; restore drill to an isolated database records RPO/RTO; alerting and rollback are tested. |
@@ -44,7 +44,7 @@ CI verifies repository implementation and regression gates; external account set
 4. Set `PROXIMA_OIDC_CLIENT_ID`, `PROXIMA_OIDC_CLIENT_SECRET` and `AGATA_PUBLIC_BASE_URL`.
 5. Configure the expected customer Entra tenant ID against that customer's Agata organization.
 6. Run the real end-to-end login, organization mapping, session and audit acceptance test.
-7. Only then enable the SSO button in the login UI.
+7. Complete a real end-to-end sign-in test before declaring SSO production-ready. The login page now exposes the organization-slug flow, and the Settings → Enterprise identity page configures the tenant mapping; these UI surfaces do not replace provider acceptance.
 
 ## Operational approach
 

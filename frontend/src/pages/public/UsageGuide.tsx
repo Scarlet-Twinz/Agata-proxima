@@ -58,7 +58,7 @@ export function UsageGuide() {
                 </ul>
                 <p>Use <code>GET /api/v1/billing/entitlements</code> to inspect the organization's current limits and usage. Do not trust a client-supplied plan key as proof of payment.</p>
                 <h2 id="sso">Microsoft Entra SSO</h2>
-                <p>SSO uses Microsoft Entra ID over OIDC, not Paystack. Create a multitenant Web app registration, register the exact public callback, store the client secret in the deployment secret store, and test tenant-to-organization mapping. The login button stays disabled until end-to-end acceptance succeeds.</p>
+                <p>SSO uses Microsoft Entra ID over OIDC, not Paystack. Create a multitenant Web app registration, register the exact public callback, store the client secret in the deployment secret store, and test tenant-to-organization mapping. The login page now accepts an organization slug to start the flow; successful sign-in remains gated on real Entra app registration, callback and end-to-end acceptance.</p>
                 <pre className="public-code">{"https://<your-control-plane-host>/api/v1/auth/oidc/callback"}</pre>
                 <p>Read the <Link to="/docs/usage">usage guide</Link> and the <a href="https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app?tabs=client-secret" target="_blank" rel="noreferrer">official Microsoft app-registration guide</a> before creating the registration.</p>
                 <h2 id="operations">Production operations</h2>

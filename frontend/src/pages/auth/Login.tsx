@@ -15,6 +15,9 @@ export default function Login() {
   const [verificationRequired,setVerificationRequired]=useState(false);
   const [resendBusy,setResendBusy]=useState(false);
   const [resendMessage,setResendMessage]=useState("");
+  const [showSsoForm,setShowSsoForm]=useState(false);
+  const [organizationSlug,setOrganizationSlug]=useState("");
+  const [ssoBusy,setSsoBusy]=useState(false);
   const locationState=location.state as {verified?:boolean;sessionExpired?:boolean}|null;
   const verifiedMessage=locationState?.verified ? "Email verified. Sign in to open your workspace." : "";
   const sessionMessage=locationState?.sessionExpired ? "Your previous security session expired. Sign in again to continue." : "";
@@ -55,6 +58,36 @@ export default function Login() {
     }
   }
 
+  async function handleSso(event: React.FormEvent) {
+    event.preventDefault();
+    setError("");
+    const slug = organizationSlug.trim();
+    if (!slug) {
+      setError("Enter your organization slug to continue with Microsoft Entra SSO.");
+      return;
+    }
+    setSsoBusy(true);
+    try {
+      const response = await fetch(`/api/v1/auth/oidc/start?organization_slug=${encodeURIComponent(slug)}`, {
+        method: "GET",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+      const body = await response.json().catch(() => ({})) as { authorization_url?: unknown; message?: unknown };
+      if (!response.ok || typeof body.authorization_url !== "string") {
+        throw new Error(typeof body.message === "string" ? body.message : "Microsoft Entra SSO is not configured for this organization.");
+      }
+      const authorizationUrl = new URL(body.authorization_url);
+      if (authorizationUrl.origin !== "https://login.microsoftonline.com") {
+        throw new Error("The SSO authorization endpoint was not trusted.");
+      }
+      window.location.assign(authorizationUrl.toString());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to start Microsoft Entra SSO.");
+      setSsoBusy(false);
+    }
+  }
+
   return <div className="agata-auth-form">
     <div className="auth-form-heading">
       <div className="auth-form-mark"><ShieldCheck size={19}/></div>
@@ -75,7 +108,11 @@ export default function Login() {
     </form>
     {verificationRequired && <div className="auth-security-callout"><ShieldCheck size={18}/><div><strong>Email verification required</strong><span>Your password is correct, but your email address must be verified. Enter the 6-digit code from your latest email.</span><div className="auth-code-row"><input aria-label="Verification code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,"").slice(0,6))} placeholder="000000"/><button className="auth-inline-action" type="button" disabled={busy || code.length!==6} onClick={handleVerifyCode}>Verify</button></div><button className="auth-inline-action" type="button" disabled={resendBusy || !email} onClick={handleResendVerification}>{resendBusy ? "Sending verification code…" : "Resend verification code"}</button>{resendMessage && <small>{resendMessage}</small>}</div></div>}
     <div className="auth-separator"><span>OR</span></div>
-    <button className="auth-sso" type="button" disabled title="SSO is not connected yet"><KeyRound size={17}/><span>Continue with SSO</span></button>
+    <button className="auth-sso" type="button" disabled={ssoBusy} aria-expanded={showSsoForm} onClick={()=>{setShowSsoForm(v=>!v);setError("");}}><KeyRound size={17}/><span>{showSsoForm?"Hide SSO sign-in":"Continue with SSO"}</span></button>
+    {showSsoForm && <form className="agata-form auth-sso-form" onSubmit={handleSso}>
+      <div className="agata-field"><label htmlFor="login-sso-organization">Organization slug</label><input id="login-sso-organization" name="organization_slug" required value={organizationSlug} onChange={e=>setOrganizationSlug(e.target.value)} autoComplete="organization" placeholder="your-workspace"/><small className="auth-note">Enter the workspace slug provided by your organization administrator.</small></div>
+      <button className="auth-submit" type="submit" disabled={ssoBusy}><span>{ssoBusy?"Connecting to Microsoft…":"Continue with Microsoft Entra"}</span><ArrowRight size={17}/></button>
+    </form>}
     <div className="auth-switch"><span>New to Agata?</span><Link to="/signup">Create a workspace</Link></div>
     <p className="auth-note">By signing in, you access your organization’s Proxima control plane.</p>
   </div>;
