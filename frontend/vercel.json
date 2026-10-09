@@ -1,0 +1,67 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://api.agataproxima.com/api/:path*"
+    },
+    {
+      "source": "/docs/openapi.json",
+      "destination": "https://api.agataproxima.com/docs/openapi.json"
+    },
+    {
+      "source": "/verify-email",
+      "destination": "https://api.agataproxima.com/verify-email"
+    },
+    {
+      "source": "/reset-password",
+      "destination": "https://api.agataproxima.com/reset-password"
+    },
+    {
+      "source": "/accept-invite",
+      "destination": "https://api.agataproxima.com/accept-invite"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "x-vercel-enable-rewrite-caching",
+          "value": "0"
+        }
+      ]
+    },
+    {
+      "source": "/verify-email",
+      "headers": [
+        {
+          "key": "x-vercel-enable-rewrite-caching",
+          "value": "0"
+        }
+      ]
+    },
+    {
+      "source": "/reset-password",
+      "headers": [
+        {
+          "key": "x-vercel-enable-rewrite-caching",
+          "value": "0"
+        }
+      ]
+    },
+    {
+      "source": "/accept-invite",
+      "headers": [
+        {
+          "key": "x-vercel-enable-rewrite-caching",
+          "value": "0"
+        }
+      ]
+    }
+  ]
+}
