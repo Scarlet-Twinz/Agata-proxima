@@ -131,6 +131,16 @@ struct SupportInput {
 }
 
 #[derive(Deserialize)]
+struct PublicSupportInput {
+    name: Option<String>,
+    email: String,
+    subject: String,
+    message: String,
+    topic: Option<String>,
+    website: Option<String>,
+}
+
+#[derive(Deserialize)]
 struct ApiKeyInput {
     name: String,
 }
@@ -220,6 +230,11 @@ async fn main() -> Result<()> {
     ))
     .execute(&db)
     .await?;
+    sqlx::raw_sql(include_str!(
+        "../migrations/0016_public_support_requests.sql"
+    ))
+    .execute(&db)
+    .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
@@ -240,6 +255,14 @@ async fn main() -> Result<()> {
                 }
                 Ok(_) => {}
                 Err(e) => error!(%e, "API rate-limit cleanup failed"),
+            }
+            if let Err(e) = sqlx::query(
+                "DELETE FROM public_support_rate_limits WHERE window_started_at < now()-interval '24 hours'",
+            )
+            .execute(&retention_db)
+            .await
+            {
+                error!(%e, "public support rate-limit cleanup failed");
             }
             match production::reconcile_billing_lifecycle(&retention_db).await {
                 Ok(transitioned) if transitioned > 0 => {
@@ -333,6 +356,10 @@ async fn main() -> Result<()> {
         )
         .route("/api/v1/audit", get(audit_events))
         .route("/api/v1/support", get(support).post(create_support))
+        .route(
+            "/api/v1/public/support-requests",
+            post(create_public_support_request),
+        )
         .route(
             "/api/v1/developer/api-keys",
             get(api_keys).post(create_api_key),
@@ -597,7 +624,7 @@ async fn signup(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Resp
 async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Response {
     let email = input.email.trim().to_lowercase();
     let row = match sqlx::query(
-        "SELECT id,password_hash,email_verified_at FROM users WHERE email=$1 AND status='active'",
+        "SELECT id,password_hash,email_verified_at,display_name FROM users WHERE email=$1 AND status='active'",
     )
     .bind(&email)
     .fetch_optional(&s.db)
@@ -673,10 +700,40 @@ async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Respo
     )
     .await;
 
-    match create_session(&s.db, user_id, organization_id).await {
+    let response = match create_session(&s.db, user_id, organization_id).await {
         Ok((token, csrf)) => auth_response(&s, user_id, organization_id, csrf, token),
-        Err(e) => db_error(e),
-    }
+        Err(e) => return db_error(e),
+    };
+
+    // Security notifications are best-effort: a Resend outage must never block a valid sign-in.
+    let recipient = email.clone();
+    let display_name: String = row.get("display_name");
+    let organization_name =
+        sqlx::query_scalar::<_, String>("SELECT name FROM organizations WHERE id=$1")
+            .bind(organization_id)
+            .fetch_one(&s.db)
+            .await
+            .unwrap_or_else(|_| "your workspace".to_string());
+    let login_time = chrono::Utc::now().to_rfc3339();
+    tokio::spawn(async move {
+        if let Err(e) = production::send_template_email_as(
+            &recipient,
+            "new-login-alert",
+            json!({
+                "DISPLAY_NAME": escape_template_value(&display_name),
+                "LOGIN_TIME": login_time,
+                "ORGANIZATION": escape_template_value(&organization_name),
+                "IP_ADDRESS": "Not collected by this deployment"
+            }),
+            "security",
+        )
+        .await
+        {
+            error!(%e, "new-login security email delivery failed");
+        }
+    });
+
+    response
 }
 
 async fn logout(State(s): State<AppState>, headers: HeaderMap) -> Response {
@@ -1653,10 +1710,11 @@ async fn change_email(
         return db_error(e);
     }
 
-    if let Err(e) = production::send_template_email(
+    if let Err(e) = production::send_template_email_as(
         &email,
-        "091dbdb2-21ed-444f-a209-6f44e55d192d",
-        json!({"DISPLAY_NAME":display_name,"CODE":code}),
+        "verify-email",
+        json!({"DISPLAY_NAME":escape_template_value(&display_name),"CODE":code}),
+        "no-reply",
     )
     .await
     {
@@ -2546,6 +2604,240 @@ async fn audit_events(State(s): State<AppState>, headers: HeaderMap) -> Response
     }
 }
 
+fn valid_public_support_email(email: &str) -> bool {
+    if email.len() > 254
+        || email.chars().any(char::is_whitespace)
+        || email.matches('@').count() != 1
+    {
+        return false;
+    }
+    let Some((local, domain)) = email.split_once('@') else {
+        return false;
+    };
+    !local.is_empty() && domain.contains('.') && !domain.starts_with('.') && !domain.ends_with('.')
+}
+
+fn valid_public_support_topic(topic: &str) -> bool {
+    matches!(
+        topic,
+        "general"
+            | "documentation"
+            | "troubleshooting"
+            | "security"
+            | "customer"
+            | "customers"
+            | "developers"
+            | "partnerships"
+    )
+}
+
+fn escape_template_value(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+async fn create_public_support_request(
+    State(s): State<AppState>,
+    Json(input): Json<PublicSupportInput>,
+) -> Response {
+    // A hidden honeypot catches simple automated submissions without disclosing the filter.
+    if input
+        .website
+        .as_deref()
+        .is_some_and(|value| !value.trim().is_empty())
+    {
+        return (
+            StatusCode::ACCEPTED,
+            Json(json!({"ok":true,"message":"Your request has been received."})),
+        )
+            .into_response();
+    }
+
+    let email = input.email.trim().to_lowercase();
+    let name = input.name.unwrap_or_default().trim().to_owned();
+    let subject = input.subject.trim().to_owned();
+    let message = input.message.trim().to_owned();
+    let topic = input.topic.unwrap_or_else(|| "general".to_string());
+
+    if !valid_public_support_email(&email) {
+        return bad("Enter a valid email address.");
+    }
+    if name.len() > 120 || name.chars().any(char::is_control) {
+        return bad("Name must be 120 characters or fewer and cannot contain control characters.");
+    }
+    if subject.chars().count() < 4
+        || subject.chars().count() > 200
+        || subject.chars().any(char::is_control)
+    {
+        return bad("Subject must be between 4 and 200 characters and cannot contain line breaks.");
+    }
+    if message.chars().count() < 10 || message.chars().count() > 10_000 {
+        return bad("Message must be between 10 and 10,000 characters.");
+    }
+    if message
+        .chars()
+        .any(|character| character.is_control() && !matches!(character, '\n' | '\r' | '\t'))
+    {
+        return bad("Message contains unsupported control characters.");
+    }
+    if !valid_public_support_topic(&topic) {
+        return bad("Choose a valid support topic.");
+    }
+
+    // Rate-limit by a one-way hash of the normalized email; raw addresses are not stored
+    // in the rate-limit table and the counter update is atomic under concurrent requests.
+    let email_hash = Sha256::digest(email.as_bytes()).to_vec();
+    let request_count = match sqlx::query_scalar::<_, i32>(
+        "INSERT INTO public_support_rate_limits(email_hash,window_started_at,request_count,updated_at)
+         VALUES($1,now(),1,now())
+         ON CONFLICT(email_hash) DO UPDATE SET
+           request_count=CASE
+             WHEN public_support_rate_limits.window_started_at < now()-interval '1 hour' THEN 1
+             ELSE public_support_rate_limits.request_count+1
+           END,
+           window_started_at=CASE
+             WHEN public_support_rate_limits.window_started_at < now()-interval '1 hour' THEN now()
+             ELSE public_support_rate_limits.window_started_at
+           END,
+           updated_at=now()
+         RETURNING request_count",
+    )
+    .bind(email_hash)
+    .fetch_one(&s.db)
+    .await
+    {
+        Ok(count) => count,
+        Err(e) => return db_error(e),
+    };
+    if request_count > 5 {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({
+                "ok":false,
+                "message":"Too many requests from this email address. Please try again later."
+            })),
+        )
+            .into_response();
+    }
+
+    let request_id = Uuid::new_v4();
+    let stored_name = if name.is_empty() {
+        "Customer"
+    } else {
+        name.as_str()
+    };
+    if let Err(e) = sqlx::query(
+        "INSERT INTO public_support_requests
+          (id,requester_name,requester_email,subject,message,topic,status)
+         VALUES($1,$2,$3,$4,$5,$6,'received')",
+    )
+    .bind(request_id)
+    .bind(stored_name)
+    .bind(&email)
+    .bind(&subject)
+    .bind(&message)
+    .bind(&topic)
+    .execute(&s.db)
+    .await
+    {
+        return db_error(e);
+    }
+
+    let mut requester_email_status = "failed";
+    if let Err(e) = production::send_template_email_as(
+        &email,
+        "support-request-received",
+        json!({
+            "DISPLAY_NAME": escape_template_value(stored_name),
+            "ORGANIZATION": escape_template_value(&format!("Public inquiry · {topic}")),
+            "SUBJECT": escape_template_value(&subject),
+            "REQUEST_ID": request_id.to_string()
+        }),
+        "no-reply",
+    )
+    .await
+    {
+        error!(request_id = %request_id, %e, "support requester confirmation email failed");
+    } else {
+        requester_email_status = "sent";
+    }
+
+    let mut support_email_status = "not_configured";
+    match env::var("AGATA_SUPPORT_INBOX_EMAIL") {
+        Ok(destination) if destination.trim().is_empty() => {
+            tracing::warn!(request_id = %request_id, "AGATA_SUPPORT_INBOX_EMAIL is empty; public request is stored but staff notification was not sent");
+        }
+        Ok(destination) if valid_public_support_email(destination.trim()) => {
+            let public_base = env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_default();
+            let support_link = if public_base.trim().is_empty() {
+                "Not configured".to_string()
+            } else {
+                format!("{}/support", public_base.trim_end_matches('/'))
+            };
+            let staff_message = format!(
+                "New Agata Proxima public support request\n\nRequest ID: {request_id}\nTopic: {topic}\nName: {stored_name}\nEmail: {email}\nSubject: {subject}\n\nMessage:\n{message}\n\nOpen support: {support_link}"
+            );
+            match production::send_text_email(
+                destination.trim(),
+                &format!("[Agata Proxima] {topic}: {subject}"),
+                &staff_message,
+                "support",
+            )
+            .await
+            {
+                Ok(()) => support_email_status = "sent",
+                Err(e) => {
+                    support_email_status = "failed";
+                    error!(request_id = %request_id, %e, "support team notification email failed");
+                }
+            }
+        }
+        Ok(_) => {
+            support_email_status = "failed";
+            tracing::error!(request_id = %request_id, "AGATA_SUPPORT_INBOX_EMAIL is invalid; public request is stored but staff notification was not sent");
+        }
+        Err(_) => {
+            tracing::warn!(request_id = %request_id, "AGATA_SUPPORT_INBOX_EMAIL is not configured; public request is stored but staff notification was not sent");
+        }
+    }
+
+    if let Err(e) = sqlx::query(
+        "UPDATE public_support_requests
+         SET requester_email_status=$1,support_email_status=$2,updated_at=now()
+         WHERE id=$3",
+    )
+    .bind(requester_email_status)
+    .bind(support_email_status)
+    .bind(request_id)
+    .execute(&s.db)
+    .await
+    {
+        error!(request_id = %request_id, %e, "support request email status update failed");
+    }
+
+    let message = if support_email_status == "sent" && requester_email_status == "sent" {
+        "Your request was recorded and a confirmation email was queued for delivery."
+    } else {
+        "Your request was recorded. Keep the request ID for reference and review the delivery statuses below."
+    };
+
+    (
+        StatusCode::ACCEPTED,
+        Json(json!({
+            "ok":true,
+            "request_id":request_id,
+            "requester_email_status":requester_email_status,
+            "support_email_status":support_email_status,
+            "message":message
+        })),
+    )
+        .into_response()
+}
+
 async fn support(State(s): State<AppState>, headers: HeaderMap) -> Response {
     let ctx = match authenticate(&s, &headers).await {
         Ok(v) => v,
@@ -3050,5 +3342,34 @@ mod tests {
         let hash = hash_password("correct horse battery staple").unwrap();
         assert!(verify_password("correct horse battery staple", &hash));
         assert!(!verify_password("wrong password", &hash));
+    }
+
+    #[test]
+    fn public_support_email_validation_rejects_malformed_addresses() {
+        assert!(valid_public_support_email("customer@example.com"));
+        assert!(!valid_public_support_email("customer@example"));
+        assert!(!valid_public_support_email("customer@@example.com"));
+        assert!(!valid_public_support_email("customer @example.com"));
+        assert!(!valid_public_support_email("@example.com"));
+        assert!(!valid_public_support_email(&format!(
+            "{}@example.com",
+            "a".repeat(250)
+        )));
+    }
+
+    #[test]
+    fn public_support_topic_is_allowlisted() {
+        assert!(valid_public_support_topic("security"));
+        assert!(valid_public_support_topic("partnerships"));
+        assert!(valid_public_support_topic("general"));
+        assert!(!valid_public_support_topic("arbitrary-topic"));
+    }
+
+    #[test]
+    fn email_template_values_are_html_escaped() {
+        assert_eq!(
+            escape_template_value("<script>alert('x')</script>"),
+            "&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;"
+        );
     }
 }

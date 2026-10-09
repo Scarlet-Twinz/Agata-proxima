@@ -16,7 +16,7 @@ use std::env;
 use uuid::Uuid;
 
 use super::{
-    audit, authenticate, bad, create_session, db_error, hash_password, internal, require_admin, require_write, token_hash,
+    audit, authenticate, bad, create_session, db_error, hash_password, internal, require_admin, require_write, token_hash, valid_public_support_email,
     AppState,
 };
 
@@ -1610,6 +1610,14 @@ pub(crate) async fn paystack_webhook(
             if let Err(e) = apply_entitlements(&s.db, org, plan).await {
                 return db_error(e);
             }
+            send_billing_notice(
+                &s.db,
+                org,
+                &key,
+                "Payment confirmed",
+                "Your subscription payment was confirmed and the organization's paid entitlements were updated.",
+            )
+            .await;
         }
         "invoice.payment_failed" => {
             if let Err(e) = sqlx::query(
@@ -1646,6 +1654,14 @@ pub(crate) async fn paystack_webhook(
                 .execute(&s.db)
                 .await;
             }
+            send_billing_notice(
+                &s.db,
+                org,
+                &key,
+                "Payment needs attention",
+                "A subscription renewal payment failed. Your organization has a fixed seven-day recovery period. Review the billing settings to restore normal service before the grace period expires.",
+            )
+            .await;
         }
         "subscription.disable" => {
             if let Err(e) = sqlx::query(
@@ -1669,6 +1685,14 @@ pub(crate) async fn paystack_webhook(
             {
                 return db_error(e);
             }
+            send_billing_notice(
+                &s.db,
+                org,
+                &key,
+                "Subscription canceled",
+                "The payment provider reported that your subscription was disabled. Review your billing settings to understand the current plan and available options.",
+            )
+            .await;
         }
         "subscription.not_renew" => {
             let end = data
@@ -1689,6 +1713,14 @@ pub(crate) async fn paystack_webhook(
             {
                 return db_error(e);
             }
+            send_billing_notice(
+                &s.db,
+                org,
+                &key,
+                "Subscription will not renew",
+                "Your subscription is marked not to renew at the end of the current billing period. Review billing settings if this was not intended.",
+            )
+            .await;
         }
         "subscription.expiring_cards" => {
             if let Err(e) = sqlx::query(
@@ -1701,6 +1733,14 @@ pub(crate) async fn paystack_webhook(
             {
                 return db_error(e);
             }
+            send_billing_notice(
+                &s.db,
+                org,
+                &key,
+                "Payment method may expire",
+                "The payment provider reports that a saved payment card may expire soon. Review your billing settings to avoid an interruption.",
+            )
+            .await;
         }
         "refund.pending" | "refund.processing" | "refund.processed" | "refund.failed" | "refund.needs-attention" => {
             let refund_reference = data
@@ -1760,14 +1800,15 @@ pub(crate) async fn send_verification_email(
     .execute(db)
     .await?;
 
-    send_template_email(
+    send_template_email_as(
         email,
-        "091dbdb2-21ed-444f-a209-6f44e55d192d",
+        "verify-email",
         json!({
-            "DISPLAY_NAME": display_name,
+            "DISPLAY_NAME": escape_email_template_value(display_name),
             "CODE": code,
             "ACTION_URL": ""
         }),
+        "no-reply",
     )
     .await
 }
@@ -1990,13 +2031,14 @@ pub(crate) async fn request_password_reset(
             .trim_end_matches('/')
             .to_string();
         let link = format!("{base}/reset-password?token={token}");
-        if let Err(e) = send_template_email(
+        if let Err(e) = send_template_email_as(
             &email,
-            "d3c046c7-fef6-42f0-931e-d92b6f96cfdf",
+            "password-reset",
             json!({
-                "DISPLAY_NAME": row.get::<String,_>("display_name"),
+                "DISPLAY_NAME": escape_email_template_value(&row.get::<String,_>("display_name")),
                 "ACTION_URL": link
             }),
+            "no-reply",
         )
         .await
         {
@@ -2106,22 +2148,24 @@ pub(crate) async fn invite(
         .trim_end_matches('/')
         .to_string();
     let link = format!("{base}/accept-invite?token={token}");
-    if let Err(e) = send_template_email(
+    let email_result = send_template_email_as(
         &email,
-        "0757a210-a372-4a5a-8fca-e642c2fed3da",
+        "organization-invitation",
         json!({
-            "ORGANIZATION": organization_name,
+            "ORGANIZATION": escape_email_template_value(&organization_name),
             "ROLE": role,
             "ACTION_URL": link
         }),
+        "notifications",
     )
-    .await
-    {
-        tracing::error!(%e, "invitation email failed");
-    }
+    .await;
 
-    audit(&s.db, ctx.organization_id, ctx.user_id, "organization.invite.created", "organization_invite", Some(id), json!({"email":email,"role":role})).await;
-    Json(json!({"ok":true,"id":id,"expires_in":"7 days"})).into_response()
+    audit(&s.db, ctx.organization_id, ctx.user_id, "organization.invite.created", "organization_invite", Some(id), json!({"email":email,"role":role,"email_delivery":if email_result.is_ok(){"sent"}else{"failed"}})).await;
+    if let Err(e) = email_result {
+        tracing::error!(%e, invitation_id = %id, "invitation email failed");
+        return service_unavailable("The invitation was recorded, but its email could not be sent. Retry the invitation after checking the email configuration.");
+    }
+    Json(json!({"ok":true,"id":id,"email_delivery":"sent","expires_in":"7 days"})).into_response()
 }
 
 pub(crate) async fn accept_invite(
@@ -2209,24 +2253,102 @@ pub(crate) async fn purge_expired_audit_events(db: &sqlx::PgPool) -> Result<i64,
 }
 
 pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
-    let db_ok=sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
-    let paystack=env::var("PAYSTACK_SECRET_KEY").map(|v|!v.trim().is_empty()).unwrap_or(false);
-    let plans=configured_paystack_plan_codes_unique();
-    let resend=env::var("RESEND_API_KEY").map(|v|!v.is_empty()).unwrap_or(false);let from=env::var("RESEND_FROM_EMAIL").map(|v|!v.is_empty()).unwrap_or(false);let base=env::var("AGATA_PUBLIC_BASE_URL").map(|v|!v.is_empty()).unwrap_or(false);let oidc=env::var("PROXIMA_OIDC_CLIENT_ID").map(|v|!v.is_empty()).unwrap_or(false)&&env::var("PROXIMA_OIDC_CLIENT_SECRET").map(|v|!v.is_empty()).unwrap_or(false);let all=db_ok&&paystack&&plans&&resend&&from&&base&&oidc;
-    Json(json!({"status":if all{"ready"}else{"needs_configuration"},"checks":{"database":db_ok,"paystack_secret":paystack,"paystack_plans":plans,"resend_api_key":resend,"resend_from":from,"public_base_url":base,"oidc":oidc,"engine_remains_authoritative":true}})).into_response()
+    let db_ok = sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
+    let paystack = env::var("PAYSTACK_SECRET_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false);
+    let plans = configured_paystack_plan_codes_unique();
+    let resend = env::var("RESEND_API_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false);
+    let fallback_from = env::var("RESEND_FROM_EMAIL").map(|v| !v.trim().is_empty()).unwrap_or(false);
+    let sender_identities = [
+        "RESEND_FROM_NO_REPLY_EMAIL",
+        "RESEND_FROM_SUPPORT_EMAIL",
+        "RESEND_FROM_SECURITY_EMAIL",
+        "RESEND_FROM_BILLING_EMAIL",
+        "RESEND_FROM_NOTIFICATIONS_EMAIL",
+    ].iter().all(|key| env::var(key).map(|v| !v.trim().is_empty()).unwrap_or(false));
+    let templates_configured = [
+        "RESEND_TEMPLATE_VERIFY_EMAIL_ID",
+        "RESEND_TEMPLATE_PASSWORD_RESET_ID",
+        "RESEND_TEMPLATE_ORGANIZATION_INVITATION_ID",
+        "RESEND_TEMPLATE_NEW_LOGIN_ALERT_ID",
+        "RESEND_TEMPLATE_SUPPORT_REQUEST_RECEIVED_ID",
+        "RESEND_TEMPLATE_BILLING_UPDATE_ID",
+    ].iter().all(|key| env::var(key).map(|v| !v.trim().is_empty()).unwrap_or(false));
+    let support_inbox = env::var("AGATA_SUPPORT_INBOX_EMAIL").map(|v| valid_public_support_email(v.trim())).unwrap_or(false);
+    let base = env::var("AGATA_PUBLIC_BASE_URL").map(|v| !v.trim().is_empty()).unwrap_or(false);
+    let oidc = env::var("PROXIMA_OIDC_CLIENT_ID").map(|v| !v.trim().is_empty()).unwrap_or(false)
+        && env::var("PROXIMA_OIDC_CLIENT_SECRET").map(|v| !v.trim().is_empty()).unwrap_or(false);
+    let email_ready = resend && sender_identities && templates_configured && support_inbox;
+    let all = db_ok && paystack && plans && email_ready && base && oidc;
+    Json(json!({
+        "status": if all { "ready" } else { "needs_configuration" },
+        "checks": {
+            "database": db_ok,
+            "paystack_secret": paystack,
+            "paystack_plans": plans,
+            "resend_api_key": resend,
+            "resend_fallback_sender": fallback_from,
+            "resend_sender_identities": sender_identities,
+            "resend_templates": templates_configured,
+            "support_inbox": support_inbox,
+            "public_base_url": base,
+            "oidc": oidc,
+            "engine_remains_authoritative": true
+        }
+    })).into_response()
 }
 
-pub(crate) async fn send_template_email(
+fn configured_template_id(template_key: &str) -> anyhow::Result<String> {
+    let env_key = match template_key {
+        "verify-email" => "RESEND_TEMPLATE_VERIFY_EMAIL_ID",
+        "password-reset" => "RESEND_TEMPLATE_PASSWORD_RESET_ID",
+        "organization-invitation" => "RESEND_TEMPLATE_ORGANIZATION_INVITATION_ID",
+        "new-login-alert" => "RESEND_TEMPLATE_NEW_LOGIN_ALERT_ID",
+        "support-request-received" => "RESEND_TEMPLATE_SUPPORT_REQUEST_RECEIVED_ID",
+        "billing-update" => "RESEND_TEMPLATE_BILLING_UPDATE_ID",
+        _ => anyhow::bail!("Unsupported transactional email template key"),
+    };
+    match env::var(env_key) {
+        Ok(value) if !value.trim().is_empty() => Ok(value.trim().to_owned()),
+        _ => anyhow::bail!("{env_key} is not configured for the current deployment"),
+    }
+}
+
+fn sender_address(role: &str) -> anyhow::Result<String> {
+    let key = match role {
+        "no-reply" => "RESEND_FROM_NO_REPLY_EMAIL",
+        "support" => "RESEND_FROM_SUPPORT_EMAIL",
+        "security" => "RESEND_FROM_SECURITY_EMAIL",
+        "billing" => "RESEND_FROM_BILLING_EMAIL",
+        "notifications" => "RESEND_FROM_NOTIFICATIONS_EMAIL",
+        _ => anyhow::bail!("Unsupported transactional email sender role"),
+    };
+    if let Ok(value) = env::var(key) {
+        if !value.trim().is_empty() {
+            return Ok(value.trim().to_owned());
+        }
+    }
+    match env::var("RESEND_FROM_EMAIL") {
+        Ok(value) if !value.trim().is_empty() => Ok(value.trim().to_owned()),
+        _ => anyhow::bail!("{key} and RESEND_FROM_EMAIL are not configured for the current deployment"),
+    }
+}
+
+pub(crate) async fn send_template_email_as(
     to: &str,
-    template_id: &str,
+    template_key: &str,
     variables: Value,
+    sender_role: &str,
 ) -> anyhow::Result<()> {
     let key = env::var("RESEND_API_KEY")?;
-    let from = match env::var("RESEND_FROM_EMAIL") {
-        Ok(v) if !v.trim().is_empty() => v,
-        _ => anyhow::bail!("RESEND_FROM_EMAIL is not configured for the current deployment"),
-    };
-    let response = Client::new()
+    if key.trim().is_empty() {
+        anyhow::bail!("RESEND_API_KEY is not configured for the current deployment");
+    }
+    let from = sender_address(sender_role)?;
+    let template_id = configured_template_id(template_key)?;
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()?;
+    let response = client
         .post("https://api.resend.com/emails")
         .bearer_auth(key)
         .json(&json!({
@@ -2242,9 +2364,108 @@ pub(crate) async fn send_template_email(
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        anyhow::bail!("Resend returned {status}: {body}");
+        anyhow::bail!("Resend returned {status}: {}", body.chars().take(500).collect::<String>());
     }
     Ok(())
+}
+
+pub(crate) async fn send_text_email(
+    to: &str,
+    subject: &str,
+    text: &str,
+    sender_role: &str,
+) -> anyhow::Result<()> {
+    let key = env::var("RESEND_API_KEY")?;
+    if key.trim().is_empty() {
+        anyhow::bail!("RESEND_API_KEY is not configured for the current deployment");
+    }
+    let from = sender_address(sender_role)?;
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()?;
+    let response = client
+        .post("https://api.resend.com/emails")
+        .bearer_auth(key)
+        .json(&json!({
+            "from": from,
+            "to": [to],
+            "subject": subject,
+            "text": text
+        }))
+        .send()
+        .await?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        anyhow::bail!("Resend returned {status}: {}", body.chars().take(500).collect::<String>());
+    }
+    Ok(())
+}
+
+fn escape_email_template_value(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+async fn send_billing_notice(
+    db: &sqlx::PgPool,
+    organization_id: Uuid,
+    event_reference: &str,
+    title: &str,
+    details: &str,
+) {
+    let recipient = match sqlx::query(
+        "SELECT u.email,u.display_name
+           FROM memberships m
+           JOIN users u ON u.id=m.user_id
+          WHERE m.organization_id=$1
+            AND m.role IN ('owner','admin')
+            AND u.status='active'
+          ORDER BY CASE m.role WHEN 'owner' THEN 0 ELSE 1 END, m.created_at
+          LIMIT 1",
+    )
+    .bind(organization_id)
+    .fetch_optional(db)
+    .await
+    {
+        Ok(Some(row)) => (row.get::<String, _>("email"), row.get::<String, _>("display_name")),
+        Ok(None) => {
+            tracing::warn!(%organization_id, "billing email skipped because no active organization owner/admin was found");
+            return;
+        }
+        Err(e) => {
+            tracing::error!(%organization_id, %e, "could not resolve billing email recipient");
+            return;
+        }
+    };
+
+    let base = match env::var("AGATA_PUBLIC_BASE_URL") {
+        Ok(value) if !value.trim().is_empty() => value.trim_end_matches('/').to_string(),
+        _ => {
+            tracing::warn!(%organization_id, "billing email skipped because AGATA_PUBLIC_BASE_URL is not configured");
+            return;
+        }
+    };
+    if let Err(e) = send_template_email_as(
+        &recipient.0,
+        "billing-update",
+        json!({
+            "DISPLAY_NAME": escape_email_template_value(&recipient.1),
+            "EVENT_TITLE": escape_email_template_value(title),
+            "DETAILS": escape_email_template_value(details),
+            "ACTION_URL": escape_email_template_value(&format!("{base}/app/billing")),
+            "REQUEST_ID": escape_email_template_value(event_reference)
+        }),
+        "billing",
+    )
+    .await
+    {
+        tracing::error!(%organization_id, %e, "billing notification email delivery failed");
+    }
 }
 
 fn verify_paystack_signature(payload:&str,signature:&str,secret:&str)->bool{let mut mac=match HmacSha512::new_from_slice(secret.as_bytes()){Ok(v)=>v,Err(_)=>return false};mac.update(payload.as_bytes());let expected=hex::encode(mac.finalize().into_bytes());constant_time_equal(signature.trim(),&expected)}

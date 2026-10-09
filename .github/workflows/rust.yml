@@ -92,6 +92,18 @@ jobs:
           grep -q "PROXIMA_OIDC_CLIENT_ID" .env.example
           grep -q "PROXIMA_OIDC_CLIENT_SECRET" .env.example
           grep -q "^RESEND_FROM_EMAIL=$" .env.example
+          grep -q "RESEND_FROM_NO_REPLY_EMAIL" .env.example
+          grep -q "RESEND_FROM_SUPPORT_EMAIL" .env.example
+          grep -q "RESEND_FROM_SECURITY_EMAIL" .env.example
+          grep -q "RESEND_FROM_BILLING_EMAIL" .env.example
+          grep -q "RESEND_FROM_NOTIFICATIONS_EMAIL" .env.example
+          grep -q "AGATA_SUPPORT_INBOX_EMAIL=" .env.example
+          grep -q "RESEND_TEMPLATE_VERIFY_EMAIL_ID" .env.example
+          grep -q "RESEND_TEMPLATE_PASSWORD_RESET_ID" .env.example
+          grep -q "RESEND_TEMPLATE_ORGANIZATION_INVITATION_ID" .env.example
+          grep -q "RESEND_TEMPLATE_NEW_LOGIN_ALERT_ID" .env.example
+          grep -q "RESEND_TEMPLATE_SUPPORT_REQUEST_RECEIVED_ID" .env.example
+          grep -q "RESEND_TEMPLATE_BILLING_UPDATE_ID" .env.example
           ! grep -q "STRIPE_" .env.example
 
       - name: Control plane operational scripts
@@ -102,6 +114,12 @@ jobs:
           test -f docs/usage.md
           test -f docs/production/operational-readiness-runbook.md
           ! grep -qi 'Stripe webhooks' docs/developer-guide.md
+
+      - name: Phase 3.23 transactional email
+        run: bash tests/launch/phase3_23_resend_email_gate.sh
+
+      - name: Phase 3.22/3.23 Entra OIDC and Resend contract
+        run: bash tests/launch/phase3_22_23_oidc_email_contract.sh
 
       - name: Phase 3.22-A canonical entitlement contract
         run: bash tests/entitlements/phase322_a_catalog_gate.sh

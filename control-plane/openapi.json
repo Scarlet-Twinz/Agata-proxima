@@ -780,6 +780,80 @@
           }
         }
       }
+    },
+    "/api/v1/public/support-requests": {
+      "post": {
+        "summary": "Submit a public support or contact request",
+        "description": "Public endpoint. Validates and persists the request before attempting requester confirmation and support-team notification emails. A 202 response includes delivery statuses; it does not guarantee final inbox placement.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "subject",
+                  "message"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 254
+                  },
+                  "subject": {
+                    "type": "string",
+                    "minLength": 4,
+                    "maxLength": 200
+                  },
+                  "message": {
+                    "type": "string",
+                    "minLength": 10,
+                    "maxLength": 10000
+                  },
+                  "topic": {
+                    "type": "string",
+                    "enum": [
+                      "general",
+                      "documentation",
+                      "troubleshooting",
+                      "security",
+                      "customer",
+                      "customers",
+                      "developers",
+                      "partnerships"
+                    ],
+                    "default": "general"
+                  },
+                  "website": {
+                    "type": "string",
+                    "description": "Hidden honeypot field; leave empty."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Request persisted; response includes request ID and email delivery statuses."
+          },
+          "400": {
+            "description": "Invalid request fields."
+          },
+          "429": {
+            "description": "Too many requests for the same email address within the rate-limit window."
+          },
+          "500": {
+            "description": "Persistence failed."
+          }
+        }
+      }
     }
   },
   "components": {
