@@ -401,8 +401,15 @@ async fn main() -> Result<()> {
         .with_state(state)
         .layer(TraceLayer::new_for_http());
 
+    // Explicit bind configuration wins. Container platforms such as Railway inject
+    // PORT dynamically; bind to all interfaces when that variable is present. Local
+    // cargo run remains loopback-only by default.
+    let default_bind = match env::var("PORT") {
+        Ok(port) => format!("0.0.0.0:{port}"),
+        Err(_) => "127.0.0.1:8080".into(),
+    };
     let addr: SocketAddr = env::var("PROXIMA_CONTROL_BIND")
-        .unwrap_or_else(|_| "127.0.0.1:8080".into())
+        .unwrap_or(default_bind)
         .parse()?;
 
     info!(%addr, "Agata Proxima control plane listening");

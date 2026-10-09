@@ -26,6 +26,34 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install
         run: npm ci
+      - name: Validate Vercel production routing
+        run: |
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const config = JSON.parse(fs.readFileSync("vercel.json", "utf8"));
+            const rewrites = config.rewrites ?? [];
+            const required = [
+              ["/api/:path*", "https://api.agataproxima.com/api/:path*"],
+              ["/docs/openapi.json", "https://api.agataproxima.com/docs/openapi.json"],
+              ["/verify-email", "https://api.agataproxima.com/verify-email"],
+              ["/reset-password", "https://api.agataproxima.com/reset-password"],
+              ["/accept-invite", "https://api.agataproxima.com/accept-invite"],
+              ["/(.*)", "/index.html"]
+            ];
+            for (const [source, destination] of required) {
+              if (!rewrites.some(rule => rule.source === source && rule.destination === destination)) {
+                throw new Error("Missing Vercel rewrite: " + source + " -> " + destination);
+              }
+            }
+            if (!(config.headers ?? []).some(rule =>
+              rule.source === "/api/(.*)" &&
+              rule.headers?.some(header => header.key === "x-vercel-enable-rewrite-caching" && header.value === "0") &&
+              rule.headers?.some(header => header.key.toLowerCase() === "cache-control" && header.value.includes("no-store"))
+            )) {
+              throw new Error("Authenticated API proxy responses must be non-cacheable");
+            }
+            console.log("PASS: Vercel API proxy, email routes, SPA fallback and no-cache rule");
+          '
       - name: Build
         run: npm run build
       - name: Lint

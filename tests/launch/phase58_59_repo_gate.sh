@@ -19,6 +19,13 @@ grep -Fq 'path: "/docs/usage"' frontend/src/app/router.tsx || fail "public usage
 grep -Fq 'paystack_provider_plan_matches_catalog' crates/proxima-control-plane/src/production.rs || fail "Paystack plan preflight missing"
 grep -Fq 'transaction_amount_mismatch' crates/proxima-control-plane/src/production.rs || fail "Paystack amount verification missing"
 test -f tests/external-saas/verify_reference_app.sh || fail "external SaaS acceptance fixture missing"
+test -f frontend/vercel.json || fail "Vercel same-origin proxy configuration missing"
+
+grep -Fq 'env::var("PORT")' crates/proxima-control-plane/src/main.rs || fail "platform-assigned Control Plane port support missing"
+grep -Fq 'ENV PORT=8080' crates/proxima-control-plane/Dockerfile || fail "container default port missing"
+grep -Fq '"destination": "https://api.agataproxima.com/api/:path*"' frontend/vercel.json || fail "frontend API proxy target missing"
+grep -Fq '"destination": "/index.html"' frontend/vercel.json || fail "SPA route fallback missing"
+grep -Fq '"value": "0"' frontend/vercel.json || fail "external rewrite cache bypass missing"
 
 grep -q 'AGATA_PAYSTACK_STARTER_PLAN_CODE' .env.example || fail "Starter Paystack plan contract missing"
 grep -q 'AGATA_PAYSTACK_GROWTH_PLAN_CODE' .env.example || fail "Growth Paystack plan contract missing"
