@@ -178,6 +178,19 @@ pub(crate) async fn portal(State(s):State<AppState>,headers:HeaderMap)->Response
     match url {Some(v) if v.starts_with("https://")=>Json(json!({"ok":true,"provider":"lemonsqueezy","portal_url":v})).into_response(),_=>bad("No customer portal URL is available yet. Open the subscription management link from your Lemon Squeezy customer receipt or wait for the first subscription webhook.")}
 }
 
+fn subscription_state(event_type:&str,status:&str,cancelled:bool,period_end:Option<chrono::DateTime<chrono::Utc>>,now:chrono::DateTime<chrono::Utc>)->(&'static str,&'static str,bool) {
+    let is_cancelled=cancelled || event_type=="subscription_cancelled" || status=="cancelled";
+    if event_type=="subscription_expired" || status=="expired" { return ("canceled","canceled",false); }
+    if is_cancelled {
+        if period_end.is_some_and(|end|end>now) { return ("active","non-renewing",true); }
+        return ("canceled","canceled",false);
+    }
+    if event_type=="subscription_payment_failed" || matches!(status,"past_due"|"unpaid"|"paused") {
+        return ("past_due","attention",false);
+    }
+    ("active","active",false)
+}
+
 fn valid_signature(body:&str, signature:&str, secret:&str)->bool {
     let Ok(mut mac)=HmacSha256::new_from_slice(secret.as_bytes()) else{return false};
     mac.update(body.as_bytes());
@@ -192,8 +205,15 @@ pub(crate) async fn webhook(State(s):State<AppState>,headers:HeaderMap,body:Stri
     let event:Value=match serde_json::from_str(&body){Ok(v)=>v,Err(_)=>return StatusCode::BAD_REQUEST.into_response()};
     let event_type=event.pointer("/meta/event_name").and_then(Value::as_str).unwrap_or("");
     let data=event.get("data").cloned().unwrap_or(Value::Null);
-    let subscription_id=data.get("id").and_then(Value::as_str).unwrap_or("");
-    if event_type.is_empty() || subscription_id.is_empty(){return StatusCode::BAD_REQUEST.into_response();}
+    let resource_id=data.get("id").and_then(Value::as_str).unwrap_or("");
+    let invoice_event=matches!(event_type,"subscription_payment_success"|"subscription_payment_failed"|"subscription_payment_recovered"|"subscription_payment_refunded");
+    let attrs_hint=data.get("attributes").cloned().unwrap_or(Value::Null);
+    let subscription_id=if invoice_event {
+        attrs_hint.get("subscription_id").and_then(|v|v.as_str().map(str::to_owned).or_else(||v.as_i64().map(|n|n.to_string())))
+            .or_else(||data.pointer("/relationships/subscription/data/id").and_then(Value::as_str).map(str::to_owned))
+            .unwrap_or_default()
+    } else { resource_id.to_owned() };
+    if event_type.is_empty() || resource_id.is_empty() || (invoice_event && subscription_id.is_empty()){return StatusCode::BAD_REQUEST.into_response();}
     let key=format!("{}:{}",event_type,hex::encode(Sha256::digest(body.as_bytes())));
     let claimed=match sqlx::query("INSERT INTO billing_events(provider,provider_event_id,event_type,payload,status,processing_started_at,attempt_count) VALUES('lemonsqueezy',$1,$2,$3,'processing',now(),1) ON CONFLICT(provider,provider_event_id) DO UPDATE SET status='processing',processing_started_at=now(),attempt_count=billing_events.attempt_count+1,payload=EXCLUDED.payload,event_type=EXCLUDED.event_type WHERE billing_events.status NOT IN ('processed','ignored') AND (billing_events.processing_started_at IS NULL OR billing_events.processing_started_at<now()-interval '5 minutes') RETURNING id")
         .bind(&key).bind(event_type).bind(&event).fetch_optional(&s.db).await {Ok(v)=>v.is_some(),Err(e)=>return db_error(e)};
@@ -203,41 +223,60 @@ pub(crate) async fn webhook(State(s):State<AppState>,headers:HeaderMap,body:Stri
     let custom=meta.get("custom_data").cloned().unwrap_or(Value::Null);
     let org_from_custom=custom.get("organization_id").and_then(Value::as_str).and_then(|v|Uuid::parse_str(v).ok());
     let customer_id=attrs.get("customer_id").and_then(Value::as_i64).map(|v|v.to_string());
-    let variant_id=attrs.get("variant_id").and_then(Value::as_i64).map(|v|v.to_string());
-    let plan=variant_id.as_deref().and_then(plan_for_variant);
+    let incoming_variant_id=attrs.get("variant_id").and_then(Value::as_i64).map(|v|v.to_string())
+        .or_else(||attrs.get("variant_id").and_then(Value::as_str).map(str::to_owned));
     let expected_store=env::var("LEMONSQUEEZY_STORE_ID").unwrap_or_default();
-    let received_store=attrs.get("store_id").and_then(Value::as_i64).map(|v|v.to_string()).unwrap_or_default();
     let expected_test_mode=env::var("LEMONSQUEEZY_TEST_MODE").map(|v|v.eq_ignore_ascii_case("true")).unwrap_or(true);
+    let received_store=attrs.get("store_id").and_then(Value::as_i64).map(|v|v.to_string());
     let received_test_mode=attrs.get("test_mode").and_then(Value::as_bool);
     let custom_plan=custom.get("plan").and_then(Value::as_str);
-    if received_store != expected_store || received_test_mode != Some(expected_test_mode) {
+    // Invoice events carry a subscription-invoice resource, not the subscription resource.
+    // Resolve them only against a subscription already accepted from a signed subscription event.
+    let existing=if invoice_event || org_from_custom.is_none() {
+        match sqlx::query("SELECT organization_id,lemonsqueezy_variant_id,plan_key FROM billing_accounts WHERE provider='lemonsqueezy' AND lemonsqueezy_subscription_id=$1")
+            .bind(&subscription_id).fetch_optional(&s.db).await {
+            Ok(v)=>v,
+            Err(e)=>return db_error(e)
+        }
+    } else { None };
+    if !invoice_event && (received_store.as_deref()!=Some(expected_store.as_str()) || received_test_mode!=Some(expected_test_mode)) {
         let _=sqlx::query("UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='lemonsqueezy' AND provider_event_id=$1").bind(&key).execute(&s.db).await;
         return Json(json!({"received":true,"ignored":"store_or_mode_mismatch"})).into_response();
     }
-    if let (Some(expected),Some(received))=(plan,custom_plan) {
-        if expected != received {
-            let _=sqlx::query("UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='lemonsqueezy' AND provider_event_id=$1").bind(&key).execute(&s.db).await;
-            return Json(json!({"received":true,"ignored":"checkout_plan_variant_mismatch"})).into_response();
-        }
+    if invoice_event && existing.is_none() {
+        let _=sqlx::query("UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='lemonsqueezy' AND provider_event_id=$1").bind(&key).execute(&s.db).await;
+        return Json(json!({"received":true,"ignored":"invoice_subscription_not_found"})).into_response();
     }
-    let existing_org=if org_from_custom.is_none(){match sqlx::query("SELECT organization_id FROM billing_accounts WHERE provider='lemonsqueezy' AND lemonsqueezy_subscription_id=$1").bind(subscription_id).fetch_optional(&s.db).await{Ok(v)=>v.map(|r|r.get::<Uuid,_>("organization_id")),Err(e)=>return db_error(e)}}else{None};
+    let existing_org=existing.as_ref().map(|r|r.get::<Uuid,_>("organization_id"));
     let org=match org_from_custom.or(existing_org){Some(v)=>v,None=>{
         let _=sqlx::query("UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='lemonsqueezy' AND provider_event_id=$1").bind(&key).execute(&s.db).await;
         return Json(json!({"received":true,"ignored":"organization_not_resolved"})).into_response();
     }};
-    if let (Some(variant),Some(plan))=(variant_id.as_deref(),plan) {
-        if configured_variant(plan).as_deref()!=Some(variant){return StatusCode::UNPROCESSABLE_ENTITY.into_response();}
+    let variant_id=incoming_variant_id.or_else(||existing.as_ref().and_then(|r|r.get::<Option<String>,_>("lemonsqueezy_variant_id")));
+    let existing_plan=existing.as_ref().map(|r|r.get::<String,_>("plan_key"));
+    let plan=variant_id.as_deref().and_then(plan_for_variant).or_else(||existing_plan.as_deref().and_then(|v|match v{"starter"=>Some("starter"),"growth"=>Some("growth"),"scale"=>Some("scale"),_=>None}));
+    if let (Some(expected),Some(received))=(plan,custom_plan) {
+        if expected!=received {
+            let _=sqlx::query("UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='lemonsqueezy' AND provider_event_id=$1").bind(&key).execute(&s.db).await;
+            return Json(json!({"received":true,"ignored":"checkout_plan_variant_mismatch"})).into_response();
+        }
+    }
+    if !invoice_event {
+        if let (Some(variant),Some(plan))=(variant_id.as_deref(),plan) {
+            if configured_variant(plan).as_deref()!=Some(variant){return StatusCode::UNPROCESSABLE_ENTITY.into_response();}
+        }
     }
     let status=attrs.get("status").and_then(Value::as_str).unwrap_or("");
     let renews=attrs.get("renews_at").and_then(Value::as_str).and_then(|v|chrono::DateTime::parse_from_rfc3339(v).ok()).map(|v|v.with_timezone(&chrono::Utc));
     let ends=attrs.get("ends_at").and_then(Value::as_str).and_then(|v|chrono::DateTime::parse_from_rfc3339(v).ok()).map(|v|v.with_timezone(&chrono::Utc));
-    let cancel=attrs.get("cancelled").and_then(Value::as_bool).unwrap_or(false) || event_type=="subscription_cancelled";
+    let cancelled=attrs.get("cancelled").and_then(Value::as_bool).unwrap_or(false) || event_type=="subscription_cancelled" || status=="cancelled";
     let portal=attrs.pointer("/urls/customer_portal").and_then(Value::as_str);
-    let effective_status=if event_type=="subscription_cancelled" || event_type=="subscription_expired" { "canceled" } else if event_type=="subscription_payment_failed" { "past_due" } else { match status {"active"|"on_trial"=>"active","past_due"|"unpaid"=>"past_due","cancelled"|"expired"=>"canceled",_=>"active"} };
+    let period_end=ends.or(renews);
+    let (effective_status,account_status,cancel_at_period_end)=subscription_state(event_type,status,cancelled,period_end,chrono::Utc::now());
     if let Some(plan)=plan {
         if matches!(event_type,"subscription_created"|"subscription_updated"|"subscription_resumed"|"subscription_cancelled"|"subscription_expired"|"subscription_paused"|"subscription_unpaused"|"subscription_payment_success"|"subscription_payment_failed") {
-            if let Err(e)=sqlx::query("INSERT INTO billing_accounts(organization_id,provider,lemonsqueezy_customer_id,lemonsqueezy_subscription_id,lemonsqueezy_variant_id,lemonsqueezy_customer_portal_url,plan_key,status,current_period_end,cancel_at_period_end,updated_at) VALUES($1,'lemonsqueezy',$2,$3,$4,$5,$6,$7,$8,$9,now()) ON CONFLICT(organization_id) DO UPDATE SET provider='lemonsqueezy',lemonsqueezy_customer_id=COALESCE(EXCLUDED.lemonsqueezy_customer_id,billing_accounts.lemonsqueezy_customer_id),lemonsqueezy_subscription_id=EXCLUDED.lemonsqueezy_subscription_id,lemonsqueezy_variant_id=EXCLUDED.lemonsqueezy_variant_id,lemonsqueezy_customer_portal_url=COALESCE(EXCLUDED.lemonsqueezy_customer_portal_url,billing_accounts.lemonsqueezy_customer_portal_url),plan_key=EXCLUDED.plan_key,status=EXCLUDED.status,current_period_end=COALESCE(EXCLUDED.current_period_end,billing_accounts.current_period_end),cancel_at_period_end=EXCLUDED.cancel_at_period_end,updated_at=now()")
-                .bind(org).bind(customer_id).bind(subscription_id).bind(variant_id).bind(portal).bind(plan).bind(effective_status).bind(renews.or(ends)).bind(cancel).execute(&s.db).await{return db_error(e);}
+            if let Err(e)=sqlx::query("INSERT INTO billing_accounts(organization_id,provider,lemonsqueezy_customer_id,lemonsqueezy_subscription_id,lemonsqueezy_variant_id,lemonsqueezy_customer_portal_url,plan_key,status,current_period_end,cancel_at_period_end,updated_at) VALUES($1,'lemonsqueezy',$2,$3,$4,$5,$6,$7,$8,$9,now()) ON CONFLICT(organization_id) DO UPDATE SET provider='lemonsqueezy',lemonsqueezy_customer_id=COALESCE(EXCLUDED.lemonsqueezy_customer_id,billing_accounts.lemonsqueezy_customer_id),lemonsqueezy_subscription_id=EXCLUDED.lemonsqueezy_subscription_id,lemonsqueezy_variant_id=COALESCE(EXCLUDED.lemonsqueezy_variant_id,billing_accounts.lemonsqueezy_variant_id),lemonsqueezy_customer_portal_url=COALESCE(EXCLUDED.lemonsqueezy_customer_portal_url,billing_accounts.lemonsqueezy_customer_portal_url),plan_key=EXCLUDED.plan_key,status=EXCLUDED.status,current_period_end=COALESCE(EXCLUDED.current_period_end,billing_accounts.current_period_end),cancel_at_period_end=EXCLUDED.cancel_at_period_end,updated_at=now()")
+                .bind(org).bind(customer_id).bind(&subscription_id).bind(&variant_id).bind(portal).bind(plan).bind(account_status).bind(period_end).bind(cancel_at_period_end).execute(&s.db).await{return db_error(e);}
             if matches!(effective_status,"active") {if let Err(e)=apply_entitlements(&s.db,org,plan).await{return db_error(e);}}
             else if let Err(e)=sqlx::query("UPDATE organization_entitlements SET billing_status=$1,billing_grace_until=CASE WHEN $1='past_due' THEN now()+interval '7 days' ELSE NULL END,updated_at=now() WHERE organization_id=$2").bind(effective_status).bind(org).execute(&s.db).await{return db_error(e);}
             if let Err(e)=sqlx::query("UPDATE billing_transactions SET status=CASE WHEN $1='subscription_payment_success' THEN 'success' WHEN $1='subscription_payment_failed' THEN 'failed' ELSE status END,payload=$2,updated_at=now() WHERE provider='lemonsqueezy' AND organization_id=$3 AND plan_key=$4 AND status='initialized'").bind(event_type).bind(&event).bind(org).bind(plan).execute(&s.db).await{return db_error(e);}
@@ -266,6 +305,13 @@ mod tests {
         assert!(valid_signature(body,&sig,"test-secret"));
         assert!(!valid_signature(body,&sig,"wrong-secret"));
         assert!(!valid_signature(body,&format!("{sig}00"),"test-secret"));
+    }
+    #[test] fn cancellation_preserves_access_until_paid_period_ends() {
+        let now=chrono::DateTime::parse_from_rfc3339("2026-10-09T12:00:00Z").unwrap().with_timezone(&chrono::Utc);
+        let future=Some(chrono::DateTime::parse_from_rfc3339("2026-10-20T12:00:00Z").unwrap().with_timezone(&chrono::Utc));
+        assert_eq!(subscription_state("subscription_cancelled","cancelled",true,future,now),("active","non-renewing",true));
+        assert_eq!(subscription_state("subscription_expired","expired",true,future,now),("canceled","canceled",false));
+        assert_eq!(subscription_state("subscription_payment_failed","past_due",false,None,now),("past_due","attention",false));
     }
     #[test] fn plan_mapping_rejects_duplicate_variants() {
         std::env::set_var("LEMONSQUEEZY_STARTER_VARIANT_ID","101");
