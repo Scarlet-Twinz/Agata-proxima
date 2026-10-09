@@ -284,7 +284,7 @@ pub(crate) async fn webhook(State(s):State<AppState>,headers:HeaderMap,body:Stri
     let customer_id=incoming_customer_id.or_else(||existing.as_ref().and_then(|r|r.get::<Option<String>,_>("lemonsqueezy_customer_id")));
     let portal=incoming_portal.map(str::to_owned).or_else(||existing.as_ref().and_then(|r|r.get::<Option<String>,_>("lemonsqueezy_customer_portal_url")));
     if let Some(plan)=plan {
-        if matches!(event_type,"subscription_created"|"subscription_updated"|"subscription_resumed"|"subscription_cancelled"|"subscription_expired"|"subscription_paused"|"subscription_unpaused"|"subscription_payment_success"|"subscription_payment_failed") {
+        if matches!(event_type,"subscription_created"|"subscription_updated"|"subscription_resumed"|"subscription_cancelled"|"subscription_expired"|"subscription_paused"|"subscription_unpaused"|"subscription_payment_success"|"subscription_payment_failed"|"subscription_payment_recovered"|"subscription_payment_refunded") {
             if let Err(e)=sqlx::query("INSERT INTO billing_accounts(organization_id,provider,lemonsqueezy_customer_id,lemonsqueezy_subscription_id,lemonsqueezy_variant_id,lemonsqueezy_customer_portal_url,plan_key,status,current_period_end,cancel_at_period_end,updated_at) VALUES($1,'lemonsqueezy',$2,$3,$4,$5,$6,$7,$8,$9,now()) ON CONFLICT(organization_id) DO UPDATE SET provider='lemonsqueezy',lemonsqueezy_customer_id=COALESCE(EXCLUDED.lemonsqueezy_customer_id,billing_accounts.lemonsqueezy_customer_id),lemonsqueezy_subscription_id=EXCLUDED.lemonsqueezy_subscription_id,lemonsqueezy_variant_id=COALESCE(EXCLUDED.lemonsqueezy_variant_id,billing_accounts.lemonsqueezy_variant_id),lemonsqueezy_customer_portal_url=COALESCE(EXCLUDED.lemonsqueezy_customer_portal_url,billing_accounts.lemonsqueezy_customer_portal_url),plan_key=EXCLUDED.plan_key,status=EXCLUDED.status,current_period_end=COALESCE(EXCLUDED.current_period_end,billing_accounts.current_period_end),cancel_at_period_end=EXCLUDED.cancel_at_period_end,updated_at=now()")
                 .bind(org).bind(customer_id).bind(&subscription_id).bind(&variant_id).bind(portal).bind(plan).bind(account_status).bind(period_end).bind(cancel_at_period_end).execute(&s.db).await{return db_error(e);}
             if matches!(effective_status,"active") {if let Err(e)=apply_entitlements(&s.db,org,plan).await{return db_error(e);}}
@@ -302,8 +302,9 @@ pub(crate) async fn webhook(State(s):State<AppState>,headers:HeaderMap,body:Stri
                 }
             }
             let (title, details) = match event_type {
-                "subscription_payment_success" => ("Subscription payment received", "Your Lemon Squeezy subscription payment was received and your plan is active."),
+                "subscription_payment_success" | "subscription_payment_recovered" => ("Subscription payment received", "Your Lemon Squeezy subscription payment was received and your plan is active."),
                 "subscription_payment_failed" => ("Subscription payment needs attention", "A Lemon Squeezy subscription payment failed. Review your payment method to avoid interruption."),
+                "subscription_payment_refunded" => ("Subscription payment refunded", "A subscription payment was refunded. Review your billing page if you believe this is unexpected."),
                 "subscription_cancelled" => ("Subscription cancelled", "Your Lemon Squeezy subscription was cancelled. Review your billing page for the current access period."),
                 "subscription_expired" => ("Subscription expired", "Your Lemon Squeezy subscription has expired."),
                 "subscription_created" => ("Subscription activated", "Your Lemon Squeezy subscription is active."),
