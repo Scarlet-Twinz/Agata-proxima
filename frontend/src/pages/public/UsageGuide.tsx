@@ -10,7 +10,7 @@ const localCommand = [
 ].join("\n");
 
 const sections = [
-  { title: "Create a workspace", body: "Create an account at /signup. The first account owns the organization. Use the organization ID returned by the authenticated API for subsequent resource requests. Keep your session cookie and CSRF token private." },
+  { title: "Create a workspace", body: "Create an account at /signup. The first account owns the organization. Signup requires working email verification through Resend; if email delivery fails, workspace creation may be rolled back. Use the organization ID returned by the authenticated API for subsequent resource requests. Keep your session cookie and CSRF token private." },
   { title: "Add tenants, policies and nodes", body: "Create tenant records, versioned policies and nodes in the organization context. Store any one-time node enrollment token in a secret store. Configure PostgreSQL roles and RLS alongside the Engine; dashboard records do not replace database enforcement." },
   { title: "Deploy and verify", body: "Record a desired deployment state, then run tenant-local and cross-tenant negative tests. Inspect verification evidence and audit events. A passing repository test is not a substitute for testing the real external application and its database path." },
   { title: "Invite your team", body: "Invite people by email and assign the least-privileged role that fits. Invitations expire after seven days. Active memberships and unexpired invitations reserve seats; accepting an invitation must not bypass the plan limit." },
