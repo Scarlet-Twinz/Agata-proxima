@@ -96,6 +96,27 @@ fn paystack_plan_code(plan: &str) -> Option<String> {
     env::var(key).ok().filter(|v|!v.trim().is_empty())
 }
 
+fn expected_paystack_amount_usd(plan: &str) -> Option<i64> {
+    match plan {
+        "starter" => Some(14_900),
+        "growth" => Some(49_900),
+        "scale" => Some(119_900),
+        _ => None,
+    }
+}
+
+fn paystack_payload_matches_plan_amount_currency(data: &Value, plan: &str) -> bool {
+    let amount = data.get("amount")
+        .or_else(|| data.pointer("/plan/amount"))
+        .or_else(|| data.pointer("/subscription/plan/amount"))
+        .and_then(Value::as_i64);
+    let currency = data.get("currency")
+        .or_else(|| data.pointer("/plan/currency"))
+        .or_else(|| data.pointer("/subscription/plan/currency"))
+        .and_then(Value::as_str);
+    amount == expected_paystack_amount_usd(plan) && currency == Some("USD")
+}
+
 fn plan_limits(plan: &str) -> (i32, i32, i32, i32, bool, bool, bool, bool, bool) {
     match plan {
         "starter" => (2, 25, 2, 30, false, true, false, false, false),
@@ -1103,14 +1124,20 @@ async fn verify_paystack_transaction(db: &sqlx::PgPool, org: Uuid, reference: &s
         .or_else(|| data.pointer("/subscription/plan/plan_code").and_then(Value::as_str))
         .or_else(|| data.pointer("/subscription/plan_code").and_then(Value::as_str))
         .or_else(|| data.get("plan_code").and_then(Value::as_str));
-    if let (Some(expected), Some(returned)) = (expected_plan_code.as_deref(), returned_plan_code) {
-        if expected != returned {
-            return (StatusCode::FORBIDDEN, Json(json!({"ok":false,"error":"transaction_plan_mismatch"}))).into_response();
-        }
+    if expected_plan_code.as_deref().is_none() || returned_plan_code != expected_plan_code.as_deref() {
+        return (StatusCode::FORBIDDEN, Json(json!({"ok":false,"error":"transaction_plan_mismatch"}))).into_response();
     }
 
     let amount = data.get("amount").and_then(Value::as_i64);
-    let currency = data.get("currency").and_then(Value::as_str).unwrap_or("USD");
+    let currency = data.get("currency").and_then(Value::as_str).unwrap_or_default();
+    if status == "success" {
+        if currency != "USD" {
+            return (StatusCode::FORBIDDEN, Json(json!({"ok":false,"error":"transaction_currency_mismatch","expected_currency":"USD","received_currency":currency}))).into_response();
+        }
+        if amount != expected_paystack_amount_usd(&plan) {
+            return (StatusCode::FORBIDDEN, Json(json!({"ok":false,"error":"transaction_amount_mismatch","expected_amount_subunits":expected_paystack_amount_usd(&plan),"received_amount_subunits":amount}))).into_response();
+        }
+    }
     let payload = data.clone();
     let end = data
         .get("next_payment_date")
@@ -1402,6 +1429,16 @@ pub(crate) async fn paystack_webhook(
                 Some("scale") => "scale",
                 _ => return mark_paystack_event_ignored(&s.db, &key, "unknown_or_non_self_service_plan").await,
             };
+
+            // Never grant a paid entitlement based only on a successful event name.
+            // The provider payload must match the configured plan's exact USD amount and currency.
+            if !paystack_payload_matches_plan_amount_currency(&data, plan) {
+                return mark_paystack_event_ignored(&s.db, &key, "webhook_plan_amount_or_currency_mismatch").await;
+            }
+            let configured_plan_code = paystack_plan_code(plan);
+            if configured_plan_code.as_deref().is_none() || payload_plan_code != configured_plan_code.as_deref() {
+                return mark_paystack_event_ignored(&s.db, &key, "webhook_plan_code_mismatch").await;
+            }
 
             if let Some(reference) = reference {
                 if event_type == "charge.success" {
@@ -2173,5 +2210,27 @@ mod tests {
     fn paystack_signature_round_trip(){let payload=r#"{"event":"charge.success","data":{"reference":"ref_test"}}"#;let secret="sk_test";let mut mac=HmacSha512::new_from_slice(secret.as_bytes()).unwrap();mac.update(payload.as_bytes());let signature=hex::encode(mac.finalize().into_bytes());assert!(verify_paystack_signature(payload,&signature,secret));}
     #[test]
     fn invalid_paystack_signature_is_rejected(){assert!(!verify_paystack_signature("payload","invalid","sk_test"));}
+
+    #[test]
+    fn canonical_paystack_usd_amounts_are_exact_minor_units() {
+        assert_eq!(super::expected_paystack_amount_usd("starter"), Some(14_900));
+        assert_eq!(super::expected_paystack_amount_usd("growth"), Some(49_900));
+        assert_eq!(super::expected_paystack_amount_usd("scale"), Some(119_900));
+        assert_eq!(super::expected_paystack_amount_usd("free"), None);
+        assert_eq!(super::expected_paystack_amount_usd("enterprise"), None);
+    }
+
+    #[test]
+    fn paystack_success_payload_must_match_usd_amount_and_plan() {
+        let starter = serde_json::json!({"amount":14900,"currency":"USD","plan":{"amount":14900,"currency":"USD"}});
+        let wrong_amount = serde_json::json!({"amount":7900,"currency":"USD"});
+        let wrong_currency = serde_json::json!({"amount":14900,"currency":"NGN"});
+        let nested_plan = serde_json::json!({"plan":{"amount":49900,"currency":"USD"}});
+        assert!(super::paystack_payload_matches_plan_amount_currency(&starter, "starter"));
+        assert!(!super::paystack_payload_matches_plan_amount_currency(&wrong_amount, "starter"));
+        assert!(!super::paystack_payload_matches_plan_amount_currency(&wrong_currency, "starter"));
+        assert!(super::paystack_payload_matches_plan_amount_currency(&nested_plan, "growth"));
+        assert!(!super::paystack_payload_matches_plan_amount_currency(&starter, "growth"));
+    }
 
 }
