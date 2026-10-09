@@ -19,11 +19,6 @@ use super::{
 };
 
 #[derive(Deserialize)]
-pub(crate) struct CheckoutInput {
-    pub price_id: Option<String>,
-}
-
-#[derive(Deserialize)]
 pub(crate) struct InviteInput {
     pub organization_id: Uuid,
     pub email: String,
