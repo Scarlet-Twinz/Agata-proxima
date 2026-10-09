@@ -1134,7 +1134,7 @@ pub(crate) async fn lemonsqueezy_webhook(State(s):State<AppState>,headers:Header
   if local.get::<Uuid,_>("organization_id")!=org||local.get::<Option<String>,_>("plan_code").as_deref()!=variant.as_deref(){return StatusCode::FORBIDDEN.into_response();}
  }
  let plan=variant.as_deref().and_then(|v|plan_for_code(Some(v)));let status=a.get("status").and_then(Value::as_str).unwrap_or_default();
- let period=a.get("renews_at").or_else(||a.get("ends_at")).and_then(Value::as_str).and_then(|v|chrono::DateTime::parse_from_rfc3339(v).ok()).map(|v|v.with_timezone(&chrono::Utc));
+ let period=a.get("renews_at").and_then(Value::as_str).or_else(||a.get("ends_at").and_then(Value::as_str)).and_then(|v|chrono::DateTime::parse_from_rfc3339(v).ok()).map(|v|v.with_timezone(&chrono::Utc));
  let payment_failed=name=="subscription_payment_failed"||matches!(status,"past_due"|"unpaid");
  let active=!payment_failed&&(matches!(status,"active"|"on_trial")||matches!(name,"subscription_created"|"subscription_payment_success"|"subscription_resumed"|"subscription_payment_recovered"));
  let cancelled=name=="subscription_cancelled"||status=="cancelled"||a.get("cancelled").and_then(Value::as_bool)==Some(true);
