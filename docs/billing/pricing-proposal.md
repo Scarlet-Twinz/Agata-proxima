@@ -1,6 +1,6 @@
 # Agata Proxima Pricing Proposal
 
-This document records the canonical launch-price schedule for Agata Proxima. The founder has directed that the previous $149 / $499 / $1,199 monthly prices be restored in the repository. This document does not itself create or modify Lemon Squeezy plans; before live checkout, verify the existing Agata-specific plan codes and amounts in the Lemon Squeezy account.
+This document records the canonical launch-price schedule for Agata Proxima. The founder has directed that the previous $149 / $499 / $1,199 monthly prices be restored in the repository. This document does not itself create or modify Lemon Squeezy plans; before live checkout, verify the existing Agata-specific variant IDs and amounts in the Lemon Squeezy account.
 
 ## Recommended launch pricing
 
@@ -134,4 +134,4 @@ The first Lemon Squeezy catalog should contain:
 
 Enterprise remains sales-led/custom until a contract-specific billing workflow is defined.
 
-Do not change the live Lemon Squeezy catalog based only on this document. The repository catalogue is now canonical at $149 / $499 / $1,199 per month; verify the actual provider plans, USD settlement eligibility and webhook/payment flow before enabling production checkout.
+Do not change the live Lemon Squeezy catalog based only on this document. The repository catalogue is now canonical at $149 / $499 / $1,199 per month; verify the actual provider variants, USD settlement eligibility and webhook/payment flow before enabling production checkout.
