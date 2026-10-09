@@ -32,5 +32,12 @@ grep -q 'subscription_payment_failed' "$production"
 grep -q 'Some(14_900)' "$production"
 grep -q 'Some(49_900)' "$production"
 grep -q 'Some(119_900)' "$production"
+! grep -qi 'paystack' "$production"
+! grep -qi 'paystack' control-plane/openapi.json
+! grep -qi 'paystack' docs/developer-guide.md
+! grep -qi 'paystack' docs/production/deployment-architecture.md
+! grep -qi 'paystack' docs/production/operational-readiness-runbook.md
+! grep -qi 'paystack' README.md
+test -f docs/production/phase3-21-lemonsqueezy-billing.md
 
 echo "PASS: Phase 3.21 Lemon Squeezy billing contract"
