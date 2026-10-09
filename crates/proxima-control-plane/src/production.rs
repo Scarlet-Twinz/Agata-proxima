@@ -15,6 +15,9 @@ use sqlx::Row;
 use std::env;
 use uuid::Uuid;
 
+#[path = "production/lemonsqueezy.rs"]
+pub(crate) mod lemonsqueezy;
+
 use super::{
     audit, authenticate, bad, create_session, db_error, hash_password, internal, require_admin, require_write, token_hash, valid_public_support_email,
     AppState,
