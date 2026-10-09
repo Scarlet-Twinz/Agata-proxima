@@ -127,7 +127,7 @@ Billing endpoints:
 - `POST /api/v1/billing/portal` — obtains a subscription-management URL after subscription exists.
 - `GET /api/v1/billing/verify?reference=...` — verifies a stored transaction as an organization admin.
 
-Paystack is the active billing provider. The server uses `PAYSTACK_SECRET_KEY` and `AGATA_PAYSTACK_STARTER_PLAN_CODE`, `AGATA_PAYSTACK_GROWTH_PLAN_CODE`, `AGATA_PAYSTACK_SCALE_PLAN_CODE`. Checkout is configured for USD. The provider plans must be monthly USD plans for exactly $149, $499 and $1,199; server-side verification must reject mismatched amounts or currencies before granting entitlements.
+Paystack is the active billing provider. The server uses `PAYSTACK_SECRET_KEY` and `AGATA_PAYSTACK_STARTER_PLAN_CODE`, `AGATA_PAYSTACK_GROWTH_PLAN_CODE`, `AGATA_PAYSTACK_SCALE_PLAN_CODE`. Checkout is configured for USD. Before redirecting a customer, the server retrieves each configured plan from Paystack and requires the exact plan code, USD currency, monthly interval and amount in cents ($149 = 14900, $499 = 49900, $1,199 = 119900). After payment, transaction verification and signed webhook processing check the exact amount, currency and plan before granting paid entitlements.
 
 Do not enable live checkout until Paystack has approved USD payments, the payout account is verified, all three plan codes match the catalogue, and a real webhook/payment round trip passes. Never commit a secret or paste it into chat.
 
