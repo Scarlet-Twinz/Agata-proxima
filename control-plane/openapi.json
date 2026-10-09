@@ -767,9 +767,21 @@
         "security": [],
         "responses": {
           "200": {
-            "description": "Returns to the app; the return URL alone does not confirm payment"
+            "description": "Returns to the app with the local reference; payment remains unconfirmed until a verified webhook updates local status."
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "reference",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Local checkout reference returned by the checkout endpoint."
+          }
+        ]
       }
     },
     "/api/v1/webhooks/lemonsqueezy": {
