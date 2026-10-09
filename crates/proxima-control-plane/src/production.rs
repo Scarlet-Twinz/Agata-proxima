@@ -1618,7 +1618,7 @@ fn escape_email_template_value(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-async fn send_billing_notice(
+pub(crate) async fn send_billing_notice(
     db: &sqlx::PgPool,
     organization_id: Uuid,
     event_reference: &str,
