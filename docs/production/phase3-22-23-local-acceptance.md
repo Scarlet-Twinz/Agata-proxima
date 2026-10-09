@@ -32,7 +32,7 @@ Set these values in `.env.local`:
 - `RESEND_FROM_SECURITY_EMAIL=Agata Proxima Security <security@agataproxima.com>`
 - `RESEND_FROM_BILLING_EMAIL=Agata Proxima Billing <billing@agataproxima.com>`
 - `RESEND_FROM_NOTIFICATIONS_EMAIL=Agata Proxima <notifications@agataproxima.com>`
-- `AGATA_SUPPORT_INBOX_EMAIL=anthonyemmanuella297@gmail.com`
+- `AGATA_SUPPORT_INBOX_EMAIL=<your monitored inbox>`
 
 Retain the six `RESEND_TEMPLATE_*_ID` values from the checked-in example.
 Do not replace them with template names or paste API keys into source code.
