@@ -16,11 +16,11 @@ use std::env;
 use uuid::Uuid;
 
 use super::{
-    audit, authenticate, bad, create_session, db_error, hash_password, internal, require_admin, require_write, token_hash,
+    audit, authenticate, bad, create_session, db_error, hash_password, internal, require_admin, require_write, token_hash, valid_public_support_email,
     AppState,
 };
 
-type HmacSha512 = Hmac<sha2::Sha512>;
+
 
 #[derive(Deserialize)]
 pub(crate) struct CheckoutInput {
@@ -80,70 +80,25 @@ pub(crate) struct PasswordResetConfirm {
     pub token: String,
     pub password: String,
 }
-fn plan_for_code(plan_code: Option<&str>) -> Option<&'static str> {
-    let starter = env::var("AGATA_PAYSTACK_STARTER_PLAN_CODE").ok();
-    let growth = env::var("AGATA_PAYSTACK_GROWTH_PLAN_CODE").ok();
-    let scale = env::var("AGATA_PAYSTACK_SCALE_PLAN_CODE").ok();
-    match plan_code {
-        Some(id) if starter.as_deref() == Some(id) => Some("starter"),
-        Some(id) if growth.as_deref() == Some(id) => Some("growth"),
-        Some(id) if scale.as_deref() == Some(id) => Some("scale"),
-        _ => None,
-    }
+fn lemon_variant_id(plan: &str) -> Option<String> {
+    let key=match plan{"starter"=>"LEMON_SQUEEZY_STARTER_VARIANT_ID","growth"=>"LEMON_SQUEEZY_GROWTH_VARIANT_ID","scale"=>"LEMON_SQUEEZY_SCALE_VARIANT_ID",_=>return None};
+    env::var(key).ok().map(|v|v.trim().to_owned()).filter(|v|!v.is_empty()&&v.chars().all(|c|c.is_ascii_digit()))
 }
-fn paystack_plan_code(plan: &str) -> Option<String> {
-    let key=match plan {"starter"=>"AGATA_PAYSTACK_STARTER_PLAN_CODE","growth"=>"AGATA_PAYSTACK_GROWTH_PLAN_CODE","scale"=>"AGATA_PAYSTACK_SCALE_PLAN_CODE",_=>return None};
-    env::var(key).ok().filter(|v|!v.trim().is_empty())
+fn plan_for_code(id: Option<&str>) -> Option<&'static str> {
+    let id = id?;
+    for p in ["starter","growth","scale"] { if lemon_variant_id(p).as_deref()==Some(id) { return Some(match p{"starter"=>"starter","growth"=>"growth",_=>"scale"}); } } None
 }
-
-fn paystack_plan_codes_unique(starter: Option<&str>, growth: Option<&str>, scale: Option<&str>) -> bool {
-    match (starter, growth, scale) {
-        (Some(starter), Some(growth), Some(scale)) =>
-            !starter.trim().is_empty()
-                && !growth.trim().is_empty()
-                && !scale.trim().is_empty()
-                && starter != growth
-                && starter != scale
-                && growth != scale,
-        _ => false,
-    }
+fn configured_lemonsqueezy_variants_unique()->bool {
+    let v=[lemon_variant_id("starter"),lemon_variant_id("growth"),lemon_variant_id("scale")];
+    v.iter().all(|x|x.as_ref().is_some_and(|s|!s.is_empty()))&&v[0]!=v[1]&&v[0]!=v[2]&&v[1]!=v[2]
 }
-
-fn configured_paystack_plan_codes_unique() -> bool {
-    let starter = paystack_plan_code("starter");
-    let growth = paystack_plan_code("growth");
-    let scale = paystack_plan_code("scale");
-    paystack_plan_codes_unique(starter.as_deref(), growth.as_deref(), scale.as_deref())
+fn expected_lemonsqueezy_amount(plan:&str)->Option<i64>{match plan{"starter"=>Some(14900),"growth"=>Some(49900),"scale"=>Some(119900),_=>None}}
+fn lemonsqueezy_test_mode()->bool{env::var("LEMON_SQUEEZY_TEST_MODE").map(|v|matches!(v.trim().to_ascii_lowercase().as_str(),"true"|"1"|"yes")).unwrap_or(true)}
+fn verify_lemonsqueezy_signature(payload:&str,signature:&str,secret:&str)->bool{
+    type HmacSha256=Hmac<sha2::Sha256>;
+    let mut mac=match HmacSha256::new_from_slice(secret.as_bytes()){Ok(v)=>v,Err(_)=>return false};mac.update(payload.as_bytes());
+    constant_time_equal(&hex::encode(mac.finalize().into_bytes()),signature.trim())
 }
-
-fn expected_paystack_amount_usd(plan: &str) -> Option<i64> {
-    match plan {
-        "starter" => Some(14_900),
-        "growth" => Some(49_900),
-        "scale" => Some(119_900),
-        _ => None,
-    }
-}
-
-fn paystack_provider_plan_matches_catalog(data: &Value, plan: &str, expected_code: &str) -> bool {
-    data.get("plan_code").and_then(Value::as_str) == Some(expected_code)
-        && data.get("amount").and_then(Value::as_i64) == expected_paystack_amount_usd(plan)
-        && data.get("currency").and_then(Value::as_str) == Some("USD")
-        && data.get("interval").and_then(Value::as_str) == Some("monthly")
-}
-
-fn paystack_payload_matches_plan_amount_currency(data: &Value, plan: &str) -> bool {
-    let amount = data.get("amount")
-        .or_else(|| data.pointer("/plan/amount"))
-        .or_else(|| data.pointer("/subscription/plan/amount"))
-        .and_then(Value::as_i64);
-    let currency = data.get("currency")
-        .or_else(|| data.pointer("/plan/currency"))
-        .or_else(|| data.pointer("/subscription/plan/currency"))
-        .and_then(Value::as_str);
-    amount == expected_paystack_amount_usd(plan) && currency == Some("USD")
-}
-
 fn plan_limits(plan: &str) -> (i32, i32, i32, i32, bool, bool, bool, bool, bool) {
     match plan {
         "starter" => (2, 25, 2, 30, false, true, false, false, false),
@@ -630,7 +585,7 @@ pub(crate) async fn require_feature(
 pub(crate) async fn plans() -> Response {
     let catalog=[("free","Free",0_i32,"Evaluation and small proofs of concept"),("starter","Starter",149_i32,"First production SaaS deployments"),("growth","Growth",499_i32,"Multi-tenant production workloads"),("scale","Scale",1199_i32,"Larger fleets and security operations"),("enterprise","Enterprise",0_i32,"Contracted enterprise deployments")];
     let plans=catalog.iter().map(|(key,name,monthly_usd,description)|{
-        let plan_code=paystack_plan_code(key);
+        let plan_code=lemon_variant_id(key);
         let (nodes,tenants,environments,retention,advanced,fleet,priority,entra,private_deployment)=plan_limits(key);
         let integrations = plan_integration_limit(key);
         let verifications = plan_verification_limit(key);
@@ -638,9 +593,9 @@ pub(crate) async fn plans() -> Response {
         let api_keys = plan_api_key_limit(key);
         let api_requests = plan_api_requests_per_minute(key);
         let support = plan_support_level(key);
-        json!({"key":key,"name":name,"monthly_usd":monthly_usd,"description":description,"provider":"paystack","plan_code":plan_code,"checkout_available":key!=&"free"&&key!=&"enterprise"&&paystack_plan_code(key).is_some()&&configured_paystack_plan_codes_unique(),"limits":{"nodes":nodes,"tenants":tenants,"environments":environments,"integrations":integrations,"verifications_per_month":verifications,"team_seats":team_seats,"api_keys":api_keys,"api_requests_per_minute":api_requests,"audit_retention_days":retention},"support_level":support,"features":{"advanced_verification":advanced,"fleet_controls":fleet,"priority_support":priority,"entra_oidc":entra,"private_deployment":private_deployment,"policy_management":key!=&"free"}})
+        json!({"key":key,"name":name,"monthly_usd":monthly_usd,"description":description,"provider":"lemonsqueezy","variant_id":plan_code,"checkout_available":key!=&"free"&&key!=&"enterprise"&&lemon_variant_id(key).is_some()&&configured_lemonsqueezy_variants_unique(),"limits":{"nodes":nodes,"tenants":tenants,"environments":environments,"integrations":integrations,"verifications_per_month":verifications,"team_seats":team_seats,"api_keys":api_keys,"api_requests_per_minute":api_requests,"audit_retention_days":retention},"support_level":support,"features":{"advanced_verification":advanced,"fleet_controls":fleet,"priority_support":priority,"entra_oidc":entra,"private_deployment":private_deployment,"policy_management":key!=&"free"}})
     }).collect::<Vec<_>>();
-    Json(json!({"currency":"usd","billing_interval":"month","provider":"paystack","plans":plans})).into_response()
+    Json(json!({"currency":"usd","billing_interval":"month","provider":"lemonsqueezy","plans":plans})).into_response()
 }
 
 pub(crate) async fn entitlements(State(s): State<AppState>, headers: HeaderMap) -> Response {
@@ -1091,655 +1046,166 @@ fn oidc_redirect_uri() -> String {
 
 pub(crate) async fn billing_status(State(s): State<AppState>, headers: HeaderMap) -> Response {
     let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};
-    match sqlx::query("SELECT paystack_customer_code,paystack_subscription_code,paystack_plan_code,plan_key,status,current_period_end,cancel_at_period_end FROM billing_accounts WHERE organization_id=$1").bind(ctx.organization_id).fetch_optional(&s.db).await{
-        Ok(Some(row))=>Json(json!({"configured":true,"provider":"paystack","customer_code":row.get::<Option<String>,_>("paystack_customer_code"),"subscription_code":row.get::<Option<String>,_>("paystack_subscription_code"),"plan_code":row.get::<Option<String>,_>("paystack_plan_code"),"plan":row.get::<String,_>("plan_key"),"status":row.get::<String,_>("status"),"current_period_end":row.get::<Option<chrono::DateTime<chrono::Utc>>,_>("current_period_end"),"cancel_at_period_end":row.get::<bool,_>("cancel_at_period_end")})).into_response(),
-        Ok(None)=>Json(json!({"configured":false,"provider":"paystack","plan":"free","status":"active"})).into_response(),Err(e)=>db_error(e)
+    match sqlx::query("SELECT lemonsqueezy_customer_id,lemonsqueezy_subscription_id,lemonsqueezy_variant_id,plan_key,status,current_period_end,cancel_at_period_end FROM billing_accounts WHERE organization_id=$1 AND provider='lemonsqueezy'").bind(ctx.organization_id).fetch_optional(&s.db).await{
+        Ok(Some(row))=>Json(json!({"configured":true,"provider":"lemonsqueezy","customer_id":row.get::<Option<String>,_>("lemonsqueezy_customer_id"),"subscription_id":row.get::<Option<String>,_>("lemonsqueezy_subscription_id"),"variant_id":row.get::<Option<String>,_>("lemonsqueezy_variant_id"),"plan":row.get::<String,_>("plan_key"),"status":row.get::<String,_>("status"),"current_period_end":row.get::<Option<chrono::DateTime<chrono::Utc>>,_>("current_period_end"),"cancel_at_period_end":row.get::<bool,_>("cancel_at_period_end")})).into_response(),
+        Ok(None)=>Json(json!({"configured":false,"provider":"lemonsqueezy","plan":"free","status":"active"})).into_response(),Err(e)=>db_error(e)
     }
 }
 pub(crate) async fn checkout(State(s):State<AppState>,headers:HeaderMap,Json(input):Json<CheckoutInput>)->Response{
-    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};if let Err(c)=require_admin(&ctx,&headers){return c.into_response();}
-    let secret=match env::var("PAYSTACK_SECRET_KEY"){Ok(v) if !v.trim().is_empty()=>v,_=>return service_unavailable("Paystack secret is not configured.")};
-    if !configured_paystack_plan_codes_unique() {
-        return service_unavailable("Agata Proxima Paystack plan codes must all be configured and unique before checkout.");
-    }
-    let plan_code=match input.price_id.as_deref().and_then(paystack_plan_code_for_input){Some(v)=>v,None=>return bad("Select an Agata Proxima plan before checkout.")};
-    let plan=match plan_for_code(Some(&plan_code)){Some(v)=>v,None=>return (StatusCode::FORBIDDEN,Json(json!({"ok":false,"error":"invalid_agata_plan"}))).into_response()};
-    if plan == "free" || plan == "enterprise" {
-        return bad("Free plans do not use checkout; Enterprise access requires explicit contracted provisioning.");
-    }
-
-    // Check the provider-side plan before redirecting a customer to checkout.
-    // A plan code can be misconfigured in the Paystack dashboard; never let that
-    // silently charge a different currency, amount, or interval.
-    let plan_response = match Client::new()
-        .get(format!("https://api.paystack.co/plan/{plan_code}"))
-        .bearer_auth(&secret)
-        .send()
-        .await {
-            Ok(response) => response,
-            Err(error) => return external_error(error),
-        };
-    if !plan_response.status().is_success() {
-        return paystack_error(plan_response).await;
-    }
-    let plan_body: Value = match plan_response.json().await {
-        Ok(value) => value,
-        Err(error) => return external_error(error),
-    };
-    let provider_plan = plan_body.get("data").cloned().unwrap_or(Value::Null);
-    if plan_body.get("status").and_then(Value::as_bool) != Some(true)
-        || !paystack_provider_plan_matches_catalog(&provider_plan, plan, &plan_code) {
-        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({
-            "ok": false,
-            "error": "paystack_plan_configuration_mismatch",
-            "message": "The configured Paystack plan must match the Agata Proxima plan's exact USD amount and monthly interval. Checkout is disabled until the provider plan is corrected."
-        }))).into_response();
-    }
-
-    let email=match sqlx::query("SELECT email FROM users WHERE id=$1").bind(ctx.user_id).fetch_one(&s.db).await{Ok(r)=>r.get::<String,_>("email"),Err(e)=>return db_error(e)};
-    let base=env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_|"http://127.0.0.1:8080".into()).trim_end_matches('/').to_string();
-    let reference=format!("agata-{}-{}",ctx.organization_id.simple(),Uuid::new_v4().simple());
-    let response=match Client::new().post("https://api.paystack.co/transaction/initialize").bearer_auth(&secret).json(&json!({"email":email,"plan":plan_code,"currency":"USD","reference":reference,"callback_url":format!("{base}/api/v1/billing/paystack/callback"),"metadata":{"organization_id":ctx.organization_id.to_string(),"plan":plan}})).send().await{Ok(r)=>r,Err(e)=>return external_error(e)};
-    if !response.status().is_success(){return paystack_error(response).await;}
-    let body:Value=match response.json().await{Ok(v)=>v,Err(e)=>return external_error(e)};if body.get("status").and_then(Value::as_bool)!=Some(true){return service_unavailable("Paystack did not initialize the transaction.");}
-    let data=body.get("data").cloned().unwrap_or(Value::Null);let url=data.get("authorization_url").and_then(Value::as_str).unwrap_or_default();let access=data.get("access_code").and_then(Value::as_str);let returned=data.get("reference").and_then(Value::as_str).unwrap_or(&reference);if url.is_empty(){return service_unavailable("Paystack did not return a checkout URL.");}
-    if let Err(e)=sqlx::query("INSERT INTO billing_transactions(organization_id,provider,reference,plan_key,plan_code,currency,status,metadata,created_at,updated_at) VALUES($1,'paystack',$2,$3,$4,'USD','initialized',$5,now(),now()) ON CONFLICT(provider,reference) DO NOTHING").bind(ctx.organization_id).bind(returned).bind(plan).bind(&plan_code).bind(&body).execute(&s.db).await{return db_error(e);}
-    audit(&s.db,ctx.organization_id,ctx.user_id,"billing.checkout.created","billing_transaction",None,json!({"provider":"paystack","reference":returned,"plan":plan,"plan_code":plan_code})).await;
-    Json(json!({"ok":true,"provider":"paystack","checkout_url":url,"access_code":access,"reference":returned})).into_response()
+ let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};if let Err(c)=require_admin(&ctx,&headers){return c.into_response();}
+ let key=match env::var("LEMON_SQUEEZY_API_KEY"){Ok(v)if !v.trim().is_empty()=>v,_=>return service_unavailable("Lemon Squeezy API key is not configured.")};
+ let store=match env::var("LEMON_SQUEEZY_STORE_ID"){Ok(v)if !v.trim().is_empty()&&v.chars().all(|c|c.is_ascii_digit())=>v,_=>return service_unavailable("Lemon Squeezy store ID is not configured.")};
+ if !configured_lemonsqueezy_variants_unique(){return service_unavailable("Lemon Squeezy monthly variant IDs must be configured and unique.");}
+ let plan=match input.price_id.as_deref(){Some(v)if ["starter","growth","scale"].contains(&v.trim())=>v.trim(),Some(v)=>match plan_for_code(Some(v.trim())){Some(p)=>p,None=>return bad("Select a valid Agata Proxima plan.")},None=>return bad("Select a plan before checkout.")};
+ if plan == "free" || plan == "enterprise" { return bad("Free and Enterprise plans do not use self-service checkout."); }
+ let variant=lemon_variant_id(plan).unwrap();
+ let client=Client::new();
+ let store_response=match client.get(format!("https://api.lemonsqueezy.com/v1/stores/{store}")).bearer_auth(&key).header("Accept","application/vnd.api+json").send().await{Ok(v)=>v,Err(e)=>return external_error(e)};
+ if !store_response.status().is_success(){return service_unavailable("Lemon Squeezy store validation failed.");}
+ let store_body:Value=match store_response.json().await{Ok(v)=>v,Err(e)=>return external_error(e)};
+ let returned_store=store_body.pointer("/data/id").and_then(Value::as_str).map(ToOwned::to_owned).or_else(||store_body.pointer("/data/id").and_then(Value::as_i64).map(|v|v.to_string()));
+ if returned_store.as_deref()!=Some(store.as_str())||store_body.pointer("/data/attributes/currency").and_then(Value::as_str)!=Some("USD"){return service_unavailable("The configured Lemon Squeezy store must be the expected store and use USD.");}
+ let vr=match client.get(format!("https://api.lemonsqueezy.com/v1/variants/{variant}")).bearer_auth(&key).header("Accept","application/vnd.api+json").send().await{Ok(v)=>v,Err(e)=>return external_error(e)};
+ if !vr.status().is_success(){return service_unavailable("Lemon Squeezy variant validation failed.");}
+ let vb:Value=match vr.json().await{Ok(v)=>v,Err(e)=>return external_error(e)};let at=vb.pointer("/data/attributes").cloned().unwrap_or(Value::Null);
+ let valid=at.get("price").and_then(Value::as_i64)==expected_lemonsqueezy_amount(plan)&&at.get("is_subscription").and_then(Value::as_bool)==Some(true)&&at.get("interval").and_then(Value::as_str)==Some("month")&&at.get("interval_count").and_then(Value::as_i64).unwrap_or(1)==1&&at.get("status").and_then(Value::as_str)==Some("published")&&at.get("test_mode").and_then(Value::as_bool).map(|v|v==lemonsqueezy_test_mode()).unwrap_or(false);
+ if !valid{return service_unavailable("Lemon Squeezy variant must match the configured test/live mode and exact monthly USD catalog price.");}
+ let product_response=match client.get(format!("https://api.lemonsqueezy.com/v1/variants/{variant}/product")).bearer_auth(&key).header("Accept","application/vnd.api+json").send().await{Ok(v)=>v,Err(e)=>return external_error(e)};
+ if !product_response.status().is_success(){return service_unavailable("Lemon Squeezy product validation failed.");}
+ let product_body:Value=match product_response.json().await{Ok(v)=>v,Err(e)=>return external_error(e)};
+ let product_attrs=product_body.pointer("/data/attributes").cloned().unwrap_or(Value::Null);
+ let product_store=product_attrs.get("store_id").and_then(Value::as_i64).map(|v|v.to_string());
+ if product_store.as_deref()!=Some(store.as_str())||product_attrs.get("status").and_then(Value::as_str)!=Some("published")||product_attrs.get("test_mode").and_then(Value::as_bool).map(|v|v==lemonsqueezy_test_mode())!=Some(true){return service_unavailable("The selected Lemon Squeezy variant must belong to the configured store and mode, and its product must be published.");}
+ let email=match sqlx::query("SELECT email FROM users WHERE id=$1").bind(ctx.user_id).fetch_one(&s.db).await{Ok(r)=>r.get::<String,_>("email"),Err(e)=>return db_error(e)};
+ let base=env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_|"http://127.0.0.1:8080".into()).trim_end_matches('/').to_owned();
+ let local_reference=Uuid::new_v4().to_string();
+ let payload=json!({"data":{"type":"checkouts","attributes":{"checkout_data":{"email":email,"custom":{"organization_id":ctx.organization_id.to_string(),"plan_key":plan,"checkout_reference":local_reference}},"product_options":{"redirect_url":format!("{base}/api/v1/billing/lemonsqueezy/callback?reference={local_reference}")}},"relationships":{"store":{"data":{"type":"stores","id":store}},"variant":{"data":{"type":"variants","id":variant}}}}});
+ let r=match client.post("https://api.lemonsqueezy.com/v1/checkouts").bearer_auth(&key).header("Accept","application/vnd.api+json").header("Content-Type","application/vnd.api+json").json(&payload).send().await{Ok(v)=>v,Err(e)=>return external_error(e)};
+ if !r.status().is_success(){return service_unavailable("Lemon Squeezy checkout creation failed.");}
+ let body:Value=match r.json().await{Ok(v)=>v,Err(e)=>return external_error(e)};let data=body.get("data").cloned().unwrap_or(Value::Null);let id=data.get("id").and_then(Value::as_str).unwrap_or_default();let url=data.pointer("/attributes/url").and_then(Value::as_str).unwrap_or_default();
+ if id.is_empty()||!url.starts_with("https://"){return service_unavailable("Lemon Squeezy returned no valid checkout URL.");}
+ if let Err(e)=sqlx::query("INSERT INTO billing_transactions(organization_id,provider,reference,provider_checkout_id,plan_key,plan_code,currency,status,metadata,payload,created_at,updated_at) VALUES($1,'lemonsqueezy',$2,$3,$4,$5,'USD','initialized',$6,$7,now(),now()) ON CONFLICT(provider,reference) DO NOTHING").bind(ctx.organization_id).bind(&local_reference).bind(id).bind(plan).bind(&variant).bind(&payload).bind(&body).execute(&s.db).await{return db_error(e);}
+ audit(&s.db,ctx.organization_id,ctx.user_id,"billing.checkout.created","billing_transaction",None,json!({"provider":"lemonsqueezy","checkout_id":id,"plan":plan,"reference":local_reference})).await;
+ Json(json!({"ok":true,"provider":"lemonsqueezy","checkout_url":url,"reference":local_reference})).into_response()
 }
-fn paystack_plan_code_for_input(input:&str)->Option<String>{let v=input.trim();if ["starter","growth","scale"].contains(&v){paystack_plan_code(v)}else{plan_for_code(Some(v)).map(|_|v.to_string())}}
-pub(crate) async fn paystack_callback(
-    State(s): State<AppState>,
-    Query(q): Query<std::collections::HashMap<String,String>>,
-) -> Response {
-    let reference = match q.get("reference").or_else(|| q.get("trxref")) {
-        Some(v) if !v.trim().is_empty() => v.trim().to_string(),
-        _ => return Html("<html><body>Missing Paystack transaction reference.</body></html>").into_response(),
-    };
-    let organization_id = match sqlx::query("SELECT organization_id FROM billing_transactions WHERE provider='paystack' AND reference=$1")
-        .bind(&reference)
-        .fetch_optional(&s.db)
-        .await {
-            Ok(Some(row)) => row.get::<Uuid,_>("organization_id"),
-            Ok(None) => return Html("<html><body>Unknown Paystack transaction.</body></html>").into_response(),
-            Err(e) => return db_error(e),
-        };
-    let _ = verify_paystack_transaction(&s.db, organization_id, &reference).await;
-    let verified = match sqlx::query("SELECT status FROM billing_transactions WHERE provider='paystack' AND reference=$1 AND organization_id=$2")
-        .bind(&reference).bind(organization_id).fetch_optional(&s.db).await {
-        Ok(Some(row)) => row.get::<String,_>("status") == "success",
-        _ => false,
-    };
-    let billing_state = if verified { "complete" } else { "verification-pending" };
-    let base = env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:8080".into()).trim_end_matches('/').to_string();
-    Html(format!(
-        "<html><head><meta http-equiv=\"refresh\" content=\"0;url={base}/app?billing={billing_state}\"></head><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\">Returning to Agata Proxima. Check billing status before assuming payment was accepted.</body></html>"
-    )).into_response()
+pub(crate) async fn lemonsqueezy_callback(Query(q):Query<std::collections::HashMap<String,String>>)->Response{
+ let base=env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_|"http://127.0.0.1:8080".into()).trim_end_matches('/').to_owned();
+ let reference=q.get("reference").and_then(|v|Uuid::parse_str(v).ok()).map(|v|v.to_string());
+ let destination=match reference{Some(v)=>format!("{base}/app?billing=return&reference={v}"),None=>format!("{base}/app?billing=return")};
+ Html(format!("<html><head><meta http-equiv=\"refresh\" content=\"0;url={destination}\"></head><body>Return complete. Billing is confirmed only by a verified webhook.</body></html>")).into_response()
 }
-
 pub(crate) async fn billing_verify(State(s):State<AppState>,headers:HeaderMap,Query(q):Query<std::collections::HashMap<String,String>>)->Response{
-    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};if let Err(c)=require_admin(&ctx,&headers){return c.into_response();}let reference=match q.get("reference").or_else(||q.get("trxref")){Some(v) if !v.trim().is_empty()=>v.trim(),_=>return bad("Paystack transaction reference is required.")};verify_paystack_transaction(&s.db,ctx.organization_id,reference).await
+ let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};if let Err(c)=require_admin(&ctx,&headers){return c.into_response();}
+ let reference=match q.get("reference"){Some(v)if !v.trim().is_empty()=>v.trim(),_=>return bad("Lemon Squeezy checkout reference is required.")};
+ match sqlx::query("SELECT status,plan_key FROM billing_transactions WHERE provider='lemonsqueezy' AND reference=$1 AND organization_id=$2").bind(reference).bind(ctx.organization_id).fetch_optional(&s.db).await{
+ Ok(Some(r))=>Json(json!({"ok":true,"provider":"lemonsqueezy","reference":reference,"status":r.get::<String,_>("status"),"plan":r.get::<String,_>("plan_key"),"verified":r.get::<String,_>("status")=="success"})).into_response(),
+ Ok(None)=>(StatusCode::NOT_FOUND,Json(json!({"ok":false,"error":"unknown_local_transaction"}))).into_response(),Err(e)=>db_error(e)}
 }
-async fn verify_paystack_transaction(db: &sqlx::PgPool, org: Uuid, reference: &str) -> Response {
-    let local = match sqlx::query(
-        "SELECT plan_key,plan_code FROM billing_transactions
-          WHERE provider='paystack' AND reference=$1 AND organization_id=$2",
-    )
-    .bind(reference)
-    .bind(org)
-    .fetch_optional(db)
-    .await
-    {
-        Ok(Some(row)) => row,
-        Ok(None) => return (StatusCode::NOT_FOUND, Json(json!({"ok":false,"error":"unknown_local_transaction"}))).into_response(),
-        Err(e) => return db_error(e),
-    };
-
-    let plan: String = local.get("plan_key");
-    let expected_plan_code: Option<String> = local.get("plan_code");
-    if !matches!(plan.as_str(), "starter" | "growth" | "scale") {
-        return (StatusCode::FORBIDDEN, Json(json!({"ok":false,"error":"invalid_local_plan"}))).into_response();
-    }
-
-    let secret = match env::var("PAYSTACK_SECRET_KEY") {
-        Ok(value) if !value.trim().is_empty() => value,
-        _ => return service_unavailable("Paystack secret is not configured."),
-    };
-    let response = match Client::new()
-        .get(format!("https://api.paystack.co/transaction/verify/{reference}"))
-        .bearer_auth(secret)
-        .send()
-        .await
-    {
-        Ok(value) => value,
-        Err(e) => return external_error(e),
-    };
-    if !response.status().is_success() {
-        return paystack_error(response).await;
-    }
-
-    let body: Value = match response.json().await {
-        Ok(value) => value,
-        Err(e) => return external_error(e),
-    };
-    if body.get("status").and_then(Value::as_bool) != Some(true) {
-        return service_unavailable("Paystack transaction verification failed.");
-    }
-
-    let data = body.get("data").cloned().unwrap_or(Value::Null);
-    let status = data.get("status").and_then(Value::as_str).unwrap_or_default();
-    let metadata_org = data
-        .pointer("/metadata/organization_id")
-        .and_then(Value::as_str)
-        .and_then(|value| Uuid::parse_str(value).ok());
-    if metadata_org != Some(org) {
-        return (StatusCode::FORBIDDEN, Json(json!({"ok":false,"error":"transaction_organization_mismatch"}))).into_response();
-    }
-
-    let returned_plan_code = data
-        .pointer("/plan/plan_code")
-        .and_then(Value::as_str)
-        .or_else(|| data.pointer("/subscription/plan/plan_code").and_then(Value::as_str))
-        .or_else(|| data.pointer("/subscription/plan_code").and_then(Value::as_str))
-        .or_else(|| data.get("plan_code").and_then(Value::as_str));
-    if expected_plan_code.as_deref().is_none() || returned_plan_code != expected_plan_code.as_deref() {
-        return (StatusCode::FORBIDDEN, Json(json!({"ok":false,"error":"transaction_plan_mismatch"}))).into_response();
-    }
-
-    let amount = data.get("amount").and_then(Value::as_i64);
-    let currency = data.get("currency").and_then(Value::as_str).unwrap_or_default();
-    if status == "success" {
-        if currency != "USD" {
-            return (StatusCode::FORBIDDEN, Json(json!({"ok":false,"error":"transaction_currency_mismatch","expected_currency":"USD","received_currency":currency}))).into_response();
-        }
-        if amount != expected_paystack_amount_usd(&plan) {
-            return (StatusCode::FORBIDDEN, Json(json!({"ok":false,"error":"transaction_amount_mismatch","expected_amount_subunits":expected_paystack_amount_usd(&plan),"received_amount_subunits":amount}))).into_response();
-        }
-    }
-    let payload = data.clone();
-    let end = data
-        .get("next_payment_date")
-        .and_then(Value::as_str)
-        .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
-        .map(|value| value.with_timezone(&chrono::Utc));
-
-    if let Err(e) = sqlx::query(
-        "UPDATE billing_transactions
-            SET transaction_id=$1,plan_key=$2,plan_code=$3,amount=$4,currency=$5,
-                status=$6,payload=$7,updated_at=now()
-          WHERE provider='paystack' AND reference=$8 AND organization_id=$9",
-    )
-    .bind(data.get("id").and_then(Value::as_u64).map(|value| value as i64))
-    .bind(&plan)
-    .bind(expected_plan_code.as_deref())
-    .bind(amount)
-    .bind(currency)
-    .bind(status)
-    .bind(&payload)
-    .bind(reference)
-    .bind(org)
-    .execute(db)
-    .await
-    {
-        return db_error(e);
-    }
-
-    if status == "success" {
-        if let Err(e) = apply_entitlements(db, org, &plan).await {
-            return db_error(e);
-        }
-        let customer_code = data
-            .pointer("/customer/customer_code")
-            .and_then(Value::as_str)
-            .or_else(|| data.get("customer_code").and_then(Value::as_str));
-        let subscription_code = data
-            .get("subscription_code")
-            .and_then(Value::as_str)
-            .or_else(|| data.pointer("/subscription/subscription_code").and_then(Value::as_str));
-        if let Err(e) = sqlx::query(
-            "INSERT INTO billing_accounts
-                (organization_id,paystack_customer_code,paystack_subscription_code,paystack_plan_code,
-                 plan_key,status,current_period_end,cancel_at_period_end,updated_at)
-             VALUES($1,$2,$3,$4,$5,'active',$6,false,now())
-             ON CONFLICT(organization_id) DO UPDATE SET
-                paystack_customer_code=COALESCE(EXCLUDED.paystack_customer_code,billing_accounts.paystack_customer_code),
-                paystack_subscription_code=COALESCE(EXCLUDED.paystack_subscription_code,billing_accounts.paystack_subscription_code),
-                paystack_plan_code=COALESCE(EXCLUDED.paystack_plan_code,billing_accounts.paystack_plan_code),
-                plan_key=EXCLUDED.plan_key,status='active',
-                current_period_end=COALESCE(EXCLUDED.current_period_end,billing_accounts.current_period_end),
-                cancel_at_period_end=false,updated_at=now()",
-        )
-        .bind(org)
-        .bind(customer_code)
-        .bind(subscription_code)
-        .bind(expected_plan_code.as_deref())
-        .bind(&plan)
-        .bind(end)
-        .execute(db)
-        .await
-        {
-            return db_error(e);
-        }
-    }
-
-    Json(json!({
-        "ok": true,
-        "verified": status == "success",
-        "provider": "paystack",
-        "reference": reference,
-        "status": status,
-        "plan": plan
-    }))
-    .into_response()
-}
-
 pub(crate) async fn portal(State(s):State<AppState>,headers:HeaderMap)->Response{
-    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};if let Err(c)=require_admin(&ctx,&headers){return c.into_response();}
-    let secret=match env::var("PAYSTACK_SECRET_KEY"){Ok(v) if !v.trim().is_empty()=>v,_=>return service_unavailable("Paystack secret is not configured.")};let code=match sqlx::query("SELECT paystack_subscription_code FROM billing_accounts WHERE organization_id=$1").bind(ctx.organization_id).fetch_optional(&s.db).await{Ok(Some(r))=>r.get::<Option<String>,_>("paystack_subscription_code"),Ok(None)=>None,Err(e)=>return db_error(e)};let code=match code{Some(v)=>v,None=>return bad("No Paystack subscription exists for this organization yet.")};
-    let response=match Client::new().get(format!("https://api.paystack.co/subscription/{code}/manage/link")).bearer_auth(secret).send().await{Ok(r)=>r,Err(e)=>return external_error(e)};if !response.status().is_success(){return paystack_error(response).await;}let body:Value=match response.json().await{Ok(v)=>v,Err(e)=>return external_error(e)};let url=body.pointer("/data/link").and_then(Value::as_str).unwrap_or_default();if url.is_empty(){return service_unavailable("Paystack did not return a subscription management URL.");}Json(json!({"ok":true,"provider":"paystack","portal_url":url})).into_response()
+ let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};if let Err(c)=require_admin(&ctx,&headers){return c.into_response();}
+ let subscription=match sqlx::query("SELECT lemonsqueezy_subscription_id FROM billing_accounts WHERE organization_id=$1 AND provider='lemonsqueezy'").bind(ctx.organization_id).fetch_optional(&s.db).await{
+  Ok(Some(row))=>row.get::<Option<String>,_>("lemonsqueezy_subscription_id"),
+  Ok(None)=>return bad("No Lemon Squeezy subscription exists for this organization yet."),Err(e)=>return db_error(e)
+ };
+ let subscription=match subscription{Some(v)=>v,None=>return bad("No Lemon Squeezy subscription exists for this organization yet.")};
+ let key=match env::var("LEMON_SQUEEZY_API_KEY"){Ok(v)if !v.trim().is_empty()=>v,_=>return service_unavailable("Lemon Squeezy API key is not configured.")};
+ let response=match Client::new().get(format!("https://api.lemonsqueezy.com/v1/subscriptions/{subscription}")).bearer_auth(key).header("Accept","application/vnd.api+json").send().await{Ok(v)=>v,Err(e)=>return external_error(e)};
+ if !response.status().is_success(){return service_unavailable("Lemon Squeezy customer portal could not be refreshed.");}
+ let body:Value=match response.json().await{Ok(v)=>v,Err(e)=>return external_error(e)};
+ let url=match body.pointer("/data/attributes/urls/customer_portal").and_then(Value::as_str).filter(|v|v.starts_with("https://")){Some(v)=>v,None=>return service_unavailable("Lemon Squeezy did not return a current customer portal URL.")};
+ if let Err(e)=sqlx::query("UPDATE billing_accounts SET lemonsqueezy_customer_portal_url=$1,updated_at=now() WHERE organization_id=$2 AND provider='lemonsqueezy'").bind(url).bind(ctx.organization_id).execute(&s.db).await{return db_error(e);}
+ Json(json!({"ok":true,"provider":"lemonsqueezy","portal_url":url})).into_response()
 }
-async fn mark_paystack_event_ignored(
-    db: &sqlx::PgPool,
-    key: &str,
-    reason: &str,
-) -> Response {
-    let _ = sqlx::query(
-        "UPDATE billing_events
-            SET status='ignored',processed_at=now(),processing_started_at=NULL
-          WHERE provider='paystack' AND provider_event_id=$1",
-    )
-    .bind(key)
-    .execute(db)
-    .await;
-    Json(json!({"received":true,"ignored":reason})).into_response()
+pub(crate) async fn lemonsqueezy_webhook(State(s):State<AppState>,headers:HeaderMap,body:String)->Response{
+ let sig=match headers.get("x-signature").and_then(|v|v.to_str().ok()){Some(v)=>v,None=>return StatusCode::BAD_REQUEST.into_response()};
+ let secret=match env::var("LEMON_SQUEEZY_WEBHOOK_SECRET"){Ok(v)if !v.trim().is_empty()=>v,_=>return StatusCode::SERVICE_UNAVAILABLE.into_response()};
+ if !verify_lemonsqueezy_signature(&body,sig,&secret){return StatusCode::UNAUTHORIZED.into_response();}
+ let event:Value=match serde_json::from_str(&body){Ok(v)=>v,Err(_)=>return StatusCode::BAD_REQUEST.into_response()};
+ let name=event.pointer("/meta/event_name").and_then(Value::as_str).unwrap_or_default();let data=event.get("data").cloned().unwrap_or(Value::Null);let a=data.get("attributes").cloned().unwrap_or(Value::Null);let id=data.get("id").and_then(Value::as_str).unwrap_or_default();
+ if name.is_empty()||id.is_empty(){return StatusCode::BAD_REQUEST.into_response();}
+ let store=env::var("LEMON_SQUEEZY_STORE_ID").unwrap_or_default();
+ if a.get("store_id").and_then(Value::as_i64).map(|v|v.to_string()).as_deref()!=Some(store.trim()){return StatusCode::FORBIDDEN.into_response();}
+ if a.get("test_mode").and_then(Value::as_bool)!=Some(lemonsqueezy_test_mode()){return StatusCode::FORBIDDEN.into_response();}
+ let event_key=format!("{}:{}:{}",name,id,hex::encode(Sha256::digest(body.as_bytes())));
+ let claimed=match sqlx::query("INSERT INTO billing_events(provider,provider_event_id,event_type,payload,status,processing_started_at,attempt_count) VALUES('lemonsqueezy',$1,$2,$3,'processing',now(),1) ON CONFLICT(provider,provider_event_id) DO UPDATE SET status='processing',processing_started_at=now(),attempt_count=billing_events.attempt_count+1,payload=EXCLUDED.payload,event_type=EXCLUDED.event_type WHERE billing_events.status NOT IN ('processed','ignored') AND (billing_events.processing_started_at IS NULL OR billing_events.processing_started_at<now()-interval '1 minute') RETURNING id").bind(&event_key).bind(name).bind(&event).fetch_optional(&s.db).await{Ok(v)=>v.is_some(),Err(e)=>return db_error(e)};
+ if !claimed{
+  let existing=match sqlx::query("SELECT status FROM billing_events WHERE provider='lemonsqueezy' AND provider_event_id=$1").bind(&event_key).fetch_optional(&s.db).await{Ok(v)=>v,Err(e)=>return db_error(e)};
+  return match existing.map(|row|row.get::<String,_>("status")).as_deref(){
+   Some("processed")|Some("ignored")=>Json(json!({"received":true,"duplicate":true})).into_response(),
+   _=>StatusCode::SERVICE_UNAVAILABLE.into_response()
+  };
+ }
+ let org=event.pointer("/meta/custom_data/organization_id").and_then(Value::as_str).and_then(|v|Uuid::parse_str(v).ok());
+ let sub=if data.get("type").and_then(Value::as_str)==Some("subscriptions"){Some(id.to_owned())}else{a.get("subscription_id").and_then(Value::as_i64).map(|v|v.to_string())};
+ let cust=a.get("customer_id").and_then(Value::as_i64).map(|v|v.to_string());
+ let resolved=if let Some(v)=org{Some(v)}else if let Some(ref v)=sub{match sqlx::query("SELECT organization_id FROM billing_accounts WHERE lemonsqueezy_subscription_id=$1").bind(v).fetch_optional(&s.db).await{Ok(r)=>r.map(|x|x.get::<Uuid,_>("organization_id")),Err(e)=>return db_error(e)}}else if let Some(ref v)=cust{match sqlx::query("SELECT organization_id FROM billing_accounts WHERE lemonsqueezy_customer_id=$1").bind(v).fetch_optional(&s.db).await{Ok(r)=>r.map(|x|x.get::<Uuid,_>("organization_id")),Err(e)=>return db_error(e)}}else{None};
+ let org=match resolved{Some(v)=>v,None=>{let _=sqlx::query("UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='lemonsqueezy' AND provider_event_id=$1").bind(&event_key).execute(&s.db).await;return Json(json!({"received":true,"ignored":"organization_not_resolved"})).into_response();}};
+ let variant=if let Some(value)=a.get("variant_id").and_then(Value::as_i64){Some(value.to_string())}else if let Some(ref subscription_id)=sub{
+  match sqlx::query("SELECT lemonsqueezy_variant_id FROM billing_accounts WHERE organization_id=$1 AND lemonsqueezy_subscription_id=$2").bind(org).bind(subscription_id).fetch_optional(&s.db).await{
+   Ok(Some(row))=>row.get::<Option<String>,_>("lemonsqueezy_variant_id"),Ok(None)=>None,Err(e)=>return db_error(e)
+  }
+ }else{None};
+ if name=="subscription_created" {
+  let checkout_reference=event.pointer("/meta/custom_data/checkout_reference").and_then(Value::as_str);
+  let checkout_reference=match checkout_reference{Some(v)=>v,None=>return StatusCode::FORBIDDEN.into_response()};
+  let local=match sqlx::query("SELECT organization_id,plan_code FROM billing_transactions WHERE provider='lemonsqueezy' AND reference=$1").bind(checkout_reference).fetch_optional(&s.db).await{Ok(v)=>v,Err(e)=>return db_error(e)};
+  let local=match local{Some(v)=>v,None=>return StatusCode::FORBIDDEN.into_response()};
+  if local.get::<Uuid,_>("organization_id")!=org||local.get::<Option<String>,_>("plan_code").as_deref()!=variant.as_deref(){return StatusCode::FORBIDDEN.into_response();}
+  let initial_status=match a.get("status").and_then(Value::as_str){Some("active")=>"success",Some("on_trial")=>"trialing",_=>"pending"};
+  if let Err(e)=sqlx::query("UPDATE billing_transactions SET status=$1,payload=$2,updated_at=now() WHERE provider='lemonsqueezy' AND reference=$3 AND organization_id=$4").bind(initial_status).bind(&event).bind(checkout_reference).bind(org).execute(&s.db).await{return db_error(e);}
+ }
+ let plan=variant.as_deref().and_then(|v|plan_for_code(Some(v)));let status=a.get("status").and_then(Value::as_str).unwrap_or_default();
+ let period=a.get("renews_at").and_then(Value::as_str).or_else(||a.get("ends_at").and_then(Value::as_str)).and_then(|v|chrono::DateTime::parse_from_rfc3339(v).ok()).map(|v|v.with_timezone(&chrono::Utc));
+ let payment_failed=name=="subscription_payment_failed"||matches!(status,"past_due"|"unpaid");
+ let active=!payment_failed&&(matches!(status,"active"|"on_trial")||matches!(name,"subscription_created"|"subscription_payment_success"|"subscription_resumed"|"subscription_payment_recovered"));
+ let cancelled=name=="subscription_cancelled"||status=="cancelled"||a.get("cancelled").and_then(Value::as_bool)==Some(true);
+ let mapped=if active{"active"}else if cancelled{"non-renewing"}else if payment_failed{"attention"}else if name=="subscription_expired"||status=="expired"{"canceled"}else if status=="paused"{"paused"}else{"pending"};
+ if let Some(plan)=plan{
+  if active{if let Err(e)=apply_entitlements(&s.db,org,plan).await{return db_error(e);}}
+  if name!="subscription_payment_refunded" {
+  if let Err(e)=sqlx::query("INSERT INTO billing_accounts(organization_id,provider,lemonsqueezy_customer_id,lemonsqueezy_subscription_id,lemonsqueezy_variant_id,lemonsqueezy_customer_portal_url,plan_key,status,current_period_end,cancel_at_period_end,updated_at) VALUES($1,'lemonsqueezy',$2,$3,$4,$5,$6,$7,$8,$9,now()) ON CONFLICT(organization_id) DO UPDATE SET provider='lemonsqueezy',lemonsqueezy_customer_id=COALESCE(EXCLUDED.lemonsqueezy_customer_id,billing_accounts.lemonsqueezy_customer_id),lemonsqueezy_subscription_id=COALESCE(EXCLUDED.lemonsqueezy_subscription_id,billing_accounts.lemonsqueezy_subscription_id),lemonsqueezy_variant_id=EXCLUDED.lemonsqueezy_variant_id,lemonsqueezy_customer_portal_url=COALESCE(EXCLUDED.lemonsqueezy_customer_portal_url,billing_accounts.lemonsqueezy_customer_portal_url),plan_key=EXCLUDED.plan_key,status=EXCLUDED.status,current_period_end=COALESCE(EXCLUDED.current_period_end,billing_accounts.current_period_end),cancel_at_period_end=CASE WHEN $10 THEN EXCLUDED.cancel_at_period_end ELSE billing_accounts.cancel_at_period_end END,updated_at=now()")
+   .bind(org).bind(cust).bind(sub).bind(&variant).bind(a.pointer("/urls/customer_portal").and_then(Value::as_str)).bind(plan).bind(mapped).bind(period).bind(cancelled).bind(data.get("type").and_then(Value::as_str)==Some("subscriptions")).execute(&s.db).await{return db_error(e);}
+  }
+  if payment_failed {
+   if let Err(e)=sqlx::query("UPDATE organization_entitlements SET billing_status='past_due',billing_grace_until=COALESCE(billing_grace_until,now()+interval '7 days'),updated_at=now() WHERE organization_id=$1").bind(org).execute(&s.db).await{return db_error(e);}
+  }
+  if name=="subscription_expired"||status=="expired" {
+   if let Err(e)=apply_entitlements(&s.db,org,"free").await{return db_error(e);}
+   if let Err(e)=sqlx::query("UPDATE organization_entitlements SET billing_status='canceled',billing_grace_until=NULL,updated_at=now() WHERE organization_id=$1").bind(org).execute(&s.db).await{return db_error(e);}
+  }
+ }
+ if matches!(name,"subscription_payment_success"|"subscription_payment_recovered"|"subscription_payment_failed"|"subscription_payment_refunded") {
+  if let (Some(plan),Some(variant_id))=(plan,variant.as_deref()) {
+   let txstatus=match name {
+    "subscription_payment_failed"=>"failed",
+    "subscription_payment_refunded"=>"refunded",
+    _=>"success"
+   };
+   let refund_status=if txstatus=="refunded"{Some("refunded")}else{None};
+   let reference=format!("invoice:{id}");
+   let amount=a.get("total_usd").and_then(Value::as_i64);
+   let currency=a.get("currency").and_then(Value::as_str).unwrap_or("USD");
+   if let Err(e)=sqlx::query("INSERT INTO billing_transactions(organization_id,provider,reference,plan_key,plan_code,amount,currency,status,refund_status,metadata,payload,created_at,updated_at) VALUES($1,'lemonsqueezy',$2,$3,$4,$5,$6,$7,$8,$9,$10,now(),now()) ON CONFLICT(provider,reference) DO UPDATE SET status=EXCLUDED.status,refund_status=COALESCE(EXCLUDED.refund_status,billing_transactions.refund_status),payload=EXCLUDED.payload,updated_at=now()")
+    .bind(org).bind(reference).bind(plan).bind(variant_id).bind(amount).bind(currency).bind(txstatus).bind(refund_status).bind(&event).bind(&event).execute(&s.db).await{return db_error(e);}
+  }
+ }
+ if let Err(e)=sqlx::query("UPDATE billing_events SET status='processed',processed_at=now(),processing_started_at=NULL WHERE provider='lemonsqueezy' AND provider_event_id=$1").bind(&event_key).execute(&s.db).await{return db_error(e);}
+ let notice=match name{
+  "subscription_created"=>Some(("Subscription activated","Your Agata Proxima subscription is active.")),
+  "subscription_payment_success"=>Some(("Subscription payment received","Your subscription payment was received successfully.")),
+  "subscription_payment_failed"=>Some(("Subscription payment failed","The latest subscription payment failed. Please update your payment method in the customer portal.")),
+  "subscription_payment_recovered"=>Some(("Subscription payment recovered","Your subscription payment issue has been resolved.")),
+  "subscription_payment_refunded"=>Some(("Subscription payment refunded","A subscription payment was refunded. Your billing history has been updated; review your subscription status and customer portal for current details.")),
+  "subscription_cancelled"=>Some(("Subscription cancellation scheduled","Your subscription was cancelled and access follows the provider's subscription period.")),
+  "subscription_expired"=>Some(("Subscription expired","Your subscription has expired. Review your plan to restore paid access.")),
+  _=>None
+ };
+ if let Some((title,details))=notice{
+  let db=s.db.clone();let reference=event_key.clone();
+  tokio::spawn(async move{send_billing_notice(&db,org,&reference,title,details).await;});
+ }
+ Json(json!({"received":true,"processed":true,"event":name})).into_response()
 }
-
-pub(crate) async fn paystack_webhook(
-    State(s): State<AppState>,
-    headers: HeaderMap,
-    body: String,
-) -> Response {
-    let signature = match headers.get("x-paystack-signature").and_then(|v| v.to_str().ok()) {
-        Some(value) => value,
-        None => return StatusCode::BAD_REQUEST.into_response(),
-    };
-    let secret = match env::var("PAYSTACK_SECRET_KEY") {
-        Ok(value) if !value.trim().is_empty() => value,
-        _ => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
-    };
-    if !verify_paystack_signature(&body, signature, &secret) {
-        return StatusCode::UNAUTHORIZED.into_response();
-    }
-
-    let event: Value = match serde_json::from_str(&body) {
-        Ok(value) => value,
-        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
-    };
-    let event_type = event.get("event").and_then(Value::as_str).unwrap_or_default();
-    if event_type.is_empty() {
-        return StatusCode::BAD_REQUEST.into_response();
-    }
-    let data = event.get("data").cloned().unwrap_or(Value::Null);
-    let key = event
-        .get("id")
-        .and_then(Value::as_str)
-        .map(ToOwned::to_owned)
-        .or_else(|| event.get("id").and_then(Value::as_i64).map(|v| v.to_string()))
-        .or_else(|| {
-            data.get("id")
-                .and_then(Value::as_i64)
-                .map(|v| format!("{event_type}:{v}"))
-        })
-        .or_else(|| {
-            data.get("reference")
-                .and_then(Value::as_str)
-                .map(|v| format!("{event_type}:{v}"))
-        })
-        .unwrap_or_else(|| {
-            format!(
-                "{event_type}:{}",
-                hex::encode(Sha256::digest(body.as_bytes()))
-            )
-        });
-
-    let claimed = match sqlx::query(
-        "INSERT INTO billing_events
-            (provider,provider_event_id,event_type,payload,status,processing_started_at,attempt_count)
-         VALUES('paystack',$1,$2,$3,'processing',now(),1)
-         ON CONFLICT(provider,provider_event_id) DO UPDATE
-            SET status='processing',processing_started_at=now(),
-                attempt_count=billing_events.attempt_count+1,
-                payload=EXCLUDED.payload,event_type=EXCLUDED.event_type
-          WHERE billing_events.status NOT IN ('processed','ignored')
-            AND (billing_events.processing_started_at IS NULL
-                 OR billing_events.processing_started_at < now()-interval '5 minutes')
-         RETURNING id",
-    )
-    .bind(&key)
-    .bind(event_type)
-    .bind(&event)
-    .fetch_optional(&s.db)
-    .await
-    {
-        Ok(value) => value.is_some(),
-        Err(e) => return db_error(e),
-    };
-    if !claimed {
-        return Json(json!({"received":true,"duplicate":true})).into_response();
-    }
-
-    let reference = data.get("reference").and_then(Value::as_str);
-    let transaction = if let Some(reference) = reference {
-        match sqlx::query(
-            "SELECT organization_id,plan_key,plan_code
-               FROM billing_transactions
-              WHERE provider='paystack' AND reference=$1",
-        )
-        .bind(reference)
-        .fetch_optional(&s.db)
-        .await
-        {
-            Ok(value) => value,
-            Err(e) => return db_error(e),
-        }
-    } else {
-        None
-    };
-
-    let metadata_org = data
-        .pointer("/metadata/organization_id")
-        .and_then(Value::as_str)
-        .and_then(|value| Uuid::parse_str(value).ok());
-    let transaction_org = transaction.as_ref().map(|row| row.get::<Uuid, _>("organization_id"));
-    if let (Some(metadata_org), Some(transaction_org)) = (metadata_org, transaction_org) {
-        if metadata_org != transaction_org {
-            return mark_paystack_event_ignored(&s.db, &key, "transaction_organization_mismatch").await;
-        }
-    }
-
-    let customer_code = data
-        .pointer("/customer/customer_code")
-        .and_then(Value::as_str)
-        .or_else(|| data.get("customer_code").and_then(Value::as_str));
-    let subscription_code = data
-        .get("subscription_code")
-        .and_then(Value::as_str)
-        .or_else(|| data.pointer("/subscription/subscription_code").and_then(Value::as_str));
-
-    let customer_org = if metadata_org.is_none() && transaction_org.is_none() {
-        if let Some(code) = customer_code {
-            match sqlx::query(
-                "SELECT organization_id FROM billing_accounts WHERE paystack_customer_code=$1",
-            )
-            .bind(code)
-            .fetch_optional(&s.db)
-            .await
-            {
-                Ok(value) => value.map(|row| row.get::<Uuid, _>("organization_id")),
-                Err(e) => return db_error(e),
-            }
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
-    let subscription_org = if metadata_org.is_none() && transaction_org.is_none() && customer_org.is_none() {
-        if let Some(code) = subscription_code {
-            match sqlx::query(
-                "SELECT organization_id FROM billing_accounts WHERE paystack_subscription_code=$1",
-            )
-            .bind(code)
-            .fetch_optional(&s.db)
-            .await
-            {
-                Ok(value) => value.map(|row| row.get::<Uuid, _>("organization_id")),
-                Err(e) => return db_error(e),
-            }
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
-    let org = match metadata_org.or(transaction_org).or(customer_org).or(subscription_org) {
-        Some(value) => value,
-        None => return mark_paystack_event_ignored(&s.db, &key, "organization_not_resolved").await,
-    };
-
-    let payload_plan_code = data
-        .pointer("/plan/plan_code")
-        .and_then(Value::as_str)
-        .or_else(|| data.pointer("/subscription/plan/plan_code").and_then(Value::as_str))
-        .or_else(|| data.pointer("/subscription/plan_code").and_then(Value::as_str))
-        .or_else(|| data.get("plan_code").and_then(Value::as_str));
-
-    let transaction_plan = transaction.as_ref().map(|row| row.get::<String, _>("plan_key"));
-    let transaction_plan_code = transaction
-        .as_ref()
-        .and_then(|row| row.get::<Option<String>, _>("plan_code"));
-
-    if let (Some(expected), Some(received)) =
-        (transaction_plan_code.as_deref(), payload_plan_code)
-    {
-        if expected != received {
-            return mark_paystack_event_ignored(&s.db, &key, "transaction_plan_code_mismatch").await;
-        }
-    }
-
-    let event_plan = transaction_plan
-        .as_deref()
-        .or_else(|| payload_plan_code.and_then(|code| plan_for_code(Some(code))));
-    let event_plan_code = transaction_plan_code
-        .as_deref()
-        .or(payload_plan_code);
-
-    match event_type {
-        "charge.success" | "subscription.create" | "subscription.enable" => {
-            if event_type == "charge.success" && transaction.is_none() {
-                return mark_paystack_event_ignored(&s.db, &key, "successful_charge_without_local_transaction").await;
-            }
-            let plan = match event_plan {
-                Some("starter") => "starter",
-                Some("growth") => "growth",
-                Some("scale") => "scale",
-                _ => return mark_paystack_event_ignored(&s.db, &key, "unknown_or_non_self_service_plan").await,
-            };
-
-            // Never grant a paid entitlement based only on a successful event name.
-            // The provider payload must match the configured plan's exact USD amount and currency.
-            if !paystack_payload_matches_plan_amount_currency(&data, plan) {
-                return mark_paystack_event_ignored(&s.db, &key, "webhook_plan_amount_or_currency_mismatch").await;
-            }
-            let configured_plan_code = paystack_plan_code(plan);
-            if configured_plan_code.as_deref().is_none() || payload_plan_code != configured_plan_code.as_deref() {
-                return mark_paystack_event_ignored(&s.db, &key, "webhook_plan_code_mismatch").await;
-            }
-
-            if let Some(reference) = reference {
-                if event_type == "charge.success" {
-                    if let Err(e) = sqlx::query(
-                        "UPDATE billing_transactions
-                            SET transaction_id=$1,status='success',payload=$2,updated_at=now()
-                          WHERE provider='paystack' AND reference=$3 AND organization_id=$4",
-                    )
-                    .bind(data.get("id").and_then(Value::as_u64).map(|value| value as i64))
-                    .bind(&data)
-                    .bind(reference)
-                    .bind(org)
-                    .execute(&s.db)
-                    .await
-                    {
-                        return db_error(e);
-                    }
-                }
-            }
-
-            let end = data
-                .get("next_payment_date")
-                .and_then(Value::as_str)
-                .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
-                .map(|value| value.with_timezone(&chrono::Utc));
-
-            if let Err(e) = sqlx::query(
-                "INSERT INTO billing_accounts
-                    (organization_id,paystack_customer_code,paystack_subscription_code,paystack_plan_code,
-                     plan_key,status,current_period_end,cancel_at_period_end,updated_at)
-                 VALUES($1,$2,$3,$4,$5,'active',$6,false,now())
-                 ON CONFLICT(organization_id) DO UPDATE SET
-                    paystack_customer_code=COALESCE(EXCLUDED.paystack_customer_code,billing_accounts.paystack_customer_code),
-                    paystack_subscription_code=COALESCE(EXCLUDED.paystack_subscription_code,billing_accounts.paystack_subscription_code),
-                    paystack_plan_code=COALESCE(EXCLUDED.paystack_plan_code,billing_accounts.paystack_plan_code),
-                    plan_key=EXCLUDED.plan_key,status='active',
-                    current_period_end=COALESCE(EXCLUDED.current_period_end,billing_accounts.current_period_end),
-                    cancel_at_period_end=false,updated_at=now()",
-            )
-            .bind(org)
-            .bind(customer_code)
-            .bind(subscription_code)
-            .bind(event_plan_code)
-            .bind(plan)
-            .bind(end)
-            .execute(&s.db)
-            .await
-            {
-                return db_error(e);
-            }
-            if let Err(e) = apply_entitlements(&s.db, org, plan).await {
-                return db_error(e);
-            }
-        }
-        "invoice.payment_failed" => {
-            if let Err(e) = sqlx::query(
-                "UPDATE billing_accounts SET status='attention',updated_at=now()
-                  WHERE organization_id=$1 AND status NOT IN ('canceled','unpaid')",
-            )
-            .bind(org)
-            .execute(&s.db)
-            .await
-            {
-                return db_error(e);
-            }
-            if let Err(e) = sqlx::query(
-                "UPDATE organization_entitlements
-                    SET billing_status='past_due',
-                        billing_grace_until=COALESCE(billing_grace_until,now()+interval '7 days'),
-                        updated_at=now()
-                  WHERE organization_id=$1 AND billing_status NOT IN ('canceled','unpaid')",
-            )
-            .bind(org)
-            .execute(&s.db)
-            .await
-            {
-                return db_error(e);
-            }
-            if let Some(reference) = reference {
-                let _ = sqlx::query(
-                    "UPDATE billing_transactions SET status='failed',payload=$1,updated_at=now()
-                      WHERE provider='paystack' AND reference=$2 AND organization_id=$3 AND status <> 'success'",
-                )
-                .bind(&data)
-                .bind(reference)
-                .bind(org)
-                .execute(&s.db)
-                .await;
-            }
-        }
-        "subscription.disable" => {
-            if let Err(e) = sqlx::query(
-                "UPDATE billing_accounts SET status='canceled',cancel_at_period_end=false,updated_at=now()
-                  WHERE organization_id=$1",
-            )
-            .bind(org)
-            .execute(&s.db)
-            .await
-            {
-                return db_error(e);
-            }
-            if let Err(e) = sqlx::query(
-                "UPDATE organization_entitlements
-                    SET billing_status='canceled',billing_grace_until=NULL,updated_at=now()
-                  WHERE organization_id=$1",
-            )
-            .bind(org)
-            .execute(&s.db)
-            .await
-            {
-                return db_error(e);
-            }
-        }
-        "subscription.not_renew" => {
-            let end = data
-                .get("next_payment_date")
-                .and_then(Value::as_str)
-                .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
-                .map(|value| value.with_timezone(&chrono::Utc));
-            if let Err(e) = sqlx::query(
-                "UPDATE billing_accounts
-                    SET status='non-renewing',cancel_at_period_end=true,
-                        current_period_end=COALESCE($1,current_period_end),updated_at=now()
-                  WHERE organization_id=$2",
-            )
-            .bind(end)
-            .bind(org)
-            .execute(&s.db)
-            .await
-            {
-                return db_error(e);
-            }
-        }
-        "subscription.expiring_cards" => {
-            if let Err(e) = sqlx::query(
-                "UPDATE billing_accounts SET status='attention',updated_at=now()
-                  WHERE organization_id=$1 AND status NOT IN ('canceled','unpaid')",
-            )
-            .bind(org)
-            .execute(&s.db)
-            .await
-            {
-                return db_error(e);
-            }
-        }
-        "refund.pending" | "refund.processing" | "refund.processed" | "refund.failed" | "refund.needs-attention" => {
-            let refund_reference = data
-                .get("reference")
-                .and_then(Value::as_str)
-                .or_else(|| data.get("transaction_reference").and_then(Value::as_str))
-                .or_else(|| data.pointer("/transaction/reference").and_then(Value::as_str));
-            if let Some(reference) = refund_reference {
-                if let Err(e) = sqlx::query(
-                    "UPDATE billing_transactions SET refund_status=$1,refund_payload=$2,updated_at=now()
-                      WHERE provider='paystack' AND reference=$3 AND organization_id=$4",
-                )
-                .bind(event_type.trim_start_matches("refund."))
-                .bind(&data)
-                .bind(reference)
-                .bind(org)
-                .execute(&s.db)
-                .await
-                {
-                    return db_error(e);
-                }
-            }
-        }
-        _ => {}
-    }
-
-    if let Err(e) = sqlx::query(
-        "UPDATE billing_events SET status='processed',processed_at=now(),processing_started_at=NULL
-          WHERE provider='paystack' AND provider_event_id=$1",
-    )
-    .bind(&key)
-    .execute(&s.db)
-    .await
-    {
-        return db_error(e);
-    }
-    Json(json!({"received":true,"processed":true})).into_response()
-}
-
 pub(crate) async fn send_verification_email(
     db: &sqlx::PgPool,
     user_id: Uuid,
@@ -1760,14 +1226,15 @@ pub(crate) async fn send_verification_email(
     .execute(db)
     .await?;
 
-    send_template_email(
+    send_template_email_as(
         email,
-        "091dbdb2-21ed-444f-a209-6f44e55d192d",
+        "verify-email",
         json!({
-            "DISPLAY_NAME": display_name,
+            "DISPLAY_NAME": escape_email_template_value(display_name),
             "CODE": code,
             "ACTION_URL": ""
         }),
+        "no-reply",
     )
     .await
 }
@@ -1990,13 +1457,14 @@ pub(crate) async fn request_password_reset(
             .trim_end_matches('/')
             .to_string();
         let link = format!("{base}/reset-password?token={token}");
-        if let Err(e) = send_template_email(
+        if let Err(e) = send_template_email_as(
             &email,
-            "d3c046c7-fef6-42f0-931e-d92b6f96cfdf",
+            "password-reset",
             json!({
-                "DISPLAY_NAME": row.get::<String,_>("display_name"),
+                "DISPLAY_NAME": escape_email_template_value(&row.get::<String,_>("display_name")),
                 "ACTION_URL": link
             }),
+            "no-reply",
         )
         .await
         {
@@ -2106,22 +1574,24 @@ pub(crate) async fn invite(
         .trim_end_matches('/')
         .to_string();
     let link = format!("{base}/accept-invite?token={token}");
-    if let Err(e) = send_template_email(
+    let email_result = send_template_email_as(
         &email,
-        "0757a210-a372-4a5a-8fca-e642c2fed3da",
+        "organization-invitation",
         json!({
-            "ORGANIZATION": organization_name,
+            "ORGANIZATION": escape_email_template_value(&organization_name),
             "ROLE": role,
             "ACTION_URL": link
         }),
+        "notifications",
     )
-    .await
-    {
-        tracing::error!(%e, "invitation email failed");
-    }
+    .await;
 
-    audit(&s.db, ctx.organization_id, ctx.user_id, "organization.invite.created", "organization_invite", Some(id), json!({"email":email,"role":role})).await;
-    Json(json!({"ok":true,"id":id,"expires_in":"7 days"})).into_response()
+    audit(&s.db, ctx.organization_id, ctx.user_id, "organization.invite.created", "organization_invite", Some(id), json!({"email":email,"role":role,"email_delivery":if email_result.is_ok(){"sent"}else{"failed"}})).await;
+    if let Err(e) = email_result {
+        tracing::error!(%e, invitation_id = %id, "invitation email failed");
+        return service_unavailable("The invitation was recorded, but its email could not be sent. Retry the invitation after checking the email configuration.");
+    }
+    Json(json!({"ok":true,"id":id,"email_delivery":"sent","expires_in":"7 days"})).into_response()
 }
 
 pub(crate) async fn accept_invite(
@@ -2209,24 +1679,102 @@ pub(crate) async fn purge_expired_audit_events(db: &sqlx::PgPool) -> Result<i64,
 }
 
 pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
-    let db_ok=sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
-    let paystack=env::var("PAYSTACK_SECRET_KEY").map(|v|!v.trim().is_empty()).unwrap_or(false);
-    let plans=configured_paystack_plan_codes_unique();
-    let resend=env::var("RESEND_API_KEY").map(|v|!v.is_empty()).unwrap_or(false);let from=env::var("RESEND_FROM_EMAIL").map(|v|!v.is_empty()).unwrap_or(false);let base=env::var("AGATA_PUBLIC_BASE_URL").map(|v|!v.is_empty()).unwrap_or(false);let oidc=env::var("PROXIMA_OIDC_CLIENT_ID").map(|v|!v.is_empty()).unwrap_or(false)&&env::var("PROXIMA_OIDC_CLIENT_SECRET").map(|v|!v.is_empty()).unwrap_or(false);let all=db_ok&&paystack&&plans&&resend&&from&&base&&oidc;
-    Json(json!({"status":if all{"ready"}else{"needs_configuration"},"checks":{"database":db_ok,"paystack_secret":paystack,"paystack_plans":plans,"resend_api_key":resend,"resend_from":from,"public_base_url":base,"oidc":oidc,"engine_remains_authoritative":true}})).into_response()
+    let db_ok = sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
+    let lemonsqueezy = env::var("LEMON_SQUEEZY_API_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false) && env::var("LEMON_SQUEEZY_STORE_ID").map(|v| !v.trim().is_empty()).unwrap_or(false) && env::var("LEMON_SQUEEZY_WEBHOOK_SECRET").map(|v| !v.trim().is_empty()).unwrap_or(false);
+    let plans = configured_lemonsqueezy_variants_unique();
+    let resend = env::var("RESEND_API_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false);
+    let fallback_from = env::var("RESEND_FROM_EMAIL").map(|v| !v.trim().is_empty()).unwrap_or(false);
+    let sender_identities = [
+        "RESEND_FROM_NO_REPLY_EMAIL",
+        "RESEND_FROM_SUPPORT_EMAIL",
+        "RESEND_FROM_SECURITY_EMAIL",
+        "RESEND_FROM_BILLING_EMAIL",
+        "RESEND_FROM_NOTIFICATIONS_EMAIL",
+    ].iter().all(|key| env::var(key).map(|v| !v.trim().is_empty()).unwrap_or(false));
+    let templates_configured = [
+        "RESEND_TEMPLATE_VERIFY_EMAIL_ID",
+        "RESEND_TEMPLATE_PASSWORD_RESET_ID",
+        "RESEND_TEMPLATE_ORGANIZATION_INVITATION_ID",
+        "RESEND_TEMPLATE_NEW_LOGIN_ALERT_ID",
+        "RESEND_TEMPLATE_SUPPORT_REQUEST_RECEIVED_ID",
+        "RESEND_TEMPLATE_BILLING_UPDATE_ID",
+    ].iter().all(|key| env::var(key).map(|v| !v.trim().is_empty()).unwrap_or(false));
+    let support_inbox = env::var("AGATA_SUPPORT_INBOX_EMAIL").map(|v| valid_public_support_email(v.trim())).unwrap_or(false);
+    let base = env::var("AGATA_PUBLIC_BASE_URL").map(|v| !v.trim().is_empty()).unwrap_or(false);
+    let oidc = env::var("PROXIMA_OIDC_CLIENT_ID").map(|v| !v.trim().is_empty()).unwrap_or(false)
+        && env::var("PROXIMA_OIDC_CLIENT_SECRET").map(|v| !v.trim().is_empty()).unwrap_or(false);
+    let email_ready = resend && sender_identities && templates_configured && support_inbox;
+    let all = db_ok && lemonsqueezy && plans && email_ready && base && oidc;
+    Json(json!({
+        "status": if all { "ready" } else { "needs_configuration" },
+        "checks": {
+            "database": db_ok,
+            "lemonsqueezy_configured": lemonsqueezy,
+            "lemonsqueezy_variants": plans,
+            "resend_api_key": resend,
+            "resend_fallback_sender": fallback_from,
+            "resend_sender_identities": sender_identities,
+            "resend_templates": templates_configured,
+            "support_inbox": support_inbox,
+            "public_base_url": base,
+            "oidc": oidc,
+            "engine_remains_authoritative": true
+        }
+    })).into_response()
 }
 
-pub(crate) async fn send_template_email(
+fn configured_template_id(template_key: &str) -> anyhow::Result<String> {
+    let env_key = match template_key {
+        "verify-email" => "RESEND_TEMPLATE_VERIFY_EMAIL_ID",
+        "password-reset" => "RESEND_TEMPLATE_PASSWORD_RESET_ID",
+        "organization-invitation" => "RESEND_TEMPLATE_ORGANIZATION_INVITATION_ID",
+        "new-login-alert" => "RESEND_TEMPLATE_NEW_LOGIN_ALERT_ID",
+        "support-request-received" => "RESEND_TEMPLATE_SUPPORT_REQUEST_RECEIVED_ID",
+        "billing-update" => "RESEND_TEMPLATE_BILLING_UPDATE_ID",
+        _ => anyhow::bail!("Unsupported transactional email template key"),
+    };
+    match env::var(env_key) {
+        Ok(value) if !value.trim().is_empty() => Ok(value.trim().to_owned()),
+        _ => anyhow::bail!("{env_key} is not configured for the current deployment"),
+    }
+}
+
+fn sender_address(role: &str) -> anyhow::Result<String> {
+    let key = match role {
+        "no-reply" => "RESEND_FROM_NO_REPLY_EMAIL",
+        "support" => "RESEND_FROM_SUPPORT_EMAIL",
+        "security" => "RESEND_FROM_SECURITY_EMAIL",
+        "billing" => "RESEND_FROM_BILLING_EMAIL",
+        "notifications" => "RESEND_FROM_NOTIFICATIONS_EMAIL",
+        _ => anyhow::bail!("Unsupported transactional email sender role"),
+    };
+    if let Ok(value) = env::var(key) {
+        if !value.trim().is_empty() {
+            return Ok(value.trim().to_owned());
+        }
+    }
+    match env::var("RESEND_FROM_EMAIL") {
+        Ok(value) if !value.trim().is_empty() => Ok(value.trim().to_owned()),
+        _ => anyhow::bail!("{key} and RESEND_FROM_EMAIL are not configured for the current deployment"),
+    }
+}
+
+pub(crate) async fn send_template_email_as(
     to: &str,
-    template_id: &str,
+    template_key: &str,
     variables: Value,
+    sender_role: &str,
 ) -> anyhow::Result<()> {
     let key = env::var("RESEND_API_KEY")?;
-    let from = match env::var("RESEND_FROM_EMAIL") {
-        Ok(v) if !v.trim().is_empty() => v,
-        _ => anyhow::bail!("RESEND_FROM_EMAIL is not configured for the current deployment"),
-    };
-    let response = Client::new()
+    if key.trim().is_empty() {
+        anyhow::bail!("RESEND_API_KEY is not configured for the current deployment");
+    }
+    let from = sender_address(sender_role)?;
+    let template_id = configured_template_id(template_key)?;
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()?;
+    let response = client
         .post("https://api.resend.com/emails")
         .bearer_auth(key)
         .json(&json!({
@@ -2242,12 +1790,113 @@ pub(crate) async fn send_template_email(
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        anyhow::bail!("Resend returned {status}: {body}");
+        anyhow::bail!("Resend returned {status}: {}", body.chars().take(500).collect::<String>());
     }
     Ok(())
 }
 
-fn verify_paystack_signature(payload:&str,signature:&str,secret:&str)->bool{let mut mac=match HmacSha512::new_from_slice(secret.as_bytes()){Ok(v)=>v,Err(_)=>return false};mac.update(payload.as_bytes());let expected=hex::encode(mac.finalize().into_bytes());constant_time_equal(signature.trim(),&expected)}
+pub(crate) async fn send_text_email(
+    to: &str,
+    subject: &str,
+    text: &str,
+    sender_role: &str,
+    reply_to: &str,
+) -> anyhow::Result<()> {
+    let key = env::var("RESEND_API_KEY")?;
+    if key.trim().is_empty() {
+        anyhow::bail!("RESEND_API_KEY is not configured for the current deployment");
+    }
+    let from = sender_address(sender_role)?;
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()?;
+    let response = client
+        .post("https://api.resend.com/emails")
+        .bearer_auth(key)
+        .json(&json!({
+            "from": from,
+            "to": [to],
+            "reply_to": [reply_to],
+            "subject": subject,
+            "text": text
+        }))
+        .send()
+        .await?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        anyhow::bail!("Resend returned {status}: {}", body.chars().take(500).collect::<String>());
+    }
+    Ok(())
+}
+
+fn escape_email_template_value(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+async fn send_billing_notice(
+    db: &sqlx::PgPool,
+    organization_id: Uuid,
+    event_reference: &str,
+    title: &str,
+    details: &str,
+) {
+    let recipient = match sqlx::query(
+        "SELECT u.email,u.display_name
+           FROM memberships m
+           JOIN users u ON u.id=m.user_id
+          WHERE m.organization_id=$1
+            AND m.role IN ('owner','admin')
+            AND u.status='active'
+          ORDER BY CASE m.role WHEN 'owner' THEN 0 ELSE 1 END, m.created_at
+          LIMIT 1",
+    )
+    .bind(organization_id)
+    .fetch_optional(db)
+    .await
+    {
+        Ok(Some(row)) => (row.get::<String, _>("email"), row.get::<String, _>("display_name")),
+        Ok(None) => {
+            tracing::warn!(%organization_id, "billing email skipped because no active organization owner/admin was found");
+            return;
+        }
+        Err(e) => {
+            tracing::error!(%organization_id, %e, "could not resolve billing email recipient");
+            return;
+        }
+    };
+
+    let base = match env::var("AGATA_PUBLIC_BASE_URL") {
+        Ok(value) if !value.trim().is_empty() => value.trim_end_matches('/').to_string(),
+        _ => {
+            tracing::warn!(%organization_id, "billing email skipped because AGATA_PUBLIC_BASE_URL is not configured");
+            return;
+        }
+    };
+    if let Err(e) = send_template_email_as(
+        &recipient.0,
+        "billing-update",
+        json!({
+            "DISPLAY_NAME": escape_email_template_value(&recipient.1),
+            "EVENT_TITLE": escape_email_template_value(title),
+            "DETAILS": escape_email_template_value(details),
+            "ACTION_URL": escape_email_template_value(&format!("{base}/app/billing")),
+            "REQUEST_ID": escape_email_template_value(event_reference)
+        }),
+        "billing",
+    )
+    .await
+    {
+        tracing::error!(%organization_id, %e, "billing notification email delivery failed");
+    }
+}
+
+
 
 fn constant_time_equal(a: &str, b: &str) -> bool {
     if a.len() != b.len() {
@@ -2260,7 +1909,7 @@ fn constant_time_equal(a: &str, b: &str) -> bool {
     diff == 0
 }
 
-async fn paystack_error(response:reqwest::Response)->Response{let status=response.status();let body=response.text().await.unwrap_or_default();tracing::error!(%status,body=%body,"Paystack API error");service_unavailable("Paystack request failed.")}
+
 
 fn external_error<E: std::fmt::Display>(e: E) -> Response {
     tracing::error!(error = %e, "external integration error");
@@ -2325,51 +1974,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn paystack_signature_round_trip(){let payload=r#"{"event":"charge.success","data":{"reference":"ref_test"}}"#;let secret="sk_test";let mut mac=HmacSha512::new_from_slice(secret.as_bytes()).unwrap();mac.update(payload.as_bytes());let signature=hex::encode(mac.finalize().into_bytes());assert!(verify_paystack_signature(payload,&signature,secret));}
-    #[test]
-    fn invalid_paystack_signature_is_rejected(){assert!(!verify_paystack_signature("payload","invalid","sk_test"));}
-
-    #[test]
-    fn paystack_plan_codes_must_be_present_and_unique() {
-        assert!(super::paystack_plan_codes_unique(Some("PLN_starter"), Some("PLN_growth"), Some("PLN_scale")));
-        assert!(!super::paystack_plan_codes_unique(Some("PLN_same"), Some("PLN_same"), Some("PLN_scale")));
-        assert!(!super::paystack_plan_codes_unique(Some("PLN_starter"), None, Some("PLN_scale")));
-        assert!(!super::paystack_plan_codes_unique(Some(""), Some("PLN_growth"), Some("PLN_scale")));
+    fn lemonsqueezy_signature_round_trip_and_rejection() {
+        let payload = r#"{"meta":{"event_name":"subscription_created"},"data":{"id":"1"}}"#;
+        let secret = "test_signing_secret";
+        type HmacSha256 = Hmac<sha2::Sha256>;
+        let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
+        mac.update(payload.as_bytes());
+        let signature = hex::encode(mac.finalize().into_bytes());
+        assert!(verify_lemonsqueezy_signature(payload, &signature, secret));
+        assert!(!verify_lemonsqueezy_signature(payload, "invalid", secret));
+        assert!(!verify_lemonsqueezy_signature("different", &signature, secret));
     }
-
     #[test]
-    fn canonical_paystack_usd_amounts_are_exact_minor_units() {
-        assert_eq!(super::expected_paystack_amount_usd("starter"), Some(14_900));
-        assert_eq!(super::expected_paystack_amount_usd("growth"), Some(49_900));
-        assert_eq!(super::expected_paystack_amount_usd("scale"), Some(119_900));
-        assert_eq!(super::expected_paystack_amount_usd("free"), None);
-        assert_eq!(super::expected_paystack_amount_usd("enterprise"), None);
+    fn lemonsqueezy_catalog_amounts_are_exact_minor_units() {
+        assert_eq!(expected_lemonsqueezy_amount("starter"), Some(14_900));
+        assert_eq!(expected_lemonsqueezy_amount("growth"), Some(49_900));
+        assert_eq!(expected_lemonsqueezy_amount("scale"), Some(119_900));
+        assert_eq!(expected_lemonsqueezy_amount("free"), None);
+        assert_eq!(expected_lemonsqueezy_amount("enterprise"), None);
     }
-
-    #[test]
-    fn paystack_success_payload_must_match_usd_amount_and_plan() {
-        let starter = serde_json::json!({"amount":14900,"currency":"USD","plan":{"amount":14900,"currency":"USD"}});
-        let wrong_amount = serde_json::json!({"amount":7900,"currency":"USD"});
-        let wrong_currency = serde_json::json!({"amount":14900,"currency":"NGN"});
-        let nested_plan = serde_json::json!({"plan":{"amount":49900,"currency":"USD"}});
-        assert!(super::paystack_payload_matches_plan_amount_currency(&starter, "starter"));
-        assert!(!super::paystack_payload_matches_plan_amount_currency(&wrong_amount, "starter"));
-        assert!(!super::paystack_payload_matches_plan_amount_currency(&wrong_currency, "starter"));
-        assert!(super::paystack_payload_matches_plan_amount_currency(&nested_plan, "growth"));
-        assert!(!super::paystack_payload_matches_plan_amount_currency(&starter, "growth"));
-    }
-
-    #[test]
-    fn paystack_provider_plan_must_match_catalog_before_checkout() {
-        let starter = serde_json::json!({"plan_code":"PLN_starter","amount":14900,"currency":"USD","interval":"monthly"});
-        let wrong_amount = serde_json::json!({"plan_code":"PLN_starter","amount":7900,"currency":"USD","interval":"monthly"});
-        let wrong_currency = serde_json::json!({"plan_code":"PLN_starter","amount":14900,"currency":"NGN","interval":"monthly"});
-        let wrong_interval = serde_json::json!({"plan_code":"PLN_starter","amount":14900,"currency":"USD","interval":"annually"});
-        assert!(super::paystack_provider_plan_matches_catalog(&starter, "starter", "PLN_starter"));
-        assert!(!super::paystack_provider_plan_matches_catalog(&wrong_amount, "starter", "PLN_starter"));
-        assert!(!super::paystack_provider_plan_matches_catalog(&wrong_currency, "starter", "PLN_starter"));
-        assert!(!super::paystack_provider_plan_matches_catalog(&wrong_interval, "starter", "PLN_starter"));
-        assert!(!super::paystack_provider_plan_matches_catalog(&starter, "growth", "PLN_starter"));
-    }
-
 }

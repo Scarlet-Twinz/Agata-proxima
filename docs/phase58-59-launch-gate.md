@@ -8,7 +8,7 @@ Completed in the repository:
 
 - Billing checkout and customer billing response contracts are aligned with the customer UI.
 - The canonical plan catalogue is Free $0, Starter $149/month, Growth $499/month, Scale $1,199/month and Enterprise custom.
-- Paystack checkout uses Agata-specific environment-configured plan codes; production plan amounts and codes still require live verification.
+- Lemon Squeezy checkout uses Agata-specific environment-configured variant IDs; Test Mode and production plan amounts still require provider-side verification.
 - Plan capacity enforcement covers nodes, tenants and environments.
 - Plan quotas cover active webhook integrations, monthly verifications, team seats/invitations, API keys and API requests.
 - Plan feature enforcement covers policy management, fleet controls, advanced verification, priority support, Microsoft Entra OIDC and private deployment.
@@ -39,7 +39,7 @@ Repository-side acceptance requires:
 These are **not** falsely marked complete by repository code:
 
 - public HTTPS deployment;
-- real Paystack plan amounts/codes, checkout and live webhook delivery;
+- real Lemon Squeezy plan amounts/codes, checkout and live webhook delivery;
 - Agata-owned Resend domain and DNS verification;
 - real Microsoft Entra application registration and end-to-end SSO;
 - production secret rotation;

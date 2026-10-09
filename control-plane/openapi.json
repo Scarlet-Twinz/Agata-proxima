@@ -3,7 +3,7 @@
   "info": {
     "title": "Agata Proxima Control Plane API",
     "version": "0.2.0",
-    "description": "Authenticated management plane for organizations, tenants, policies, fleet, deployments, verification, audit, support and Paystack billing. The Proxima Engine remains the independent data-plane enforcement authority."
+    "description": "Authenticated management plane for organizations, tenants, policies, fleet, deployments, verification, audit, support and Lemon Squeezy billing. The Proxima Engine remains the independent data-plane enforcement authority."
   },
   "servers": [
     {
@@ -403,7 +403,7 @@
     },
     "/api/v1/billing/checkout": {
       "post": {
-        "summary": "Initialize Paystack USD checkout for a paid Agata plan",
+        "summary": "Create a Lemon Squeezy checkout for an Agata Proxima monthly plan",
         "requestBody": {
           "required": true,
           "content": {
@@ -421,7 +421,7 @@
                       "growth",
                       "scale"
                     ],
-                    "description": "Agata Proxima plan key. The server resolves the configured plan code."
+                    "description": "Agata Proxima plan key (starter, growth, or scale); the server resolves and validates the configured Lemon Squeezy variant."
                   }
                 }
               }
@@ -430,7 +430,7 @@
         },
         "responses": {
           "200": {
-            "description": "Paystack checkout URL and local transaction reference"
+            "description": "Lemon Squeezy checkout URL and local checkout reference"
           },
           "400": {
             "description": "Invalid plan"
@@ -442,17 +442,17 @@
             "description": "Plan is not permitted"
           },
           "503": {
-            "description": "Paystack is not configured or unavailable"
+            "description": "Lemon Squeezy is not configured, the variant does not match the catalog, or the provider is unavailable"
           }
         }
       }
     },
     "/api/v1/billing/portal": {
       "post": {
-        "summary": "Get Paystack subscription management URL",
+        "summary": "Get the Lemon Squeezy customer portal URL",
         "responses": {
           "200": {
-            "description": "Paystack portal URL"
+            "description": "Lemon Squeezy customer portal URL"
           },
           "400": {
             "description": "No subscription exists"
@@ -461,14 +461,14 @@
             "description": "Authentication required"
           },
           "503": {
-            "description": "Paystack is not configured or unavailable"
+            "description": "Lemon Squeezy portal URL is not available"
           }
         }
       }
     },
     "/api/v1/billing/verify": {
       "get": {
-        "summary": "Verify a locally stored Paystack transaction",
+        "summary": "Check locally stored Lemon Squeezy checkout status",
         "parameters": [
           {
             "name": "reference",
@@ -477,19 +477,11 @@
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "name": "trxref",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Verified status and plan; paid entitlements are applied only when the provider transaction matches the expected USD amount and plan code"
+            "description": "Local transaction status; a paid entitlement is only applied after a verified Lemon Squeezy webhook"
           },
           "401": {
             "description": "Authentication required"
@@ -499,92 +491,6 @@
           },
           "404": {
             "description": "Unknown local transaction"
-          }
-        }
-      }
-    },
-    "/api/v1/billing/paystack/callback": {
-      "get": {
-        "summary": "Paystack hosted checkout callback",
-        "security": [],
-        "parameters": [
-          {
-            "name": "reference",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "trxref",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Redirects to the app with verified or verification-pending billing state"
-          },
-          "404": {
-            "description": "Unknown local transaction"
-          }
-        }
-      }
-    },
-    "/api/v1/webhooks/paystack": {
-      "post": {
-        "summary": "Receive signed Paystack webhook events",
-        "security": [],
-        "parameters": [
-          {
-            "name": "x-paystack-signature",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "event",
-                  "data"
-                ],
-                "properties": {
-                  "event": {
-                    "type": "string"
-                  },
-                  "data": {
-                    "type": "object",
-                    "additionalProperties": true
-                  }
-                },
-                "additionalProperties": true
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Event accepted, processed, ignored safely or identified as duplicate"
-          },
-          "400": {
-            "description": "Malformed event or missing signature"
-          },
-          "401": {
-            "description": "Invalid Paystack signature"
-          },
-          "503": {
-            "description": "Paystack secret or database unavailable"
           }
         }
       }
@@ -777,6 +683,189 @@
         "responses": {
           "200": {
             "description": "Webhook delivery history"
+          }
+        }
+      }
+    },
+    "/api/v1/public/support-requests": {
+      "post": {
+        "summary": "Submit a public support or contact request",
+        "description": "Public endpoint. Validates and persists the request before attempting requester confirmation and support-team notification emails. A 202 response includes delivery statuses; it does not guarantee final inbox placement.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "subject",
+                  "message"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 254
+                  },
+                  "subject": {
+                    "type": "string",
+                    "minLength": 4,
+                    "maxLength": 200
+                  },
+                  "message": {
+                    "type": "string",
+                    "minLength": 10,
+                    "maxLength": 10000
+                  },
+                  "topic": {
+                    "type": "string",
+                    "enum": [
+                      "general",
+                      "documentation",
+                      "troubleshooting",
+                      "security",
+                      "customer",
+                      "customers",
+                      "developers",
+                      "partnerships"
+                    ],
+                    "default": "general"
+                  },
+                  "website": {
+                    "type": "string",
+                    "description": "Hidden honeypot field; leave empty."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Request persisted; response includes request ID and email delivery statuses."
+          },
+          "400": {
+            "description": "Invalid request fields."
+          },
+          "429": {
+            "description": "Too many requests for the same email address within the rate-limit window."
+          },
+          "500": {
+            "description": "Persistence failed."
+          }
+        }
+      }
+    },
+    "/api/v1/billing/lemonsqueezy/callback": {
+      "get": {
+        "summary": "Lemon Squeezy checkout return",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Returns to the app with the local reference; payment remains unconfirmed until a verified webhook updates local status."
+          }
+        },
+        "parameters": [
+          {
+            "name": "reference",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Local checkout reference returned by the checkout endpoint."
+          }
+        ]
+      }
+    },
+    "/api/v1/webhooks/lemonsqueezy": {
+      "post": {
+        "summary": "Receive signed Lemon Squeezy webhook events",
+        "security": [],
+        "parameters": [
+          {
+            "name": "x-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "meta",
+                  "data"
+                ],
+                "properties": {
+                  "meta": {
+                    "type": "object",
+                    "required": [
+                      "event_name"
+                    ],
+                    "properties": {
+                      "event_name": {
+                        "type": "string"
+                      },
+                      "custom_data": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "data": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "attributes"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "type": "string"
+                      },
+                      "attributes": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "additionalProperties": true
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Event processed, safely ignored, or recognized as a duplicate"
+          },
+          "400": {
+            "description": "Malformed event or missing signature"
+          },
+          "401": {
+            "description": "Invalid Lemon Squeezy signature"
+          },
+          "403": {
+            "description": "Store or test/live mode mismatch"
+          },
+          "503": {
+            "description": "Webhook signing secret or database unavailable"
           }
         }
       }

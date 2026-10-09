@@ -54,9 +54,9 @@ The request shapes and end-to-end workflow are documented in [usage.md](usage.md
 
 API keys are organization-scoped. Store newly issued credentials securely and revoke keys that are no longer needed. Webhook receivers should use HTTPS, verify the signing contract, tolerate retries and avoid treating a delivery as an exactly-once transport.
 
-## Billing — Paystack
+## Billing — Lemon Squeezy
 
-Paystack is the active billing provider. Server-authoritative endpoints are:
+Lemon Squeezy is the active billing provider. Server-authoritative endpoints are:
 
 - `GET /api/v1/billing`
 - `GET /api/v1/billing/plans`
@@ -64,12 +64,12 @@ Paystack is the active billing provider. Server-authoritative endpoints are:
 - `POST /api/v1/billing/checkout`
 - `POST /api/v1/billing/portal`
 - `GET /api/v1/billing/verify?reference=...`
-- `GET /api/v1/billing/paystack/callback`
-- `POST /api/v1/webhooks/paystack`
+- `GET /api/v1/billing/lemonsqueezy/callback`
+- `POST /api/v1/webhooks/lemonsqueezy`
 
-The public/server catalogue is Free $0, Starter $149/month, Growth $499/month, Scale $1,199/month and Enterprise custom. Checkout is configured for USD. Paystack's plan codes must resolve to USD monthly plans at exactly the expected amounts. The server verifies the local transaction reference, organization, plan code, currency and expected amount before applying paid entitlements; signed webhook events must also match the configured plan and price.
+The public/server catalogue is Free $0, Starter $149/month, Growth $499/month, Scale $1,199/month and Enterprise custom. Checkout is configured for USD. Lemon Squeezy variant IDs must resolve to published monthly subscription variants at exactly the expected USD amounts and selected Test/Live mode. The server validates the variant before checkout and applies paid entitlements only from a verified, store-matched, mode-matched, idempotently processed webhook.
 
-Production variables are `PAYSTACK_SECRET_KEY` and the three `AGATA_PAYSTACK_*_PLAN_CODE` variables. Keep secrets in the deployment secret store. Live activation requires a real Paystack payment, signed webhook and entitlement reconciliation test.
+Configure `LEMON_SQUEEZY_API_KEY`, `LEMON_SQUEEZY_STORE_ID`, the three `LEMON_SQUEEZY_*_VARIANT_ID` values, `LEMON_SQUEEZY_WEBHOOK_SECRET`, and `LEMON_SQUEEZY_TEST_MODE=true` for initial verification. Keep secrets in the deployment secret store. Live activation remains blocked until test-mode checkout, signed webhook, subscription lifecycle and entitlement reconciliation checks pass.
 
 ## Microsoft Entra SSO
 

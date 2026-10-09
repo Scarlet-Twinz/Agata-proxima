@@ -47,7 +47,7 @@ for file in "$matrix" "$proposal" "$contract" "docs/usage.md" "docs/billing/enti
   fi
 done
 
-grep -Fq 'Paystack is the active billing provider' "docs/usage.md" || fail "usage guide does not identify Paystack as the active provider"
+grep -Fq 'Lemon Squeezy is the active billing provider' "docs/usage.md" || fail "usage guide does not identify Lemon Squeezy as the active provider"
 grep -Fq 'Microsoft Entra ID (OpenID Connect/OIDC)' "docs/usage.md" || fail "usage guide does not document the SSO provider"
 
 pass "canonical pricing agrees across backend, public pricing and billing docs"

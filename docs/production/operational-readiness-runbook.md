@@ -14,7 +14,7 @@ Required components:
 2. **Rust Control Plane container** on a managed container host with a stable public HTTPS origin.
 3. **Managed PostgreSQL** for the Control Plane, with automated backups, encryption/TLS and restricted network access.
 4. **Proxima Engine nodes** deployed close to the protected PostgreSQL systems. The Engine remains the data-plane enforcement authority.
-5. **Secret store** for database credentials, Paystack, Resend and Entra credentials.
+5. **Secret store** for database credentials, Lemon Squeezy, Resend and Entra credentials.
 6. **Monitoring and alerting** for liveness, readiness, database failures, webhook failures and email delivery.
 7. **Recovery path** that can restore a backup to an isolated database and redeploy a previous known-good image.
 
@@ -41,7 +41,7 @@ Before rollout:
 The Control Plane exposes:
 
 - `GET /healthz` and `GET /api/v1/health`: liveness/database connectivity.
-- `GET /api/v1/production/readiness`: configuration readiness checks for database, Paystack secret/plan codes, Resend, public base URL and OIDC credentials.
+- `GET /api/v1/production/readiness`: configuration readiness checks for database, Lemon Squeezy API/store/webhook settings and variants, Resend, public base URL and OIDC credentials.
 
 Use liveness for frequent health probes. Use readiness as a launch/rollout gate: `needs_configuration` means one or more production integrations are not configured. Do not make the service public to customers just because liveness returns healthy.
 
@@ -98,7 +98,7 @@ Minimum launch monitoring:
 | Readiness | `/api/v1/production/readiness` during deploy and periodically | Any missing required production configuration |
 | Database | Liveness plus managed database metrics | Connection failures, storage exhaustion or sustained high saturation |
 | API | HTTP 5xx rate and latency | Sustained 5xx spike or breached agreed latency threshold |
-| Paystack | Signed webhook delivery, rejected signatures, failed payment reconciliation | Repeated delivery failures or successful charge not reconciled |
+| Lemon Squeezy | Signed webhook delivery, rejected signatures, failed payment reconciliation | Repeated delivery failures or successful subscription payment not reconciled |
 | Resend | Delivery failures and provider events | Verification/reset/invitation emails failing |
 | Backups | Provider backup status and age | Latest successful backup exceeds policy |
 | Engine nodes | Node health, restart rate and saturation | Node unhealthy or connection/resource limits approached |
@@ -118,7 +118,7 @@ The Engine must continue enforcing tenant isolation if the Control Plane is unav
 
 ### Payment/entitlement mismatch
 1. Do not manually grant a paid plan based on a browser redirect.
-2. Inspect the local billing transaction and the signed Paystack event.
+2. Inspect the local billing transaction and the signed Lemon Squeezy event.
 3. Verify the provider transaction reference, plan code, USD currency and exact expected amount.
 4. Retry reconciliation only through the verified provider transaction flow.
 5. Record the event and remediation in the audit trail.
@@ -136,8 +136,8 @@ Do not declare production ready until all are evidenced:
 - [ ] Public HTTPS frontend and Control Plane are deployed.
 - [ ] Production database is separate from local Compose and its connection is verified.
 - [ ] Migrations 0001–0015 are applied and schema state is checked.
-- [ ] Paystack USD plans and codes match $149 / $499 / $1,199 per month.
-- [ ] Real Paystack checkout → signed webhook → entitlement update succeeds.
+- [ ] Lemon Squeezy Test Mode variants match $149 / $499 / $1,199 per month.
+- [ ] Lemon Squeezy Test Mode checkout → signed webhook → entitlement update succeeds.
 - [ ] Microsoft Entra sign-in works against the real registered application.
 - [ ] Resend domain is verified and real email delivery succeeds.
 - [ ] Liveness/readiness probes and alerting are configured.

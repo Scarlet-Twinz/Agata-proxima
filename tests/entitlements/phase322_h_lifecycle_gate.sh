@@ -185,44 +185,45 @@ status_d=$(psql -v ON_ERROR_STOP=1 -d "${test_db}" -Atc "SELECT e.billing_status
 pass "payment-failure grace and non-renewing period end are reconciled correctly"
 
 # Event claiming: processed events are terminal, active claims are not stolen,
-# and stale processing claims can be retried after five minutes.
+# and stale processing claims can be retried after one minute.
 psql -v ON_ERROR_STOP=1 -d "${test_db}" <<'SQL'
 INSERT INTO billing_events(provider,provider_event_id,event_type,payload,status,attempt_count)
-VALUES ('paystack','charge.success:42','charge.success','{}'::jsonb,'processed',1),
-       ('paystack','invoice.payment_failed:43','invoice.payment_failed','{}'::jsonb,'processing',1),
-       ('paystack','subscription.enable:44','subscription.enable','{}'::jsonb,'processing',1);
+VALUES ('lemonsqueezy','subscription_payment_success:42','subscription_payment_success','{}'::jsonb,'processed',1),
+       ('lemonsqueezy','subscription_payment_failed:43','subscription_payment_failed','{}'::jsonb,'processing',1),
+       ('lemonsqueezy','subscription_updated:44','subscription_updated','{}'::jsonb,'processing',1);
 UPDATE billing_events SET processing_started_at=now()
- WHERE provider_event_id='invoice.payment_failed:43';
+ WHERE provider_event_id='subscription_payment_failed:43';
 UPDATE billing_events SET processing_started_at=now()-interval '6 minutes'
- WHERE provider_event_id='subscription.enable:44';
+ WHERE provider_event_id='subscription_updated:44';
 INSERT INTO billing_events(provider,provider_event_id,event_type,payload,status)
-VALUES ('paystack','subscription.enable:42','subscription.enable','{}'::jsonb,'processed');
+VALUES ('lemonsqueezy','subscription_updated:42','subscription_updated','{}'::jsonb,'processed');
 SQL
-processed_claim=$(psql -v ON_ERROR_STOP=1 -d "${test_db}" -Atqc "INSERT INTO billing_events(provider,provider_event_id,event_type,payload,status,processing_started_at,attempt_count) VALUES('paystack','charge.success:42','charge.success','{}'::jsonb,'processing',now(),1) ON CONFLICT(provider,provider_event_id) DO UPDATE SET status='processing',processing_started_at=now(),attempt_count=billing_events.attempt_count+1,payload=EXCLUDED.payload,event_type=EXCLUDED.event_type WHERE billing_events.status NOT IN ('processed','ignored') AND (billing_events.processing_started_at IS NULL OR billing_events.processing_started_at < now()-interval '5 minutes') RETURNING id")
-active_claim=$(psql -v ON_ERROR_STOP=1 -d "${test_db}" -Atqc "INSERT INTO billing_events(provider,provider_event_id,event_type,payload,status,processing_started_at,attempt_count) VALUES('paystack','invoice.payment_failed:43','invoice.payment_failed','{}'::jsonb,'processing',now(),1) ON CONFLICT(provider,provider_event_id) DO UPDATE SET status='processing',processing_started_at=now(),attempt_count=billing_events.attempt_count+1,payload=EXCLUDED.payload,event_type=EXCLUDED.event_type WHERE billing_events.status NOT IN ('processed','ignored') AND (billing_events.processing_started_at IS NULL OR billing_events.processing_started_at < now()-interval '5 minutes') RETURNING id")
-stale_claim=$(psql -v ON_ERROR_STOP=1 -d "${test_db}" -Atqc "INSERT INTO billing_events(provider,provider_event_id,event_type,payload,status,processing_started_at,attempt_count) VALUES('paystack','subscription.enable:44','subscription.enable','{}'::jsonb,'processing',now(),1) ON CONFLICT(provider,provider_event_id) DO UPDATE SET status='processing',processing_started_at=now(),attempt_count=billing_events.attempt_count+1,payload=EXCLUDED.payload,event_type=EXCLUDED.event_type WHERE billing_events.status NOT IN ('processed','ignored') AND (billing_events.processing_started_at IS NULL OR billing_events.processing_started_at < now()-interval '5 minutes') RETURNING id")
+processed_claim=$(psql -v ON_ERROR_STOP=1 -d "${test_db}" -Atqc "INSERT INTO billing_events(provider,provider_event_id,event_type,payload,status,processing_started_at,attempt_count) VALUES('lemonsqueezy','subscription_payment_success:42','subscription_payment_success','{}'::jsonb,'processing',now(),1) ON CONFLICT(provider,provider_event_id) DO UPDATE SET status='processing',processing_started_at=now(),attempt_count=billing_events.attempt_count+1,payload=EXCLUDED.payload,event_type=EXCLUDED.event_type WHERE billing_events.status NOT IN ('processed','ignored') AND (billing_events.processing_started_at IS NULL OR billing_events.processing_started_at < now()-interval '1 minute') RETURNING id")
+active_claim=$(psql -v ON_ERROR_STOP=1 -d "${test_db}" -Atqc "INSERT INTO billing_events(provider,provider_event_id,event_type,payload,status,processing_started_at,attempt_count) VALUES('lemonsqueezy','subscription_payment_failed:43','subscription_payment_failed','{}'::jsonb,'processing',now(),1) ON CONFLICT(provider,provider_event_id) DO UPDATE SET status='processing',processing_started_at=now(),attempt_count=billing_events.attempt_count+1,payload=EXCLUDED.payload,event_type=EXCLUDED.event_type WHERE billing_events.status NOT IN ('processed','ignored') AND (billing_events.processing_started_at IS NULL OR billing_events.processing_started_at < now()-interval '1 minute') RETURNING id")
+stale_claim=$(psql -v ON_ERROR_STOP=1 -d "${test_db}" -Atqc "INSERT INTO billing_events(provider,provider_event_id,event_type,payload,status,processing_started_at,attempt_count) VALUES('lemonsqueezy','subscription_updated:44','subscription_updated','{}'::jsonb,'processing',now(),1) ON CONFLICT(provider,provider_event_id) DO UPDATE SET status='processing',processing_started_at=now(),attempt_count=billing_events.attempt_count+1,payload=EXCLUDED.payload,event_type=EXCLUDED.event_type WHERE billing_events.status NOT IN ('processed','ignored') AND (billing_events.processing_started_at IS NULL OR billing_events.processing_started_at < now()-interval '1 minute') RETURNING id")
 [[ -z "$processed_claim" ]] || fail "processed webhook event was claimed again"
 [[ -z "$active_claim" ]] || fail "recent in-progress webhook event was claimed concurrently"
 [[ -n "$stale_claim" ]] || fail "stale webhook event was not eligible for retry"
-type_count=$(psql -v ON_ERROR_STOP=1 -d "${test_db}" -Atc "SELECT count(*) FROM billing_events WHERE provider='paystack' AND provider_event_id IN ('charge.success:42','subscription.enable:42')")
+type_count=$(psql -v ON_ERROR_STOP=1 -d "${test_db}" -Atc "SELECT count(*) FROM billing_events WHERE provider='lemonsqueezy' AND provider_event_id IN ('subscription_payment_success:42','subscription_updated:42')")
 [[ "$type_count" == "2" ]] || fail "different event types with the same provider object ID collided"
 pass "webhook idempotency, in-progress claims, and stale retry behavior are enforced"
 
-grep -Fq 'transaction_plan_mismatch' crates/proxima-control-plane/src/production.rs || fail "verified transaction plan mismatch is not rejected"
-grep -Fq 'transaction_amount_mismatch' crates/proxima-control-plane/src/production.rs || fail "verified transaction amount mismatch is not rejected"
-grep -Fq 'transaction_currency_mismatch' crates/proxima-control-plane/src/production.rs || fail "verified transaction currency mismatch is not rejected"
-grep -Fq 'webhook_plan_amount_or_currency_mismatch' crates/proxima-control-plane/src/production.rs || fail "webhook plan amount/currency mismatch is not rejected"
-grep -Fq 'webhook_plan_code_mismatch' crates/proxima-control-plane/src/production.rs || fail "webhook plan code mismatch is not rejected"
-grep -Fq 'expected_paystack_amount_usd' crates/proxima-control-plane/src/production.rs || fail "canonical USD plan amounts are not enforced"
-grep -Fq 'paystack_provider_plan_matches_catalog' crates/proxima-control-plane/src/production.rs || fail "Paystack provider plan is not checked before checkout"
-grep -Fq 'paystack_plan_configuration_mismatch' crates/proxima-control-plane/src/production.rs || fail "checkout does not fail closed on provider plan mismatch"
-grep -Fq 'paystack_success_payload_must_match_usd_amount_and_plan' crates/proxima-control-plane/src/production.rs || fail "USD amount/currency regression tests are missing"
-grep -Fq 'paystack_provider_plan_must_match_catalog_before_checkout' crates/proxima-control-plane/src/production.rs || fail "provider plan configuration regression tests are missing"
-grep -Fq 'configured_paystack_plan_codes_unique' crates/proxima-control-plane/src/production.rs || fail "missing or duplicate Paystack plan codes are not rejected"
-grep -Fq 'paystack_plan_codes_must_be_present_and_unique' crates/proxima-control-plane/src/production.rs || fail "plan-code uniqueness regression tests are missing"
+grep -Fq 'plan_code").as_deref()!=variant.as_deref()' crates/proxima-control-plane/src/production.rs || fail "subscription variant must match the local checkout plan"
+grep -Fq 'expected_lemonsqueezy_amount' crates/proxima-control-plane/src/production.rs || fail "configured subscription price must match the catalog"
+grep -Fq 'currency").and_then(Value::as_str)!=Some("USD")' crates/proxima-control-plane/src/production.rs || fail "the configured store must use USD"
+grep -Fq 'variant must match the configured test/live mode and exact monthly USD catalog price' crates/proxima-control-plane/src/production.rs || fail "checkout fails to enforce exact monthly USD pricing"
+grep -Fq 'checkout_reference' crates/proxima-control-plane/src/production.rs || fail "webhook must be correlated to a local checkout"
+grep -Fq 'expected_lemonsqueezy_amount' crates/proxima-control-plane/src/production.rs || fail "canonical USD plan amounts are not enforced"
+grep -Fq 'configured_lemonsqueezy_variants_unique' crates/proxima-control-plane/src/production.rs || fail "missing or duplicate Lemon Squeezy variants are not rejected"
+grep -Fq 'verify_lemonsqueezy_signature' crates/proxima-control-plane/src/production.rs || fail "signed Lemon Squeezy webhook validation is missing"
+grep -Fq 'lemonsqueezy_signature_round_trip_and_rejection' crates/proxima-control-plane/src/production.rs || fail "signature regression tests are missing"
+grep -Fq 'lemonsqueezy_catalog_amounts_are_exact_minor_units' crates/proxima-control-plane/src/production.rs || fail "USD catalog amount regression tests are missing"
+grep -Fq 'checkout_reference' crates/proxima-control-plane/src/production.rs || fail "subscription creation is not bound to a local checkout reference"
+grep -Fq 'x-signature' crates/proxima-control-plane/src/production.rs || fail "Lemon Squeezy webhook signature header is not validated"
+! grep -Fqi 'paystack' crates/proxima-control-plane/src/production.rs || fail "legacy billing provider remains in active control-plane code"
 grep -Fq 'unknown_local_transaction' crates/proxima-control-plane/src/production.rs || fail "verification does not require a server-stored transaction"
 grep -Fq 'billing_grace_until=COALESCE(billing_grace_until,now()+interval' crates/proxima-control-plane/src/production.rs || fail "payment failure does not establish a fixed grace window"
-grep -Fq 'mark_paystack_event_ignored' crates/proxima-control-plane/src/production.rs || fail "unknown webhook states are not handled safely"
+grep -Fq 'organization_not_resolved' crates/proxima-control-plane/src/production.rs || fail "unknown webhook organizations are not ignored safely"
 grep -Fq 'include_str!("' crates/proxima-control-plane/src/main.rs || fail "startup migration wiring missing"
 grep -Fq '0015_billing_lifecycle_downgrade.sql' crates/proxima-control-plane/src/main.rs || fail "lifecycle migration is not applied on startup"
 grep -Fq 'production::reconcile_billing_lifecycle' crates/proxima-control-plane/src/main.rs || fail "billing lifecycle reconciler is not scheduled"
