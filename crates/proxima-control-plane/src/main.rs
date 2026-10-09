@@ -230,9 +230,11 @@ async fn main() -> Result<()> {
     ))
     .execute(&db)
     .await?;
-    sqlx::raw_sql(include_str!("../migrations/0016_public_support_requests.sql"))
-        .execute(&db)
-        .await?;
+    sqlx::raw_sql(include_str!(
+        "../migrations/0016_public_support_requests.sql"
+    ))
+    .execute(&db)
+    .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
@@ -706,13 +708,12 @@ async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Respo
     // Security notifications are best-effort: a Resend outage must never block a valid sign-in.
     let recipient = email.clone();
     let display_name: String = row.get("display_name");
-    let organization_name = sqlx::query_scalar::<_, String>(
-        "SELECT name FROM organizations WHERE id=$1",
-    )
-    .bind(organization_id)
-    .fetch_one(&s.db)
-    .await
-    .unwrap_or_else(|_| "your workspace".to_string());
+    let organization_name =
+        sqlx::query_scalar::<_, String>("SELECT name FROM organizations WHERE id=$1")
+            .bind(organization_id)
+            .fetch_one(&s.db)
+            .await
+            .unwrap_or_else(|_| "your workspace".to_string());
     let login_time = chrono::Utc::now().to_rfc3339();
     tokio::spawn(async move {
         if let Err(e) = production::send_template_email_as(
@@ -2604,7 +2605,10 @@ async fn audit_events(State(s): State<AppState>, headers: HeaderMap) -> Response
 }
 
 fn valid_public_support_email(email: &str) -> bool {
-    if email.len() > 254 || email.chars().any(char::is_whitespace) || email.matches('@').count() != 1 {
+    if email.len() > 254
+        || email.chars().any(char::is_whitespace)
+        || email.matches('@').count() != 1
+    {
         return false;
     }
     let Some((local, domain)) = email.split_once('@') else {
@@ -2616,8 +2620,14 @@ fn valid_public_support_email(email: &str) -> bool {
 fn valid_public_support_topic(topic: &str) -> bool {
     matches!(
         topic,
-        "general" | "documentation" | "troubleshooting" | "security" |
-        "customer" | "customers" | "developers" | "partnerships"
+        "general"
+            | "documentation"
+            | "troubleshooting"
+            | "security"
+            | "customer"
+            | "customers"
+            | "developers"
+            | "partnerships"
     )
 }
 
@@ -2635,7 +2645,11 @@ async fn create_public_support_request(
     Json(input): Json<PublicSupportInput>,
 ) -> Response {
     // A hidden honeypot catches simple automated submissions without disclosing the filter.
-    if input.website.as_deref().is_some_and(|value| !value.trim().is_empty()) {
+    if input
+        .website
+        .as_deref()
+        .is_some_and(|value| !value.trim().is_empty())
+    {
         return (
             StatusCode::ACCEPTED,
             Json(json!({"ok":true,"message":"Your request has been received."})),
@@ -2702,7 +2716,11 @@ async fn create_public_support_request(
     }
 
     let request_id = Uuid::new_v4();
-    let stored_name = if name.is_empty() { "Customer" } else { name.as_str() };
+    let stored_name = if name.is_empty() {
+        "Customer"
+    } else {
+        name.as_str()
+    };
     if let Err(e) = sqlx::query(
         "INSERT INTO public_support_requests
           (id,requester_name,requester_email,subject,message,topic,status)
@@ -3312,7 +3330,10 @@ mod tests {
         assert!(!valid_public_support_email("customer@@example.com"));
         assert!(!valid_public_support_email("customer @example.com"));
         assert!(!valid_public_support_email("@example.com"));
-        assert!(!valid_public_support_email(&format!("{}@example.com", "a".repeat(250))));
+        assert!(!valid_public_support_email(&format!(
+            "{}@example.com",
+            "a".repeat(250)
+        )));
     }
 
     #[test]
