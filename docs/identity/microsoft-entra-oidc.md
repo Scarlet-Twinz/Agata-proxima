@@ -81,8 +81,8 @@ SSO must not blindly create a Proxima organization from an arbitrary email addre
 
 The production implementation should bind the authenticated Entra tenant ID to a Proxima organization/identity connection. The sequence is:
 
-1. Organization owner enables Entra SSO.
-2. Agata stores the expected Entra tenant identifier for that organization.
+1. An organization owner/admin opens Settings → Advanced configuration → Enterprise identity.
+2. The owner/admin saves the expected Entra tenant identifier for that organization; Agata stores it in the OIDC connection record.
 3. On the login page, the user enters the organization's slug; the SSO start endpoint resolves it to the organization with an enabled Entra connection. The UUID-based `organization_id` query remains available for controlled administrative/testing workflows.
 4. The user completes the Entra authorization-code flow.
 5. Agata validates the token issuer, audience, signature, expiry and tenant identity.
