@@ -274,6 +274,20 @@
             "description": "Client ID or database unavailable"
           }
         }
+      },
+      "get": {
+        "summary": "Get current organization's Microsoft Entra OIDC configuration",
+        "responses": {
+          "200": {
+            "description": "Configured state, tenant ID and JIT provisioning flag; no secret material is returned"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Owner/admin role or plan feature required"
+          }
+        }
       }
     },
     "/api/v1/auth/oidc/start": {
