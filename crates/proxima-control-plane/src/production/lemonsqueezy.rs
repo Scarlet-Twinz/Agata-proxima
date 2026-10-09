@@ -107,8 +107,8 @@ fn valid_signature(body:&str, signature:&str, secret:&str)->bool {
     let Ok(mut mac)=HmacSha256::new_from_slice(secret.as_bytes()) else{return false};
     mac.update(body.as_bytes());
     let expected=hex::encode(mac.finalize().into_bytes());
-    use subtle::ConstantTimeEq;
-    expected.as_bytes().ct_eq(signature.trim().as_bytes()).into()
+    let Ok(received) = hex::decode(signature.trim()) else { return false; };
+    mac.verify_slice(&received).is_ok()
 }
 
 pub(crate) async fn webhook(State(s):State<AppState>,headers:HeaderMap,body:String)->Response {
