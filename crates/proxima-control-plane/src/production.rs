@@ -1610,6 +1610,14 @@ pub(crate) async fn paystack_webhook(
             if let Err(e) = apply_entitlements(&s.db, org, plan).await {
                 return db_error(e);
             }
+            send_billing_notice(
+                &s.db,
+                org,
+                &key,
+                "Payment confirmed",
+                "Your subscription payment was confirmed and the organization's paid entitlements were updated.",
+            )
+            .await;
         }
         "invoice.payment_failed" => {
             if let Err(e) = sqlx::query(
@@ -1646,6 +1654,14 @@ pub(crate) async fn paystack_webhook(
                 .execute(&s.db)
                 .await;
             }
+            send_billing_notice(
+                &s.db,
+                org,
+                &key,
+                "Payment needs attention",
+                "A subscription renewal payment failed. Your organization has a fixed seven-day recovery period. Review the billing settings to restore normal service before the grace period expires.",
+            )
+            .await;
         }
         "subscription.disable" => {
             if let Err(e) = sqlx::query(
@@ -1669,6 +1685,14 @@ pub(crate) async fn paystack_webhook(
             {
                 return db_error(e);
             }
+            send_billing_notice(
+                &s.db,
+                org,
+                &key,
+                "Subscription canceled",
+                "The payment provider reported that your subscription was disabled. Review your billing settings to understand the current plan and available options.",
+            )
+            .await;
         }
         "subscription.not_renew" => {
             let end = data
@@ -1689,6 +1713,14 @@ pub(crate) async fn paystack_webhook(
             {
                 return db_error(e);
             }
+            send_billing_notice(
+                &s.db,
+                org,
+                &key,
+                "Subscription will not renew",
+                "Your subscription is marked not to renew at the end of the current billing period. Review billing settings if this was not intended.",
+            )
+            .await;
         }
         "subscription.expiring_cards" => {
             if let Err(e) = sqlx::query(
@@ -1701,6 +1733,14 @@ pub(crate) async fn paystack_webhook(
             {
                 return db_error(e);
             }
+            send_billing_notice(
+                &s.db,
+                org,
+                &key,
+                "Payment method may expire",
+                "The payment provider reports that a saved payment card may expire soon. Review your billing settings to avoid an interruption.",
+            )
+            .await;
         }
         "refund.pending" | "refund.processing" | "refund.processed" | "refund.failed" | "refund.needs-attention" => {
             let refund_reference = data
@@ -2286,7 +2326,10 @@ pub(crate) async fn send_template_email_as(
         anyhow::bail!("RESEND_API_KEY is not configured for the current deployment");
     }
     let from = sender_address(sender_role)?;
-    let response = Client::new()
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()?;
+    let response = client
         .post("https://api.resend.com/emails")
         .bearer_auth(key)
         .json(&json!({
@@ -2318,7 +2361,10 @@ pub(crate) async fn send_text_email(
         anyhow::bail!("RESEND_API_KEY is not configured for the current deployment");
     }
     let from = sender_address(sender_role)?;
-    let response = Client::new()
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()?;
+    let response = client
         .post("https://api.resend.com/emails")
         .bearer_auth(key)
         .json(&json!({
@@ -2335,6 +2381,69 @@ pub(crate) async fn send_text_email(
         anyhow::bail!("Resend returned {status}: {}", body.chars().take(500).collect::<String>());
     }
     Ok(())
+}
+
+fn escape_email_template_value(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+async fn send_billing_notice(
+    db: &sqlx::PgPool,
+    organization_id: Uuid,
+    event_reference: &str,
+    title: &str,
+    details: &str,
+) {
+    let recipient = match sqlx::query(
+        "SELECT u.email,u.display_name
+           FROM memberships m
+           JOIN users u ON u.id=m.user_id
+          WHERE m.organization_id=$1
+            AND m.role IN ('owner','admin')
+            AND u.status='active'
+          ORDER BY CASE m.role WHEN 'owner' THEN 0 ELSE 1 END, m.created_at
+          LIMIT 1",
+    )
+    .bind(organization_id)
+    .fetch_optional(db)
+    .await
+    {
+        Ok(Some(row)) => (row.get::<String, _>("email"), row.get::<String, _>("display_name")),
+        Ok(None) => {
+            tracing::warn!(%organization_id, "billing email skipped because no active organization owner/admin was found");
+            return;
+        }
+        Err(e) => {
+            tracing::error!(%organization_id, %e, "could not resolve billing email recipient");
+            return;
+        }
+    };
+
+    let base = env::var("AGATA_PUBLIC_BASE_URL")
+        .unwrap_or_else(|_| "https://agataproxima.com".to_string())
+        .trim_end_matches('/')
+        .to_string();
+    if let Err(e) = send_template_email_as(
+        &recipient.0,
+        "0500c270-e1ab-474f-b3d4-288831b73049",
+        json!({
+            "DISPLAY_NAME": escape_email_template_value(&recipient.1),
+            "EVENT_TITLE": escape_email_template_value(title),
+            "DETAILS": escape_email_template_value(details),
+            "ACTION_URL": escape_email_template_value(&format!("{base}/app/billing")),
+            "REQUEST_ID": escape_email_template_value(event_reference)
+        }),
+        "billing",
+    )
+    .await
+    {
+        tracing::error!(%organization_id, %e, "billing notification email delivery failed");
+    }
 }
 
 fn verify_paystack_signature(payload:&str,signature:&str,secret:&str)->bool{let mut mac=match HmacSha512::new_from_slice(secret.as_bytes()){Ok(v)=>v,Err(_)=>return false};mac.update(payload.as_bytes());let expected=hex::encode(mac.finalize().into_bytes());constant_time_equal(signature.trim(),&expected)}
