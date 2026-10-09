@@ -48,7 +48,7 @@ Configure these service variables in the provider's secret/configuration UI:
 - `PROXIMA_CONTROL_DATABASE_URL` — managed PostgreSQL connection string.
 - `PROXIMA_COOKIE_SECURE=true`.
 - `AGATA_PUBLIC_BASE_URL=https://agataproxima.com`.
-- `RESEND_API_KEY` and `RESEND_FROM_EMAIL` after the sender domain is verified.
+- `RESEND_API_KEY`, the five purpose-specific `RESEND_FROM_*_EMAIL` identities, and `AGATA_SUPPORT_INBOX_EMAIL` after the sending domain is verified. Keep the API key server-side; the support inbox must be an actually monitored mailbox.
 - `PAYSTACK_SECRET_KEY` and the three `AGATA_PAYSTACK_*_PLAN_CODE` values after Paystack activation.
 - `PROXIMA_OIDC_CLIENT_ID` and `PROXIMA_OIDC_CLIENT_SECRET` after Microsoft Entra registration. The current implementation derives and validates the issuer from the organization's configured Entra tenant ID; there is no separate `PROXIMA_OIDC_ISSUER` runtime variable.
 
