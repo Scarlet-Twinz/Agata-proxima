@@ -4,14 +4,14 @@ Status: repository implementation complete for workstreams A–H. All eight Phas
 
 ## Pricing source of truth
 
-The launch pricing approved in the existing billing proposal is:
+The restored launch pricing is recorded as follows. Before live activation, verify that each configured Paystack plan code resolves to a plan whose amount matches this schedule:
 
 | Plan | Monthly price | Checkout |
 |---|---:|---|
 | Free | $0 | No payment provider subscription |
-| Starter | $79 | Paystack recurring plan |
-| Growth | $249 | Paystack recurring plan |
-| Scale | $799 | Paystack recurring plan |
+| Starter | $149 | Paystack recurring plan |
+| Growth | $499 | Paystack recurring plan |
+| Scale | $1,199 | Paystack recurring plan |
 | Enterprise | Custom | Authorized, contract-managed provisioning |
 
 Pricing is separate from entitlement limits. A plan code received from a browser is never sufficient evidence to grant a plan.
