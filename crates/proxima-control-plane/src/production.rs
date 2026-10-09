@@ -701,7 +701,7 @@ pub(crate) async fn entitlements(State(s): State<AppState>, headers: HeaderMap) 
     }
 }
 
-async fn apply_entitlements(db: &sqlx::PgPool, organization_id: Uuid, plan: &str) -> Result<(), sqlx::Error> {
+pub(crate) async fn apply_entitlements(db: &sqlx::PgPool, organization_id: Uuid, plan: &str) -> Result<(), sqlx::Error> {
     let (nodes, tenants, environments, retention, advanced, fleet, priority, entra, private_deployment) = plan_limits(plan);
     let integrations = plan_integration_limit(plan);
     let verifications = plan_verification_limit(plan);
@@ -2254,47 +2254,29 @@ pub(crate) async fn purge_expired_audit_events(db: &sqlx::PgPool) -> Result<i64,
 
 pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
     let db_ok = sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
-    let paystack = env::var("PAYSTACK_SECRET_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false);
-    let plans = configured_paystack_plan_codes_unique();
+    let lemon_key = env::var("LEMONSQUEEZY_API_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false);
+    let store = env::var("LEMONSQUEEZY_STORE_ID").map(|v| !v.trim().is_empty()).unwrap_or(false);
+    let variants = ["LEMONSQUEEZY_STARTER_VARIANT_ID","LEMONSQUEEZY_GROWTH_VARIANT_ID","LEMONSQUEEZY_SCALE_VARIANT_ID"]
+        .iter().filter_map(|key| env::var(key).ok()).filter(|v| !v.trim().is_empty()).collect::<Vec<_>>();
+    let plans = variants.len() == 3 && variants[0] != variants[1] && variants[0] != variants[2] && variants[1] != variants[2];
+    let webhook = env::var("LEMONSQUEEZY_WEBHOOK_SECRET").map(|v| !v.trim().is_empty()).unwrap_or(false);
     let resend = env::var("RESEND_API_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false);
-    let fallback_from = env::var("RESEND_FROM_EMAIL").map(|v| !v.trim().is_empty()).unwrap_or(false);
-    let sender_identities = [
-        "RESEND_FROM_NO_REPLY_EMAIL",
-        "RESEND_FROM_SUPPORT_EMAIL",
-        "RESEND_FROM_SECURITY_EMAIL",
-        "RESEND_FROM_BILLING_EMAIL",
-        "RESEND_FROM_NOTIFICATIONS_EMAIL",
-    ].iter().all(|key| env::var(key).map(|v| !v.trim().is_empty()).unwrap_or(false));
-    let templates_configured = [
-        "RESEND_TEMPLATE_VERIFY_EMAIL_ID",
-        "RESEND_TEMPLATE_PASSWORD_RESET_ID",
-        "RESEND_TEMPLATE_ORGANIZATION_INVITATION_ID",
-        "RESEND_TEMPLATE_NEW_LOGIN_ALERT_ID",
-        "RESEND_TEMPLATE_SUPPORT_REQUEST_RECEIVED_ID",
-        "RESEND_TEMPLATE_BILLING_UPDATE_ID",
-    ].iter().all(|key| env::var(key).map(|v| !v.trim().is_empty()).unwrap_or(false));
+    let sender_identities = ["RESEND_FROM_NO_REPLY_EMAIL","RESEND_FROM_SUPPORT_EMAIL","RESEND_FROM_SECURITY_EMAIL","RESEND_FROM_BILLING_EMAIL","RESEND_FROM_NOTIFICATIONS_EMAIL"]
+        .iter().all(|key| env::var(key).map(|v| !v.trim().is_empty()).unwrap_or(false));
+    let templates_configured = ["RESEND_TEMPLATE_VERIFY_EMAIL_ID","RESEND_TEMPLATE_PASSWORD_RESET_ID","RESEND_TEMPLATE_ORGANIZATION_INVITATION_ID","RESEND_TEMPLATE_NEW_LOGIN_ALERT_ID","RESEND_TEMPLATE_SUPPORT_REQUEST_RECEIVED_ID","RESEND_TEMPLATE_BILLING_UPDATE_ID"]
+        .iter().all(|key| env::var(key).map(|v| !v.trim().is_empty()).unwrap_or(false));
     let support_inbox = env::var("AGATA_SUPPORT_INBOX_EMAIL").map(|v| valid_public_support_email(v.trim())).unwrap_or(false);
     let base = env::var("AGATA_PUBLIC_BASE_URL").map(|v| !v.trim().is_empty()).unwrap_or(false);
     let oidc = env::var("PROXIMA_OIDC_CLIENT_ID").map(|v| !v.trim().is_empty()).unwrap_or(false)
         && env::var("PROXIMA_OIDC_CLIENT_SECRET").map(|v| !v.trim().is_empty()).unwrap_or(false);
     let email_ready = resend && sender_identities && templates_configured && support_inbox;
-    let all = db_ok && paystack && plans && email_ready && base && oidc;
-    Json(json!({
-        "status": if all { "ready" } else { "needs_configuration" },
-        "checks": {
-            "database": db_ok,
-            "paystack_secret": paystack,
-            "paystack_plans": plans,
-            "resend_api_key": resend,
-            "resend_fallback_sender": fallback_from,
-            "resend_sender_identities": sender_identities,
-            "resend_templates": templates_configured,
-            "support_inbox": support_inbox,
-            "public_base_url": base,
-            "oidc": oidc,
-            "engine_remains_authoritative": true
-        }
-    })).into_response()
+    let all = db_ok && lemon_key && store && plans && webhook && email_ready && base && oidc;
+    Json(json!({"status":if all {"ready"} else {"needs_configuration"},"checks":{
+        "database":db_ok,"lemonsqueezy_api_key":lemon_key,"lemonsqueezy_store":store,
+        "lemonsqueezy_variants":plans,"lemonsqueezy_webhook_secret":webhook,
+        "resend_api_key":resend,"resend_sender_identities":sender_identities,"resend_templates":templates_configured,
+        "support_inbox":support_inbox,"public_base_url":base,"oidc":oidc,"engine_remains_authoritative":true
+    }})).into_response()
 }
 
 fn configured_template_id(template_key: &str) -> anyhow::Result<String> {
