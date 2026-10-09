@@ -38,7 +38,7 @@ Stop the local database with `docker compose stop control-postgres`. Do not run 
 
 ## 3. Create an account and workspace
 
-Open `/signup`. Signup accepts `email`, `password` (at least 12 characters), optional `name`, and optional `organization`. The first user becomes the organization owner. Email delivery requires valid Resend configuration.
+Open `/signup`. Signup accepts `email`, `password` (at least 12 characters), optional `name`, and optional `organization`. The first user becomes the organization owner. Signup requires working email verification through Resend; configure a valid API key and verified sender before testing signup. If verification email delivery fails, workspace creation may be rolled back rather than silently bypassing verification.
 
 The API session is held in the HTTP-only `proxima_session` cookie. For state-changing API calls, retrieve the current CSRF token from `GET /api/v1/session` and send it as `x-csrf-token`. Do not expose session cookies, CSRF tokens, passwords or provider secrets in source control, screenshots, issues or logs.
 
