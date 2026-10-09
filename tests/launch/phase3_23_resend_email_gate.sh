@@ -36,8 +36,7 @@ grep -q 'RESEND_TEMPLATE_ORGANIZATION_INVITATION_ID' "$env_example"
 grep -q 'RESEND_TEMPLATE_NEW_LOGIN_ALERT_ID' "$env_example"
 grep -q 'RESEND_TEMPLATE_SUPPORT_REQUEST_RECEIVED_ID' "$env_example"
 grep -q 'RESEND_TEMPLATE_BILLING_UPDATE_ID' "$env_example"
-! grep -q '091dbdb2-21ed-444f-a209-6f44e55d192d' "$main" "$production"
-! grep -q '0500c270-e1ab-474f-b3d4-288831b73049' "$main" "$production"
+! grep -Eq '091dbdb2-21ed-444f-a209-6f44e55d192d|d3c046c7-fef6-42f0-931e-d92b6f96cfdf|0757a210-a372-4a5a-8fca-e642c2fed3da|2740537f-79d4-44a1-bbf8-f7913c0be3a0|3ca9fee8-01cd-4d6c-ae75-e0ff7b54034c|0500c270-e1ab-474f-b3d4-288831b73049' "$main" "$production"
 python -m json.tool control-plane/openapi.json >/dev/null
 
 echo "PASS: Phase 3.23 transactional email contract"
