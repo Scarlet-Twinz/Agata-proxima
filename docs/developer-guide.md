@@ -54,22 +54,20 @@ The request shapes and end-to-end workflow are documented in [usage.md](usage.md
 
 API keys are organization-scoped. Store newly issued credentials securely and revoke keys that are no longer needed. Webhook receivers should use HTTPS, verify the signing contract, tolerate retries and avoid treating a delivery as an exactly-once transport.
 
-## Billing — Paystack
+## Billing — Lemon Squeezy
 
-Paystack is the active billing provider. Server-authoritative endpoints are:
+Lemon Squeezy is the active billing provider for hosted checkout and subscription lifecycle events. The Control Plane routes are:
 
-- `GET /api/v1/billing`
+- `GET /api/v1/billing` and `GET /api/v1/billing/status`
 - `GET /api/v1/billing/plans`
-- `GET /api/v1/billing/entitlements`
 - `POST /api/v1/billing/checkout`
 - `POST /api/v1/billing/portal`
 - `GET /api/v1/billing/verify?reference=...`
-- `GET /api/v1/billing/paystack/callback`
-- `POST /api/v1/webhooks/paystack`
+- `POST /api/v1/webhooks/lemonsqueezy`
 
-The public/server catalogue is Free $0, Starter $149/month, Growth $499/month, Scale $1,199/month and Enterprise custom. Checkout is configured for USD. Paystack's plan codes must resolve to USD monthly plans at exactly the expected amounts. The server verifies the local transaction reference, organization, plan code, currency and expected amount before applying paid entitlements; signed webhook events must also match the configured plan and price.
+The self-service catalogue is Free $0, Starter $149/month, Growth $499/month, Scale $1,199/month and Enterprise custom. Paid variants must be distinct, monthly subscriptions, and match the configured USD prices. Checkout validates the provider variant before creating a hosted checkout. Entitlements are applied only from a signed, accepted subscription event; the verification endpoint reports local state and does not independently grant access.
 
-Production variables are `PAYSTACK_SECRET_KEY` and the three `AGATA_PAYSTACK_*_PLAN_CODE` variables. Keep secrets in the deployment secret store. Live activation requires a real Paystack payment, signed webhook and entitlement reconciliation test.
+Server-side configuration: `LEMONSQUEEZY_API_KEY`, `LEMONSQUEEZY_STORE_ID`, `LEMONSQUEEZY_STARTER_VARIANT_ID`, `LEMONSQUEEZY_GROWTH_VARIANT_ID`, `LEMONSQUEEZY_SCALE_VARIANT_ID`, and `LEMONSQUEEZY_WEBHOOK_SECRET`. Keep secrets in the environment/secret store. Test mode and live mode must use matching API keys, store/variant IDs, and webhook configuration. See [the Phase 3.21 billing runbook](production/phase3-21-lemonsqueezy-billing.md) for acceptance boundaries.
 
 ## Microsoft Entra SSO
 
