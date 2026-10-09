@@ -211,6 +211,9 @@ pub(crate) async fn portal(State(s):State<AppState>,headers:HeaderMap)->Response
 fn subscription_state(event_type:&str,status:&str,cancelled:bool,period_end:Option<chrono::DateTime<chrono::Utc>>,now:chrono::DateTime<chrono::Utc>)->(&'static str,&'static str,bool) {
     let is_cancelled=cancelled || event_type=="subscription_cancelled" || status=="cancelled";
     if event_type=="subscription_expired" || status=="expired" { return ("canceled","canceled",false); }
+    if matches!(event_type,"subscription_payment_success"|"subscription_payment_recovered") {
+        return ("active","active",false);
+    }
     if event_type=="subscription_payment_refunded" {
         return ("past_due","attention",false);
     }
@@ -396,6 +399,10 @@ mod tests {
         assert_eq!(subscription_state("subscription_cancelled","cancelled",true,future,now),("active","non-renewing",true));
         assert_eq!(subscription_state("subscription_expired","expired",true,future,now),("canceled","canceled",false));
         assert_eq!(subscription_state("subscription_payment_failed","past_due",false,None,now),("past_due","attention",false));
+        assert_eq!(subscription_state("subscription_payment_success","paid",false,None,now),("active","active",false));
+        assert_eq!(subscription_state("subscription_payment_recovered","paid",false,None,now),("active","active",false));
+        assert_eq!(subscription_state("subscription_payment_refunded","refunded",false,None,now),("past_due","attention",false));
+        assert_eq!(subscription_state("subscription_updated","unknown",false,None,now),("unpaid","attention",false));
     }
     #[test] fn plan_mapping_rejects_duplicate_variants() {
         std::env::set_var("LEMONSQUEEZY_STARTER_VARIANT_ID","101");
