@@ -91,7 +91,7 @@ The production implementation should bind the authenticated Entra tenant ID to a
 8. A normal Agata session is created.
 9. The event is written to the append-only audit log.
 
-This prevents an authenticated Microsoft account from selecting an arbitrary Agata organization.
+This prevents an authenticated Microsoft account from selecting an arbitrary Agata organization. The backend also checks the organization's Entra entitlement when starting the flow and again at callback time, so a downgrade cannot use an already-started login to bypass the plan gate.
 
 ## Production credential handling
 
