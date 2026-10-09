@@ -5,8 +5,6 @@ ALTER TABLE billing_accounts
   ADD COLUMN IF NOT EXISTS lemonsqueezy_variant_id text,
   ADD COLUMN IF NOT EXISTS lemonsqueezy_customer_portal_url text;
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_billing_accounts_lemonsqueezy_customer
-  ON billing_accounts(lemonsqueezy_customer_id) WHERE lemonsqueezy_customer_id IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_billing_accounts_lemonsqueezy_subscription
   ON billing_accounts(lemonsqueezy_subscription_id) WHERE lemonsqueezy_subscription_id IS NOT NULL;
 
