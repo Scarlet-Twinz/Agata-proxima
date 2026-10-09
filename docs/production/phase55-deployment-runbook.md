@@ -38,7 +38,7 @@ Use a deployment secret store, not a committed `.env` file. Do not paste secret 
 
 Set `AGATA_PUBLIC_BASE_URL` to the browser-facing app origin. In production, route `/api/v1/*`, the OIDC callback and health/readiness endpoints from that origin to the Rust Control Plane (for example, through a same-origin reverse proxy). The OIDC callback sets a host-only session cookie and redirects to `/app`; a separate frontend/backend origin without an explicit cookie/proxy design will break sign-in.
 
-Before enabling checkout, verify that the configured Lemon Squeezy plans are Agata Proxima plans with the canonical monthly prices:
+Before enabling checkout, verify that the configured Lemon Squeezy variants are Agata Proxima monthly subscriptions with the canonical prices:
 
 - Starter — $149/month
 - Growth — $499/month
@@ -65,7 +65,7 @@ Do not mark SSO live until the multitenant Entra application, exact production H
 - HTTPS terminates correctly and secure cookies are enabled.
 - Control Plane health/readiness endpoints are reachable.
 - Database migrations are applied in order and schema state is verified without destructive resets.
-- Lemon Squeezy plan codes and amounts match the canonical catalogue.
+- Lemon Squeezy variant IDs, store currency, monthly intervals and amounts match the canonical catalogue.
 - The Lemon Squeezy webhook endpoint is reachable and signature verification passes.
 - Resend sending domain is verified and a real delivery test succeeds.
 - Entra redirect URI exactly matches the production callback before SSO is enabled.
