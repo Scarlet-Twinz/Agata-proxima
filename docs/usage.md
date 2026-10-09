@@ -2,7 +2,7 @@
 
 This is the practical operating guide for the repository-backed product. It covers local development, organizations and tenants, verification, team access, billing, SSO, and the boundary between local development and production.
 
-> **Honest status:** Phase 3.22-A–H repository gates have passed. Live Paystack, Microsoft Entra SSO, production email, hosted database operations and runtime external-SaaS acceptance remain external acceptance tasks.
+> **Honest status:** Phase 3.22-A–H repository gates have passed. Live Lemon Squeezy, Microsoft Entra SSO, production email, hosted database operations and runtime external-SaaS acceptance remain external acceptance tasks.
 
 ## 1. Know which database you are using
 
@@ -127,13 +127,13 @@ Billing endpoints:
 - `POST /api/v1/billing/portal` — obtains a subscription-management URL after subscription exists.
 - `GET /api/v1/billing/verify?reference=...` — verifies a stored transaction as an organization admin.
 
-Paystack is the active billing provider. The server uses `PAYSTACK_SECRET_KEY` and `AGATA_PAYSTACK_STARTER_PLAN_CODE`, `AGATA_PAYSTACK_GROWTH_PLAN_CODE`, `AGATA_PAYSTACK_SCALE_PLAN_CODE`. Checkout is configured for USD. The three configured plan codes must be present and unique. Before redirecting a customer, the server retrieves each configured plan from Paystack and requires the exact plan code, USD currency, monthly interval and amount in cents ($149 = 14900, $499 = 49900, $1,199 = 119900). After payment, transaction verification and signed webhook processing check the exact amount, currency and plan before granting paid entitlements.
+Lemon Squeezy is the active billing provider. The server uses `LEMON_SQUEEZY_API_KEY` and `LEMON_SQUEEZY_STARTER_VARIANT_ID`, `LEMON_SQUEEZY_GROWTH_VARIANT_ID`, `LEMON_SQUEEZY_SCALE_VARIANT_ID`. Checkout is configured for USD. The three configured plan codes must be present and unique. Before redirecting a customer, the server retrieves each configured plan from Lemon Squeezy and requires the exact plan code, USD currency, monthly interval and amount in cents ($149 = 14900, $499 = 49900, $1,199 = 119900). After payment, transaction verification and signed webhook processing check the exact amount, currency and plan before granting paid entitlements.
 
-For a Nigeria-based business, Paystack's current guidance says USD payouts require a verified Zenith Bank USD domiciliary account; international card acceptance can be enabled separately, with local-currency settlement as the default. Do not enable live checkout until Paystack has approved USD payments, the required payout account is verified, all three plan codes match the catalogue, and a real webhook/payment round trip passes. Never commit a secret or paste it into chat. See Paystack's [international payments and USD settlement guide](https://support.paystack.com/en/articles/2130690).
+For a Nigeria-based business, Lemon Squeezy's current guidance says USD payouts require a verified Zenith Bank USD domiciliary account; international card acceptance can be enabled separately, with local-currency settlement as the default. Do not enable live checkout until Lemon Squeezy has approved USD payments, the required payout account is verified, all three plan codes match the catalogue, and a real webhook/payment round trip passes. Never commit a secret or paste it into chat. See Lemon Squeezy's [international payments and USD settlement guide](https://support.lemonsqueezy.com/en/articles/2130690).
 
 ## 9. Where to get SSO
 
-Agata Proxima's SSO provider is **Microsoft Entra ID (OpenID Connect/OIDC)**. It is not a key you get from Paystack. Create an app registration in the Microsoft Entra admin center: **Entra ID → App registrations → New registration**.
+Agata Proxima's SSO provider is **Microsoft Entra ID (OpenID Connect/OIDC)**. It is not a key you get from Lemon Squeezy. Create an app registration in the Microsoft Entra admin center: **Entra ID → App registrations → New registration**.
 
 For the SaaS app, select **Accounts in any organizational directory (multitenant)** and add a **Web** redirect URI matching the deployed Control Plane exactly:
 
@@ -159,7 +159,7 @@ The Entra feature is available on Growth and above; the backend checks entitleme
 - **Control Plane 503:** check service logs, database connectivity and `/api/v1/production/readiness`.
 - **CSRF failure:** refresh `GET /api/v1/session` and send the current `x-csrf-token`.
 - **Email not delivered:** check Resend credentials, verified sending domain and sender address.
-- **Checkout unavailable:** check the Paystack secret and all plan-code variables; verify the provider plans are USD monthly plans at the canonical prices.
+- **Checkout unavailable:** check the Lemon Squeezy secret and all plan-code variables; verify the provider plans are USD monthly plans at the canonical prices.
 - **SSO failure:** verify client ID/secret, tenant ID, public URL and exact redirect URI. Never log authorization codes, client secrets or ID tokens.
 - **Quota reached:** inspect `GET /api/v1/billing/entitlements`; remove unused resources or upgrade. Downgrades preserve existing resources rather than deleting them.
 
