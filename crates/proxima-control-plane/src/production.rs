@@ -1046,7 +1046,7 @@ fn oidc_redirect_uri() -> String {
 
 pub(crate) async fn billing_status(State(s): State<AppState>, headers: HeaderMap) -> Response {
     let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};
-    match sqlx::query("SELECT lemonsqueezy_customer_id,lemonsqueezy_subscription_id,lemonsqueezy_variant_id,plan_key,status,current_period_end,cancel_at_period_end FROM billing_accounts WHERE organization_id=$1").bind(ctx.organization_id).fetch_optional(&s.db).await{
+    match sqlx::query("SELECT lemonsqueezy_customer_id,lemonsqueezy_subscription_id,lemonsqueezy_variant_id,plan_key,status,current_period_end,cancel_at_period_end FROM billing_accounts WHERE organization_id=$1 AND provider='lemonsqueezy'").bind(ctx.organization_id).fetch_optional(&s.db).await{
         Ok(Some(row))=>Json(json!({"configured":true,"provider":"lemonsqueezy","customer_id":row.get::<Option<String>,_>("lemonsqueezy_customer_id"),"subscription_id":row.get::<Option<String>,_>("lemonsqueezy_subscription_id"),"variant_id":row.get::<Option<String>,_>("lemonsqueezy_variant_id"),"plan":row.get::<String,_>("plan_key"),"status":row.get::<String,_>("status"),"current_period_end":row.get::<Option<chrono::DateTime<chrono::Utc>>,_>("current_period_end"),"cancel_at_period_end":row.get::<bool,_>("cancel_at_period_end")})).into_response(),
         Ok(None)=>Json(json!({"configured":false,"provider":"lemonsqueezy","plan":"free","status":"active"})).into_response(),Err(e)=>db_error(e)
     }
@@ -1141,8 +1141,12 @@ pub(crate) async fn lemonsqueezy_webhook(State(s):State<AppState>,headers:Header
   if let Err(e)=sqlx::query("INSERT INTO billing_accounts(organization_id,provider,lemonsqueezy_customer_id,lemonsqueezy_subscription_id,lemonsqueezy_variant_id,lemonsqueezy_customer_portal_url,plan_key,status,current_period_end,cancel_at_period_end,updated_at) VALUES($1,'lemonsqueezy',$2,$3,$4,$5,$6,$7,$8,$9,now()) ON CONFLICT(organization_id) DO UPDATE SET provider='lemonsqueezy',lemonsqueezy_customer_id=COALESCE(EXCLUDED.lemonsqueezy_customer_id,billing_accounts.lemonsqueezy_customer_id),lemonsqueezy_subscription_id=COALESCE(EXCLUDED.lemonsqueezy_subscription_id,billing_accounts.lemonsqueezy_subscription_id),lemonsqueezy_variant_id=EXCLUDED.lemonsqueezy_variant_id,lemonsqueezy_customer_portal_url=COALESCE(EXCLUDED.lemonsqueezy_customer_portal_url,billing_accounts.lemonsqueezy_customer_portal_url),plan_key=EXCLUDED.plan_key,status=EXCLUDED.status,current_period_end=COALESCE(EXCLUDED.current_period_end,billing_accounts.current_period_end),cancel_at_period_end=EXCLUDED.cancel_at_period_end,updated_at=now()")
    .bind(org).bind(cust).bind(sub).bind(variant).bind(a.pointer("/urls/customer_portal").and_then(Value::as_str)).bind(plan).bind(mapped).bind(period).bind(cancelled).execute(&s.db).await{return db_error(e);}
  }
- let txstatus=if matches!(name,"subscription_payment_success"|"order_created"){"success"}else if name=="subscription_payment_failed"{"failed"}else{"updated"};
- let _=sqlx::query("UPDATE billing_transactions SET status=$1,payload=$2,updated_at=now() WHERE provider='lemonsqueezy' AND organization_id=$3 AND plan_code=COALESCE($4,plan_code)").bind(txstatus).bind(&event).bind(org).bind(variant.as_deref()).execute(&s.db).await;
+ if matches!(name,"subscription_payment_success"|"subscription_payment_recovered"|"subscription_payment_failed") {
+  let txstatus=if name=="subscription_payment_failed"{"failed"}else{"success"};
+  if let Some(ref variant_id)=variant {
+   let _=sqlx::query("UPDATE billing_transactions SET status=$1,payload=$2,updated_at=now() WHERE provider='lemonsqueezy' AND organization_id=$3 AND plan_code=$4").bind(txstatus).bind(&event).bind(org).bind(variant_id).execute(&s.db).await;
+  }
+ }
  if let Err(e)=sqlx::query("UPDATE billing_events SET status='processed',processed_at=now(),processing_started_at=NULL WHERE provider='lemonsqueezy' AND provider_event_id=$1").bind(&event_key).execute(&s.db).await{return db_error(e);}
  let notice=match name{
   "subscription_created"=>Some(("Subscription activated","Your Agata Proxima subscription is active.")),
