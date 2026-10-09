@@ -1,6 +1,6 @@
 # Agata Proxima — Phases 41–50
 
-This release moved the platform from a private-beta foundation into production-oriented identity, commercial, integration and operational contracts. The provider-specific billing notes in this historical record are superseded by the Lemon Squeezy implementation and pricing contract in Phase 3.22.
+This release moved the platform from a private-beta foundation into production-oriented identity, commercial, integration and operational contracts. The provider-specific billing notes in this historical record are superseded by the Lemon Squeezy implementation and pricing contract in Phase 3.21.
 
 ## Phase gates
 
@@ -25,16 +25,16 @@ Production configuration uses `RESEND_API_KEY`, `RESEND_FROM_EMAIL` and `AGATA_P
 
 ## Current billing provider: Lemon Squeezy
 
-Lemon Squeezy is the active provider for Agata Proxima. The current provider-specific integration and pricing contract is documented in Phase 3.22.
+Lemon Squeezy is the active provider for Agata Proxima. The current provider-specific integration and pricing contract is documented in Phase 3.21.
 
-The Control Plane uses environment-configured Agata-specific Lemon Squeezy plan codes:
+The Control Plane uses environment-configured Agata-specific Lemon Squeezy variant IDs:
 
 - `LEMON_SQUEEZY_API_KEY`
 - `LEMON_SQUEEZY_STARTER_VARIANT_ID`
 - `LEMON_SQUEEZY_GROWTH_VARIANT_ID`
 - `LEMON_SQUEEZY_SCALE_VARIANT_ID`
 
-The canonical monthly launch prices are Starter **$149**, Growth **$499**, and Scale **$1,199**. Free requires no provider subscription; Enterprise is contract-managed. The actual Lemon Squeezy account plan amounts and codes must be checked before live checkout is enabled. Do not reuse unrelated products or accept a browser-supplied plan as proof of payment.
+The canonical monthly launch prices are Starter **$149**, Growth **$499**, and Scale **$1,199**. Free requires no provider subscription; Enterprise is contract-managed. The configured store must be USD; each variant must belong to that store, be published, be monthly, match the exact price, and match the configured Test/Live mode before checkout is enabled. Do not reuse unrelated products or accept a browser-supplied plan as proof of payment.
 
 ## Identity
 
