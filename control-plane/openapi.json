@@ -3,7 +3,7 @@
   "info": {
     "title": "Agata Proxima Control Plane API",
     "version": "0.2.0",
-    "description": "Authenticated management plane for organizations, tenants, policies, fleet, deployments, verification, audit, support and Paystack billing. The Proxima Engine remains the independent data-plane enforcement authority."
+    "description": "Authenticated management plane for organizations, tenants, policies, fleet, deployments, verification, audit, support and Lemon Squeezy billing. The Proxima Engine remains the independent data-plane enforcement authority."
   },
   "servers": [
     {
@@ -403,7 +403,7 @@
     },
     "/api/v1/billing/checkout": {
       "post": {
-        "summary": "Initialize Paystack USD checkout for a paid Agata plan",
+        "summary": "Initialize Lemon Squeezy USD checkout for a paid Agata plan",
         "requestBody": {
           "required": true,
           "content": {
@@ -430,7 +430,7 @@
         },
         "responses": {
           "200": {
-            "description": "Paystack checkout URL and local transaction reference"
+            "description": "Lemon Squeezy checkout URL and local transaction reference"
           },
           "400": {
             "description": "Invalid plan"
@@ -442,17 +442,17 @@
             "description": "Plan is not permitted"
           },
           "503": {
-            "description": "Paystack is not configured or unavailable"
+            "description": "Lemon Squeezy is not configured or unavailable"
           }
         }
       }
     },
     "/api/v1/billing/portal": {
       "post": {
-        "summary": "Get Paystack subscription management URL",
+        "summary": "Get Lemon Squeezy subscription management URL",
         "responses": {
           "200": {
-            "description": "Paystack portal URL"
+            "description": "Lemon Squeezy portal URL"
           },
           "400": {
             "description": "No subscription exists"
@@ -461,14 +461,14 @@
             "description": "Authentication required"
           },
           "503": {
-            "description": "Paystack is not configured or unavailable"
+            "description": "Lemon Squeezy is not configured or unavailable"
           }
         }
       }
     },
     "/api/v1/billing/verify": {
       "get": {
-        "summary": "Verify a locally stored Paystack transaction",
+        "summary": "Verify a locally stored Lemon Squeezy transaction",
         "parameters": [
           {
             "name": "reference",
@@ -499,92 +499,6 @@
           },
           "404": {
             "description": "Unknown local transaction"
-          }
-        }
-      }
-    },
-    "/api/v1/billing/paystack/callback": {
-      "get": {
-        "summary": "Paystack hosted checkout callback",
-        "security": [],
-        "parameters": [
-          {
-            "name": "reference",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "trxref",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Redirects to the app with verified or verification-pending billing state"
-          },
-          "404": {
-            "description": "Unknown local transaction"
-          }
-        }
-      }
-    },
-    "/api/v1/webhooks/paystack": {
-      "post": {
-        "summary": "Receive signed Paystack webhook events",
-        "security": [],
-        "parameters": [
-          {
-            "name": "x-paystack-signature",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "event",
-                  "data"
-                ],
-                "properties": {
-                  "event": {
-                    "type": "string"
-                  },
-                  "data": {
-                    "type": "object",
-                    "additionalProperties": true
-                  }
-                },
-                "additionalProperties": true
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Event accepted, processed, ignored safely or identified as duplicate"
-          },
-          "400": {
-            "description": "Malformed event or missing signature"
-          },
-          "401": {
-            "description": "Invalid Paystack signature"
-          },
-          "503": {
-            "description": "Paystack secret or database unavailable"
           }
         }
       }
@@ -851,6 +765,60 @@
           },
           "500": {
             "description": "Persistence failed."
+          }
+        }
+      }
+    },
+    "/api/v1/webhooks/lemonsqueezy": {
+      "post": {
+        "summary": "Receive signed Lemon Squeezy webhook events",
+        "security": [],
+        "parameters": [
+          {
+            "name": "x-lemonsqueezy-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "event",
+                  "data"
+                ],
+                "properties": {
+                  "event": {
+                    "type": "string"
+                  },
+                  "data": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Event accepted, processed, ignored safely or identified as duplicate"
+          },
+          "400": {
+            "description": "Malformed event or missing signature"
+          },
+          "401": {
+            "description": "Invalid Lemon Squeezy signature"
+          },
+          "503": {
+            "description": "Lemon Squeezy secret or database unavailable"
           }
         }
       }
