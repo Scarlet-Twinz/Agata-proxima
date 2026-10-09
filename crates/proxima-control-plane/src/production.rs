@@ -1121,11 +1121,15 @@ pub(crate) async fn lemonsqueezy_webhook(State(s):State<AppState>,headers:Header
  let claimed=match sqlx::query("INSERT INTO billing_events(provider,provider_event_id,event_type,payload,status,processing_started_at,attempt_count) VALUES('lemonsqueezy',$1,$2,$3,'processing',now(),1) ON CONFLICT(provider,provider_event_id) DO UPDATE SET status='processing',processing_started_at=now(),attempt_count=billing_events.attempt_count+1,payload=EXCLUDED.payload,event_type=EXCLUDED.event_type WHERE billing_events.status NOT IN ('processed','ignored') AND (billing_events.processing_started_at IS NULL OR billing_events.processing_started_at<now()-interval '1 minute') RETURNING id").bind(&event_key).bind(name).bind(&event).fetch_optional(&s.db).await{Ok(v)=>v.is_some(),Err(e)=>return db_error(e)};
  if !claimed{return Json(json!({"received":true,"duplicate":true})).into_response();}
  let org=event.pointer("/meta/custom_data/organization_id").and_then(Value::as_str).and_then(|v|Uuid::parse_str(v).ok());
- let sub=if data.get("type").and_then(Value::as_str)==Some("subscriptions"){Some(id.to_owned())}else{None};
+ let sub=if data.get("type").and_then(Value::as_str)==Some("subscriptions"){Some(id.to_owned())}else{a.get("subscription_id").and_then(Value::as_i64).map(|v|v.to_string())};
  let cust=a.get("customer_id").and_then(Value::as_i64).map(|v|v.to_string());
  let resolved=if let Some(v)=org{Some(v)}else if let Some(ref v)=sub{match sqlx::query("SELECT organization_id FROM billing_accounts WHERE lemonsqueezy_subscription_id=$1").bind(v).fetch_optional(&s.db).await{Ok(r)=>r.map(|x|x.get::<Uuid,_>("organization_id")),Err(e)=>return db_error(e)}}else if let Some(ref v)=cust{match sqlx::query("SELECT organization_id FROM billing_accounts WHERE lemonsqueezy_customer_id=$1").bind(v).fetch_optional(&s.db).await{Ok(r)=>r.map(|x|x.get::<Uuid,_>("organization_id")),Err(e)=>return db_error(e)}}else{None};
  let org=match resolved{Some(v)=>v,None=>{let _=sqlx::query("UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='lemonsqueezy' AND provider_event_id=$1").bind(&event_key).execute(&s.db).await;return Json(json!({"received":true,"ignored":"organization_not_resolved"})).into_response();}};
- let variant=a.get("variant_id").and_then(Value::as_i64).map(|v|v.to_string());
+ let variant=if let Some(value)=a.get("variant_id").and_then(Value::as_i64){Some(value.to_string())}else if let Some(ref subscription_id)=sub{
+  match sqlx::query("SELECT lemonsqueezy_variant_id FROM billing_accounts WHERE organization_id=$1 AND lemonsqueezy_subscription_id=$2").bind(org).bind(subscription_id).fetch_optional(&s.db).await{
+   Ok(Some(row))=>row.get::<Option<String>,_>("lemonsqueezy_variant_id"),Ok(None)=>None,Err(e)=>return db_error(e)
+  }
+ }else{None};
  if name=="subscription_created" {
   let checkout_reference=event.pointer("/meta/custom_data/checkout_reference").and_then(Value::as_str);
   let checkout_reference=match checkout_reference{Some(v)=>v,None=>return StatusCode::FORBIDDEN.into_response()};
