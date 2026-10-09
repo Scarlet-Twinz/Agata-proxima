@@ -1,0 +1,60 @@
+name: Production smoke monitoring
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Public HTTPS origin for Agata Proxima (leave blank to use AGATA_PUBLIC_BASE_URL repository secret)"
+        required: false
+        type: string
+  schedule:
+    - cron: "*/15 * * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: Liveness and launch readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      AGATA_PUBLIC_BASE_URL: ${{ inputs.base_url || secrets.AGATA_PUBLIC_BASE_URL }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Skip scheduled probe until a public URL is configured
+        if: ${{ github.event_name == 'schedule' && env.AGATA_PUBLIC_BASE_URL == '' }}
+        run: echo "Skipped production smoke probe because AGATA_PUBLIC_BASE_URL is not configured yet."
+
+      - name: Require a target for a manual run
+        if: ${{ github.event_name == 'workflow_dispatch' && env.AGATA_PUBLIC_BASE_URL == '' }}
+        shell: bash
+        run: |
+          echo "::error::Enter base_url or configure the AGATA_PUBLIC_BASE_URL repository secret."
+          exit 1
+
+      - name: Validate public HTTPS origin
+        if: ${{ env.AGATA_PUBLIC_BASE_URL != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$AGATA_PUBLIC_BASE_URL" in
+            https://*) ;;
+            *) echo "::error::Production smoke checks require a public HTTPS URL."; exit 1 ;;
+          esac
+          base_url="${AGATA_PUBLIC_BASE_URL%/}"
+          echo "AGATA_PUBLIC_BASE_URL=$base_url" >> "$GITHUB_ENV"
+
+      - name: Check Control Plane liveness and database connectivity
+        if: ${{ env.AGATA_PUBLIC_BASE_URL != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 10 "$AGATA_PUBLIC_BASE_URL/api/v1/health"
+
+      - name: Check full production configuration readiness
+        if: ${{ github.event_name == 'workflow_dispatch' && env.AGATA_PUBLIC_BASE_URL != '' }}
+        shell: bash
+        run: bash scripts/ops/check-control-plane.sh
