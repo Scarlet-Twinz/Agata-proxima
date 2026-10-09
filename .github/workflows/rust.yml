@@ -97,6 +97,10 @@ jobs:
         run: |
           bash -n tests/control-plane/api_smoke.sh
           bash -n scripts/proxima-platform.sh
+          bash -n scripts/ops/check-control-plane.sh scripts/ops/backup-control-plane.sh
+          test -f docs/usage.md
+          test -f docs/production/operational-readiness-runbook.md
+          ! grep -qi 'Stripe webhooks' docs/developer-guide.md
 
       - name: Phase 3.22-A canonical entitlement contract
         run: bash tests/entitlements/phase322_a_catalog_gate.sh
