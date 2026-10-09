@@ -23,9 +23,10 @@ The fundamental Proxima Engine security boundary is available on every plan. Com
 | Audit retention | 7 days | 30 days | 180 days | 365 days | Contract-defined |
 | Basic verification | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Policy management | — | ✓ | ✓ | ✓ | ✓ |
-| Fleet/deployment controls | — | ✓ | ✓ | ✓ | Contract-defined |
+| Fleet/deployment controls | — | ✓ | ✓ | ✓ | ✓ |
 | Advanced verification | — | — | ✓ | ✓ | Contract-defined |
 | Priority support | — | — | ✓ | ✓ | Contract-defined |
+| Support level | Community | Standard | Priority | Priority+ | Contract-defined |
 | Microsoft Entra OIDC | — | — | ✓ | ✓ | Contract-defined |
 | Private deployment | — | — | — | ✓ | Contract-defined |
 | Custom SLA/compliance/deployment terms | — | — | — | — | Contract-defined |
