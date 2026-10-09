@@ -106,7 +106,8 @@ async fn validate_store_and_variant(client: &Client, key: &str, store_id: &str, 
     let price = prices.get("data").and_then(Value::as_array).and_then(|v|v.first())
         .ok_or("The configured Lemon Squeezy variant has no price.")?;
     let price_attrs = price.get("attributes").ok_or("Lemon Squeezy price attributes are missing.")?;
-    if price_attrs.get("category").and_then(Value::as_str) != Some("subscription")
+    if price_attrs.get("currency").and_then(Value::as_str) != Some("USD")
+        || price_attrs.get("category").and_then(Value::as_str) != Some("subscription")
         || price_attrs.get("scheme").and_then(Value::as_str) != Some("standard")
         || price_attrs.get("unit_price").and_then(Value::as_i64) != expected_monthly_price(plan)
         || price_attrs.get("renewal_interval_unit").and_then(Value::as_str) != Some("month")
@@ -376,8 +377,8 @@ pub(crate) async fn webhook(State(s):State<AppState>,headers:HeaderMap,body:Stri
             else if let Err(e)=sqlx::query("UPDATE organization_entitlements SET billing_status=$1,billing_grace_until=CASE WHEN $1='past_due' THEN now()+interval '7 days' ELSE NULL END,updated_at=now() WHERE organization_id=$2").bind(effective_status).bind(org).execute(&s.db).await{return db_error(e);}
             if event_type=="subscription_created" {
                 let order_id=attrs.get("order_id").and_then(Value::as_i64).map(|v|v.to_string());
-                if let Err(e)=sqlx::query("UPDATE billing_transactions SET lemonsqueezy_subscription_id=$1,lemonsqueezy_order_id=$2,lemonsqueezy_variant_id=$3,payload=$4,updated_at=now() WHERE provider='lemonsqueezy' AND organization_id=$5 AND plan_key=$6 AND metadata->>'checkout_nonce'=$7 AND status='initialized'")
-                    .bind(&subscription_id).bind(order_id).bind(&variant_id).bind(&event).bind(org).bind(plan).bind(custom.get("checkout_nonce").and_then(Value::as_str).unwrap_or("")).execute(&s.db).await{return db_error(e);}
+                if let Err(e)=sqlx::query("UPDATE billing_transactions SET lemonsqueezy_subscription_id=$1,lemonsqueezy_order_id=$2,lemonsqueezy_variant_id=$3,payload=$4,status=CASE WHEN $8='active' THEN 'success' ELSE status END,updated_at=now() WHERE provider='lemonsqueezy' AND organization_id=$5 AND plan_key=$6 AND metadata->>'checkout_nonce'=$7 AND status='initialized'")
+                    .bind(&subscription_id).bind(order_id).bind(&variant_id).bind(&event).bind(org).bind(plan).bind(custom.get("checkout_nonce").and_then(Value::as_str).unwrap_or("")).bind(effective_status).execute(&s.db).await{return db_error(e);}
             }
             if invoice_event {
                 let next_status=match event_type {"subscription_payment_success"|"subscription_payment_recovered"=>"success","subscription_payment_failed"=>"failed","subscription_payment_refunded"=>"refunded",_=>"initialized"};
