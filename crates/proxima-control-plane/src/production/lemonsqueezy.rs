@@ -106,7 +106,6 @@ pub(crate) async fn portal(State(s):State<AppState>,headers:HeaderMap)->Response
 fn valid_signature(body:&str, signature:&str, secret:&str)->bool {
     let Ok(mut mac)=HmacSha256::new_from_slice(secret.as_bytes()) else{return false};
     mac.update(body.as_bytes());
-    let expected=hex::encode(mac.finalize().into_bytes());
     let Ok(received) = hex::decode(signature.trim()) else { return false; };
     mac.verify_slice(&received).is_ok()
 }
