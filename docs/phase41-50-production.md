@@ -30,6 +30,9 @@ Lemon Squeezy is the active provider for Agata Proxima. The current provider-spe
 The Control Plane uses environment-configured Agata-specific Lemon Squeezy variant IDs:
 
 - `LEMON_SQUEEZY_API_KEY`
+- `LEMON_SQUEEZY_STORE_ID`
+- `LEMON_SQUEEZY_WEBHOOK_SECRET`
+- `LEMON_SQUEEZY_TEST_MODE=true` for initial acceptance
 - `LEMON_SQUEEZY_STARTER_VARIANT_ID`
 - `LEMON_SQUEEZY_GROWTH_VARIANT_ID`
 - `LEMON_SQUEEZY_SCALE_VARIANT_ID`
