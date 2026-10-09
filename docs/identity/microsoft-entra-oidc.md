@@ -53,13 +53,15 @@ Use the authorization-code flow. Do not enable the legacy implicit flow.
 
 ## OIDC configuration
 
-The existing control-plane environment contract reserves:
+The runtime configuration uses the app registration's client ID and secret plus the public Control Plane origin:
 
 ```env
-PROXIMA_OIDC_ISSUER=
 PROXIMA_OIDC_CLIENT_ID=
 PROXIMA_OIDC_CLIENT_SECRET=
+AGATA_PUBLIC_BASE_URL=https://<public-control-plane-host>
 ```
+
+The expected issuer is derived from the organization's configured Entra tenant ID and validated against the signed ID token; there is no separate `PROXIMA_OIDC_ISSUER` runtime setting in the current implementation.
 
 For the multitenant Microsoft Entra deployment, the authority is based on the Microsoft identity platform's `organizations` authority. The application must validate the tenant-specific issuer returned during sign-in rather than assuming every customer has the same issuer.
 

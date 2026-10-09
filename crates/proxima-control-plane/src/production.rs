@@ -96,6 +96,54 @@ fn paystack_plan_code(plan: &str) -> Option<String> {
     env::var(key).ok().filter(|v|!v.trim().is_empty())
 }
 
+fn paystack_plan_codes_unique(starter: Option<&str>, growth: Option<&str>, scale: Option<&str>) -> bool {
+    match (starter, growth, scale) {
+        (Some(starter), Some(growth), Some(scale)) =>
+            !starter.trim().is_empty()
+                && !growth.trim().is_empty()
+                && !scale.trim().is_empty()
+                && starter != growth
+                && starter != scale
+                && growth != scale,
+        _ => false,
+    }
+}
+
+fn configured_paystack_plan_codes_unique() -> bool {
+    let starter = paystack_plan_code("starter");
+    let growth = paystack_plan_code("growth");
+    let scale = paystack_plan_code("scale");
+    paystack_plan_codes_unique(starter.as_deref(), growth.as_deref(), scale.as_deref())
+}
+
+fn expected_paystack_amount_usd(plan: &str) -> Option<i64> {
+    match plan {
+        "starter" => Some(14_900),
+        "growth" => Some(49_900),
+        "scale" => Some(119_900),
+        _ => None,
+    }
+}
+
+fn paystack_provider_plan_matches_catalog(data: &Value, plan: &str, expected_code: &str) -> bool {
+    data.get("plan_code").and_then(Value::as_str) == Some(expected_code)
+        && data.get("amount").and_then(Value::as_i64) == expected_paystack_amount_usd(plan)
+        && data.get("currency").and_then(Value::as_str) == Some("USD")
+        && data.get("interval").and_then(Value::as_str) == Some("monthly")
+}
+
+fn paystack_payload_matches_plan_amount_currency(data: &Value, plan: &str) -> bool {
+    let amount = data.get("amount")
+        .or_else(|| data.pointer("/plan/amount"))
+        .or_else(|| data.pointer("/subscription/plan/amount"))
+        .and_then(Value::as_i64);
+    let currency = data.get("currency")
+        .or_else(|| data.pointer("/plan/currency"))
+        .or_else(|| data.pointer("/subscription/plan/currency"))
+        .and_then(Value::as_str);
+    amount == expected_paystack_amount_usd(plan) && currency == Some("USD")
+}
+
 fn plan_limits(plan: &str) -> (i32, i32, i32, i32, bool, bool, bool, bool, bool) {
     match plan {
         "starter" => (2, 25, 2, 30, false, true, false, false, false),
@@ -590,7 +638,7 @@ pub(crate) async fn plans() -> Response {
         let api_keys = plan_api_key_limit(key);
         let api_requests = plan_api_requests_per_minute(key);
         let support = plan_support_level(key);
-        json!({"key":key,"name":name,"monthly_usd":monthly_usd,"description":description,"provider":"paystack","plan_code":plan_code,"checkout_available":key!=&"free"&&key!=&"enterprise"&&paystack_plan_code(key).is_some(),"limits":{"nodes":nodes,"tenants":tenants,"environments":environments,"integrations":integrations,"verifications_per_month":verifications,"team_seats":team_seats,"api_keys":api_keys,"api_requests_per_minute":api_requests,"audit_retention_days":retention},"support_level":support,"features":{"advanced_verification":advanced,"fleet_controls":fleet,"priority_support":priority,"entra_oidc":entra,"private_deployment":private_deployment,"policy_management":key!=&"free"}})
+        json!({"key":key,"name":name,"monthly_usd":monthly_usd,"description":description,"provider":"paystack","plan_code":plan_code,"checkout_available":key!=&"free"&&key!=&"enterprise"&&paystack_plan_code(key).is_some()&&configured_paystack_plan_codes_unique(),"limits":{"nodes":nodes,"tenants":tenants,"environments":environments,"integrations":integrations,"verifications_per_month":verifications,"team_seats":team_seats,"api_keys":api_keys,"api_requests_per_minute":api_requests,"audit_retention_days":retention},"support_level":support,"features":{"advanced_verification":advanced,"fleet_controls":fleet,"priority_support":priority,"entra_oidc":entra,"private_deployment":private_deployment,"policy_management":key!=&"free"}})
     }).collect::<Vec<_>>();
     Json(json!({"currency":"usd","billing_interval":"month","provider":"paystack","plans":plans})).into_response()
 }
@@ -998,11 +1046,43 @@ pub(crate) async fn billing_status(State(s): State<AppState>, headers: HeaderMap
 pub(crate) async fn checkout(State(s):State<AppState>,headers:HeaderMap,Json(input):Json<CheckoutInput>)->Response{
     let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};if let Err(c)=require_admin(&ctx,&headers){return c.into_response();}
     let secret=match env::var("PAYSTACK_SECRET_KEY"){Ok(v) if !v.trim().is_empty()=>v,_=>return service_unavailable("Paystack secret is not configured.")};
+    if !configured_paystack_plan_codes_unique() {
+        return service_unavailable("Agata Proxima Paystack plan codes must all be configured and unique before checkout.");
+    }
     let plan_code=match input.price_id.as_deref().and_then(paystack_plan_code_for_input){Some(v)=>v,None=>return bad("Select an Agata Proxima plan before checkout.")};
     let plan=match plan_for_code(Some(&plan_code)){Some(v)=>v,None=>return (StatusCode::FORBIDDEN,Json(json!({"ok":false,"error":"invalid_agata_plan"}))).into_response()};
     if plan == "free" || plan == "enterprise" {
         return bad("Free plans do not use checkout; Enterprise access requires explicit contracted provisioning.");
     }
+
+    // Check the provider-side plan before redirecting a customer to checkout.
+    // A plan code can be misconfigured in the Paystack dashboard; never let that
+    // silently charge a different currency, amount, or interval.
+    let plan_response = match Client::new()
+        .get(format!("https://api.paystack.co/plan/{plan_code}"))
+        .bearer_auth(&secret)
+        .send()
+        .await {
+            Ok(response) => response,
+            Err(error) => return external_error(error),
+        };
+    if !plan_response.status().is_success() {
+        return paystack_error(plan_response).await;
+    }
+    let plan_body: Value = match plan_response.json().await {
+        Ok(value) => value,
+        Err(error) => return external_error(error),
+    };
+    let provider_plan = plan_body.get("data").cloned().unwrap_or(Value::Null);
+    if plan_body.get("status").and_then(Value::as_bool) != Some(true)
+        || !paystack_provider_plan_matches_catalog(&provider_plan, plan, &plan_code) {
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({
+            "ok": false,
+            "error": "paystack_plan_configuration_mismatch",
+            "message": "The configured Paystack plan must match the Agata Proxima plan's exact USD amount and monthly interval. Checkout is disabled until the provider plan is corrected."
+        }))).into_response();
+    }
+
     let email=match sqlx::query("SELECT email FROM users WHERE id=$1").bind(ctx.user_id).fetch_one(&s.db).await{Ok(r)=>r.get::<String,_>("email"),Err(e)=>return db_error(e)};
     let base=env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_|"http://127.0.0.1:8080".into()).trim_end_matches('/').to_string();
     let reference=format!("agata-{}-{}",ctx.organization_id.simple(),Uuid::new_v4().simple());
@@ -1032,9 +1112,15 @@ pub(crate) async fn paystack_callback(
             Err(e) => return db_error(e),
         };
     let _ = verify_paystack_transaction(&s.db, organization_id, &reference).await;
+    let verified = match sqlx::query("SELECT status FROM billing_transactions WHERE provider='paystack' AND reference=$1 AND organization_id=$2")
+        .bind(&reference).bind(organization_id).fetch_optional(&s.db).await {
+        Ok(Some(row)) => row.get::<String,_>("status") == "success",
+        _ => false,
+    };
+    let billing_state = if verified { "complete" } else { "verification-pending" };
     let base = env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:8080".into()).trim_end_matches('/').to_string();
     Html(format!(
-        "<html><head><meta http-equiv=\"refresh\" content=\"0;url={base}/app?billing=complete\"></head><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\">Payment verification complete. Returning to Agata Proxima…</body></html>"
+        "<html><head><meta http-equiv=\"refresh\" content=\"0;url={base}/app?billing={billing_state}\"></head><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\">Returning to Agata Proxima. Check billing status before assuming payment was accepted.</body></html>"
     )).into_response()
 }
 
@@ -1103,14 +1189,20 @@ async fn verify_paystack_transaction(db: &sqlx::PgPool, org: Uuid, reference: &s
         .or_else(|| data.pointer("/subscription/plan/plan_code").and_then(Value::as_str))
         .or_else(|| data.pointer("/subscription/plan_code").and_then(Value::as_str))
         .or_else(|| data.get("plan_code").and_then(Value::as_str));
-    if let (Some(expected), Some(returned)) = (expected_plan_code.as_deref(), returned_plan_code) {
-        if expected != returned {
-            return (StatusCode::FORBIDDEN, Json(json!({"ok":false,"error":"transaction_plan_mismatch"}))).into_response();
-        }
+    if expected_plan_code.as_deref().is_none() || returned_plan_code != expected_plan_code.as_deref() {
+        return (StatusCode::FORBIDDEN, Json(json!({"ok":false,"error":"transaction_plan_mismatch"}))).into_response();
     }
 
     let amount = data.get("amount").and_then(Value::as_i64);
-    let currency = data.get("currency").and_then(Value::as_str).unwrap_or("USD");
+    let currency = data.get("currency").and_then(Value::as_str).unwrap_or_default();
+    if status == "success" {
+        if currency != "USD" {
+            return (StatusCode::FORBIDDEN, Json(json!({"ok":false,"error":"transaction_currency_mismatch","expected_currency":"USD","received_currency":currency}))).into_response();
+        }
+        if amount != expected_paystack_amount_usd(&plan) {
+            return (StatusCode::FORBIDDEN, Json(json!({"ok":false,"error":"transaction_amount_mismatch","expected_amount_subunits":expected_paystack_amount_usd(&plan),"received_amount_subunits":amount}))).into_response();
+        }
+    }
     let payload = data.clone();
     let end = data
         .get("next_payment_date")
@@ -1402,6 +1494,16 @@ pub(crate) async fn paystack_webhook(
                 Some("scale") => "scale",
                 _ => return mark_paystack_event_ignored(&s.db, &key, "unknown_or_non_self_service_plan").await,
             };
+
+            // Never grant a paid entitlement based only on a successful event name.
+            // The provider payload must match the configured plan's exact USD amount and currency.
+            if !paystack_payload_matches_plan_amount_currency(&data, plan) {
+                return mark_paystack_event_ignored(&s.db, &key, "webhook_plan_amount_or_currency_mismatch").await;
+            }
+            let configured_plan_code = paystack_plan_code(plan);
+            if configured_plan_code.as_deref().is_none() || payload_plan_code != configured_plan_code.as_deref() {
+                return mark_paystack_event_ignored(&s.db, &key, "webhook_plan_code_mismatch").await;
+            }
 
             if let Some(reference) = reference {
                 if event_type == "charge.success" {
@@ -2056,7 +2158,7 @@ pub(crate) async fn purge_expired_audit_events(db: &sqlx::PgPool) -> Result<i64,
 pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
     let db_ok=sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
     let paystack=env::var("PAYSTACK_SECRET_KEY").map(|v|!v.trim().is_empty()).unwrap_or(false);
-    let plans=["AGATA_PAYSTACK_STARTER_PLAN_CODE","AGATA_PAYSTACK_GROWTH_PLAN_CODE","AGATA_PAYSTACK_SCALE_PLAN_CODE"].iter().all(|k|env::var(k).map(|v|!v.trim().is_empty()).unwrap_or(false));
+    let plans=configured_paystack_plan_codes_unique();
     let resend=env::var("RESEND_API_KEY").map(|v|!v.is_empty()).unwrap_or(false);let from=env::var("RESEND_FROM_EMAIL").map(|v|!v.is_empty()).unwrap_or(false);let base=env::var("AGATA_PUBLIC_BASE_URL").map(|v|!v.is_empty()).unwrap_or(false);let oidc=env::var("PROXIMA_OIDC_CLIENT_ID").map(|v|!v.is_empty()).unwrap_or(false)&&env::var("PROXIMA_OIDC_CLIENT_SECRET").map(|v|!v.is_empty()).unwrap_or(false);let all=db_ok&&paystack&&plans&&resend&&from&&base&&oidc;
     Json(json!({"status":if all{"ready"}else{"needs_configuration"},"checks":{"database":db_ok,"paystack_secret":paystack,"paystack_plans":plans,"resend_api_key":resend,"resend_from":from,"public_base_url":base,"oidc":oidc,"engine_remains_authoritative":true}})).into_response()
 }
@@ -2173,5 +2275,48 @@ mod tests {
     fn paystack_signature_round_trip(){let payload=r#"{"event":"charge.success","data":{"reference":"ref_test"}}"#;let secret="sk_test";let mut mac=HmacSha512::new_from_slice(secret.as_bytes()).unwrap();mac.update(payload.as_bytes());let signature=hex::encode(mac.finalize().into_bytes());assert!(verify_paystack_signature(payload,&signature,secret));}
     #[test]
     fn invalid_paystack_signature_is_rejected(){assert!(!verify_paystack_signature("payload","invalid","sk_test"));}
+
+    #[test]
+    fn paystack_plan_codes_must_be_present_and_unique() {
+        assert!(super::paystack_plan_codes_unique(Some("PLN_starter"), Some("PLN_growth"), Some("PLN_scale")));
+        assert!(!super::paystack_plan_codes_unique(Some("PLN_same"), Some("PLN_same"), Some("PLN_scale")));
+        assert!(!super::paystack_plan_codes_unique(Some("PLN_starter"), None, Some("PLN_scale")));
+        assert!(!super::paystack_plan_codes_unique(Some(""), Some("PLN_growth"), Some("PLN_scale")));
+    }
+
+    #[test]
+    fn canonical_paystack_usd_amounts_are_exact_minor_units() {
+        assert_eq!(super::expected_paystack_amount_usd("starter"), Some(14_900));
+        assert_eq!(super::expected_paystack_amount_usd("growth"), Some(49_900));
+        assert_eq!(super::expected_paystack_amount_usd("scale"), Some(119_900));
+        assert_eq!(super::expected_paystack_amount_usd("free"), None);
+        assert_eq!(super::expected_paystack_amount_usd("enterprise"), None);
+    }
+
+    #[test]
+    fn paystack_success_payload_must_match_usd_amount_and_plan() {
+        let starter = serde_json::json!({"amount":14900,"currency":"USD","plan":{"amount":14900,"currency":"USD"}});
+        let wrong_amount = serde_json::json!({"amount":7900,"currency":"USD"});
+        let wrong_currency = serde_json::json!({"amount":14900,"currency":"NGN"});
+        let nested_plan = serde_json::json!({"plan":{"amount":49900,"currency":"USD"}});
+        assert!(super::paystack_payload_matches_plan_amount_currency(&starter, "starter"));
+        assert!(!super::paystack_payload_matches_plan_amount_currency(&wrong_amount, "starter"));
+        assert!(!super::paystack_payload_matches_plan_amount_currency(&wrong_currency, "starter"));
+        assert!(super::paystack_payload_matches_plan_amount_currency(&nested_plan, "growth"));
+        assert!(!super::paystack_payload_matches_plan_amount_currency(&starter, "growth"));
+    }
+
+    #[test]
+    fn paystack_provider_plan_must_match_catalog_before_checkout() {
+        let starter = serde_json::json!({"plan_code":"PLN_starter","amount":14900,"currency":"USD","interval":"monthly"});
+        let wrong_amount = serde_json::json!({"plan_code":"PLN_starter","amount":7900,"currency":"USD","interval":"monthly"});
+        let wrong_currency = serde_json::json!({"plan_code":"PLN_starter","amount":14900,"currency":"NGN","interval":"monthly"});
+        let wrong_interval = serde_json::json!({"plan_code":"PLN_starter","amount":14900,"currency":"USD","interval":"annually"});
+        assert!(super::paystack_provider_plan_matches_catalog(&starter, "starter", "PLN_starter"));
+        assert!(!super::paystack_provider_plan_matches_catalog(&wrong_amount, "starter", "PLN_starter"));
+        assert!(!super::paystack_provider_plan_matches_catalog(&wrong_currency, "starter", "PLN_starter"));
+        assert!(!super::paystack_provider_plan_matches_catalog(&wrong_interval, "starter", "PLN_starter"));
+        assert!(!super::paystack_provider_plan_matches_catalog(&starter, "growth", "PLN_starter"));
+    }
 
 }

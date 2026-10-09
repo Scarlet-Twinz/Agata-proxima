@@ -89,7 +89,8 @@ jobs:
           grep -q "AGATA_PAYSTACK_SCALE_PLAN_CODE" .env.example
           grep -q "PAYSTACK_SECRET_KEY" .env.example
           grep -q "RESEND_API_KEY" .env.example
-          grep -q "PROXIMA_OIDC_ISSUER" .env.example
+          grep -q "PROXIMA_OIDC_CLIENT_ID" .env.example
+          grep -q "PROXIMA_OIDC_CLIENT_SECRET" .env.example
           grep -q "^RESEND_FROM_EMAIL=$" .env.example
           ! grep -q "STRIPE_" .env.example
 
@@ -97,6 +98,10 @@ jobs:
         run: |
           bash -n tests/control-plane/api_smoke.sh
           bash -n scripts/proxima-platform.sh
+          bash -n scripts/ops/check-control-plane.sh scripts/ops/backup-control-plane.sh
+          test -f docs/usage.md
+          test -f docs/production/operational-readiness-runbook.md
+          ! grep -qi 'Stripe webhooks' docs/developer-guide.md
 
       - name: Phase 3.22-A canonical entitlement contract
         run: bash tests/entitlements/phase322_a_catalog_gate.sh
