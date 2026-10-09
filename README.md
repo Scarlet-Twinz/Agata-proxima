@@ -38,13 +38,25 @@ Security guarantees will be documented against an explicit threat model. Proxima
 
 ## Status
 
-Early infrastructure development.
+The repository now includes the Proxima Engine, a durable Control Plane, a public React frontend, the Phase 3.22-A–H entitlement enforcement workstreams, Paystack billing integration, Microsoft Entra OIDC groundwork, operational runbooks and acceptance gates. Repository CI has passed for the canonical entitlement gates. Live provider activation and production operational acceptance remain separate launch gates.
 
 The current engine establishes a verified tenant context, maps it to a PostgreSQL role, brokers the PostgreSQL authentication/startup exchange, and then enters the normal query stream only after PostgreSQL reports a ready session.
 
 The repository includes a real PostgreSQL integration test, independent RLS verification, malformed-frame property tests, connection safety limits, and an adversarial `Proxima Verify` harness. Client-side PostgreSQL TLS is now terminated at Proxima with Rustls when configured, and the upstream database leg can require independent CA + hostname verification. The repository also contains the Proxima operator dashboard, deeper adversarial verification, and a documented Cloud control-plane boundary.
 
 The 25–40 platform layer adds an authenticated, durable control plane with organization membership, tenant inventory, versioned policies, node enrollment, deployment intent, verification evidence, append-only audit events, support requests, OpenAPI documentation, a public product homepage, sign-up/sign-in and a full command center. The control plane is intentionally non-authoritative: an already-running Proxima Engine continues to enforce tenant isolation when the control plane is unavailable.
+
+## Documentation
+
+- [Practical usage guide](docs/usage.md) — local setup, resources, verification, billing, team access and SSO.
+- [Developer/API guide](docs/developer-guide.md) — authenticated API routes and integration contracts.
+- [Customer integration guide](docs/customer-integration.md) — connecting an existing SaaS application to Proxima.
+- [Security verification](docs/verification.md) — RLS, protocol tests and adversarial verification.
+- [Phase 3.22 entitlement contract](docs/billing/phase3-22-entitlement-contract.md) — pricing, quotas and A–H acceptance map.
+- [Microsoft Entra SSO runbook](docs/identity/microsoft-entra-oidc.md) — OIDC configuration and remaining activation gates.
+- [Production deployment runbook](docs/production/phase55-deployment-runbook.md) — production environment requirements.
+- [Operational readiness runbook](docs/production/operational-readiness-runbook.md) — health, backups, restore drills, monitoring and incident response.
+- [OpenAPI contract](control-plane/openapi.json) — machine-readable Control Plane API.
 
 ## License
 
