@@ -1128,7 +1128,13 @@ pub(crate) async fn lemonsqueezy_webhook(State(s):State<AppState>,headers:Header
  if a.get("test_mode").and_then(Value::as_bool)!=Some(lemonsqueezy_test_mode()){return StatusCode::FORBIDDEN.into_response();}
  let event_key=format!("{}:{}:{}",name,id,hex::encode(Sha256::digest(body.as_bytes())));
  let claimed=match sqlx::query("INSERT INTO billing_events(provider,provider_event_id,event_type,payload,status,processing_started_at,attempt_count) VALUES('lemonsqueezy',$1,$2,$3,'processing',now(),1) ON CONFLICT(provider,provider_event_id) DO UPDATE SET status='processing',processing_started_at=now(),attempt_count=billing_events.attempt_count+1,payload=EXCLUDED.payload,event_type=EXCLUDED.event_type WHERE billing_events.status NOT IN ('processed','ignored') AND (billing_events.processing_started_at IS NULL OR billing_events.processing_started_at<now()-interval '1 minute') RETURNING id").bind(&event_key).bind(name).bind(&event).fetch_optional(&s.db).await{Ok(v)=>v.is_some(),Err(e)=>return db_error(e)};
- if !claimed{return Json(json!({"received":true,"duplicate":true})).into_response();}
+ if !claimed{
+  let existing=match sqlx::query("SELECT status FROM billing_events WHERE provider='lemonsqueezy' AND provider_event_id=$1").bind(&event_key).fetch_optional(&s.db).await{Ok(v)=>v,Err(e)=>return db_error(e)};
+  return match existing.map(|row|row.get::<String,_>("status")).as_deref(){
+   Some("processed")|Some("ignored")=>Json(json!({"received":true,"duplicate":true})).into_response(),
+   _=>StatusCode::SERVICE_UNAVAILABLE.into_response()
+  };
+ }
  let org=event.pointer("/meta/custom_data/organization_id").and_then(Value::as_str).and_then(|v|Uuid::parse_str(v).ok());
  let sub=if data.get("type").and_then(Value::as_str)==Some("subscriptions"){Some(id.to_owned())}else{a.get("subscription_id").and_then(Value::as_i64).map(|v|v.to_string())};
  let cust=a.get("customer_id").and_then(Value::as_i64).map(|v|v.to_string());
