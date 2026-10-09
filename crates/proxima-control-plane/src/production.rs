@@ -584,7 +584,7 @@ pub(crate) async fn require_feature(
 pub(crate) async fn plans() -> Response {
     let catalog=[("free","Free",0_i32,"Evaluation and small proofs of concept"),("starter","Starter",149_i32,"First production SaaS deployments"),("growth","Growth",499_i32,"Multi-tenant production workloads"),("scale","Scale",1199_i32,"Larger fleets and security operations"),("enterprise","Enterprise",0_i32,"Contracted enterprise deployments")];
     let plans=catalog.iter().map(|(key,name,monthly_usd,description)|{
-        let plan_code=paystack_plan_code(key);
+        let plan_code=lemon_variant_id(key);
         let (nodes,tenants,environments,retention,advanced,fleet,priority,entra,private_deployment)=plan_limits(key);
         let integrations = plan_integration_limit(key);
         let verifications = plan_verification_limit(key);
@@ -592,9 +592,9 @@ pub(crate) async fn plans() -> Response {
         let api_keys = plan_api_key_limit(key);
         let api_requests = plan_api_requests_per_minute(key);
         let support = plan_support_level(key);
-        json!({"key":key,"name":name,"monthly_usd":monthly_usd,"description":description,"provider":"paystack","plan_code":plan_code,"checkout_available":key!=&"free"&&key!=&"enterprise"&&paystack_plan_code(key).is_some()&&configured_paystack_plan_codes_unique(),"limits":{"nodes":nodes,"tenants":tenants,"environments":environments,"integrations":integrations,"verifications_per_month":verifications,"team_seats":team_seats,"api_keys":api_keys,"api_requests_per_minute":api_requests,"audit_retention_days":retention},"support_level":support,"features":{"advanced_verification":advanced,"fleet_controls":fleet,"priority_support":priority,"entra_oidc":entra,"private_deployment":private_deployment,"policy_management":key!=&"free"}})
+        json!({"key":key,"name":name,"monthly_usd":monthly_usd,"description":description,"provider":"lemonsqueezy","variant_id":plan_code,"checkout_available":key!=&"free"&&key!=&"enterprise"&&lemon_variant_id(key).is_some()&&configured_lemonsqueezy_variants_unique(),"limits":{"nodes":nodes,"tenants":tenants,"environments":environments,"integrations":integrations,"verifications_per_month":verifications,"team_seats":team_seats,"api_keys":api_keys,"api_requests_per_minute":api_requests,"audit_retention_days":retention},"support_level":support,"features":{"advanced_verification":advanced,"fleet_controls":fleet,"priority_support":priority,"entra_oidc":entra,"private_deployment":private_deployment,"policy_management":key!=&"free"}})
     }).collect::<Vec<_>>();
-    Json(json!({"currency":"usd","billing_interval":"month","provider":"paystack","plans":plans})).into_response()
+    Json(json!({"currency":"usd","billing_interval":"month","provider":"lemonsqueezy","plans":plans})).into_response()
 }
 
 pub(crate) async fn entitlements(State(s): State<AppState>, headers: HeaderMap) -> Response {
@@ -1045,9 +1045,9 @@ fn oidc_redirect_uri() -> String {
 
 pub(crate) async fn billing_status(State(s): State<AppState>, headers: HeaderMap) -> Response {
     let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};
-    match sqlx::query("SELECT paystack_customer_code,paystack_subscription_code,paystack_plan_code,plan_key,status,current_period_end,cancel_at_period_end FROM billing_accounts WHERE organization_id=$1").bind(ctx.organization_id).fetch_optional(&s.db).await{
-        Ok(Some(row))=>Json(json!({"configured":true,"provider":"paystack","customer_code":row.get::<Option<String>,_>("paystack_customer_code"),"subscription_code":row.get::<Option<String>,_>("paystack_subscription_code"),"plan_code":row.get::<Option<String>,_>("paystack_plan_code"),"plan":row.get::<String,_>("plan_key"),"status":row.get::<String,_>("status"),"current_period_end":row.get::<Option<chrono::DateTime<chrono::Utc>>,_>("current_period_end"),"cancel_at_period_end":row.get::<bool,_>("cancel_at_period_end")})).into_response(),
-        Ok(None)=>Json(json!({"configured":false,"provider":"paystack","plan":"free","status":"active"})).into_response(),Err(e)=>db_error(e)
+    match sqlx::query("SELECT lemonsqueezy_customer_id,lemonsqueezy_subscription_id,lemonsqueezy_variant_id,plan_key,status,current_period_end,cancel_at_period_end FROM billing_accounts WHERE organization_id=$1").bind(ctx.organization_id).fetch_optional(&s.db).await{
+        Ok(Some(row))=>Json(json!({"configured":true,"provider":"lemonsqueezy","customer_id":row.get::<Option<String>,_>("lemonsqueezy_customer_id"),"subscription_id":row.get::<Option<String>,_>("lemonsqueezy_subscription_id"),"variant_id":row.get::<Option<String>,_>("lemonsqueezy_variant_id"),"plan":row.get::<String,_>("plan_key"),"status":row.get::<String,_>("status"),"current_period_end":row.get::<Option<chrono::DateTime<chrono::Utc>>,_>("current_period_end"),"cancel_at_period_end":row.get::<bool,_>("cancel_at_period_end")})).into_response(),
+        Ok(None)=>Json(json!({"configured":false,"provider":"lemonsqueezy","plan":"free","status":"active"})).into_response(),Err(e)=>db_error(e)
     }
 }
 pub(crate) async fn checkout(State(s):State<AppState>,headers:HeaderMap,Json(input):Json<CheckoutInput>)->Response{
@@ -1598,8 +1598,8 @@ pub(crate) async fn purge_expired_audit_events(db: &sqlx::PgPool) -> Result<i64,
 
 pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
     let db_ok = sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
-    let paystack = env::var("PAYSTACK_SECRET_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false);
-    let plans = configured_paystack_plan_codes_unique();
+    let lemonsqueezy = env::var("LEMON_SQUEEZY_API_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false) && env::var("LEMON_SQUEEZY_STORE_ID").map(|v| !v.trim().is_empty()).unwrap_or(false) && env::var("LEMON_SQUEEZY_WEBHOOK_SECRET").map(|v| !v.trim().is_empty()).unwrap_or(false);
+    let plans = configured_lemonsqueezy_variants_unique();
     let resend = env::var("RESEND_API_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false);
     let fallback_from = env::var("RESEND_FROM_EMAIL").map(|v| !v.trim().is_empty()).unwrap_or(false);
     let sender_identities = [
@@ -1622,7 +1622,7 @@ pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
     let oidc = env::var("PROXIMA_OIDC_CLIENT_ID").map(|v| !v.trim().is_empty()).unwrap_or(false)
         && env::var("PROXIMA_OIDC_CLIENT_SECRET").map(|v| !v.trim().is_empty()).unwrap_or(false);
     let email_ready = resend && sender_identities && templates_configured && support_inbox;
-    let all = db_ok && paystack && plans && email_ready && base && oidc;
+    let all = db_ok && lemonsqueezy && plans && email_ready && base && oidc;
     Json(json!({
         "status": if all { "ready" } else { "needs_configuration" },
         "checks": {
@@ -1812,7 +1812,7 @@ async fn send_billing_notice(
     }
 }
 
-fn verify_paystack_signature(payload:&str,signature:&str,secret:&str)->bool{let mut mac=match HmacSha512::new_from_slice(secret.as_bytes()){Ok(v)=>v,Err(_)=>return false};mac.update(payload.as_bytes());let expected=hex::encode(mac.finalize().into_bytes());constant_time_equal(signature.trim(),&expected)}
+
 
 fn constant_time_equal(a: &str, b: &str) -> bool {
     if a.len() != b.len() {
@@ -1825,7 +1825,7 @@ fn constant_time_equal(a: &str, b: &str) -> bool {
     diff == 0
 }
 
-async fn paystack_error(response:reqwest::Response)->Response{let status=response.status();let body=response.text().await.unwrap_or_default();tracing::error!(%status,body=%body,"Paystack API error");service_unavailable("Paystack request failed.")}
+
 
 fn external_error<E: std::fmt::Display>(e: E) -> Response {
     tracing::error!(error = %e, "external integration error");
@@ -1890,51 +1890,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn paystack_signature_round_trip(){let payload=r#"{"event":"charge.success","data":{"reference":"ref_test"}}"#;let secret="sk_test";let mut mac=HmacSha512::new_from_slice(secret.as_bytes()).unwrap();mac.update(payload.as_bytes());let signature=hex::encode(mac.finalize().into_bytes());assert!(verify_paystack_signature(payload,&signature,secret));}
-    #[test]
-    fn invalid_paystack_signature_is_rejected(){assert!(!verify_paystack_signature("payload","invalid","sk_test"));}
-
-    #[test]
-    fn paystack_plan_codes_must_be_present_and_unique() {
-        assert!(super::paystack_plan_codes_unique(Some("PLN_starter"), Some("PLN_growth"), Some("PLN_scale")));
-        assert!(!super::paystack_plan_codes_unique(Some("PLN_same"), Some("PLN_same"), Some("PLN_scale")));
-        assert!(!super::paystack_plan_codes_unique(Some("PLN_starter"), None, Some("PLN_scale")));
-        assert!(!super::paystack_plan_codes_unique(Some(""), Some("PLN_growth"), Some("PLN_scale")));
+    fn lemonsqueezy_signature_round_trip_and_rejection() {
+        let payload = r#"{"meta":{"event_name":"subscription_created"},"data":{"id":"1"}}"#;
+        let secret = "test_signing_secret";
+        type HmacSha256 = Hmac<sha2::Sha256>;
+        let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
+        mac.update(payload.as_bytes());
+        let signature = hex::encode(mac.finalize().into_bytes());
+        assert!(verify_lemonsqueezy_signature(payload, &signature, secret));
+        assert!(!verify_lemonsqueezy_signature(payload, "invalid", secret));
+        assert!(!verify_lemonsqueezy_signature("different", &signature, secret));
     }
-
     #[test]
-    fn canonical_paystack_usd_amounts_are_exact_minor_units() {
-        assert_eq!(super::expected_paystack_amount_usd("starter"), Some(14_900));
-        assert_eq!(super::expected_paystack_amount_usd("growth"), Some(49_900));
-        assert_eq!(super::expected_paystack_amount_usd("scale"), Some(119_900));
-        assert_eq!(super::expected_paystack_amount_usd("free"), None);
-        assert_eq!(super::expected_paystack_amount_usd("enterprise"), None);
+    fn lemonsqueezy_catalog_amounts_are_exact_minor_units() {
+        assert_eq!(expected_lemonsqueezy_amount("starter"), Some(14_900));
+        assert_eq!(expected_lemonsqueezy_amount("growth"), Some(49_900));
+        assert_eq!(expected_lemonsqueezy_amount("scale"), Some(119_900));
+        assert_eq!(expected_lemonsqueezy_amount("free"), None);
+        assert_eq!(expected_lemonsqueezy_amount("enterprise"), None);
     }
-
-    #[test]
-    fn paystack_success_payload_must_match_usd_amount_and_plan() {
-        let starter = serde_json::json!({"amount":14900,"currency":"USD","plan":{"amount":14900,"currency":"USD"}});
-        let wrong_amount = serde_json::json!({"amount":7900,"currency":"USD"});
-        let wrong_currency = serde_json::json!({"amount":14900,"currency":"NGN"});
-        let nested_plan = serde_json::json!({"plan":{"amount":49900,"currency":"USD"}});
-        assert!(super::paystack_payload_matches_plan_amount_currency(&starter, "starter"));
-        assert!(!super::paystack_payload_matches_plan_amount_currency(&wrong_amount, "starter"));
-        assert!(!super::paystack_payload_matches_plan_amount_currency(&wrong_currency, "starter"));
-        assert!(super::paystack_payload_matches_plan_amount_currency(&nested_plan, "growth"));
-        assert!(!super::paystack_payload_matches_plan_amount_currency(&starter, "growth"));
-    }
-
-    #[test]
-    fn paystack_provider_plan_must_match_catalog_before_checkout() {
-        let starter = serde_json::json!({"plan_code":"PLN_starter","amount":14900,"currency":"USD","interval":"monthly"});
-        let wrong_amount = serde_json::json!({"plan_code":"PLN_starter","amount":7900,"currency":"USD","interval":"monthly"});
-        let wrong_currency = serde_json::json!({"plan_code":"PLN_starter","amount":14900,"currency":"NGN","interval":"monthly"});
-        let wrong_interval = serde_json::json!({"plan_code":"PLN_starter","amount":14900,"currency":"USD","interval":"annually"});
-        assert!(super::paystack_provider_plan_matches_catalog(&starter, "starter", "PLN_starter"));
-        assert!(!super::paystack_provider_plan_matches_catalog(&wrong_amount, "starter", "PLN_starter"));
-        assert!(!super::paystack_provider_plan_matches_catalog(&wrong_currency, "starter", "PLN_starter"));
-        assert!(!super::paystack_provider_plan_matches_catalog(&wrong_interval, "starter", "PLN_starter"));
-        assert!(!super::paystack_provider_plan_matches_catalog(&starter, "growth", "PLN_starter"));
-    }
-
 }
