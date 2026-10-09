@@ -41,5 +41,9 @@ grep -q 'Some(119_900)' "$production"
 ! grep -qi 'paystack' docs/production/operational-readiness-runbook.md
 ! grep -qi 'paystack' README.md
 test -f docs/production/phase3-21-lemonsqueezy-billing.md
+grep -Fq '/api/v1/billing/checkout' frontend/src/pages/console/NestedResource.tsx
+grep -Fq '/api/v1/billing/verify?reference=' frontend/src/pages/console/NestedResource.tsx
+grep -Fq 'billing-plan-grid' frontend/src/styles/console.css
+! grep -Fqi 'paystack' frontend/src/pages/console/NestedResource.tsx
 
 echo "PASS: Phase 3.21 Lemon Squeezy billing contract"
