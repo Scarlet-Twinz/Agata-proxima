@@ -787,9 +787,22 @@ pub(crate) async fn entra_start(
     State(s): State<AppState>,
     Query(q): Query<std::collections::HashMap<String,String>>,
 ) -> Response {
-    let organization_id = match q.get("organization_id").and_then(|v| Uuid::parse_str(v).ok()) {
-        Some(v) => v,
-        None => return bad("organization_id is required."),
+    let organization_id = if let Some(raw_id) = q.get("organization_id") {
+        match Uuid::parse_str(raw_id) {
+            Ok(value) => value,
+            Err(_) => return bad("organization_id must be a UUID."),
+        }
+    } else if let Some(slug) = q.get("organization_slug").map(|value| value.trim()).filter(|value| !value.is_empty()) {
+        match sqlx::query("SELECT id FROM organizations WHERE lower(slug)=lower($1)")
+            .bind(slug)
+            .fetch_optional(&s.db)
+            .await {
+                Ok(Some(row)) => row.get::<Uuid, _>("id"),
+                Ok(None) => return bad("Microsoft Entra SSO is not configured for this organization."),
+                Err(error) => return db_error(error),
+            }
+    } else {
+        return bad("organization_slug is required.");
     };
     let connection = match sqlx::query(
         "SELECT tenant_id,issuer,client_id,jit_provisioning FROM organization_oidc_connections
