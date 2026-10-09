@@ -1,0 +1,30 @@
+name: Temporary Rust formatting pass
+on:
+  push:
+    branches:
+      - phase3-21-lemon-squeezy-provider-migration
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase3-21-lemon-squeezy-provider-migration
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Format Rust workspace
+        run: cargo fmt --all
+      - name: Commit formatting changes if needed
+        run: |
+          if git diff --quiet -- '*.rs'; then
+            echo "Rust sources already formatted."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- '*.rs'
+          git commit -m "Apply rustfmt to Lemon Squeezy billing changes"
+          git push origin HEAD:phase3-21-lemon-squeezy-provider-migration
