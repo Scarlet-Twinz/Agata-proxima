@@ -37,6 +37,9 @@ grep -q 'identity.entra.configured' crates/proxima-control-plane/src/production.
 grep -q 'Microsoft Entra identity boundary validation failed' crates/proxima-control-plane/src/production.rs || fail "Entra boundary validation missing"
 grep -q 'oidc_login_states' crates/proxima-control-plane/migrations/0004_oidc.sql || fail "OIDC state storage missing"
 grep -q 'user_identities' crates/proxima-control-plane/migrations/0004_oidc.sql || fail "OIDC identity mapping missing"
+grep -Fq 'organization_slug' crates/proxima-control-plane/src/production.rs || fail "SSO start does not resolve organization slug"
+grep -Fq 'Continue with Microsoft Entra' frontend/src/pages/auth/Login.tsx || fail "login page does not expose the Entra SSO flow"
+! grep -Fq 'SSO is not connected yet' frontend/src/pages/auth/Login.tsx || fail "obsolete disabled SSO button remains"
 
 grep -q 'control_plane_coupling.*non_authoritative' crates/proxima-control-plane/src/main.rs || fail "control-plane non-authoritative health contract missing"
 grep -q 'engine_continues_enforcement' crates/proxima-control-plane/src/main.rs || fail "engine independence contract missing"
