@@ -212,7 +212,9 @@ pub(crate) async fn checkout(
         Ok(r) => r,
         Err(e) => {
             tracing::error!(%e,"Lemon Squeezy variant lookup failed");
-            return production::service_unavailable("Could not validate the configured plan price.");
+            return production::service_unavailable(
+                "Could not validate the configured plan price.",
+            );
         }
     };
     if !variant_response.status().is_success() {
