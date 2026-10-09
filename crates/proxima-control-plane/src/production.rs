@@ -1143,17 +1143,33 @@ async fn verify_paystack_transaction(db: &sqlx::PgPool, org: Uuid, reference: &s
         if let Err(e) = apply_entitlements(db, org, &plan).await {
             return db_error(e);
         }
+        let customer_code = data
+            .pointer("/customer/customer_code")
+            .and_then(Value::as_str)
+            .or_else(|| data.get("customer_code").and_then(Value::as_str));
+        let subscription_code = data
+            .get("subscription_code")
+            .and_then(Value::as_str)
+            .or_else(|| data.pointer("/subscription/subscription_code").and_then(Value::as_str));
         if let Err(e) = sqlx::query(
-            "UPDATE billing_accounts
-                SET paystack_plan_code=COALESCE($1,paystack_plan_code),plan_key=$2,
-                    status='active',current_period_end=COALESCE($3,current_period_end),
-                    cancel_at_period_end=false,updated_at=now()
-              WHERE organization_id=$4",
+            "INSERT INTO billing_accounts
+                (organization_id,paystack_customer_code,paystack_subscription_code,paystack_plan_code,
+                 plan_key,status,current_period_end,cancel_at_period_end,updated_at)
+             VALUES($1,$2,$3,$4,$5,'active',$6,false,now())
+             ON CONFLICT(organization_id) DO UPDATE SET
+                paystack_customer_code=COALESCE(EXCLUDED.paystack_customer_code,billing_accounts.paystack_customer_code),
+                paystack_subscription_code=COALESCE(EXCLUDED.paystack_subscription_code,billing_accounts.paystack_subscription_code),
+                paystack_plan_code=COALESCE(EXCLUDED.paystack_plan_code,billing_accounts.paystack_plan_code),
+                plan_key=EXCLUDED.plan_key,status='active',
+                current_period_end=COALESCE(EXCLUDED.current_period_end,billing_accounts.current_period_end),
+                cancel_at_period_end=false,updated_at=now()",
         )
+        .bind(org)
+        .bind(customer_code)
+        .bind(subscription_code)
         .bind(expected_plan_code.as_deref())
         .bind(&plan)
         .bind(end)
-        .bind(org)
         .execute(db)
         .await
         {
