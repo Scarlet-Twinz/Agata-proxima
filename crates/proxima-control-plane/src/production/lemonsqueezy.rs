@@ -222,7 +222,7 @@ pub(crate) async fn webhook(State(s):State<AppState>,headers:HeaderMap,body:Stri
     let meta=event.get("meta").cloned().unwrap_or(Value::Null);
     let custom=meta.get("custom_data").cloned().unwrap_or(Value::Null);
     let org_from_custom=custom.get("organization_id").and_then(Value::as_str).and_then(|v|Uuid::parse_str(v).ok());
-    let customer_id=attrs.get("customer_id").and_then(Value::as_i64).map(|v|v.to_string());
+    let incoming_customer_id=attrs.get("customer_id").and_then(Value::as_i64).map(|v|v.to_string());
     let incoming_variant_id=attrs.get("variant_id").and_then(Value::as_i64).map(|v|v.to_string())
         .or_else(||attrs.get("variant_id").and_then(Value::as_str).map(str::to_owned));
     let expected_store=env::var("LEMONSQUEEZY_STORE_ID").unwrap_or_default();
@@ -233,7 +233,7 @@ pub(crate) async fn webhook(State(s):State<AppState>,headers:HeaderMap,body:Stri
     // Invoice events carry a subscription-invoice resource, not the subscription resource.
     // Resolve them only against a subscription already accepted from a signed subscription event.
     let existing=if invoice_event || org_from_custom.is_none() {
-        match sqlx::query("SELECT organization_id,lemonsqueezy_variant_id,plan_key FROM billing_accounts WHERE provider='lemonsqueezy' AND lemonsqueezy_subscription_id=$1")
+        match sqlx::query("SELECT organization_id,lemonsqueezy_variant_id,plan_key,lemonsqueezy_customer_id,lemonsqueezy_customer_portal_url,status,current_period_end,cancel_at_period_end FROM billing_accounts WHERE provider='lemonsqueezy' AND lemonsqueezy_subscription_id=$1")
             .bind(&subscription_id).fetch_optional(&s.db).await {
             Ok(v)=>v,
             Err(e)=>return db_error(e)
@@ -270,9 +270,19 @@ pub(crate) async fn webhook(State(s):State<AppState>,headers:HeaderMap,body:Stri
     let renews=attrs.get("renews_at").and_then(Value::as_str).and_then(|v|chrono::DateTime::parse_from_rfc3339(v).ok()).map(|v|v.with_timezone(&chrono::Utc));
     let ends=attrs.get("ends_at").and_then(Value::as_str).and_then(|v|chrono::DateTime::parse_from_rfc3339(v).ok()).map(|v|v.with_timezone(&chrono::Utc));
     let cancelled=attrs.get("cancelled").and_then(Value::as_bool).unwrap_or(false) || event_type=="subscription_cancelled" || status=="cancelled";
-    let portal=attrs.pointer("/urls/customer_portal").and_then(Value::as_str);
-    let period_end=ends.or(renews);
-    let (effective_status,account_status,cancel_at_period_end)=subscription_state(event_type,status,cancelled,period_end,chrono::Utc::now());
+    let incoming_portal=attrs.pointer("/urls/customer_portal").and_then(Value::as_str);
+    let period_end=if invoice_event { existing.as_ref().and_then(|r|r.get::<Option<chrono::DateTime<chrono::Utc>>,_>("current_period_end")) } else { ends.or(renews) };
+    let (effective_status,account_status,cancel_at_period_end)=if invoice_event {
+        let prior_status=existing.as_ref().map(|r|r.get::<String,_>("status")).unwrap_or_else(||"active".to_owned());
+        let prior_cancel=existing.as_ref().map(|r|r.get::<bool,_>("cancel_at_period_end")).unwrap_or(false);
+        if event_type=="subscription_payment_failed" {
+            ("past_due",if prior_status=="non-renewing"{"non-renewing"}else{"attention"},prior_cancel)
+        } else {
+            ("active",if prior_status=="non-renewing"{"non-renewing"}else{"active"},prior_cancel)
+        }
+    } else { subscription_state(event_type,status,cancelled,period_end,chrono::Utc::now()) };
+    let customer_id=incoming_customer_id.or_else(||existing.as_ref().and_then(|r|r.get::<Option<String>,_>("lemonsqueezy_customer_id")));
+    let portal=incoming_portal.or_else(||existing.as_ref().and_then(|r|r.get::<Option<String>,_>("lemonsqueezy_customer_portal_url")));
     if let Some(plan)=plan {
         if matches!(event_type,"subscription_created"|"subscription_updated"|"subscription_resumed"|"subscription_cancelled"|"subscription_expired"|"subscription_paused"|"subscription_unpaused"|"subscription_payment_success"|"subscription_payment_failed") {
             if let Err(e)=sqlx::query("INSERT INTO billing_accounts(organization_id,provider,lemonsqueezy_customer_id,lemonsqueezy_subscription_id,lemonsqueezy_variant_id,lemonsqueezy_customer_portal_url,plan_key,status,current_period_end,cancel_at_period_end,updated_at) VALUES($1,'lemonsqueezy',$2,$3,$4,$5,$6,$7,$8,$9,now()) ON CONFLICT(organization_id) DO UPDATE SET provider='lemonsqueezy',lemonsqueezy_customer_id=COALESCE(EXCLUDED.lemonsqueezy_customer_id,billing_accounts.lemonsqueezy_customer_id),lemonsqueezy_subscription_id=EXCLUDED.lemonsqueezy_subscription_id,lemonsqueezy_variant_id=COALESCE(EXCLUDED.lemonsqueezy_variant_id,billing_accounts.lemonsqueezy_variant_id),lemonsqueezy_customer_portal_url=COALESCE(EXCLUDED.lemonsqueezy_customer_portal_url,billing_accounts.lemonsqueezy_customer_portal_url),plan_key=EXCLUDED.plan_key,status=EXCLUDED.status,current_period_end=COALESCE(EXCLUDED.current_period_end,billing_accounts.current_period_end),cancel_at_period_end=EXCLUDED.cancel_at_period_end,updated_at=now()")
