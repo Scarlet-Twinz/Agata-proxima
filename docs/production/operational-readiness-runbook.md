@@ -49,6 +49,14 @@ Run the repository smoke check:
 AGATA_PUBLIC_BASE_URL=https://<public-control-plane-host> bash scripts/ops/check-control-plane.sh
 ```
 
+The repository also includes `.github/workflows/production-smoke.yml`:
+
+- After the repository secret `AGATA_PUBLIC_BASE_URL` is configured, GitHub Actions checks `/api/v1/health` every 15 minutes and records failures in Actions.
+- Run **Production smoke monitoring** manually from the Actions tab to check both liveness and the full `/api/v1/production/readiness` contract before launch. A manual run can use the `base_url` input or the repository secret.
+- The scheduled probe skips cleanly until the public URL secret exists. It requires HTTPS and does not print credentials.
+
+This is a lightweight early-warning layer, not a replacement for managed database alerts, application metrics, incident ownership or an independent uptime monitor.
+
 ## 4. Backups and restore
 
 The managed PostgreSQL provider should perform automated backups/PITR where available. Set retention to a documented policy (recommended starting point: daily backups retained for at least 14 days, with point-in-time recovery if the provider supports it). Keep backups protected by access controls and encryption.
