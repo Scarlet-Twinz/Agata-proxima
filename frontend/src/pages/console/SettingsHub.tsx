@@ -124,9 +124,32 @@ export function SettingsHub(){
 
   async function signOut(){ await logout(); navigate("/login",{replace:true}); }
 
+  async function deleteOrganization(org: Organization) {
+    const confirmation = window.prompt(
+      `To permanently delete the organization “${org.name}”, type its exact name below. Other organizations will not be deleted.`,
+    );
+    if (confirmation !== org.name) {
+      if (confirmation !== null) setError("Organization deletion cancelled because the name did not match.");
+      return;
+    }
+    setError(""); setMessage("");
+    try {
+      await api.delete<{ok:boolean;message:string}>(`/api/v1/organizations/${encodeURIComponent(org.id)}`);
+      await load();
+      setMessage(`Organization “${org.name}” was deleted. Your other organizations and account were kept.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to delete this organization.");
+    }
+  }
+
   async function deleteAccount(){
-    const confirmed=window.confirm("Delete your Agata Proxima account? This is permanent. Your account can only be deleted when you are the sole member of every organization you own.");
-    if(!confirmed)return;
+    const confirmation = window.prompt(
+      "This permanently deletes your account and every organization you own. To continue, type DELETE MY ACCOUNT exactly.",
+    );
+    if (confirmation !== "DELETE MY ACCOUNT") {
+      if (confirmation !== null) setError("Account deletion cancelled because the confirmation text did not match.");
+      return;
+    }
     try{await api.delete("/api/v1/account");sessionStorage.removeItem("proxima_csrf");navigate("/",{replace:true});}
     catch(err){setError(err instanceof Error?err.message:"Unable to delete the account.");}
   }
@@ -163,7 +186,7 @@ export function SettingsHub(){
 
     <section className="settings-section">
       <div className="settings-section-heading"><div><h2>Organizations</h2><p>Organizations are isolated workspaces. Your account can belong to multiple organizations, and switching changes the active organization context.</p></div><Building2 size={19}/></div>
-      <div className="organization-list">{data?.organizations.map(org=><button key={org.id} className={org.id===data.organization.id?"organization-option is-current":"organization-option"} disabled={switching} onClick={()=>switchOrganization(org.id)}><span><strong>{org.name}</strong><small>{org.role} · {org.slug}{org.id===data.organization.id?" · Active":""}</small></span>{org.id===data.organization.id&&<Check size={17}/>}</button>)}</div>
+      <div className="organization-list">{data?.organizations.map(org=><div key={org.id} style={{display:"flex",alignItems:"stretch",gap:8}}><button type="button" style={{flex:1,minWidth:0}} className={org.id===data.organization.id?"organization-option is-current":"organization-option"} disabled={switching} onClick={()=>switchOrganization(org.id)}><span><strong>{org.name}</strong><small>{org.role} · {org.slug}{org.id===data.organization.id?" · Active":""}</small></span>{org.id===data.organization.id&&<Check size={17}/>}</button><button type="button" className="secondary-action" onClick={()=>void deleteOrganization(org)} title={`Delete ${org.name} only`} aria-label={`Delete organization ${org.name}`}><Trash2 size={15}/><span>Delete</span></button></div>)}</div>
       <div className="create-organization">
         <div><strong>Create another organization</strong><small>Creates a separate organization with its own Production project and isolated resources.</small></div>
         <div className="create-organization-form"><input value={orgName} onChange={e=>setOrgName(e.target.value)} placeholder="Organization name" onKeyDown={e=>{if(e.key==="Enter")void createOrganization()}}/><button className="secondary-action" type="button" disabled={orgBusy||!orgName.trim()} onClick={createOrganization}><Plus size={15}/>{orgBusy?"Creating…":"Create organization"}</button></div>
