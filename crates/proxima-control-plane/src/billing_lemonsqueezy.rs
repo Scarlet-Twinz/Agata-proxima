@@ -24,6 +24,9 @@ pub(crate) struct CheckoutInput { pub price_id: Option<String> }
 fn setting(key: &str) -> Option<String> {
     env::var(key).ok().map(|v| v.trim().to_owned()).filter(|v| !v.is_empty())
 }
+fn expected_price(plan: &str) -> Option<i64> {
+    match plan { "starter" => Some(14_900), "growth" => Some(49_900), "scale" => Some(119_900), _ => None }
+}
 fn variant_key(plan: &str) -> Option<&'static str> {
     match plan {
         "starter" => Some("LEMONSQUEEZY_STARTER_VARIANT_ID"),
@@ -103,7 +106,7 @@ pub(crate) async fn checkout(State(s): State<AppState>, headers: HeaderMap, Json
         match plan_for_variant(requested) { Some(p)=>p, None=>return bad("Select a valid Agata Proxima monthly plan.") }
     };
     let variant_id = match variant_key(plan).and_then(setting) { Some(v)=>v, None=>return production::service_unavailable("The selected plan variant is not configured.") };
-    let expected_price = match plan { "starter"=>14_900_i64, "growth"=>49_900_i64, "scale"=>119_900_i64, _=>return bad("Unsupported paid plan.") };
+    let expected_price = match expected_price(plan) { Some(v)=>v, None=>return bad("Unsupported paid plan.") };
     let variant_response = match Client::new().get(format!("https://api.lemonsqueezy.com/v1/variants/{variant_id}"))
         .bearer_auth(&api_key).header("Accept","application/vnd.api+json").send().await {
         Ok(r)=>r, Err(e)=>{tracing::error!(%e,"Lemon Squeezy variant lookup failed");return production::service_unavailable("Could not validate the configured plan price.")}
@@ -250,7 +253,10 @@ mod tests {
         assert!(!signature_valid(body,&signature,"wrong-secret"));
         assert!(!signature_valid(body,"00",secret));
     }
-    #[test] fn plans_have_expected_usd_amounts() {
-        assert_eq!(149,149); assert_eq!(499,499); assert_eq!(1199,1199);
+    #[test] fn plans_have_expected_usd_monthly_prices() {
+        assert_eq!(expected_price("starter"), Some(14_900));
+        assert_eq!(expected_price("growth"), Some(49_900));
+        assert_eq!(expected_price("scale"), Some(119_900));
+        assert_eq!(expected_price("free"), None);
     }
 }
