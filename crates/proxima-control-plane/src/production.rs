@@ -1059,10 +1059,14 @@ pub(crate) async fn checkout(State(s):State<AppState>,headers:HeaderMap,Json(inp
  let plan=match input.price_id.as_deref(){Some(v)if ["starter","growth","scale"].contains(&v.trim())=>v.trim(),Some(v)=>match plan_for_code(Some(v.trim())){Some(p)=>p,None=>return bad("Select a valid Agata Proxima plan.")},None=>return bad("Select a plan before checkout.")};
  let variant=lemon_variant_id(plan).unwrap();
  let client=Client::new();
+ let store_response=match client.get(format!("https://api.lemonsqueezy.com/v1/stores/{store}")).bearer_auth(&key).header("Accept","application/vnd.api+json").send().await{Ok(v)=>v,Err(e)=>return external_error(e)};
+ if !store_response.status().is_success(){return service_unavailable("Lemon Squeezy store validation failed.");}
+ let store_body:Value=match store_response.json().await{Ok(v)=>v,Err(e)=>return external_error(e)};
+ if store_body.pointer("/data/id").and_then(Value::as_str).map(|v|v==store).unwrap_or_else(||store_body.pointer("/data/id").and_then(Value::as_i64).map(|v|v.to_string()==store).unwrap_or(false))==false||store_body.pointer("/data/attributes/currency").and_then(Value::as_str)!=Some("USD"){return service_unavailable("The configured Lemon Squeezy store must be the expected store and use USD.");}
  let vr=match client.get(format!("https://api.lemonsqueezy.com/v1/variants/{variant}")).bearer_auth(&key).header("Accept","application/vnd.api+json").send().await{Ok(v)=>v,Err(e)=>return external_error(e)};
  if !vr.status().is_success(){return service_unavailable("Lemon Squeezy variant validation failed.");}
  let vb:Value=match vr.json().await{Ok(v)=>v,Err(e)=>return external_error(e)};let at=vb.pointer("/data/attributes").cloned().unwrap_or(Value::Null);
- let valid=at.get("price").and_then(Value::as_i64)==expected_lemonsqueezy_amount(plan)&&at.get("is_subscription").and_then(Value::as_bool)==Some(true)&&at.get("interval").and_then(Value::as_str)==Some("month")&&at.get("interval_count").and_then(Value::as_i64).unwrap_or(1)==1&&at.get("test_mode").and_then(Value::as_bool).map(|v|v==lemonsqueezy_test_mode()).unwrap_or(false);
+ let valid=at.get("price").and_then(Value::as_i64)==expected_lemonsqueezy_amount(plan)&&at.get("is_subscription").and_then(Value::as_bool)==Some(true)&&at.get("interval").and_then(Value::as_str)==Some("month")&&at.get("interval_count").and_then(Value::as_i64).unwrap_or(1)==1&&at.get("status").and_then(Value::as_str)==Some("published")&&at.get("test_mode").and_then(Value::as_bool).map(|v|v==lemonsqueezy_test_mode()).unwrap_or(false);
  if !valid{return service_unavailable("Lemon Squeezy variant must match the configured test/live mode and exact monthly USD catalog price.");}
  let product_response=match client.get(format!("https://api.lemonsqueezy.com/v1/variants/{variant}/product")).bearer_auth(&key).header("Accept","application/vnd.api+json").send().await{Ok(v)=>v,Err(e)=>return external_error(e)};
  if !product_response.status().is_success(){return service_unavailable("Lemon Squeezy product validation failed.");}
