@@ -2,6 +2,8 @@
 
 This runbook is the implementation plan for operating Agata Proxima outside a developer laptop. It deliberately separates controls already in the repository from evidence that must come from the real hosting environment.
 
+For the proposed Vercel + container-host + managed PostgreSQL topology, use [`deployment-architecture.md`](deployment-architecture.md) for the concrete service settings and deployment order. That path is prepared in source control but is not yet provisioned.
+
 ## 1. Target operating model
 
 Production must not depend on VS Code, the developer's laptop, or a local Docker volume.
