@@ -41,8 +41,8 @@ This checklist separates repository implementation from external production acce
 - [x] Tenants / Policies / Fleet / Deployments
 - [x] Verification / Audit / Security / Infrastructure
 - [x] Developer / Support surfaces
-- [x] Paystack billing entitlement model, plan catalogue and repository integration contract
-- [ ] Live Paystack activation — verify Agata plan codes and amounts, configure production secret and webhook, then complete a real payment round trip
+- [x] Lemon Squeezy billing entitlement model, plan catalogue and repository integration contract
+- [ ] Live Lemon Squeezy activation — verify Agata plan codes and amounts, configure production secret and webhook, then complete a real payment round trip
 - [ ] Production email delivery — waiting for Agata-owned sending domain verification and a real delivery test
 - [ ] Customer-facing status page
 - [ ] Practical `/docs/usage` guide covering setup, first workspace, nodes, tenants, environments, verification, integrations, seats/invitations, billing, API use and troubleshooting
@@ -61,7 +61,7 @@ The canonical monthly prices are:
 | Scale | $1,199 |
 | Enterprise | Custom |
 
-Free requires no Paystack subscription. Paid checkout must use the configured Agata-specific Paystack plan codes, and the live provider plan amounts must match this table before checkout is enabled.
+Free requires no Lemon Squeezy subscription. Paid checkout must use the configured Agata-specific Lemon Squeezy plan codes, and the live provider plan amounts must match this table before checkout is enabled.
 
 ## Phase 3.22-A–H acceptance state
 
@@ -76,12 +76,12 @@ All eight repository-side Phase 3.22 entitlement gates are implemented and passe
 - [x] G — API keys/rate limits, feature gates, enterprise provisioning and support tiers
 - [x] H — Billing lifecycle, grace/downgrade behavior, webhook idempotency and regression gates
 
-Passing these repository gates does not mean that live Paystack payment acceptance or the external production gates below have been completed.
+Passing these repository gates does not mean that live Lemon Squeezy payment acceptance or the external production gates below have been completed.
 
 ## External production acceptance still required
 
 - Real Microsoft Entra login and callback against a registered production application.
-- Live Paystack checkout, signed webhook delivery, plan/amount verification, renewal failure/recovery and cancellation tests.
+- Live Lemon Squeezy checkout, signed webhook delivery, plan/amount verification, renewal failure/recovery and cancellation tests.
 - Verified Resend delivery using the Agata-owned domain.
 - Public HTTPS deployment and production secret management/rotation.
 - Backup/restore exercise with measured RPO/RTO.

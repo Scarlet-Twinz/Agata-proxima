@@ -1,0 +1,27 @@
+-- Forward-only Lemon Squeezy billing migration. Historical provider data is retained.
+ALTER TABLE billing_accounts
+  ADD COLUMN IF NOT EXISTS lemonsqueezy_customer_id text,
+  ADD COLUMN IF NOT EXISTS lemonsqueezy_subscription_id text,
+  ADD COLUMN IF NOT EXISTS lemonsqueezy_variant_id text,
+  ADD COLUMN IF NOT EXISTS lemonsqueezy_customer_portal_url text;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_billing_accounts_lemonsqueezy_subscription
+  ON billing_accounts(lemonsqueezy_subscription_id) WHERE lemonsqueezy_subscription_id IS NOT NULL;
+
+-- Preserve legacy provider identifiers and records for audit/history. New billing events
+-- and transactions are written under provider='lemonsqueezy'.
+
+-- New records default to the active provider; historical rows keep their original provider.
+ALTER TABLE billing_accounts ALTER COLUMN provider SET DEFAULT 'lemonsqueezy';
+ALTER TABLE billing_events ALTER COLUMN provider SET DEFAULT 'lemonsqueezy';
+ALTER TABLE billing_transactions ALTER COLUMN provider SET DEFAULT 'lemonsqueezy';
+
+-- Link checkout attempts to the exact subscription and order that activated them.
+ALTER TABLE billing_transactions
+  ADD COLUMN IF NOT EXISTS lemonsqueezy_subscription_id text,
+  ADD COLUMN IF NOT EXISTS lemonsqueezy_order_id text,
+  ADD COLUMN IF NOT EXISTS lemonsqueezy_variant_id text;
+
+CREATE INDEX IF NOT EXISTS idx_billing_transactions_lemonsqueezy_subscription
+  ON billing_transactions(lemonsqueezy_subscription_id)
+  WHERE lemonsqueezy_subscription_id IS NOT NULL;
