@@ -209,6 +209,12 @@ type_count=$(psql -v ON_ERROR_STOP=1 -d "${test_db}" -Atc "SELECT count(*) FROM 
 pass "webhook idempotency, in-progress claims, and stale retry behavior are enforced"
 
 grep -Fq 'transaction_plan_mismatch' crates/proxima-control-plane/src/production.rs || fail "verified transaction plan mismatch is not rejected"
+grep -Fq 'transaction_amount_mismatch' crates/proxima-control-plane/src/production.rs || fail "verified transaction amount mismatch is not rejected"
+grep -Fq 'transaction_currency_mismatch' crates/proxima-control-plane/src/production.rs || fail "verified transaction currency mismatch is not rejected"
+grep -Fq 'webhook_plan_amount_or_currency_mismatch' crates/proxima-control-plane/src/production.rs || fail "webhook plan amount/currency mismatch is not rejected"
+grep -Fq 'webhook_plan_code_mismatch' crates/proxima-control-plane/src/production.rs || fail "webhook plan code mismatch is not rejected"
+grep -Fq 'expected_paystack_amount_usd' crates/proxima-control-plane/src/production.rs || fail "canonical USD plan amounts are not enforced"
+grep -Fq 'paystack_success_payload_must_match_usd_amount_and_plan' crates/proxima-control-plane/src/production.rs || fail "USD amount/currency regression tests are missing"
 grep -Fq 'unknown_local_transaction' crates/proxima-control-plane/src/production.rs || fail "verification does not require a server-stored transaction"
 grep -Fq 'billing_grace_until=COALESCE(billing_grace_until,now()+interval' crates/proxima-control-plane/src/production.rs || fail "payment failure does not establish a fixed grace window"
 grep -Fq 'mark_paystack_event_ignored' crates/proxima-control-plane/src/production.rs || fail "unknown webhook states are not handled safely"
