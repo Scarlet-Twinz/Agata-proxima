@@ -1326,3 +1326,54 @@ a {
   .billing-plan-description { min-height:0; }
 }
 
+/* Keep high-volume dashboard widgets inside their cards. */
+.activity-stream {
+  max-height: 320px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 6px;
+}
+
+.topology-links {
+  min-width: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  align-content: start;
+  padding-right: 6px;
+}
+
+.topology-node strong,
+.topology-node small {
+  overflow-wrap: anywhere;
+}
+
+.chart-point {
+  fill: var(--agata-blue);
+  stroke: #ffffff;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart-caption {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .topology {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .topology-core {
+    min-height: 120px;
+  }
+
+  .topology-links {
+    max-height: 260px;
+  }
+}
