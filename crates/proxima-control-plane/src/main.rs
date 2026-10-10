@@ -332,7 +332,7 @@ async fn main() -> Result<()> {
             post(mark_all_notifications_read),
         )
         .route(
-            "/api/v1/notifications/:id/read",
+            "/api/v1/notifications/{id}/read",
             post(mark_notification_read),
         )
         .route("/api/v1/account", delete(delete_account))
@@ -346,6 +346,7 @@ async fn main() -> Result<()> {
             "/api/v1/organizations",
             get(organizations).post(create_organization),
         )
+        .route("/api/v1/organizations/{id}", delete(delete_organization))
         .route("/api/v1/tenants", get(tenants).post(create_tenant))
         .route("/api/v1/policies", get(policies).post(create_policy))
         .route("/api/v1/nodes", get(nodes).post(create_node))
@@ -596,20 +597,18 @@ async fn signup(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Resp
     if let Err(e) = production::send_verification_email(&s.db, user_id, &email, &display_name).await
     {
         tracing::error!(%e, "verification email delivery failed");
-        let _ = sqlx::query("DELETE FROM organizations WHERE id=$1")
-            .bind(organization_id)
-            .execute(&s.db)
-            .await;
-        let _ = sqlx::query("DELETE FROM users WHERE id=$1")
-            .bind(user_id)
-            .execute(&s.db)
-            .await;
+        // Keep the newly created account and workspace if email delivery is unavailable.
+        // The verification code/hash remains stored, and the user can retry via the resend endpoint.
         return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(Message {
-                ok: false,
-                message: "Workspace creation was rolled back because the verification email could not be sent. Check the Resend configuration and try again.".into(),
-            }),
+            StatusCode::ACCEPTED,
+            Json(json!({
+                "ok": true,
+                "verification_required": true,
+                "email_sent": false,
+                "user_id": user_id,
+                "organization_id": organization_id,
+                "message": "Your workspace was created and kept, but the verification email could not be sent. Fix the email configuration and choose Send a new code to retry."
+            })),
         )
             .into_response();
     }
@@ -2044,6 +2043,175 @@ async fn organizations(State(s): State<AppState>, headers: HeaderMap) -> Respons
         .into_response(),
         Err(e) => db_error(e),
     }
+}
+
+async fn delete_organization(
+    State(s): State<AppState>,
+    Path(organization_id): Path<Uuid>,
+    headers: HeaderMap,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(value) => value,
+        Err(response) => return response.into_response(),
+    };
+    if ctx.api_key {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    if let Err(response) = require_write(&ctx, &headers) {
+        return response.into_response();
+    }
+
+    let mut tx = match s.db.begin().await {
+        Ok(value) => value,
+        Err(error) => return db_error(error),
+    };
+
+    let role = match sqlx::query_scalar::<_, String>(
+        "SELECT role FROM memberships WHERE user_id=$1 AND organization_id=$2",
+    )
+    .bind(ctx.user_id)
+    .bind(organization_id)
+    .fetch_optional(&mut *tx)
+    .await
+    {
+        Ok(Some(value)) => value,
+        Ok(None) => return (
+            StatusCode::NOT_FOUND,
+            Json(
+                json!({"ok":false,"message":"That organization is not available to this account."}),
+            ),
+        )
+            .into_response(),
+        Err(error) => return db_error(error),
+    };
+    if role != "owner" {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"ok":false,"message":"Only an organization owner can delete that organization."})),
+        )
+            .into_response();
+    }
+
+    let member_count = match sqlx::query_scalar::<_, i64>(
+        "SELECT count(*) FROM memberships WHERE organization_id=$1",
+    )
+    .bind(organization_id)
+    .fetch_one(&mut *tx)
+    .await
+    {
+        Ok(value) => value,
+        Err(error) => return db_error(error),
+    };
+    if member_count > 1 {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({"ok":false,"message":"This organization has other members. Remove or transfer their access before deleting the organization."})),
+        )
+            .into_response();
+    }
+
+    let organization_count =
+        match sqlx::query_scalar::<_, i64>("SELECT count(*) FROM memberships WHERE user_id=$1")
+            .bind(ctx.user_id)
+            .fetch_one(&mut *tx)
+            .await
+        {
+            Ok(value) => value,
+            Err(error) => return db_error(error),
+        };
+    if organization_count <= 1 {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({"ok":false,"message":"You cannot delete your last organization. Create or join another organization first, or use the separate account-deletion flow if that is your intention."})),
+        )
+            .into_response();
+    }
+
+    let active_billing = match sqlx::query_scalar::<_, i64>(
+        "SELECT count(*) FROM billing_accounts WHERE organization_id=$1 AND status NOT IN ('inactive','canceled')",
+    )
+    .bind(organization_id)
+    .fetch_one(&mut *tx)
+    .await
+    {
+        Ok(value) => value,
+        Err(error) => return db_error(error),
+    };
+    if active_billing > 0 {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({"ok":false,"message":"This organization has active billing. Cancel or deactivate its subscription before deleting the organization."})),
+        )
+            .into_response();
+    }
+
+    let replacement_organization = match sqlx::query_scalar::<_, Uuid>(
+        "SELECT organization_id FROM memberships
+         WHERE user_id=$1 AND organization_id<>$2
+         ORDER BY created_at, organization_id LIMIT 1",
+    )
+    .bind(ctx.user_id)
+    .bind(organization_id)
+    .fetch_optional(&mut *tx)
+    .await
+    {
+        Ok(Some(value)) => value,
+        Ok(None) => {
+            return (
+                StatusCode::CONFLICT,
+                Json(json!({"ok":false,"message":"Create or join another organization before deleting this one."})),
+            )
+                .into_response()
+        }
+        Err(error) => return db_error(error),
+    };
+
+    if let Err(error) = sqlx::query(
+        "UPDATE sessions SET organization_id=$1
+         WHERE user_id=$2 AND organization_id=$3",
+    )
+    .bind(replacement_organization)
+    .bind(ctx.user_id)
+    .bind(organization_id)
+    .execute(&mut *tx)
+    .await
+    {
+        return db_error(error);
+    }
+
+    if let Err(error) = sqlx::query("DELETE FROM organizations WHERE id=$1")
+        .bind(organization_id)
+        .execute(&mut *tx)
+        .await
+    {
+        return db_error(error);
+    }
+
+    if let Err(error) = sqlx::query(
+        "INSERT INTO audit_events(organization_id,user_id,action,resource_type,resource_id,metadata)
+         VALUES($1,$2,'organization.deleted','organization',$3,$4)",
+    )
+    .bind(replacement_organization)
+    .bind(ctx.user_id)
+    .bind(organization_id)
+    .bind(json!({"deleted_organization_id": organization_id, "source": "organization_settings"}))
+    .execute(&mut *tx)
+    .await
+    {
+        return db_error(error);
+    }
+
+    if let Err(error) = tx.commit().await {
+        return db_error(error);
+    }
+
+    Json(json!({
+        "ok": true,
+        "deleted_organization_id": organization_id,
+        "active_organization_id": if ctx.organization_id == organization_id { replacement_organization } else { ctx.organization_id },
+        "message": "Organization deleted. Other organizations and your account remain intact."
+    }))
+    .into_response()
 }
 
 async fn create_organization(

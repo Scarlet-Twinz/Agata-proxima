@@ -71,6 +71,7 @@ export function ConsoleLayout() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [session, setSession] = useState<Session | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
   const [organizationName, setOrganizationName] = useState("Workspace");
   const [accountDisplayName, setAccountDisplayName] = useState("Account");
   const [accountEmail, setAccountEmail] = useState("");
@@ -92,30 +93,45 @@ export function ConsoleLayout() {
 
   useEffect(() => {
     let active = true;
-    getSession()
-      .then((current) => {
-        if (active) setSession(current);
-      })
-      .catch(() => {
-        if (active) setSession(null);
-      });
-    api.get<{organization:{name:string;slug:string};organizations:unknown[];user:{display_name?:string;email?:string}}>("/api/v1/settings")
-      .then((settings) => {
+    async function initializeConsole() {
+      try {
+        const current = await getSession();
         if (!active) return;
-        setOrganizationName(settings.organization.name || "Workspace");
-        setAccountDisplayName(settings.user.display_name || "Account");
-        setAccountEmail(settings.user.email || "");
-      })
-      .catch(() => undefined);
-    api.get<{notifications:{read:boolean}[]}>("/api/v1/notifications")
-      .then((result) => {
-        if (active) setUnreadNotifications(result.notifications.filter((item) => !item.read).length);
-      })
-      .catch(() => undefined);
+        if (!current) {
+          setSession(null);
+          navigate("/login", { replace: true, state: { from: window.location.pathname } });
+          return;
+        }
+        setSession(current);
+        if (current.csrf_token) sessionStorage.setItem("proxima_csrf", current.csrf_token);
+
+        void api.get<{organization:{name:string;slug:string};organizations:unknown[];user:{display_name?:string;email?:string}}>("/api/v1/settings")
+          .then((settings) => {
+            if (!active) return;
+            setOrganizationName(settings.organization.name || "Workspace");
+            setAccountDisplayName(settings.user.display_name || "Account");
+            setAccountEmail(settings.user.email || "");
+          })
+          .catch(() => undefined);
+        void api.get<{notifications:{read:boolean}[]}>("/api/v1/notifications")
+          .then((result) => {
+            if (active) setUnreadNotifications(result.notifications.filter((item) => !item.read).length);
+          })
+          .catch(() => undefined);
+      } catch {
+        if (active) {
+          setSession(null);
+          navigate("/login", { replace: true, state: { from: window.location.pathname } });
+        }
+      } finally {
+        if (active) setSessionLoading(false);
+      }
+    }
+    void initializeConsole();
     return () => {
       active = false;
     };
-  }, []);
+  }, [navigate]);
 
   async function handleLogout() {
     await logout();
@@ -172,6 +188,11 @@ export function ConsoleLayout() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [searchOpen]);
+
+  if (sessionLoading) {
+    return <div className="console-root"><main className="console-main"><div className="surface empty-state"><strong>Checking your session…</strong><span>Opening the command center securely.</span></div></main></div>;
+  }
+  if (!session) return null;
 
   return (
     <div
