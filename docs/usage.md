@@ -2,7 +2,7 @@
 
 This is the practical operating guide for the repository-backed product. It covers local development, organizations and tenants, verification, team access, billing, SSO, and the boundary between local development and production.
 
-> **Honest status:** Phase 3.22-A–H repository gates have passed. Live Lemon Squeezy, Microsoft Entra SSO, production email, hosted database operations and runtime external-SaaS acceptance remain external acceptance tasks.
+> **Honest status:** Phase 3.22-A–H repository gates have passed. Live Paddle, Microsoft Entra SSO, production email, hosted database operations and runtime external-SaaS acceptance remain external acceptance tasks.
 
 ## 1. Know which database you are using
 
@@ -127,13 +127,13 @@ Billing endpoints:
 - `POST /api/v1/billing/portal` — obtains a subscription-management URL after subscription exists.
 - `GET /api/v1/billing/verify?reference=...` — verifies a stored transaction as an organization admin.
 
-Lemon Squeezy is the active billing provider. The server uses `LEMON_SQUEEZY_API_KEY` and `LEMON_SQUEEZY_STARTER_VARIANT_ID`, `LEMON_SQUEEZY_GROWTH_VARIANT_ID`, `LEMON_SQUEEZY_SCALE_VARIANT_ID`. Checkout is configured for USD. The three configured variant IDs must be present, numeric and unique. Before redirecting a customer, the server verifies that the configured store uses USD and that the selected product/variant belongs to that store, is published, matches Test/Live mode, is a monthly subscription, and has the exact amount in cents ($149 = 14900, $499 = 49900, $1,199 = 119900). The webhook then validates the raw-body signature, store, mode, local checkout reference, organization, and variant before applying entitlements.
+Paddle is the active billing provider in the current implementation. Configure `PADDLE_API_KEY`, `PADDLE_CLIENT_TOKEN`, `PADDLE_WEBHOOK_SECRET`, `PADDLE_STARTER_PRICE_ID`, `PADDLE_GROWTH_PRICE_ID`, `PADDLE_SCALE_PRICE_ID`, and `PADDLE_ENVIRONMENT=sandbox` for initial testing. Paddle price IDs use the `pri_...` format; they are not product IDs. The server verifies that each selected price is active, monthly, USD, unique, and matches the canonical amounts ($149 = 14900 cents, $499 = 49900 cents, $1,199 = 119900 cents). The webhook validates Paddle's timestamped `Paddle-Signature`, maps events to a local checkout or known subscription, and applies entitlements only after verification.
 
-For a Nigeria-based business, Lemon Squeezy's current guidance says USD payouts require a verified Zenith Bank USD domiciliary account; international card acceptance can be enabled separately, with local-currency settlement as the default. Do not enable live checkout until Lemon Squeezy has approved USD payments, the required payout account is verified, all three variant IDs match the catalogue, and a real webhook/payment round trip passes. Never commit a secret or paste it into chat. See Lemon Squeezy's [international payments and USD settlement guide](https://support.lemonsqueezy.com/en/articles/2130690).
+Do not enable live checkout until Paddle approves the business and checkout domain, the live API key/client token/webhook secret and all three price IDs are configured for the production environment, and a real payment/webhook round trip passes. Never commit a secret or paste it into chat. See `docs/production/paddle-billing.md` for the current provider contract.
 
 ## 9. Where to get SSO
 
-Agata Proxima's SSO provider is **Microsoft Entra ID (OpenID Connect/OIDC)**. It is not a key you get from Lemon Squeezy. Create an app registration in the Microsoft Entra admin center: **Entra ID → App registrations → New registration**.
+Agata Proxima's SSO provider is **Microsoft Entra ID (OpenID Connect/OIDC)**. SSO is independent of the billing provider. Create an app registration in the Microsoft Entra admin center: **Entra ID → App registrations → New registration**.
 
 For the SaaS app, select **Accounts in any organizational directory (multitenant)** and add a **Web** redirect URI matching the deployed Control Plane exactly:
 
@@ -159,7 +159,7 @@ The Entra feature is available on Growth and above; the backend checks entitleme
 - **Control Plane 503:** check service logs, database connectivity and `/api/v1/production/readiness`.
 - **CSRF failure:** refresh `GET /api/v1/session` and send the current `x-csrf-token`.
 - **Email not delivered:** check Resend credentials, verified sending domain and sender address.
-- **Checkout unavailable:** check the Lemon Squeezy secret and all variant-ID variables; verify the provider plans are USD monthly plans at the canonical prices.
+- **Checkout unavailable:** check the Paddle API key, client token, notification secret and three price-ID variables; verify the Paddle prices are active USD monthly prices at the canonical amounts.
 - **SSO failure:** verify client ID/secret, tenant ID, public URL and exact redirect URI. Never log authorization codes, client secrets or ID tokens.
 - **Quota reached:** inspect `GET /api/v1/billing/entitlements`; remove unused resources or upgrade. Downgrades preserve existing resources rather than deleting them.
 
