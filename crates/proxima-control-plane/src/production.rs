@@ -695,9 +695,6 @@ pub(crate) async fn entra_status(State(s): State<AppState>, headers: HeaderMap) 
         Ok(value) => value,
         Err(response) => return response.into_response(),
     };
-    if !matches!(ctx.role.as_str(), "owner" | "admin") {
-        return StatusCode::FORBIDDEN.into_response();
-    }
     if let Err(response) = require_feature(&s.db, ctx.organization_id, "entra_oidc").await {
         return response;
     }
@@ -787,7 +784,14 @@ pub(crate) async fn entra_start(
             .fetch_optional(&s.db)
             .await {
                 Ok(Some(row)) => row.get::<Uuid, _>("id"),
-                Ok(None) => return bad("Microsoft Entra SSO is not configured for this organization."),
+                Ok(None) => return (
+                    StatusCode::NOT_FOUND,
+                    Json(json!({
+                        "ok": false,
+                        "error": "organization_slug_not_found",
+                        "message": "No organization matches that exact slug. Use the organization slug shown in workspace settings, not its display name."
+                    })),
+                ).into_response(),
                 Err(error) => return db_error(error),
             }
     } else {
@@ -801,7 +805,14 @@ pub(crate) async fn entra_start(
          WHERE organization_id=$1 AND provider='microsoft-entra' AND enabled=true"
     ).bind(organization_id).fetch_optional(&s.db).await {
         Ok(Some(row)) => row,
-        Ok(None) => return bad("Microsoft Entra SSO is not configured for this organization."),
+        Ok(None) => return (
+            StatusCode::CONFLICT,
+            Json(json!({
+                "ok": false,
+                "error": "entra_connection_not_configured",
+                "message": "This organization has no enabled Microsoft Entra connection. An organization owner or admin must configure its tenant ID and enable Entra SSO before anyone can continue."
+            })),
+        ).into_response(),
         Err(e) => return db_error(e),
     };
 
@@ -838,13 +849,77 @@ pub(crate) async fn entra_start(
     Json(json!({"ok":true,"authorization_url":authorize,"tenant_id":tenant_id,"issuer":issuer})).into_response()
 }
 
+
+pub(crate) async fn entra_link_start(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(value) => value,
+        Err(status) => return status.into_response(),
+    };
+    if ctx.api_key {
+        return (StatusCode::FORBIDDEN, Json(json!({
+            "ok": false,
+            "error": "browser_session_required",
+            "message": "Sign in through the browser before linking Microsoft Entra."
+        }))).into_response();
+    }
+    if let Err(response) = require_write(&ctx, &headers) {
+        return response.into_response();
+    }
+    if let Err(response) = require_feature(&s.db, ctx.organization_id, "entra_oidc").await {
+        return response;
+    }
+    let connection = match sqlx::query(
+        "SELECT tenant_id,issuer,client_id FROM organization_oidc_connections
+         WHERE organization_id=$1 AND provider='microsoft-entra' AND enabled=true"
+    ).bind(ctx.organization_id).fetch_optional(&s.db).await {
+        Ok(Some(row)) => row,
+        Ok(None) => return (StatusCode::CONFLICT, Json(json!({
+            "ok": false,
+            "error": "entra_connection_not_configured",
+            "message": "Configure Microsoft Entra for this organization before linking your identity."
+        }))).into_response(),
+        Err(error) => return db_error(error),
+    };
+    let tenant_id: Uuid = connection.get("tenant_id");
+    let issuer: String = connection.get("issuer");
+    let client_id: String = connection.get("client_id");
+    let nonce = format!("{}-{}", Uuid::new_v4(), Uuid::new_v4());
+    let state = format!("{}-{}", Uuid::new_v4(), Uuid::new_v4());
+    let state_hash = token_hash(&state);
+    if let Err(error) = sqlx::query(
+        "INSERT INTO oidc_login_states(state_hash,organization_id,nonce,expires_at,linking_user_id)
+         VALUES($1,$2,$3,now()+interval '10 minutes',$4)"
+    ).bind(state_hash).bind(ctx.organization_id).bind(&nonce).bind(ctx.user_id).execute(&s.db).await {
+        return db_error(error);
+    }
+    let authorize = match reqwest::Url::parse("https://login.microsoftonline.com/organizations/oauth2/v2.0/authorize") {
+        Ok(mut url) => {
+            url.query_pairs_mut()
+                .append_pair("client_id", &client_id)
+                .append_pair("response_type", "code")
+                .append_pair("redirect_uri", &oidc_redirect_uri())
+                .append_pair("response_mode", "query")
+                .append_pair("scope", "openid profile email")
+                .append_pair("state", &state)
+                .append_pair("nonce", &nonce)
+                .append_pair("prompt", "select_account");
+            url.to_string()
+        }
+        Err(_) => return service_unavailable("Unable to construct Microsoft Entra authorization URL."),
+    };
+    Json(json!({"ok":true,"authorization_url":authorize,"tenant_id":tenant_id,"issuer":issuer})).into_response()
+}
+
 pub(crate) async fn entra_callback(
     State(s): State<AppState>,
     Query(q): Query<OidcCallbackQuery>,
 ) -> Response {
     let state_hash = token_hash(&q.state);
     let state_row = match sqlx::query(
-        "SELECT organization_id,nonce FROM oidc_login_states
+        "SELECT organization_id,nonce,linking_user_id FROM oidc_login_states
          WHERE state_hash=$1 AND expires_at>now()"
     ).bind(&state_hash).fetch_optional(&s.db).await {
         Ok(Some(row)) => row,
@@ -853,6 +928,7 @@ pub(crate) async fn entra_callback(
     };
     let organization_id: Uuid = state_row.get("organization_id");
     let expected_nonce: String = state_row.get("nonce");
+    let linking_user_id: Option<Uuid> = state_row.get("linking_user_id");
     let _ = sqlx::query("DELETE FROM oidc_login_states WHERE state_hash=$1").bind(&state_hash).execute(&s.db).await;
     if let Err(response) = require_feature(&s.db, organization_id, "entra_oidc").await {
         return response;
@@ -962,51 +1038,100 @@ pub(crate) async fn entra_callback(
     };
     let display_name = claims.name.clone().unwrap_or_else(|| email.split('@').next().unwrap_or("Operator").to_string());
 
-    let user_id = match sqlx::query(
-        "SELECT user_id FROM user_identities WHERE provider='microsoft-entra'
-         AND issuer=$1 AND subject=$2 AND organization_id=$3"
-    ).bind(&claims.iss).bind(&subject).bind(organization_id).fetch_optional(&s.db).await {
-        Ok(Some(row)) => row.get("user_id"),
-        Ok(None) => {
-            if !jit_provisioning {
-                return (StatusCode::FORBIDDEN, Json(json!({
-                    "ok":false,
-                    "error":"sso_identity_not_linked",
-                    "message":"This Microsoft Entra identity is not linked to the organization."
-                }))).into_response();
-            }
-            let email_exists = match sqlx::query("SELECT 1 FROM users WHERE lower(email)=lower($1)")
-                .bind(&email).fetch_optional(&s.db).await {
-                Ok(v) => v.is_some(),
-                Err(e) => return db_error(e),
-            };
-            if email_exists {
+    let user_id = if let Some(linking_user_id) = linking_user_id {
+        let account = match sqlx::query(
+            "SELECT email FROM users WHERE id=$1
+             AND EXISTS (SELECT 1 FROM memberships WHERE user_id=$1 AND organization_id=$2)"
+        ).bind(linking_user_id).bind(organization_id).fetch_optional(&s.db).await {
+            Ok(Some(row)) => row,
+            Ok(None) => return (StatusCode::FORBIDDEN, Json(json!({
+                "ok":false,
+                "error":"sso_link_account_not_in_organization",
+                "message":"The account that started identity linking no longer belongs to this organization."
+            }))).into_response(),
+            Err(error) => return db_error(error),
+        };
+        let account_email: String = account.get("email");
+        if account_email.trim().to_lowercase() != email {
+            return (StatusCode::CONFLICT, Json(json!({
+                "ok":false,
+                "error":"sso_link_email_mismatch",
+                "message":"The Microsoft account email must match your currently signed-in Agata account before it can be linked."
+            }))).into_response();
+        }
+        let existing = match sqlx::query(
+            "SELECT user_id,organization_id FROM user_identities
+             WHERE provider='microsoft-entra' AND issuer=$1 AND subject=$2"
+        ).bind(&claims.iss).bind(&subject).fetch_optional(&s.db).await {
+            Ok(row) => row,
+            Err(error) => return db_error(error),
+        };
+        if let Some(row) = existing {
+            let mapped_user: Uuid = row.get("user_id");
+            let mapped_org: Uuid = row.get("organization_id");
+            if mapped_user != linking_user_id || mapped_org != organization_id {
                 return (StatusCode::CONFLICT, Json(json!({
                     "ok":false,
-                    "error":"sso_identity_requires_link",
-                    "message":"An Agata account already uses this email. An organization administrator must link the Entra identity explicitly."
+                    "error":"sso_identity_already_linked",
+                    "message":"This Microsoft identity is already linked to a different Agata account or organization."
                 }))).into_response();
             }
-            let uid = Uuid::new_v4();
-            if let Err(e) = sqlx::query(
-                "INSERT INTO users(id,email,display_name,password_hash) VALUES($1,$2,$3,$4)"
-            ).bind(uid).bind(&email).bind(&display_name).bind("OIDC_MANAGED_IDENTITY").execute(&s.db).await {
-                return db_error(e);
-            }
-            if let Err(e) = sqlx::query(
-                "INSERT INTO memberships(user_id,organization_id,role) VALUES($1,$2,'viewer')"
-            ).bind(uid).bind(organization_id).execute(&s.db).await {
-                return db_error(e);
-            }
-            if let Err(e) = sqlx::query(
-                "INSERT INTO user_identities(id,user_id,organization_id,provider,issuer,subject)
-                 VALUES($1,$2,$3,'microsoft-entra',$4,$5)"
-            ).bind(Uuid::new_v4()).bind(uid).bind(organization_id).bind(&claims.iss).bind(&subject).execute(&s.db).await {
-                return db_error(e);
-            }
-            uid
+        } else if let Err(error) = sqlx::query(
+            "INSERT INTO user_identities(id,user_id,organization_id,provider,issuer,subject)
+             VALUES($1,$2,$3,'microsoft-entra',$4,$5)"
+        ).bind(Uuid::new_v4()).bind(linking_user_id).bind(organization_id).bind(&claims.iss).bind(&subject).execute(&s.db).await {
+            return db_error(error);
         }
-        Err(e) => return db_error(e),
+        audit(&s.db, organization_id, linking_user_id, "identity.entra.linked", "user_identity", None,
+            json!({"provider":"microsoft-entra","tenant_id":tenant_id})).await;
+        linking_user_id
+    } else {
+        match sqlx::query(
+            "SELECT user_id FROM user_identities WHERE provider='microsoft-entra'
+             AND issuer=$1 AND subject=$2 AND organization_id=$3"
+        ).bind(&claims.iss).bind(&subject).bind(organization_id).fetch_optional(&s.db).await {
+            Ok(Some(row)) => row.get("user_id"),
+            Ok(None) => {
+                if !jit_provisioning {
+                    return (StatusCode::FORBIDDEN, Json(json!({
+                        "ok":false,
+                        "error":"sso_identity_not_linked",
+                        "message":"This Microsoft Entra identity is not linked to the organization. Sign in with your existing account and link it under Settings → Enterprise identity."
+                    }))).into_response();
+                }
+                let email_exists = match sqlx::query("SELECT 1 FROM users WHERE lower(email)=lower($1)")
+                    .bind(&email).fetch_optional(&s.db).await {
+                    Ok(v) => v.is_some(),
+                    Err(e) => return db_error(e),
+                };
+                if email_exists {
+                    return (StatusCode::CONFLICT, Json(json!({
+                        "ok":false,
+                        "error":"sso_identity_requires_link",
+                        "message":"An Agata account already uses this email. Sign in to that account and link Microsoft Entra from Settings → Enterprise identity."
+                    }))).into_response();
+                }
+                let uid = Uuid::new_v4();
+                if let Err(e) = sqlx::query(
+                    "INSERT INTO users(id,email,display_name,password_hash) VALUES($1,$2,$3,$4)"
+                ).bind(uid).bind(&email).bind(&display_name).bind("OIDC_MANAGED_IDENTITY").execute(&s.db).await {
+                    return db_error(e);
+                }
+                if let Err(e) = sqlx::query(
+                    "INSERT INTO memberships(user_id,organization_id,role) VALUES($1,$2,'viewer')"
+                ).bind(uid).bind(organization_id).execute(&s.db).await {
+                    return db_error(e);
+                }
+                if let Err(e) = sqlx::query(
+                    "INSERT INTO user_identities(id,user_id,organization_id,provider,issuer,subject)
+                     VALUES($1,$2,$3,'microsoft-entra',$4,$5)"
+                ).bind(Uuid::new_v4()).bind(uid).bind(organization_id).bind(&claims.iss).bind(&subject).execute(&s.db).await {
+                    return db_error(e);
+                }
+                uid
+            }
+            Err(e) => return db_error(e),
+        }
     };
 
     if let Err(e) = sqlx::query(

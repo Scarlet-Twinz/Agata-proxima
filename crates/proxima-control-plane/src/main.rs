@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use sqlx::{postgres::PgPoolOptions, PgPool, Row};
-use std::{env, net::SocketAddr};
+use std::{env, net::SocketAddr, path::Path as FsPath};
 use tower_http::trace::TraceLayer;
 use tracing::{error, info};
 use uuid::Uuid;
@@ -165,10 +165,39 @@ struct AuthOutput {
     csrf_token: String,
 }
 
+// Load local configuration from predictable locations even when `cargo run` is
+// invoked from the workspace root or another working directory. Existing process
+// environment variables intentionally take precedence over files (dotenvy default).
+fn load_environment_files() {
+    let manifest_dir = FsPath::new(env!("CARGO_MANIFEST_DIR"));
+    let candidates = [
+        manifest_dir.join("../../.env.local"),
+        manifest_dir.join(".env.local"),
+        FsPath::new(".env.local").to_path_buf(),
+        manifest_dir.join("../../.env"),
+        manifest_dir.join(".env"),
+        FsPath::new(".env").to_path_buf(),
+    ];
+    let mut loaded = std::collections::HashSet::new();
+    for path in candidates {
+        let canonical = path.canonicalize().unwrap_or(path.clone());
+        if !canonical.is_file() || !loaded.insert(canonical.clone()) {
+            continue;
+        }
+        if let Err(error) = dotenvy::from_path(&canonical) {
+            eprintln!(
+                "Could not load environment file {}: {error}",
+                canonical.display()
+            );
+        } else {
+            eprintln!("Loaded environment file: {}", canonical.display());
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    let _ = dotenvy::from_filename(".env.local");
-    let _ = dotenvy::dotenv();
+    load_environment_files();
     tracing_subscriber::fmt().with_target(false).init();
 
     let database_url = env::var("PROXIMA_CONTROL_DATABASE_URL").unwrap_or_else(|_| {
@@ -415,6 +444,10 @@ async fn main() -> Result<()> {
             get(production::entra_status).post(production::configure_entra),
         )
         .route("/api/v1/auth/oidc/start", get(production::entra_start))
+        .route(
+            "/api/v1/auth/oidc/link/start",
+            post(production::entra_link_start),
+        )
         .route(
             "/api/v1/auth/oidc/callback",
             get(production::entra_callback),
