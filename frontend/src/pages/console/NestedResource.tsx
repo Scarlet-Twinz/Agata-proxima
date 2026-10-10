@@ -465,7 +465,7 @@ function BillingPlans() {
 
   return <div className="resource-page billing-plans-page">
     <div className="page-heading">
-      <div><span className="eyebrow">BILLING · PADDLE</span><h1>Plans and billing</h1><p>Choose a monthly plan. Agata verifies the configured provider variant and confirms paid access only from a signed webhook.</p></div>
+      <div><span className="eyebrow">BILLING · PADDLE</span><h1>Plans and billing</h1><p>Choose a monthly plan. Agata verifies the configured Paddle price and confirms paid access only from a signed webhook.</p></div>
       {account?.subscription_id && <button type="button" className="console-refresh-button" onClick={() => void openPortal()} disabled={busyPlan !== ""}>{busyPlan === "portal" ? "Opening portal…" : "Manage subscription"}</button>}
     </div>
     {account && <section className="surface billing-current-plan">
