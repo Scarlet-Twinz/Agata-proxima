@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use sqlx::{postgres::PgPoolOptions, PgPool, Row};
-use std::{env, net::SocketAddr, path::Path};
+use std::{env, net::SocketAddr, path::Path as FsPath};
 use tower_http::trace::TraceLayer;
 use tracing::{error, info};
 use uuid::Uuid;
@@ -169,14 +169,14 @@ struct AuthOutput {
 // invoked from the workspace root or another working directory. Existing process
 // environment variables intentionally take precedence over files (dotenvy default).
 fn load_environment_files() {
-    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let manifest_dir = FsPath::new(env!("CARGO_MANIFEST_DIR"));
     let candidates = [
         manifest_dir.join("../../.env.local"),
         manifest_dir.join(".env.local"),
-        Path::new(".env.local").to_path_buf(),
+        FsPath::new(".env.local").to_path_buf(),
         manifest_dir.join("../../.env"),
         manifest_dir.join(".env"),
-        Path::new(".env").to_path_buf(),
+        FsPath::new(".env").to_path_buf(),
     ];
     let mut loaded = std::collections::HashSet::new();
     for path in candidates {
