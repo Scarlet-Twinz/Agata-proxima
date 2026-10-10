@@ -495,7 +495,7 @@ function BillingPlans() {
         </section>;
       })}
     </div>}
-    {!loading && catalog && !catalog.plans.some((plan) => plan.checkout_available) && <div className="empty-state"><strong>Checkout is not configured yet.</strong><span>The server needs the Paddle Test Mode API key, store ID, webhook secret, and three unique monthly variant IDs before paid checkout is enabled.</span></div>}
+    {!loading && catalog && !catalog.plans.some((plan) => plan.checkout_available) && <div className="empty-state"><strong>Checkout is not configured yet.</strong><span>The server needs a Paddle API key, client-side token, notification destination secret, and three unique monthly price IDs before paid checkout is enabled.</span></div>}
   </div>;
 }
 
