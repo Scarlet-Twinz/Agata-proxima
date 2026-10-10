@@ -787,7 +787,14 @@ pub(crate) async fn entra_start(
             .fetch_optional(&s.db)
             .await {
                 Ok(Some(row)) => row.get::<Uuid, _>("id"),
-                Ok(None) => return bad("Microsoft Entra SSO is not configured for this organization."),
+                Ok(None) => return (
+                    StatusCode::NOT_FOUND,
+                    Json(json!({
+                        "ok": false,
+                        "error": "organization_slug_not_found",
+                        "message": "No organization matches that exact slug. Use the organization slug shown in workspace settings, not its display name."
+                    })),
+                ).into_response(),
                 Err(error) => return db_error(error),
             }
     } else {
@@ -801,7 +808,14 @@ pub(crate) async fn entra_start(
          WHERE organization_id=$1 AND provider='microsoft-entra' AND enabled=true"
     ).bind(organization_id).fetch_optional(&s.db).await {
         Ok(Some(row)) => row,
-        Ok(None) => return bad("Microsoft Entra SSO is not configured for this organization."),
+        Ok(None) => return (
+            StatusCode::CONFLICT,
+            Json(json!({
+                "ok": false,
+                "error": "entra_connection_not_configured",
+                "message": "This organization has no enabled Microsoft Entra connection. An organization owner or admin must configure its tenant ID and enable Entra SSO before anyone can continue."
+            })),
+        ).into_response(),
         Err(e) => return db_error(e),
     };
 
