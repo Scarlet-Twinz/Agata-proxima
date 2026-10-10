@@ -1738,6 +1738,28 @@ pub(crate) async fn paddle_webhook(
         } else {
             return (StatusCode::FORBIDDEN, Json(json!({"received":false,"error":"subscription_missing"}))).into_response();
         }
+        let Some(subscription) = subscription_id.as_deref() else {
+            return (StatusCode::FORBIDDEN, Json(json!({"received":false,"error":"subscription_missing"}))).into_response();
+        };
+        if let Err(error) = sqlx::query(
+            "INSERT INTO billing_accounts(organization_id,provider,paddle_customer_id,paddle_subscription_id,paddle_price_id,plan_key,status,current_period_end,cancel_at_period_end,updated_at)
+             VALUES($1,'paddle',$2,$3,$4,$5,'active',NULL,false,now())
+             ON CONFLICT(organization_id) DO UPDATE SET provider='paddle',
+               paddle_customer_id=COALESCE(EXCLUDED.paddle_customer_id,billing_accounts.paddle_customer_id),
+               paddle_subscription_id=EXCLUDED.paddle_subscription_id,
+               paddle_price_id=EXCLUDED.paddle_price_id,plan_key=EXCLUDED.plan_key,status='active',
+               cancel_at_period_end=false,updated_at=now()",
+        )
+        .bind(organization_id)
+        .bind(customer_id.as_deref())
+        .bind(subscription)
+        .bind(price_id.as_deref())
+        .bind(plan)
+        .execute(&s.db)
+        .await
+        {
+            return db_error(error);
+        }
         if let Err(error) = apply_entitlements(&s.db, organization_id, plan).await {
             return db_error(error);
         }
