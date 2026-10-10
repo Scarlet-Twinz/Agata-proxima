@@ -289,7 +289,8 @@ function EntraIdentitySettings() {
             <li>Test login, organization mapping, session creation and audit evidence against a real Entra tenant.</li>
           </ol>
           <p><a href="https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app?tabs=client-secret" target="_blank" rel="noreferrer">Microsoft's official app registration guide</a></p>
-        </section>        )}
+        </section>
+        )}
 
       </>
     }
