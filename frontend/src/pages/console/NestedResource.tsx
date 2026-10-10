@@ -430,11 +430,18 @@ function BillingPlans() {
     setError("");
     setNotice("");
     try {
-      const result = await api.post<{ checkout_url: string }>("/api/v1/billing/checkout", { price_id: plan.key });
-      if (!result.checkout_url || !result.checkout_url.startsWith("https://")) throw new Error("The billing provider did not return a secure checkout URL.");
-      window.location.assign(result.checkout_url);
+      const result = await api.post<{ transaction_id: string; client_token: string; environment: string }>(
+        "/api/v1/billing/checkout",
+        { price_id: plan.key },
+      );
+      if (!result.transaction_id || !result.client_token) {
+        throw new Error("Paddle did not return the checkout transaction and client token.");
+      }
+      await openPaddleCheckout(result.transaction_id, result.client_token, result.environment);
+      setNotice("Paddle Checkout opened. Paid access changes only after the server verifies Paddle's signed billing events.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to start secure checkout.");
+      setError(err instanceof Error ? err.message : "Unable to start Paddle Checkout.");
+    } finally {
       setBusyPlan("");
     }
   }
