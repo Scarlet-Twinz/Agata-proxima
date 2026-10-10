@@ -695,9 +695,6 @@ pub(crate) async fn entra_status(State(s): State<AppState>, headers: HeaderMap) 
         Ok(value) => value,
         Err(response) => return response.into_response(),
     };
-    if !matches!(ctx.role.as_str(), "owner" | "admin") {
-        return StatusCode::FORBIDDEN.into_response();
-    }
     if let Err(response) = require_feature(&s.db, ctx.organization_id, "entra_oidc").await {
         return response;
     }
@@ -867,6 +864,9 @@ pub(crate) async fn entra_link_start(
             "error": "browser_session_required",
             "message": "Sign in through the browser before linking Microsoft Entra."
         }))).into_response();
+    }
+    if let Err(response) = require_write(&ctx, &headers) {
+        return response.into_response();
     }
     if let Err(response) = require_feature(&s.db, ctx.organization_id, "entra_oidc").await {
         return response;

@@ -192,7 +192,6 @@ function EntraIdentitySettings() {
         setOrganizationSlug(settings.organization.slug);
         const manager = ["owner","admin"].includes(settings.organization.role);
         setCanManage(manager);
-        if (!manager) return;
         const connection = await api.get<{configured:boolean;tenant_id?:string|null;jit_provisioning?:boolean}>("/api/v1/organization/oidc/entra");
         if (!active) return;
         setConfigured(connection.configured);
@@ -259,13 +258,13 @@ function EntraIdentitySettings() {
     {message && <div className="settings-banner settings-banner--success"><CheckCircle2 size={16}/>{message}</div>}
     {error && <div className="settings-banner settings-banner--error">{error}</div>}
     {loading ? <div className="surface empty-state"><strong>Loading identity configuration…</strong><span>Checking your organization role and SSO settings.</span></div> :
-      !canManage ? <div className="surface empty-state"><ShieldCheck size={24}/><strong>Organization administrator required</strong><span>Only an organization owner or admin can configure enterprise identity.</span></div> :
       !available ? <div className="surface empty-state"><ShieldCheck size={24}/><strong>SSO configuration unavailable</strong><span>Microsoft Entra SSO requires the Growth plan or higher and the Control Plane must be configured with the app registration's client ID.</span></div> :
       <>
         <section className="settings-section">
           <div className="settings-section-heading"><div><h2>Connection status</h2><p>Configuration state is not the same as successful end-to-end sign-in.</p></div><ShieldCheck size={19}/></div>
           <div className="settings-readonly"><strong>{configured ? "Tenant mapping configured" : "Not configured yet"}</strong><small>Organization slug: {organizationSlug || "unavailable"}</small></div>
         </section>
+        {canManage && (
         <section className="settings-section">
           <div className="settings-section-heading"><div><h2>Expected Entra tenant</h2><p>Use the Microsoft Entra Directory (tenant) ID for the customer organization, not the Agata application (client) ID.</p></div><ShieldCheck size={19}/></div>
           <form className="agata-form" onSubmit={saveConnection}>
@@ -274,10 +273,12 @@ function EntraIdentitySettings() {
             <button className="primary-action" type="submit" disabled={saving || !canManage || !tenantId.trim()}><Save size={15}/>{saving ? "Saving…" : "Save Entra configuration"}</button>
           </form>
         </section>
+        )}
         <section className="settings-section">
           <div className="settings-section-heading"><div><h2>Link your existing account</h2><p>Sign in with Microsoft using the same email as your current Agata account. This explicitly links the identity; it never transfers an identity already linked elsewhere.</p></div><ShieldCheck size={19}/></div>
-          <button className="secondary-action" type="button" onClick={linkMicrosoftIdentity} disabled={linking || !configured || !canManage}>{linking ? "Opening Microsoft…" : "Link Microsoft Entra identity"}</button>
+          <button className="secondary-action" type="button" onClick={linkMicrosoftIdentity} disabled={linking || !configured}>{linking ? "Opening Microsoft…" : "Link Microsoft Entra identity"}</button>
         </section>
+        {canManage && (
         <section className="settings-section">
           <div className="settings-section-heading"><div><h2>Required before live SSO</h2><p>This page stores the organization mapping only.</p></div></div>
           <ol>
@@ -288,7 +289,8 @@ function EntraIdentitySettings() {
             <li>Test login, organization mapping, session creation and audit evidence against a real Entra tenant.</li>
           </ol>
           <p><a href="https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app?tabs=client-secret" target="_blank" rel="noreferrer">Microsoft's official app registration guide</a></p>
-        </section>
+        </section>        )}
+
       </>
     }
   </ContextShell>;
