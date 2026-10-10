@@ -80,24 +80,13 @@ pub(crate) struct PasswordResetConfirm {
     pub token: String,
     pub password: String,
 }
-fn lemon_variant_id(plan: &str) -> Option<String> {
-    let key=match plan{"starter"=>"LEMON_SQUEEZY_STARTER_VARIANT_ID","growth"=>"LEMON_SQUEEZY_GROWTH_VARIANT_ID","scale"=>"LEMON_SQUEEZY_SCALE_VARIANT_ID",_=>return None};
-    env::var(key).ok().map(|v|v.trim().to_owned()).filter(|v|!v.is_empty()&&v.chars().all(|c|c.is_ascii_digit()))
-}
-fn plan_for_code(id: Option<&str>) -> Option<&'static str> {
-    let id = id?;
-    for p in ["starter","growth","scale"] { if lemon_variant_id(p).as_deref()==Some(id) { return Some(match p{"starter"=>"starter","growth"=>"growth",_=>"scale"}); } } None
-}
-fn configured_lemonsqueezy_variants_unique()->bool {
-    let v=[lemon_variant_id("starter"),lemon_variant_id("growth"),lemon_variant_id("scale")];
-    v.iter().all(|x|x.as_ref().is_some_and(|s|!s.is_empty()))&&v[0]!=v[1]&&v[0]!=v[2]&&v[1]!=v[2]
-}
-fn expected_lemonsqueezy_amount(plan:&str)->Option<i64>{match plan{"starter"=>Some(14900),"growth"=>Some(49900),"scale"=>Some(119900),_=>None}}
-fn lemonsqueezy_test_mode()->bool{env::var("LEMON_SQUEEZY_TEST_MODE").map(|v|matches!(v.trim().to_ascii_lowercase().as_str(),"true"|"1"|"yes")).unwrap_or(true)}
-fn verify_lemonsqueezy_signature(payload:&str,signature:&str,secret:&str)->bool{
-    type HmacSha256=Hmac<sha2::Sha256>;
-    let mut mac=match HmacSha256::new_from_slice(secret.as_bytes()){Ok(v)=>v,Err(_)=>return false};mac.update(payload.as_bytes());
-    constant_time_equal(&hex::encode(mac.finalize().into_bytes()),signature.trim())
+fn expected_plan_amount(plan: &str) -> Option<i64> {
+    match plan {
+        "starter" => Some(14_900),
+        "growth" => Some(49_900),
+        "scale" => Some(119_900),
+        _ => None,
+    }
 }
 
 fn paddle_price_id(plan: &str) -> Option<String> {
@@ -160,7 +149,7 @@ fn verify_paddle_signature(payload: &str, signature_header: &str, secret: &str) 
     let expected = hex::encode(mac.finalize().into_bytes());
     signatures
         .iter()
-        .any(|signature| super::constant_time_equal(&expected, signature))
+        .any(|signature| constant_time_equal(&expected, signature))
 }
 
 fn plan_for_paddle_price(price_id: Option<&str>) -> Option<&'static str> {
@@ -1333,7 +1322,7 @@ pub(crate) async fn checkout(
     let interval = price.pointer("/billing_cycle/interval").and_then(Value::as_str);
     let frequency = price.pointer("/billing_cycle/frequency").and_then(Value::as_i64);
     let status = price.get("status").and_then(Value::as_str);
-    if amount != expected_lemonsqueezy_amount(plan)
+    if amount != expected_plan_amount(plan)
         || currency != Some("USD")
         || interval != Some("month")
         || frequency != Some(1)
@@ -1423,12 +1412,6 @@ pub(crate) async fn checkout(
     })).into_response()
 }
 
-pub(crate) async fn lemonsqueezy_callback(Query(q):Query<std::collections::HashMap<String,String>>)->Response{
- let base=env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_|"http://127.0.0.1:8080".into()).trim_end_matches('/').to_owned();
- let reference=q.get("reference").and_then(|v|Uuid::parse_str(v).ok()).map(|v|v.to_string());
- let destination=match reference{Some(v)=>format!("{base}/app?billing=return&reference={v}"),None=>format!("{base}/app?billing=return")};
- Html(format!("<html><head><meta http-equiv=\"refresh\" content=\"0;url={destination}\"></head><body>Return complete. Billing is confirmed only by a verified webhook.</body></html>")).into_response()
-}
 pub(crate) async fn billing_verify(
     State(s): State<AppState>,
     headers: HeaderMap,
@@ -1893,96 +1876,6 @@ pub(crate) async fn paddle_webhook(
     Json(json!({"received":true,"processed":true,"event_type":event_type})).into_response()
 }
 
-pub(crate) async fn lemonsqueezy_webhook(State(s):State<AppState>,headers:HeaderMap,body:String)->Response{
- let sig=match headers.get("x-signature").and_then(|v|v.to_str().ok()){Some(v)=>v,None=>return StatusCode::BAD_REQUEST.into_response()};
- let secret=match env::var("LEMON_SQUEEZY_WEBHOOK_SECRET"){Ok(v)if !v.trim().is_empty()=>v,_=>return StatusCode::SERVICE_UNAVAILABLE.into_response()};
- if !verify_lemonsqueezy_signature(&body,sig,&secret){return StatusCode::UNAUTHORIZED.into_response();}
- let event:Value=match serde_json::from_str(&body){Ok(v)=>v,Err(_)=>return StatusCode::BAD_REQUEST.into_response()};
- let name=event.pointer("/meta/event_name").and_then(Value::as_str).unwrap_or_default();let data=event.get("data").cloned().unwrap_or(Value::Null);let a=data.get("attributes").cloned().unwrap_or(Value::Null);let id=data.get("id").and_then(Value::as_str).unwrap_or_default();
- if name.is_empty()||id.is_empty(){return StatusCode::BAD_REQUEST.into_response();}
- let store=env::var("LEMON_SQUEEZY_STORE_ID").unwrap_or_default();
- if a.get("store_id").and_then(Value::as_i64).map(|v|v.to_string()).as_deref()!=Some(store.trim()){return StatusCode::FORBIDDEN.into_response();}
- if a.get("test_mode").and_then(Value::as_bool)!=Some(lemonsqueezy_test_mode()){return StatusCode::FORBIDDEN.into_response();}
- let event_key=format!("{}:{}:{}",name,id,hex::encode(Sha256::digest(body.as_bytes())));
- let claimed=match sqlx::query("INSERT INTO billing_events(provider,provider_event_id,event_type,payload,status,processing_started_at,attempt_count) VALUES('lemonsqueezy',$1,$2,$3,'processing',now(),1) ON CONFLICT(provider,provider_event_id) DO UPDATE SET status='processing',processing_started_at=now(),attempt_count=billing_events.attempt_count+1,payload=EXCLUDED.payload,event_type=EXCLUDED.event_type WHERE billing_events.status NOT IN ('processed','ignored') AND (billing_events.processing_started_at IS NULL OR billing_events.processing_started_at<now()-interval '1 minute') RETURNING id").bind(&event_key).bind(name).bind(&event).fetch_optional(&s.db).await{Ok(v)=>v.is_some(),Err(e)=>return db_error(e)};
- if !claimed{
-  let existing=match sqlx::query("SELECT status FROM billing_events WHERE provider='lemonsqueezy' AND provider_event_id=$1").bind(&event_key).fetch_optional(&s.db).await{Ok(v)=>v,Err(e)=>return db_error(e)};
-  return match existing.map(|row|row.get::<String,_>("status")).as_deref(){
-   Some("processed")|Some("ignored")=>Json(json!({"received":true,"duplicate":true})).into_response(),
-   _=>StatusCode::SERVICE_UNAVAILABLE.into_response()
-  };
- }
- let org=event.pointer("/meta/custom_data/organization_id").and_then(Value::as_str).and_then(|v|Uuid::parse_str(v).ok());
- let sub=if data.get("type").and_then(Value::as_str)==Some("subscriptions"){Some(id.to_owned())}else{a.get("subscription_id").and_then(Value::as_i64).map(|v|v.to_string())};
- let cust=a.get("customer_id").and_then(Value::as_i64).map(|v|v.to_string());
- let resolved=if let Some(v)=org{Some(v)}else if let Some(ref v)=sub{match sqlx::query("SELECT organization_id FROM billing_accounts WHERE lemonsqueezy_subscription_id=$1").bind(v).fetch_optional(&s.db).await{Ok(r)=>r.map(|x|x.get::<Uuid,_>("organization_id")),Err(e)=>return db_error(e)}}else if let Some(ref v)=cust{match sqlx::query("SELECT organization_id FROM billing_accounts WHERE lemonsqueezy_customer_id=$1").bind(v).fetch_optional(&s.db).await{Ok(r)=>r.map(|x|x.get::<Uuid,_>("organization_id")),Err(e)=>return db_error(e)}}else{None};
- let org=match resolved{Some(v)=>v,None=>{let _=sqlx::query("UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='lemonsqueezy' AND provider_event_id=$1").bind(&event_key).execute(&s.db).await;return Json(json!({"received":true,"ignored":"organization_not_resolved"})).into_response();}};
- let variant=if let Some(value)=a.get("variant_id").and_then(Value::as_i64){Some(value.to_string())}else if let Some(ref subscription_id)=sub{
-  match sqlx::query("SELECT lemonsqueezy_variant_id FROM billing_accounts WHERE organization_id=$1 AND lemonsqueezy_subscription_id=$2").bind(org).bind(subscription_id).fetch_optional(&s.db).await{
-   Ok(Some(row))=>row.get::<Option<String>,_>("lemonsqueezy_variant_id"),Ok(None)=>None,Err(e)=>return db_error(e)
-  }
- }else{None};
- if name=="subscription_created" {
-  let checkout_reference=event.pointer("/meta/custom_data/checkout_reference").and_then(Value::as_str);
-  let checkout_reference=match checkout_reference{Some(v)=>v,None=>return StatusCode::FORBIDDEN.into_response()};
-  let local=match sqlx::query("SELECT organization_id,plan_code FROM billing_transactions WHERE provider='lemonsqueezy' AND reference=$1").bind(checkout_reference).fetch_optional(&s.db).await{Ok(v)=>v,Err(e)=>return db_error(e)};
-  let local=match local{Some(v)=>v,None=>return StatusCode::FORBIDDEN.into_response()};
-  if local.get::<Uuid,_>("organization_id")!=org||local.get::<Option<String>,_>("plan_code").as_deref()!=variant.as_deref(){return StatusCode::FORBIDDEN.into_response();}
-  let initial_status=match a.get("status").and_then(Value::as_str){Some("active")=>"success",Some("on_trial")=>"trialing",_=>"pending"};
-  if let Err(e)=sqlx::query("UPDATE billing_transactions SET status=$1,payload=$2,updated_at=now() WHERE provider='lemonsqueezy' AND reference=$3 AND organization_id=$4").bind(initial_status).bind(&event).bind(checkout_reference).bind(org).execute(&s.db).await{return db_error(e);}
- }
- let plan=variant.as_deref().and_then(|v|plan_for_code(Some(v)));let status=a.get("status").and_then(Value::as_str).unwrap_or_default();
- let period=a.get("renews_at").and_then(Value::as_str).or_else(||a.get("ends_at").and_then(Value::as_str)).and_then(|v|chrono::DateTime::parse_from_rfc3339(v).ok()).map(|v|v.with_timezone(&chrono::Utc));
- let payment_failed=name=="subscription_payment_failed"||matches!(status,"past_due"|"unpaid");
- let active=!payment_failed&&(matches!(status,"active"|"on_trial")||matches!(name,"subscription_created"|"subscription_payment_success"|"subscription_resumed"|"subscription_payment_recovered"));
- let cancelled=name=="subscription_cancelled"||status=="cancelled"||a.get("cancelled").and_then(Value::as_bool)==Some(true);
- let mapped=if active{"active"}else if cancelled{"non-renewing"}else if payment_failed{"attention"}else if name=="subscription_expired"||status=="expired"{"canceled"}else if status=="paused"{"paused"}else{"pending"};
- if let Some(plan)=plan{
-  if active{if let Err(e)=apply_entitlements(&s.db,org,plan).await{return db_error(e);}}
-  if name!="subscription_payment_refunded" {
-  if let Err(e)=sqlx::query("INSERT INTO billing_accounts(organization_id,provider,lemonsqueezy_customer_id,lemonsqueezy_subscription_id,lemonsqueezy_variant_id,lemonsqueezy_customer_portal_url,plan_key,status,current_period_end,cancel_at_period_end,updated_at) VALUES($1,'lemonsqueezy',$2,$3,$4,$5,$6,$7,$8,$9,now()) ON CONFLICT(organization_id) DO UPDATE SET provider='lemonsqueezy',lemonsqueezy_customer_id=COALESCE(EXCLUDED.lemonsqueezy_customer_id,billing_accounts.lemonsqueezy_customer_id),lemonsqueezy_subscription_id=COALESCE(EXCLUDED.lemonsqueezy_subscription_id,billing_accounts.lemonsqueezy_subscription_id),lemonsqueezy_variant_id=EXCLUDED.lemonsqueezy_variant_id,lemonsqueezy_customer_portal_url=COALESCE(EXCLUDED.lemonsqueezy_customer_portal_url,billing_accounts.lemonsqueezy_customer_portal_url),plan_key=EXCLUDED.plan_key,status=EXCLUDED.status,current_period_end=COALESCE(EXCLUDED.current_period_end,billing_accounts.current_period_end),cancel_at_period_end=CASE WHEN $10 THEN EXCLUDED.cancel_at_period_end ELSE billing_accounts.cancel_at_period_end END,updated_at=now()")
-   .bind(org).bind(cust).bind(sub).bind(&variant).bind(a.pointer("/urls/customer_portal").and_then(Value::as_str)).bind(plan).bind(mapped).bind(period).bind(cancelled).bind(data.get("type").and_then(Value::as_str)==Some("subscriptions")).execute(&s.db).await{return db_error(e);}
-  }
-  if payment_failed {
-   if let Err(e)=sqlx::query("UPDATE organization_entitlements SET billing_status='past_due',billing_grace_until=COALESCE(billing_grace_until,now()+interval '7 days'),updated_at=now() WHERE organization_id=$1").bind(org).execute(&s.db).await{return db_error(e);}
-  }
-  if name=="subscription_expired"||status=="expired" {
-   if let Err(e)=apply_entitlements(&s.db,org,"free").await{return db_error(e);}
-   if let Err(e)=sqlx::query("UPDATE organization_entitlements SET billing_status='canceled',billing_grace_until=NULL,updated_at=now() WHERE organization_id=$1").bind(org).execute(&s.db).await{return db_error(e);}
-  }
- }
- if matches!(name,"subscription_payment_success"|"subscription_payment_recovered"|"subscription_payment_failed"|"subscription_payment_refunded") {
-  if let (Some(plan),Some(variant_id))=(plan,variant.as_deref()) {
-   let txstatus=match name {
-    "subscription_payment_failed"=>"failed",
-    "subscription_payment_refunded"=>"refunded",
-    _=>"success"
-   };
-   let refund_status=if txstatus=="refunded"{Some("refunded")}else{None};
-   let reference=format!("invoice:{id}");
-   let amount=a.get("total_usd").and_then(Value::as_i64);
-   let currency=a.get("currency").and_then(Value::as_str).unwrap_or("USD");
-   if let Err(e)=sqlx::query("INSERT INTO billing_transactions(organization_id,provider,reference,plan_key,plan_code,amount,currency,status,refund_status,metadata,payload,created_at,updated_at) VALUES($1,'lemonsqueezy',$2,$3,$4,$5,$6,$7,$8,$9,$10,now(),now()) ON CONFLICT(provider,reference) DO UPDATE SET status=EXCLUDED.status,refund_status=COALESCE(EXCLUDED.refund_status,billing_transactions.refund_status),payload=EXCLUDED.payload,updated_at=now()")
-    .bind(org).bind(reference).bind(plan).bind(variant_id).bind(amount).bind(currency).bind(txstatus).bind(refund_status).bind(&event).bind(&event).execute(&s.db).await{return db_error(e);}
-  }
- }
- if let Err(e)=sqlx::query("UPDATE billing_events SET status='processed',processed_at=now(),processing_started_at=NULL WHERE provider='lemonsqueezy' AND provider_event_id=$1").bind(&event_key).execute(&s.db).await{return db_error(e);}
- let notice=match name{
-  "subscription_created"=>Some(("Subscription activated","Your Agata Proxima subscription is active.")),
-  "subscription_payment_success"=>Some(("Subscription payment received","Your subscription payment was received successfully.")),
-  "subscription_payment_failed"=>Some(("Subscription payment failed","The latest subscription payment failed. Please update your payment method in the customer portal.")),
-  "subscription_payment_recovered"=>Some(("Subscription payment recovered","Your subscription payment issue has been resolved.")),
-  "subscription_payment_refunded"=>Some(("Subscription payment refunded","A subscription payment was refunded. Your billing history has been updated; review your subscription status and customer portal for current details.")),
-  "subscription_cancelled"=>Some(("Subscription cancellation scheduled","Your subscription was cancelled and access follows the provider's subscription period.")),
-  "subscription_expired"=>Some(("Subscription expired","Your subscription has expired. Review your plan to restore paid access.")),
-  _=>None
- };
- if let Some((title,details))=notice{
-  let db=s.db.clone();let reference=event_key.clone();
-  tokio::spawn(async move{send_billing_notice(&db,org,&reference,title,details).await;});
- }
- Json(json!({"received":true,"processed":true,"event":name})).into_response()
-}
 pub(crate) async fn send_verification_email(
     db: &sqlx::PgPool,
     user_id: Uuid,
@@ -2767,23 +2660,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn lemonsqueezy_signature_round_trip_and_rejection() {
-        let payload = r#"{"meta":{"event_name":"subscription_created"},"data":{"id":"1"}}"#;
-        let secret = "test_signing_secret";
+    fn paddle_signature_round_trip_rejects_invalid_and_stale_signatures() {
+        let payload = r#"{"event_id":"evt_test","event_type":"transaction.completed"}"#;
+        let secret = "test_paddle_notification_secret";
+        let timestamp = chrono::Utc::now().timestamp();
         type HmacSha256 = Hmac<sha2::Sha256>;
         let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
-        mac.update(payload.as_bytes());
+        mac.update(format!("{timestamp}:{payload}").as_bytes());
         let signature = hex::encode(mac.finalize().into_bytes());
-        assert!(verify_lemonsqueezy_signature(payload, &signature, secret));
-        assert!(!verify_lemonsqueezy_signature(payload, "invalid", secret));
-        assert!(!verify_lemonsqueezy_signature("different", &signature, secret));
+        let header = format!("ts={timestamp};h1={signature}");
+        assert!(verify_paddle_signature(payload, &header, secret));
+        assert!(!verify_paddle_signature(payload, "ts=1;h1=invalid", secret));
+        assert!(!verify_paddle_signature("changed", &header, secret));
     }
+
     #[test]
-    fn lemonsqueezy_catalog_amounts_are_exact_minor_units() {
-        assert_eq!(expected_lemonsqueezy_amount("starter"), Some(14_900));
-        assert_eq!(expected_lemonsqueezy_amount("growth"), Some(49_900));
-        assert_eq!(expected_lemonsqueezy_amount("scale"), Some(119_900));
-        assert_eq!(expected_lemonsqueezy_amount("free"), None);
-        assert_eq!(expected_lemonsqueezy_amount("enterprise"), None);
+    fn configured_plan_amounts_are_exact_minor_units() {
+        assert_eq!(expected_plan_amount("starter"), Some(14_900));
+        assert_eq!(expected_plan_amount("growth"), Some(49_900));
+        assert_eq!(expected_plan_amount("scale"), Some(119_900));
+        assert_eq!(expected_plan_amount("free"), None);
+        assert_eq!(expected_plan_amount("enterprise"), None);
     }
 }
