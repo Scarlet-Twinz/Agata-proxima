@@ -1,6 +1,6 @@
 # Agata Proxima Pricing Proposal
 
-This document records the canonical launch-price schedule for Agata Proxima. The founder has directed that the previous $149 / $499 / $1,199 monthly prices be restored in the repository. This document does not itself create or modify Lemon Squeezy plans; before live checkout, verify the existing Agata-specific variant IDs and amounts in the Lemon Squeezy account.
+This document records the canonical launch-price schedule for Agata Proxima. The founder has directed that the previous $149 / $499 / $1,199 monthly prices be restored in the repository. This document does not itself create or modify Paddle products; before live checkout, verify the Agata-specific monthly USD price IDs and amounts in Paddle.
 
 ## Recommended launch pricing
 
