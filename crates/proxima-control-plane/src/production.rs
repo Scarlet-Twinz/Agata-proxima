@@ -1241,49 +1241,184 @@ fn oidc_redirect_uri() -> String {
 }
 
 pub(crate) async fn billing_status(State(s): State<AppState>, headers: HeaderMap) -> Response {
-    let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};
-    match sqlx::query("SELECT lemonsqueezy_customer_id,lemonsqueezy_subscription_id,lemonsqueezy_variant_id,plan_key,status,current_period_end,cancel_at_period_end FROM billing_accounts WHERE organization_id=$1 AND provider='lemonsqueezy'").bind(ctx.organization_id).fetch_optional(&s.db).await{
-        Ok(Some(row))=>Json(json!({"configured":true,"provider":"lemonsqueezy","customer_id":row.get::<Option<String>,_>("lemonsqueezy_customer_id"),"subscription_id":row.get::<Option<String>,_>("lemonsqueezy_subscription_id"),"variant_id":row.get::<Option<String>,_>("lemonsqueezy_variant_id"),"plan":row.get::<String,_>("plan_key"),"status":row.get::<String,_>("status"),"current_period_end":row.get::<Option<chrono::DateTime<chrono::Utc>>,_>("current_period_end"),"cancel_at_period_end":row.get::<bool,_>("cancel_at_period_end")})).into_response(),
-        Ok(None)=>Json(json!({"configured":false,"provider":"lemonsqueezy","plan":"free","status":"active"})).into_response(),Err(e)=>db_error(e)
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(value) => value,
+        Err(code) => return code.into_response(),
+    };
+    match sqlx::query(
+        "SELECT paddle_customer_id,paddle_subscription_id,paddle_price_id,plan_key,status,current_period_end,cancel_at_period_end
+         FROM billing_accounts WHERE organization_id=$1 AND provider='paddle'",
+    )
+    .bind(ctx.organization_id)
+    .fetch_optional(&s.db)
+    .await
+    {
+        Ok(Some(row)) => Json(json!({
+            "configured": true,
+            "provider": "paddle",
+            "customer_id": row.get::<Option<String>,_>("paddle_customer_id"),
+            "subscription_id": row.get::<Option<String>,_>("paddle_subscription_id"),
+            "price_id": row.get::<Option<String>,_>("paddle_price_id"),
+            "plan": row.get::<String,_>("plan_key"),
+            "status": row.get::<String,_>("status"),
+            "current_period_end": row.get::<Option<chrono::DateTime<chrono::Utc>>,_>("current_period_end"),
+            "cancel_at_period_end": row.get::<bool,_>("cancel_at_period_end")
+        })).into_response(),
+        Ok(None) => Json(json!({"configured": false, "provider": "paddle", "plan": "free", "status": "active"})).into_response(),
+        Err(error) => db_error(error),
     }
 }
-pub(crate) async fn checkout(State(s):State<AppState>,headers:HeaderMap,Json(input):Json<CheckoutInput>)->Response{
- let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};if let Err(c)=require_admin(&ctx,&headers){return c.into_response();}
- let key=match env::var("LEMON_SQUEEZY_API_KEY"){Ok(v)if !v.trim().is_empty()=>v,_=>return service_unavailable("Lemon Squeezy API key is not configured.")};
- let store=match env::var("LEMON_SQUEEZY_STORE_ID"){Ok(v)if !v.trim().is_empty()&&v.chars().all(|c|c.is_ascii_digit())=>v,_=>return service_unavailable("Lemon Squeezy store ID is not configured.")};
- if !configured_lemonsqueezy_variants_unique(){return service_unavailable("Lemon Squeezy monthly variant IDs must be configured and unique.");}
- let plan=match input.price_id.as_deref(){Some(v)if ["starter","growth","scale"].contains(&v.trim())=>v.trim(),Some(v)=>match plan_for_code(Some(v.trim())){Some(p)=>p,None=>return bad("Select a valid Agata Proxima plan.")},None=>return bad("Select a plan before checkout.")};
- if plan == "free" || plan == "enterprise" { return bad("Free and Enterprise plans do not use self-service checkout."); }
- let variant=lemon_variant_id(plan).unwrap();
- let client=Client::new();
- let store_response=match client.get(format!("https://api.lemonsqueezy.com/v1/stores/{store}")).bearer_auth(&key).header("Accept","application/vnd.api+json").send().await{Ok(v)=>v,Err(e)=>return external_error(e)};
- if !store_response.status().is_success(){return service_unavailable("Lemon Squeezy store validation failed.");}
- let store_body:Value=match store_response.json().await{Ok(v)=>v,Err(e)=>return external_error(e)};
- let returned_store=store_body.pointer("/data/id").and_then(Value::as_str).map(ToOwned::to_owned).or_else(||store_body.pointer("/data/id").and_then(Value::as_i64).map(|v|v.to_string()));
- if returned_store.as_deref()!=Some(store.as_str())||store_body.pointer("/data/attributes/currency").and_then(Value::as_str)!=Some("USD"){return service_unavailable("The configured Lemon Squeezy store must be the expected store and use USD.");}
- let vr=match client.get(format!("https://api.lemonsqueezy.com/v1/variants/{variant}")).bearer_auth(&key).header("Accept","application/vnd.api+json").send().await{Ok(v)=>v,Err(e)=>return external_error(e)};
- if !vr.status().is_success(){return service_unavailable("Lemon Squeezy variant validation failed.");}
- let vb:Value=match vr.json().await{Ok(v)=>v,Err(e)=>return external_error(e)};let at=vb.pointer("/data/attributes").cloned().unwrap_or(Value::Null);
- let valid=at.get("price").and_then(Value::as_i64)==expected_lemonsqueezy_amount(plan)&&at.get("is_subscription").and_then(Value::as_bool)==Some(true)&&at.get("interval").and_then(Value::as_str)==Some("month")&&at.get("interval_count").and_then(Value::as_i64).unwrap_or(1)==1&&at.get("status").and_then(Value::as_str)==Some("published")&&at.get("test_mode").and_then(Value::as_bool).map(|v|v==lemonsqueezy_test_mode()).unwrap_or(false);
- if !valid{return service_unavailable("Lemon Squeezy variant must match the configured test/live mode and exact monthly USD catalog price.");}
- let product_response=match client.get(format!("https://api.lemonsqueezy.com/v1/variants/{variant}/product")).bearer_auth(&key).header("Accept","application/vnd.api+json").send().await{Ok(v)=>v,Err(e)=>return external_error(e)};
- if !product_response.status().is_success(){return service_unavailable("Lemon Squeezy product validation failed.");}
- let product_body:Value=match product_response.json().await{Ok(v)=>v,Err(e)=>return external_error(e)};
- let product_attrs=product_body.pointer("/data/attributes").cloned().unwrap_or(Value::Null);
- let product_store=product_attrs.get("store_id").and_then(Value::as_i64).map(|v|v.to_string());
- if product_store.as_deref()!=Some(store.as_str())||product_attrs.get("status").and_then(Value::as_str)!=Some("published")||product_attrs.get("test_mode").and_then(Value::as_bool).map(|v|v==lemonsqueezy_test_mode())!=Some(true){return service_unavailable("The selected Lemon Squeezy variant must belong to the configured store and mode, and its product must be published.");}
- let email=match sqlx::query("SELECT email FROM users WHERE id=$1").bind(ctx.user_id).fetch_one(&s.db).await{Ok(r)=>r.get::<String,_>("email"),Err(e)=>return db_error(e)};
- let base=env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_|"http://127.0.0.1:8080".into()).trim_end_matches('/').to_owned();
- let local_reference=Uuid::new_v4().to_string();
- let payload=json!({"data":{"type":"checkouts","attributes":{"checkout_data":{"email":email,"custom":{"organization_id":ctx.organization_id.to_string(),"plan_key":plan,"checkout_reference":local_reference}},"product_options":{"redirect_url":format!("{base}/api/v1/billing/lemonsqueezy/callback?reference={local_reference}")}},"relationships":{"store":{"data":{"type":"stores","id":store}},"variant":{"data":{"type":"variants","id":variant}}}}});
- let r=match client.post("https://api.lemonsqueezy.com/v1/checkouts").bearer_auth(&key).header("Accept","application/vnd.api+json").header("Content-Type","application/vnd.api+json").json(&payload).send().await{Ok(v)=>v,Err(e)=>return external_error(e)};
- if !r.status().is_success(){return service_unavailable("Lemon Squeezy checkout creation failed.");}
- let body:Value=match r.json().await{Ok(v)=>v,Err(e)=>return external_error(e)};let data=body.get("data").cloned().unwrap_or(Value::Null);let id=data.get("id").and_then(Value::as_str).unwrap_or_default();let url=data.pointer("/attributes/url").and_then(Value::as_str).unwrap_or_default();
- if id.is_empty()||!url.starts_with("https://"){return service_unavailable("Lemon Squeezy returned no valid checkout URL.");}
- if let Err(e)=sqlx::query("INSERT INTO billing_transactions(organization_id,provider,reference,provider_checkout_id,plan_key,plan_code,currency,status,metadata,payload,created_at,updated_at) VALUES($1,'lemonsqueezy',$2,$3,$4,$5,'USD','initialized',$6,$7,now(),now()) ON CONFLICT(provider,reference) DO NOTHING").bind(ctx.organization_id).bind(&local_reference).bind(id).bind(plan).bind(&variant).bind(&payload).bind(&body).execute(&s.db).await{return db_error(e);}
- audit(&s.db,ctx.organization_id,ctx.user_id,"billing.checkout.created","billing_transaction",None,json!({"provider":"lemonsqueezy","checkout_id":id,"plan":plan,"reference":local_reference})).await;
- Json(json!({"ok":true,"provider":"lemonsqueezy","checkout_url":url,"reference":local_reference})).into_response()
+
+pub(crate) async fn checkout(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<CheckoutInput>,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(value) => value,
+        Err(code) => return code.into_response(),
+    };
+    if let Err(code) = require_admin(&ctx, &headers) {
+        return code.into_response();
+    }
+    let key = match env::var("PADDLE_API_KEY") {
+        Ok(value) if !value.trim().is_empty() => value.trim().to_owned(),
+        _ => return service_unavailable("Paddle API key is not configured."),
+    };
+    if !configured_paddle_prices_unique() {
+        return service_unavailable("Paddle Starter, Growth, and Scale monthly price IDs must be configured and unique.");
+    }
+    let plan = match input.price_id.as_deref() {
+        Some(value) if ["starter", "growth", "scale"].contains(&value.trim()) => value.trim(),
+        Some(value) => match plan_for_paddle_price(Some(value.trim())) {
+            Some(plan) => plan,
+            None => return bad("Select a valid Agata Proxima plan."),
+        },
+        None => return bad("Select a plan before checkout."),
+    };
+    let price_id = match paddle_price_id(plan) {
+        Some(value) => value,
+        None => return service_unavailable("The Paddle price ID for this plan is not configured."),
+    };
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(12))
+        .build()
+        .unwrap_or_else(|_| Client::new());
+    let price_response = match client
+        .get(format!("{}/prices/{price_id}", paddle_api_base()))
+        .bearer_auth(&key)
+        .header("Paddle-Version", "1")
+        .send()
+        .await
+    {
+        Ok(response) => response,
+        Err(error) => return external_error(error),
+    };
+    if !price_response.status().is_success() {
+        return service_unavailable("Paddle price validation failed. Check the API key, environment, and configured price ID.");
+    }
+    let price_body: Value = match price_response.json().await {
+        Ok(body) => body,
+        Err(error) => return external_error(error),
+    };
+    let price = price_body.get("data").cloned().unwrap_or(Value::Null);
+    let amount = price.pointer("/unit_price/amount")
+        .and_then(Value::as_str)
+        .and_then(|value| value.parse::<i64>().ok());
+    let currency = price.pointer("/unit_price/currency_code").and_then(Value::as_str);
+    let interval = price.pointer("/billing_cycle/interval").and_then(Value::as_str);
+    let frequency = price.pointer("/billing_cycle/frequency").and_then(Value::as_i64);
+    let status = price.get("status").and_then(Value::as_str);
+    if amount != expected_lemonsqueezy_amount(plan)
+        || currency != Some("USD")
+        || interval != Some("month")
+        || frequency != Some(1)
+        || status != Some("active")
+    {
+        return service_unavailable("Paddle price must be active, monthly, USD, and match the approved Agata Proxima plan price.");
+    }
+
+    let email = match sqlx::query("SELECT email FROM users WHERE id=$1")
+        .bind(ctx.user_id)
+        .fetch_one(&s.db)
+        .await
+    {
+        Ok(row) => row.get::<String,_>("email"),
+        Err(error) => return db_error(error),
+    };
+    let reference = Uuid::new_v4().to_string();
+    let payload = json!({
+        "items": [{"price_id": price_id, "quantity": 1}],
+        "collection_mode": "automatic",
+        "custom_data": {
+            "organization_id": ctx.organization_id.to_string(),
+            "plan_key": plan,
+            "checkout_reference": reference
+        }
+    });
+    let response = match client
+        .post(format!("{}/transactions", paddle_api_base()))
+        .bearer_auth(&key)
+        .header("Paddle-Version", "1")
+        .json(&payload)
+        .send()
+        .await
+    {
+        Ok(response) => response,
+        Err(error) => return external_error(error),
+    };
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        tracing::error!(%status, response = %body.chars().take(500).collect::<String>(), "Paddle transaction creation failed");
+        return service_unavailable("Paddle could not create the checkout transaction. Verify the checkout domain and Paddle account status.");
+    }
+    let body: Value = match response.json().await {
+        Ok(body) => body,
+        Err(error) => return external_error(error),
+    };
+    let data = body.get("data").cloned().unwrap_or(Value::Null);
+    let transaction_id = data.get("id").and_then(Value::as_str).unwrap_or_default();
+    let checkout_url = data.pointer("/checkout/url").and_then(Value::as_str).unwrap_or_default();
+    if transaction_id.is_empty() || !checkout_url.starts_with("https://") {
+        return service_unavailable("Paddle returned no secure checkout URL. Configure and approve the default checkout domain in Paddle.");
+    }
+    if let Err(error) = sqlx::query(
+        "INSERT INTO billing_transactions
+         (organization_id,provider,reference,provider_checkout_id,plan_key,plan_code,currency,status,metadata,payload,created_at,updated_at)
+         VALUES($1,'paddle',$2,$3,$4,$5,'USD','initialized',$6,$7,now(),now())
+         ON CONFLICT(provider,reference) DO NOTHING",
+    )
+    .bind(ctx.organization_id)
+    .bind(&reference)
+    .bind(transaction_id)
+    .bind(plan)
+    .bind(&price_id)
+    .bind(&payload)
+    .bind(&body)
+    .execute(&s.db)
+    .await
+    {
+        return db_error(error);
+    }
+    audit(
+        &s.db,
+        ctx.organization_id,
+        ctx.user_id,
+        "billing.checkout.created",
+        "billing_transaction",
+        None,
+        json!({"provider":"paddle","transaction_id":transaction_id,"plan":plan,"reference":reference}),
+    ).await;
+    Json(json!({
+        "ok": true,
+        "provider": "paddle",
+        "checkout_url": checkout_url,
+        "transaction_id": transaction_id,
+        "reference": reference
+    })).into_response()
 }
+
 pub(crate) async fn lemonsqueezy_callback(Query(q):Query<std::collections::HashMap<String,String>>)->Response{
  let base=env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_else(|_|"http://127.0.0.1:8080".into()).trim_end_matches('/').to_owned();
  let reference=q.get("reference").and_then(|v|Uuid::parse_str(v).ok()).map(|v|v.to_string());
