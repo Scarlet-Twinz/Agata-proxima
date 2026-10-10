@@ -597,20 +597,18 @@ async fn signup(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Resp
     if let Err(e) = production::send_verification_email(&s.db, user_id, &email, &display_name).await
     {
         tracing::error!(%e, "verification email delivery failed");
-        let _ = sqlx::query("DELETE FROM organizations WHERE id=$1")
-            .bind(organization_id)
-            .execute(&s.db)
-            .await;
-        let _ = sqlx::query("DELETE FROM users WHERE id=$1")
-            .bind(user_id)
-            .execute(&s.db)
-            .await;
+        // Keep the newly created account and workspace if email delivery is unavailable.
+        // The verification code/hash remains stored, and the user can retry via the resend endpoint.
         return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(Message {
-                ok: false,
-                message: "Workspace creation was rolled back because the verification email could not be sent. Check the Resend configuration and try again.".into(),
-            }),
+            StatusCode::ACCEPTED,
+            Json(json!({
+                "ok": true,
+                "verification_required": true,
+                "email_sent": false,
+                "user_id": user_id,
+                "organization_id": organization_id,
+                "message": "Your workspace was created and kept, but the verification email could not be sent. Fix the email configuration and choose Send a new code to retry."
+            })),
         )
             .into_response();
     }
