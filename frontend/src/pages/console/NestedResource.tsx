@@ -4,6 +4,48 @@ import { Link, useLocation, useParams, useSearchParams } from "react-router-dom"
 import { ResourceSurface } from "../../components/console/ResourceSurface";
 import { api, type ApiError } from "../../api/client";
 
+type PaddleCheckoutApi = {
+  Environment: { set: (environment: "sandbox") => void };
+  Initialize: (options: { token: string }) => void;
+  Checkout: { open: (options: { transactionId: string }) => void };
+};
+
+declare global {
+  interface Window {
+    Paddle?: PaddleCheckoutApi;
+  }
+}
+
+let initializedPaddleToken = "";
+
+async function openPaddleCheckout(transactionId: string, clientToken: string, environment: string) {
+  if (!window.Paddle) {
+    await new Promise<void>((resolve, reject) => {
+      const existing = document.querySelector<HTMLScriptElement>('script[data-paddle-js="true"]');
+      if (existing) {
+        existing.addEventListener("load", () => resolve(), { once: true });
+        existing.addEventListener("error", () => reject(new Error("Paddle Checkout could not load.")), { once: true });
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = "https://cdn.paddle.com/paddle/v2/paddle.js";
+      script.async = true;
+      script.dataset.paddleJs = "true";
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("Paddle Checkout could not load. Check your connection and content-security policy."));
+      document.head.appendChild(script);
+    });
+  }
+  const paddle = window.Paddle;
+  if (!paddle) throw new Error("Paddle Checkout did not initialize.");
+  if (environment !== "production") paddle.Environment.set("sandbox");
+  if (initializedPaddleToken !== clientToken) {
+    paddle.Initialize({ token: clientToken });
+    initializedPaddleToken = clientToken;
+  }
+  paddle.Checkout.open({ transactionId });
+}
+
 type Config = {
   eyebrow: string;
   title: string;
