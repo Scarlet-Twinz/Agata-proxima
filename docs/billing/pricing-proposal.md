@@ -118,20 +118,16 @@ After the monthly plans are validated, add annual billing at approximately two m
 
 These annual figures are intentionally simple rather than aggressively discounted.
 
-## Lemon Squeezy boundary
+## Paddle Billing boundary
 
-Only Agata Proxima products should be created in the connected Lemon Squeezy account.
+Only Agata Proxima products should be created in the connected Paddle account. Do not modify, rename, reuse or attach Agata customers to unrelated products.
 
-Do not modify, rename, reuse or attach Agata customers to the existing unrelated Nexora product.
-
-The Free plan does not need a Lemon Squeezy recurring Plan.
-
-The first Lemon Squeezy catalog should contain:
+The Free plan does not need a recurring Paddle price. The initial Paddle catalog should contain these monthly USD recurring prices:
 
 - Agata Proxima Starter — $149/month
 - Agata Proxima Growth — $499/month
 - Agata Proxima Scale — $1,199/month
 
-Enterprise remains sales-led/custom until a contract-specific billing workflow is defined.
+Configure the corresponding Paddle **price IDs** (`pri_...`) as `PADDLE_STARTER_PRICE_ID`, `PADDLE_GROWTH_PRICE_ID`, and `PADDLE_SCALE_PRICE_ID`. The API validates that each price is active, monthly, USD, unique, and matches the canonical price. Enterprise remains sales-led/custom until a contract-specific billing workflow is defined.
 
-Do not change the live Lemon Squeezy catalog based only on this document. The repository catalogue is now canonical at $149 / $499 / $1,199 per month; verify the actual provider variants, USD settlement eligibility and webhook/payment flow before enabling production checkout.
+Do not enable live checkout based only on this document. Verify Paddle business and checkout-domain approval, the production API key/client token/notification secret, the three price IDs, and the complete signed webhook/payment lifecycle before activating production billing. See `docs/production/paddle-billing.md`.
