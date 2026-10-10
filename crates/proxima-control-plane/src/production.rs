@@ -1334,6 +1334,7 @@ pub(crate) async fn checkout(
     let payload = json!({
         "items": [{"price_id": price_id, "quantity": 1}],
         "collection_mode": "automatic",
+        "enable_checkout": true,
         "custom_data": {
             "organization_id": ctx.organization_id.to_string(),
             "plan_key": plan,
