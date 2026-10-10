@@ -1502,16 +1502,8 @@ pub(crate) async fn portal(State(s): State<AppState>, headers: HeaderMap) -> Res
         Some(value) => value,
         None => return service_unavailable("Paddle did not return a secure customer portal URL."),
     };
-    if let Err(error) = sqlx::query(
-        "UPDATE billing_accounts SET paddle_customer_portal_url=$1,updated_at=now() WHERE organization_id=$2 AND provider='paddle'",
-    )
-    .bind(url)
-    .bind(ctx.organization_id)
-    .execute(&s.db)
-    .await
-    {
-        return db_error(error);
-    }
+    // Paddle portal-session URLs contain temporary authentication tokens; return
+    // the freshly generated URL but never persist it in the billing database.
     Json(json!({"ok":true,"provider":"paddle","portal_url":url})).into_response()
 }
 
@@ -1830,6 +1822,7 @@ pub(crate) async fn paddle_webhook(
                 return db_error(error);
             }
         }
+        let account_plan = if canceled { "free" } else { plan };
         if let Err(error) = sqlx::query(
             "INSERT INTO billing_accounts(organization_id,provider,paddle_customer_id,paddle_subscription_id,paddle_price_id,plan_key,status,current_period_end,cancel_at_period_end,updated_at)
              VALUES($1,'paddle',$2,$3,$4,$5,$6,$7,$8,now())
@@ -1845,7 +1838,7 @@ pub(crate) async fn paddle_webhook(
         .bind(customer_id)
         .bind(subscription)
         .bind(price_id.as_deref())
-        .bind(plan)
+        .bind(account_plan)
         .bind(mapped)
         .bind(period)
         .bind(scheduled_cancel)
