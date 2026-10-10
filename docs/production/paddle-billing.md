@@ -44,7 +44,7 @@ After the Control Plane has been deployed and the API route is reachable, create
 
 Subscribe to the relevant transaction and subscription lifecycle events, including transaction completed, transaction payment failed, transaction refunded, subscription created, subscription updated, and subscription canceled.
 
-The handler verifies the raw request body using the `Paddle-Signature` header (`ts` and `h1`) and the destination's secret before parsing or processing the event. Keep the raw-body signature check, timestamp validation, organization/price matching, and event idempotency intact.
+The handler verifies the raw request body using the `Paddle-Signature` header (`ts` and `h1`) and the destination's secret before parsing or processing the event. It rejects timestamps more than five seconds from the current server time to reduce replay risk. Keep the raw-body signature check, timestamp validation, organization/price matching, and event idempotency intact.
 
 ## Acceptance checklist
 
