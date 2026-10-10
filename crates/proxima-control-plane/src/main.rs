@@ -270,9 +270,11 @@ async fn main() -> Result<()> {
     sqlx::raw_sql(include_str!("../migrations/0018_oidc_identity_linking.sql"))
         .execute(&db)
         .await?;
-    sqlx::raw_sql(include_str!("../migrations/0019_support_requests_compat.sql"))
-        .execute(&db)
-        .await?;
+    sqlx::raw_sql(include_str!(
+        "../migrations/0019_support_requests_compat.sql"
+    ))
+    .execute(&db)
+    .await?;
     sqlx::raw_sql(include_str!("../migrations/0020_paddle_billing.sql"))
         .execute(&db)
         .await?;
