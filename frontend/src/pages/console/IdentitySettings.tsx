@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, CheckCircle2, RefreshCw, Save, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
-import { api, type ApiError } from "../../api/client";
+import { api } from "../../api/client";
 
 type EntraStatus = {
   ok: boolean;
@@ -60,7 +60,6 @@ export function IdentitySettings() {
       setTenantId(result.tenant_id);
       setMessage("Microsoft Entra connection saved and enabled for this organization.");
     } catch (cause) {
-      const err = cause as ApiError;
       setError(messageOf(cause));
     } finally {
       setSaving(false);
