@@ -864,3 +864,19 @@
 .home-final-cta p{max-width:650px;color:#aebed4;line-height:1.7}
 @media(max-width:1000px){.home-developer-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.home-operating-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){.home-developer-grid,.home-operating-grid{grid-template-columns:1fr}.home-doc-strip,.home-final-cta{align-items:stretch;flex-direction:column}}
+
+.support-delivery-status {
+  display: grid;
+  gap: 4px;
+  margin: 12px 0;
+  padding: 12px 14px;
+  background: rgba(23, 107, 255, 0.06);
+  border: 1px solid rgba(23, 107, 255, 0.16);
+  border-radius: 10px;
+}
+
+.support-delivery-status p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
