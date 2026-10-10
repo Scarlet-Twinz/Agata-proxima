@@ -137,7 +137,7 @@ fn verify_paddle_signature(payload: &str, signature_header: &str, secret: &str) 
         }
     }
     let Some(timestamp) = timestamp else { return false };
-    if signatures.is_empty() || (chrono::Utc::now().timestamp() - timestamp).abs() > 300 {
+    if signatures.is_empty() || timestamp.abs_diff(chrono::Utc::now().timestamp()) > 300 {
         return false;
     }
     type HmacSha256 = Hmac<sha2::Sha256>;
