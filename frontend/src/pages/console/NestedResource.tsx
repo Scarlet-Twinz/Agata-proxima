@@ -179,6 +179,7 @@ function EntraIdentitySettings() {
   const [available,setAvailable] = useState(true);
   const [loading,setLoading] = useState(true);
   const [saving,setSaving] = useState(false);
+  const [linking,setLinking] = useState(false);
   const [error,setError] = useState("");
   const [message,setMessage] = useState("");
 
@@ -209,6 +210,22 @@ function EntraIdentitySettings() {
     })();
     return () => { active = false; };
   }, []);
+
+  async function linkMicrosoftIdentity() {
+    setError("");
+    setMessage("");
+    setLinking(true);
+    try {
+      const result = await api.post<{ok:boolean;authorization_url:string}>("/api/v1/auth/oidc/link/start", {});
+      if (!result.authorization_url.startsWith("https://login.microsoftonline.com/")) {
+        throw new Error("The server returned an unexpected Microsoft authorization URL.");
+      }
+      window.location.assign(result.authorization_url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to start Microsoft identity linking.");
+      setLinking(false);
+    }
+  }
 
   async function saveConnection(event: React.FormEvent) {
     event.preventDefault();
@@ -256,6 +273,10 @@ function EntraIdentitySettings() {
             <label className="settings-toggle"><span><strong>Just-in-time provisioning</strong><small>Allow eligible Entra users to be provisioned into this organization according to the server's configured role policy.</small></span><input type="checkbox" checked={jitProvisioning} onChange={e=>setJitProvisioning(e.target.checked)} disabled={!canManage}/></label>
             <button className="primary-action" type="submit" disabled={saving || !canManage || !tenantId.trim()}><Save size={15}/>{saving ? "Saving…" : "Save Entra configuration"}</button>
           </form>
+        </section>
+        <section className="settings-section">
+          <div className="settings-section-heading"><div><h2>Link your existing account</h2><p>Sign in with Microsoft using the same email as your current Agata account. This explicitly links the identity; it never transfers an identity already linked elsewhere.</p></div><ShieldCheck size={19}/></div>
+          <button className="secondary-action" type="button" onClick={linkMicrosoftIdentity} disabled={linking || !configured || !canManage}>{linking ? "Opening Microsoft…" : "Link Microsoft Entra identity"}</button>
         </section>
         <section className="settings-section">
           <div className="settings-section-heading"><div><h2>Required before live SSO</h2><p>This page stores the organization mapping only.</p></div></div>

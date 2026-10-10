@@ -444,6 +444,7 @@ async fn main() -> Result<()> {
             get(production::entra_status).post(production::configure_entra),
         )
         .route("/api/v1/auth/oidc/start", get(production::entra_start))
+        .route("/api/v1/auth/oidc/link/start", post(production::entra_link_start))
         .route(
             "/api/v1/auth/oidc/callback",
             get(production::entra_callback),

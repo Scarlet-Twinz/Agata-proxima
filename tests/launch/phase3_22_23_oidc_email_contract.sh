@@ -19,6 +19,11 @@ grep -q 'set_issuer' "$production"
 grep -q 'PROXIMA_OIDC_CLIENT_SECRET' "$production"
 grep -q 'PROXIMA_OIDC_CLIENT_ID' "$production"
 grep -q 'fn oidc_redirect_uri' "$production"
+grep -q '"/api/v1/auth/oidc/link/start"' "$main"
+grep -q 'entra_link_start' "$production"
+grep -q 'linking_user_id' "$production"
+grep -q 'sso_link_email_mismatch' "$production"
+grep -q 'sso_identity_already_linked' "$production"
 
 # Sender identities and template IDs must be present in both environment examples.
 for file in "$env_example" "$control_env"; do
