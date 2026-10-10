@@ -21,7 +21,7 @@ export function ActivityChart({ points, height = 250 }: Props) {
       x: points.length === 1
         ? width / 2
         : padding + (index / (points.length - 1)) * usableWidth,
-      y: height - padding - ((point.value - min) / range) * usableHeight,
+      y: max === min ? height / 2 : height - padding - ((point.value - min) / range) * usableHeight,
       value: point.value,
       timestamp: point.timestamp,
     }));
@@ -56,8 +56,8 @@ export function ActivityChart({ points, height = 250 }: Props) {
       >
         <defs>
           <linearGradient id="agata-chart-fill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopOpacity="0.20" />
-            <stop offset="100%" stopOpacity="0" />
+            <stop offset="0%" stopColor="var(--agata-blue)" stopOpacity="0.20" />
+            <stop offset="100%" stopColor="var(--agata-blue)" stopOpacity="0" />
           </linearGradient>
         </defs>
 
