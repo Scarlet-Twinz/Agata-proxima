@@ -68,10 +68,9 @@ export function IdentitySettings() {
 
   return (
     <div className="settings-page">
-      <div className="settings-page-header">
-        <Link className="settings-back-link" to="/app/settings"><ArrowLeft size={16} /> Settings</Link>
-        <div className="settings-page-title">
-          <span className="settings-eyebrow">ADVANCED CONFIGURATION</span>
+      <div className="page-heading">
+        <div>
+          <Link to="/app/settings">← Settings</Link>
           <h1>Enterprise identity</h1>
           <p>Configure Microsoft Entra ID single sign-on for the active organization.</p>
         </div>
@@ -83,8 +82,8 @@ export function IdentitySettings() {
           <ShieldCheck size={19}/>
         </div>
 
-        {error && <div className="settings-error" role="alert">{error}</div>}
-        {message && <div className="settings-success" role="status"><CheckCircle2 size={16}/>{message}</div>}
+        {error && <div className="settings-banner settings-banner--error" role="alert">{error}</div>}
+        {message && <div className="settings-banner settings-banner--success" role="status"><CheckCircle2 size={16}/>{message}</div>}
 
         {busy ? <p>Loading identity configuration…</p> : <>
           <div className="settings-readonly" style={{marginBottom:16}}>
