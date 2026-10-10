@@ -450,11 +450,97 @@ function BillingPlans() {
   </div>;
 }
 
+
+type ApiKeyRecord = {
+  id: string;
+  name: string;
+  key_prefix: string;
+  last_used_at: string | null;
+  created_at: string;
+  revoked_at: string | null;
+};
+
+function ApiKeysManager() {
+  const [keys, setKeys] = useState<ApiKeyRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [revoking, setRevoking] = useState("");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  async function loadKeys() {
+    setLoading(true);
+    setError("");
+    try {
+      setKeys(await api.get<ApiKeyRecord[]>("/api/v1/developer/api-keys"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load API keys.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { void loadKeys(); }, []);
+
+  async function revokeKey(key: ApiKeyRecord) {
+    if (key.revoked_at) return;
+    const confirmed = window.confirm(
+      `Revoke "${key.name}" (${key.key_prefix})? This takes effect immediately and any integration using it will stop authenticating. This cannot be undone.`,
+    );
+    if (!confirmed) return;
+    setRevoking(key.id);
+    setError("");
+    setNotice("");
+    try {
+      await api.delete<{ok:boolean;message:string}>(`/api/v1/developer/api-keys/${key.id}`);
+      setNotice(`API key "${key.name}" was revoked. The revocation is recorded in the audit stream.`);
+      await loadKeys();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to revoke this API key.");
+    } finally {
+      setRevoking("");
+    }
+  }
+
+  return (
+    <div className="api-keys-manager">
+      <div className="api-key-policy-note">
+        <ShieldCheck size={17} />
+        <p><strong>Credential safety</strong><span>Revocation is immediate and is never capped by a lifetime counter. Confirm each action carefully; the API records successful revocations in the organization audit log.</span></p>
+      </div>
+      {notice && <div className="settings-banner settings-banner--success" role="status">{notice}</div>}
+      {error && <div className="settings-banner settings-banner--error" role="alert">{error}</div>}
+      {loading ? (
+        <div className="surface empty-state"><strong>Loading API keys…</strong><span>Reading keys for the active organization.</span></div>
+      ) : keys.length === 0 ? (
+        <div className="surface empty-state"><KeyRound size={24}/><strong>No API keys yet.</strong><span>Create a key for an integration. The full secret is displayed only once.</span><Link className="primary-action" to="/app/developer/api-keys/new">Create API key</Link></div>
+      ) : (
+        <div className="api-key-list">
+          {keys.map((key) => (
+            <article className="surface api-key-row" key={key.id}>
+              <div className="api-key-details">
+                <div className="api-key-title"><KeyRound size={17}/><strong>{key.name}</strong><span className={key.revoked_at ? "api-key-status api-key-status--revoked" : "api-key-status"}>{key.revoked_at ? "Revoked" : "Active"}</span></div>
+                <code>{key.key_prefix}••••••••</code>
+                <div className="api-key-meta">
+                  <span>Created {new Date(key.created_at).toLocaleString()}</span>
+                  <span>{key.last_used_at ? `Last used ${new Date(key.last_used_at).toLocaleString()}` : "Never used"}</span>
+                  {key.revoked_at && <span>Revoked {new Date(key.revoked_at).toLocaleString()}</span>}
+                </div>
+              </div>
+              {!key.revoked_at && <button className="api-key-revoke" type="button" onClick={() => void revokeKey(key)} disabled={revoking !== ""}>{revoking === key.id ? "Revoking…" : "Revoke key"}</button>}
+            </article>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function NestedResource(){
   const {pathname}=useLocation(); const params=useParams();
   const detailId=params.tenantId??params.policyId??params.nodeId??params.deploymentId??params.runId??params.eventId??params.apiKeyId??params.webhookId;
   const base=detailId?pathname.replace(/\/[^/]+$/,""):pathname;
   const config=baseConfigs[base]??baseConfigs[pathname];
+  if(pathname === "/app/developer/api-keys" && config) return <ContextShell config={config}><ApiKeysManager /></ContextShell>;
   if(pathname === "/app/billing/plans" && config) return <ContextShell config={config}><BillingPlans /></ContextShell>;
   if(detailId && config?.endpoint) return <DetailPage config={config} id={detailId}/>;
   if(config) return <ContextShell config={config}><ResourceSurface eyebrow={config.eyebrow} title={config.title} description={config.description} endpoint={config.endpoint} detailBase={config.detailBase} createHref={config.createHref} createLabel={config.createLabel}/></ContextShell>;
