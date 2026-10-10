@@ -3,7 +3,7 @@
   "info": {
     "title": "Agata Proxima Control Plane API",
     "version": "0.2.0",
-    "description": "Authenticated management plane for organizations, tenants, policies, fleet, deployments, verification, audit, support and Lemon Squeezy billing. The Proxima Engine remains the independent data-plane enforcement authority."
+    "description": "Authenticated management plane for organizations, tenants, policies, fleet, deployments, verification, audit, support and Paddle Billing. The Proxima Engine remains the independent data-plane enforcement authority."
   },
   "servers": [
     {
@@ -403,7 +403,7 @@
     },
     "/api/v1/billing/checkout": {
       "post": {
-        "summary": "Create a Lemon Squeezy checkout for an Agata Proxima monthly plan",
+        "summary": "Create a Paddle checkout transaction for an Agata Proxima monthly plan",
         "requestBody": {
           "required": true,
           "content": {
@@ -421,7 +421,7 @@
                       "growth",
                       "scale"
                     ],
-                    "description": "Agata Proxima plan key (starter, growth, or scale); the server resolves and validates the configured Lemon Squeezy variant."
+                    "description": "Agata Proxima plan key (starter, growth, or scale); the server resolves and validates the configured Paddle price ID."
                   }
                 }
               }
@@ -430,7 +430,51 @@
         },
         "responses": {
           "200": {
-            "description": "Lemon Squeezy checkout URL and local checkout reference"
+            "description": "Paddle transaction ID and client token for opening Paddle Checkout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "provider",
+                    "transaction_id",
+                    "client_token",
+                    "environment",
+                    "reference"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "provider": {
+                      "type": "string",
+                      "enum": [
+                        "paddle"
+                      ]
+                    },
+                    "transaction_id": {
+                      "type": "string"
+                    },
+                    "client_token": {
+                      "type": "string",
+                      "description": "Public Paddle client-side token, not the server API key."
+                    },
+                    "environment": {
+                      "type": "string",
+                      "enum": [
+                        "sandbox",
+                        "production"
+                      ]
+                    },
+                    "reference": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid plan"
@@ -442,17 +486,17 @@
             "description": "Plan is not permitted"
           },
           "503": {
-            "description": "Lemon Squeezy is not configured, the variant does not match the catalog, or the provider is unavailable"
+            "description": "Paddle is not configured, the price does not match the catalog, or the provider is unavailable."
           }
         }
       }
     },
     "/api/v1/billing/portal": {
       "post": {
-        "summary": "Get the Lemon Squeezy customer portal URL",
+        "summary": "Create an authenticated Paddle customer portal session",
         "responses": {
           "200": {
-            "description": "Lemon Squeezy customer portal URL"
+            "description": "Temporary Paddle customer portal URL for the authenticated organization"
           },
           "400": {
             "description": "No subscription exists"
@@ -461,14 +505,14 @@
             "description": "Authentication required"
           },
           "503": {
-            "description": "Lemon Squeezy portal URL is not available"
+            "description": "Paddle portal URL is not available"
           }
         }
       }
     },
     "/api/v1/billing/verify": {
       "get": {
-        "summary": "Check locally stored Lemon Squeezy checkout status",
+        "summary": "Check locally stored Paddle transaction status",
         "parameters": [
           {
             "name": "reference",
@@ -481,7 +525,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Local transaction status; a paid entitlement is only applied after a verified Lemon Squeezy webhook"
+            "description": "Local transaction status; paid entitlement is applied only after a verified Paddle webhook"
           },
           "401": {
             "description": "Authentication required"
@@ -761,41 +805,20 @@
         }
       }
     },
-    "/api/v1/billing/lemonsqueezy/callback": {
-      "get": {
-        "summary": "Lemon Squeezy checkout return",
-        "security": [],
-        "responses": {
-          "200": {
-            "description": "Returns to the app with the local reference; payment remains unconfirmed until a verified webhook updates local status."
-          }
-        },
-        "parameters": [
-          {
-            "name": "reference",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "description": "Local checkout reference returned by the checkout endpoint."
-          }
-        ]
-      }
-    },
-    "/api/v1/webhooks/lemonsqueezy": {
+    "/api/v1/webhooks/paddle": {
       "post": {
-        "summary": "Receive signed Lemon Squeezy webhook events",
+        "summary": "Receive signed Paddle Billing webhook events",
+        "description": "Validates the Paddle-Signature header against the raw request body and destination secret before processing idempotent transaction/subscription events.",
         "security": [],
         "parameters": [
           {
-            "name": "x-signature",
+            "name": "Paddle-Signature",
             "in": "header",
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Paddle timestamped HMAC-SHA256 signature (ts and h1)."
           }
         ],
         "requestBody": {
@@ -805,44 +828,19 @@
               "schema": {
                 "type": "object",
                 "required": [
-                  "meta",
+                  "event_id",
+                  "event_type",
                   "data"
                 ],
                 "properties": {
-                  "meta": {
-                    "type": "object",
-                    "required": [
-                      "event_name"
-                    ],
-                    "properties": {
-                      "event_name": {
-                        "type": "string"
-                      },
-                      "custom_data": {
-                        "type": "object",
-                        "additionalProperties": true
-                      }
-                    },
-                    "additionalProperties": true
+                  "event_id": {
+                    "type": "string"
+                  },
+                  "event_type": {
+                    "type": "string"
                   },
                   "data": {
                     "type": "object",
-                    "required": [
-                      "id",
-                      "attributes"
-                    ],
-                    "properties": {
-                      "id": {
-                        "type": "string"
-                      },
-                      "type": {
-                        "type": "string"
-                      },
-                      "attributes": {
-                        "type": "object",
-                        "additionalProperties": true
-                      }
-                    },
                     "additionalProperties": true
                   }
                 },
@@ -859,10 +857,10 @@
             "description": "Malformed event or missing signature"
           },
           "401": {
-            "description": "Invalid Lemon Squeezy signature"
+            "description": "Invalid or stale Paddle signature"
           },
           "403": {
-            "description": "Store or test/live mode mismatch"
+            "description": "Checkout, organization, or price mismatch"
           },
           "503": {
             "description": "Webhook signing secret or database unavailable"
