@@ -185,7 +185,10 @@ fn load_environment_files() {
             continue;
         }
         if let Err(error) = dotenvy::from_path(&canonical) {
-            eprintln!("Could not load environment file {}: {error}", canonical.display());
+            eprintln!(
+                "Could not load environment file {}: {error}",
+                canonical.display()
+            );
         } else {
             eprintln!("Loaded environment file: {}", canonical.display());
         }
