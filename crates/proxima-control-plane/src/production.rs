@@ -656,7 +656,7 @@ pub(crate) async fn require_feature(
 pub(crate) async fn plans() -> Response {
     let catalog=[("free","Free",0_i32,"Evaluation and small proofs of concept"),("starter","Starter",149_i32,"First production SaaS deployments"),("growth","Growth",499_i32,"Multi-tenant production workloads"),("scale","Scale",1199_i32,"Larger fleets and security operations"),("enterprise","Enterprise",0_i32,"Contracted enterprise deployments")];
     let plans=catalog.iter().map(|(key,name,monthly_usd,description)|{
-        let plan_code=lemon_variant_id(key);
+        let plan_code=paddle_price_id(key);
         let (nodes,tenants,environments,retention,advanced,fleet,priority,entra,private_deployment)=plan_limits(key);
         let integrations = plan_integration_limit(key);
         let verifications = plan_verification_limit(key);
@@ -664,9 +664,9 @@ pub(crate) async fn plans() -> Response {
         let api_keys = plan_api_key_limit(key);
         let api_requests = plan_api_requests_per_minute(key);
         let support = plan_support_level(key);
-        json!({"key":key,"name":name,"monthly_usd":monthly_usd,"description":description,"provider":"lemonsqueezy","variant_id":plan_code,"checkout_available":key!=&"free"&&key!=&"enterprise"&&lemon_variant_id(key).is_some()&&configured_lemonsqueezy_variants_unique(),"limits":{"nodes":nodes,"tenants":tenants,"environments":environments,"integrations":integrations,"verifications_per_month":verifications,"team_seats":team_seats,"api_keys":api_keys,"api_requests_per_minute":api_requests,"audit_retention_days":retention},"support_level":support,"features":{"advanced_verification":advanced,"fleet_controls":fleet,"priority_support":priority,"entra_oidc":entra,"private_deployment":private_deployment,"policy_management":key!=&"free"}})
+        json!({"key":key,"name":name,"monthly_usd":monthly_usd,"description":description,"provider":"paddle","price_id":plan_code,"checkout_available":key!=&"free"&&key!=&"enterprise"&&paddle_price_id(key).is_some()&&configured_paddle_prices_unique(),"limits":{"nodes":nodes,"tenants":tenants,"environments":environments,"integrations":integrations,"verifications_per_month":verifications,"team_seats":team_seats,"api_keys":api_keys,"api_requests_per_minute":api_requests,"audit_retention_days":retention},"support_level":support,"features":{"advanced_verification":advanced,"fleet_controls":fleet,"priority_support":priority,"entra_oidc":entra,"private_deployment":private_deployment,"policy_management":key!=&"free"}})
     }).collect::<Vec<_>>();
-    Json(json!({"currency":"usd","billing_interval":"month","provider":"lemonsqueezy","plans":plans})).into_response()
+    Json(json!({"currency":"usd","billing_interval":"month","provider":"paddle","plans":plans})).into_response()
 }
 
 pub(crate) async fn entitlements(State(s): State<AppState>, headers: HeaderMap) -> Response {
