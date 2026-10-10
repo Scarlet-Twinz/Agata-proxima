@@ -273,6 +273,9 @@ async fn main() -> Result<()> {
     sqlx::raw_sql(include_str!("../migrations/0019_support_requests_compat.sql"))
         .execute(&db)
         .await?;
+    sqlx::raw_sql(include_str!("../migrations/0020_paddle_billing.sql"))
+        .execute(&db)
+        .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
@@ -444,6 +447,10 @@ async fn main() -> Result<()> {
         .route(
             "/api/v1/webhooks/lemonsqueezy",
             post(production::lemonsqueezy_webhook),
+        )
+        .route(
+            "/api/v1/webhooks/paddle",
+            post(production::paddle_webhook),
         )
         .route(
             "/api/v1/organization/oidc/entra",
