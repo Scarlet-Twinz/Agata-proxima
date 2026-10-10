@@ -2699,13 +2699,14 @@ async fn verifications(State(s): State<AppState>, headers: HeaderMap) -> Respons
         Err(c) => return c.into_response(),
     };
     match sqlx::query(
-        "SELECT id,tenant_id,kind,status,evidence FROM verification_results
+        "SELECT id,tenant_id,kind,status,evidence,created_at FROM verification_results
          WHERE organization_id=$1 ORDER BY created_at DESC"
     ).bind(ctx.organization_id).fetch_all(&s.db).await {
         Ok(rows) => Json(rows.iter().map(|r| json!({
             "id":r.get::<Uuid,_>("id"), "tenant_id":r.get::<Option<Uuid>,_>("tenant_id"),
             "kind":r.get::<String,_>("kind"), "status":r.get::<String,_>("status"),
-            "evidence":r.get::<Value,_>("evidence")
+            "evidence":r.get::<Value,_>("evidence"),
+            "created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at")
         })).collect::<Vec<_>>()).into_response(),
         Err(e) => db_error(e),
     }
