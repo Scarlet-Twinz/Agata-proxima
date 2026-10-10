@@ -439,15 +439,7 @@ async fn main() -> Result<()> {
         )
         .route("/api/v1/billing/checkout", post(production::checkout))
         .route("/api/v1/billing/portal", post(production::portal))
-        .route(
-            "/api/v1/billing/lemonsqueezy/callback",
-            get(production::lemonsqueezy_callback),
-        )
         .route("/api/v1/billing/verify", get(production::billing_verify))
-        .route(
-            "/api/v1/webhooks/lemonsqueezy",
-            post(production::lemonsqueezy_webhook),
-        )
         .route(
             "/api/v1/webhooks/paddle",
             post(production::paddle_webhook),
