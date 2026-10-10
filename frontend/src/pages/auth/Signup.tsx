@@ -23,7 +23,7 @@ export default function Signup() {
       const result=await signup({name,organization,email,password});
       if(result.verification_required){
         setVerificationMode(true);
-        setMessage(result.message || "A 6-digit verification code has been sent to your email.");
+        setMessage(result.message || (result.email_sent === false ? "Your workspace was kept. Email delivery failed; fix the email configuration and use Send a new code to retry." : "A 6-digit verification code has been sent to your email."));
       }
     } catch(err) {
       setError(err instanceof Error ? err.message : "Unable to create workspace.");
@@ -53,7 +53,7 @@ export default function Signup() {
         <div className="auth-form-mark"><CheckCircle2 size={19}/></div>
         <span className="auth-kicker auth-kicker-dark">EMAIL VERIFICATION</span>
         <h2>Enter your verification code.</h2>
-        <p>We sent a 6-digit code to <strong>{email}</strong>. Keep this page open and enter the code here.</p>
+        <p>Verification is required for <strong>{email}</strong>. If the email did not arrive, use Send a new code after checking the email configuration.</p>
       </div>
       {error && <div className="auth-error" role="alert">{error}</div>}
       {message && <div className="auth-security-callout"><ShieldCheck size={18}/><div><strong>Check your inbox</strong><span>{message}</span></div></div>}
