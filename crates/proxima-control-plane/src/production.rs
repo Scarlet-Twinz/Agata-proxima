@@ -1729,6 +1729,8 @@ pub(crate) async fn paddle_webhook(
         if let Err(error) = apply_entitlements(&s.db, organization_id, plan).await {
             return db_error(error);
         }
+        let details = format!("Your Agata Proxima {plan} subscription payment was confirmed by Paddle.");
+        send_billing_notice(&s.db, organization_id, event_id, "Paddle payment received", &details).await;
     } else if is_transaction && event_type == "transaction.payment_failed" {
         if let Some(subscription) = subscription_id.as_deref() {
             let _ = sqlx::query(
@@ -1739,6 +1741,8 @@ pub(crate) async fn paddle_webhook(
             .bind(subscription)
             .execute(&s.db)
             .await;
+            let details = "Paddle reported a failed subscription payment. Review your billing details to avoid interruption.";
+            send_billing_notice(&s.db, organization_id, event_id, "Paddle payment failed", details).await;
         }
     } else if is_transaction && event_type == "transaction.refunded" {
         let _ = sqlx::query(
@@ -1831,6 +1835,10 @@ pub(crate) async fn paddle_webhook(
         .await
         {
             return db_error(error);
+        }
+        if canceled {
+            let details = "Your Paddle subscription was canceled. Your organization has returned to the Free plan.";
+            send_billing_notice(&s.db, organization_id, event_id, "Paddle subscription canceled", details).await;
         }
         if provider_status == "past_due" {
             let _ = sqlx::query(
