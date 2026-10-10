@@ -2431,8 +2431,9 @@ pub(crate) async fn purge_expired_audit_events(db: &sqlx::PgPool) -> Result<i64,
 
 pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
     let db_ok = sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
-    let lemonsqueezy = env::var("LEMON_SQUEEZY_API_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false) && env::var("LEMON_SQUEEZY_STORE_ID").map(|v| !v.trim().is_empty()).unwrap_or(false) && env::var("LEMON_SQUEEZY_WEBHOOK_SECRET").map(|v| !v.trim().is_empty()).unwrap_or(false);
-    let plans = configured_lemonsqueezy_variants_unique();
+    let paddle_configured = env::var("PADDLE_API_KEY").map(|value| !value.trim().is_empty()).unwrap_or(false)
+        && env::var("PADDLE_WEBHOOK_SECRET").map(|value| !value.trim().is_empty()).unwrap_or(false);
+    let paddle_prices = configured_paddle_prices_unique();
     let configured = |key: &str| env::var(key).map(|value| !value.trim().is_empty()).unwrap_or(false);
     let resend = configured("RESEND_API_KEY");
     let fallback_from = configured("RESEND_FROM_EMAIL");
@@ -2456,13 +2457,13 @@ pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
     let oidc_client_secret = configured("PROXIMA_OIDC_CLIENT_SECRET");
     let oidc = oidc_client_id && oidc_client_secret;
     let email_ready = resend && sender_identities && templates_configured && support_inbox;
-    let all = db_ok && lemonsqueezy && plans && email_ready && base && oidc;
+    let all = db_ok && paddle_configured && paddle_prices && email_ready && base && oidc;
     Json(json!({
         "status": if all { "ready" } else { "needs_configuration" },
         "checks": {
             "database": db_ok,
-            "lemonsqueezy_configured": lemonsqueezy,
-            "lemonsqueezy_variants": plans,
+            "paddle_configured": paddle_configured,
+            "paddle_prices": paddle_prices,
             "resend_api_key": resend,
             "resend_fallback_sender": fallback_from,
             "resend_sender_identities": sender_identities,
