@@ -21,6 +21,7 @@ import { AgataLogo } from "../brand/AgataLogo";
 type ConsoleSidebarProps = {
   open: boolean;
   onClose: () => void;
+  organizationName?: string;
 };
 
 const primary = [
@@ -46,7 +47,9 @@ const organization = [
 export default function ConsoleSidebar({
   open,
   onClose,
+  organizationName = "Workspace",
 }: ConsoleSidebarProps) {
+  const organizationInitial = organizationName.trim().slice(0, 1).toUpperCase() || "W";
   return (
     <aside className={`console-sidebar ${open ? "open" : ""}`}>
       <div className="console-brand">
@@ -69,8 +72,8 @@ export default function ConsoleSidebar({
 
         <button className="console-workspace-button" type="button">
           <span className="console-workspace-name">
-            <span className="console-workspace-mark">AC</span>
-            <span>Acme Corporation</span>
+            <span className="console-workspace-mark">{organizationInitial}</span>
+            <span>{organizationName}</span>
           </span>
 
           <Activity size={14} />
