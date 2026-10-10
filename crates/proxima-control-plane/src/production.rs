@@ -1425,28 +1425,109 @@ pub(crate) async fn lemonsqueezy_callback(Query(q):Query<std::collections::HashM
  let destination=match reference{Some(v)=>format!("{base}/app?billing=return&reference={v}"),None=>format!("{base}/app?billing=return")};
  Html(format!("<html><head><meta http-equiv=\"refresh\" content=\"0;url={destination}\"></head><body>Return complete. Billing is confirmed only by a verified webhook.</body></html>")).into_response()
 }
-pub(crate) async fn billing_verify(State(s):State<AppState>,headers:HeaderMap,Query(q):Query<std::collections::HashMap<String,String>>)->Response{
- let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};if let Err(c)=require_admin(&ctx,&headers){return c.into_response();}
- let reference=match q.get("reference"){Some(v)if !v.trim().is_empty()=>v.trim(),_=>return bad("Lemon Squeezy checkout reference is required.")};
- match sqlx::query("SELECT status,plan_key FROM billing_transactions WHERE provider='lemonsqueezy' AND reference=$1 AND organization_id=$2").bind(reference).bind(ctx.organization_id).fetch_optional(&s.db).await{
- Ok(Some(r))=>Json(json!({"ok":true,"provider":"lemonsqueezy","reference":reference,"status":r.get::<String,_>("status"),"plan":r.get::<String,_>("plan_key"),"verified":r.get::<String,_>("status")=="success"})).into_response(),
- Ok(None)=>(StatusCode::NOT_FOUND,Json(json!({"ok":false,"error":"unknown_local_transaction"}))).into_response(),Err(e)=>db_error(e)}
+pub(crate) async fn billing_verify(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    Query(query): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(value) => value,
+        Err(code) => return code.into_response(),
+    };
+    if let Err(code) = require_admin(&ctx, &headers) {
+        return code.into_response();
+    }
+    let reference = match query.get("reference") {
+        Some(value) if !value.trim().is_empty() => value.trim(),
+        _ => return bad("Paddle checkout reference is required."),
+    };
+    match sqlx::query(
+        "SELECT status,plan_key FROM billing_transactions WHERE provider='paddle' AND reference=$1 AND organization_id=$2",
+    )
+    .bind(reference)
+    .bind(ctx.organization_id)
+    .fetch_optional(&s.db)
+    .await
+    {
+        Ok(Some(row)) => Json(json!({
+            "ok": true,
+            "provider": "paddle",
+            "reference": reference,
+            "status": row.get::<String,_>("status"),
+            "plan": row.get::<String,_>("plan_key"),
+            "verified": row.get::<String,_>("status") == "success"
+        })).into_response(),
+        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"ok":false,"error":"unknown_local_transaction"}))).into_response(),
+        Err(error) => db_error(error),
+    }
 }
-pub(crate) async fn portal(State(s):State<AppState>,headers:HeaderMap)->Response{
- let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()};if let Err(c)=require_admin(&ctx,&headers){return c.into_response();}
- let subscription=match sqlx::query("SELECT lemonsqueezy_subscription_id FROM billing_accounts WHERE organization_id=$1 AND provider='lemonsqueezy'").bind(ctx.organization_id).fetch_optional(&s.db).await{
-  Ok(Some(row))=>row.get::<Option<String>,_>("lemonsqueezy_subscription_id"),
-  Ok(None)=>return bad("No Lemon Squeezy subscription exists for this organization yet."),Err(e)=>return db_error(e)
- };
- let subscription=match subscription{Some(v)=>v,None=>return bad("No Lemon Squeezy subscription exists for this organization yet.")};
- let key=match env::var("LEMON_SQUEEZY_API_KEY"){Ok(v)if !v.trim().is_empty()=>v,_=>return service_unavailable("Lemon Squeezy API key is not configured.")};
- let response=match Client::new().get(format!("https://api.lemonsqueezy.com/v1/subscriptions/{subscription}")).bearer_auth(key).header("Accept","application/vnd.api+json").send().await{Ok(v)=>v,Err(e)=>return external_error(e)};
- if !response.status().is_success(){return service_unavailable("Lemon Squeezy customer portal could not be refreshed.");}
- let body:Value=match response.json().await{Ok(v)=>v,Err(e)=>return external_error(e)};
- let url=match body.pointer("/data/attributes/urls/customer_portal").and_then(Value::as_str).filter(|v|v.starts_with("https://")){Some(v)=>v,None=>return service_unavailable("Lemon Squeezy did not return a current customer portal URL.")};
- if let Err(e)=sqlx::query("UPDATE billing_accounts SET lemonsqueezy_customer_portal_url=$1,updated_at=now() WHERE organization_id=$2 AND provider='lemonsqueezy'").bind(url).bind(ctx.organization_id).execute(&s.db).await{return db_error(e);}
- Json(json!({"ok":true,"provider":"lemonsqueezy","portal_url":url})).into_response()
+
+pub(crate) async fn portal(State(s): State<AppState>, headers: HeaderMap) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(value) => value,
+        Err(code) => return code.into_response(),
+    };
+    if let Err(code) = require_admin(&ctx, &headers) {
+        return code.into_response();
+    }
+    let account = match sqlx::query(
+        "SELECT paddle_customer_id,paddle_subscription_id FROM billing_accounts WHERE organization_id=$1 AND provider='paddle'",
+    )
+    .bind(ctx.organization_id)
+    .fetch_optional(&s.db)
+    .await
+    {
+        Ok(Some(row)) => row,
+        Ok(None) => return bad("No Paddle subscription exists for this organization yet."),
+        Err(error) => return db_error(error),
+    };
+    let customer_id = match account.get::<Option<String>,_>("paddle_customer_id") {
+        Some(value) if value.starts_with("ctm_") => value,
+        _ => return bad("The Paddle customer record is not available yet."),
+    };
+    let subscription_id = account.get::<Option<String>,_>("paddle_subscription_id");
+    let key = match env::var("PADDLE_API_KEY") {
+        Ok(value) if !value.trim().is_empty() => value.trim().to_owned(),
+        _ => return service_unavailable("Paddle API key is not configured."),
+    };
+    let payload = subscription_id.map(|id| json!({"subscription_ids":[id]})).unwrap_or_else(|| json!({}));
+    let response = match Client::new()
+        .post(format!("{}/customers/{customer_id}/portal-sessions", paddle_api_base()))
+        .bearer_auth(&key)
+        .header("Paddle-Version", "1")
+        .json(&payload)
+        .send()
+        .await
+    {
+        Ok(response) => response,
+        Err(error) => return external_error(error),
+    };
+    if !response.status().is_success() {
+        return service_unavailable("Paddle customer portal could not be opened.");
+    }
+    let body: Value = match response.json().await {
+        Ok(body) => body,
+        Err(error) => return external_error(error),
+    };
+    let url = match body.pointer("/data/urls/general/overview").and_then(Value::as_str)
+        .filter(|value| value.starts_with("https://"))
+    {
+        Some(value) => value,
+        None => return service_unavailable("Paddle did not return a secure customer portal URL."),
+    };
+    if let Err(error) = sqlx::query(
+        "UPDATE billing_accounts SET paddle_customer_portal_url=$1,updated_at=now() WHERE organization_id=$2 AND provider='paddle'",
+    )
+    .bind(url)
+    .bind(ctx.organization_id)
+    .execute(&s.db)
+    .await
+    {
+        return db_error(error);
+    }
+    Json(json!({"ok":true,"provider":"paddle","portal_url":url})).into_response()
 }
+
 pub(crate) async fn lemonsqueezy_webhook(State(s):State<AppState>,headers:HeaderMap,body:String)->Response{
  let sig=match headers.get("x-signature").and_then(|v|v.to_str().ok()){Some(v)=>v,None=>return StatusCode::BAD_REQUEST.into_response()};
  let secret=match env::var("LEMON_SQUEEZY_WEBHOOK_SECRET"){Ok(v)if !v.trim().is_empty()=>v,_=>return StatusCode::SERVICE_UNAVAILABLE.into_response()};
