@@ -1331,14 +1331,6 @@ pub(crate) async fn checkout(
         return service_unavailable("Paddle price must be active, monthly, USD, and match the approved Agata Proxima plan price.");
     }
 
-    let email = match sqlx::query("SELECT email FROM users WHERE id=$1")
-        .bind(ctx.user_id)
-        .fetch_one(&s.db)
-        .await
-    {
-        Ok(row) => row.get::<String,_>("email"),
-        Err(error) => return db_error(error),
-    };
     let reference = Uuid::new_v4().to_string();
     let payload = json!({
         "items": [{"price_id": price_id, "quantity": 1}],
@@ -1762,13 +1754,7 @@ pub(crate) async fn paddle_webhook(
     }
 
     if is_subscription {
-        let Some(plan) = plan.or_else(|| {
-            price_id.as_deref().and_then(|price| {
-                // Existing subscriptions retain their recorded price mapping during renewal events.
-                let _ = price;
-                None
-            })
-        }) else {
+        let Some(plan) = plan else {
             let _ = sqlx::query("UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='paddle' AND provider_event_id=$1")
                 .bind(event_id).execute(&s.db).await;
             return Json(json!({"received":true,"ignored":"unrecognized_subscription_price"})).into_response();
