@@ -16,6 +16,7 @@ import {
 } from "./pages/console/ConsoleSurfaces";
 import { NestedResource } from "./pages/console/NestedResource";
 import { SettingsHub } from "./pages/console/SettingsHub";
+import { IdentitySettings } from "./pages/console/IdentitySettings";
 import { Notifications } from "./pages/console/Notifications";
 
 export function App() {
@@ -39,10 +40,7 @@ export function App() {
         <Route path="nodes/:nodeId" element={<NestedResource />} />
 
         <Route path="deployments" element={<Deployments />} />
-        <Route
-          path="deployments/:deploymentId"
-          element={<NestedResource />}
-        />
+        <Route path="deployments/:deploymentId" element={<NestedResource />} />
 
         <Route path="verification" element={<Verification />} />
         <Route path="verification/:runId" element={<NestedResource />} />
@@ -62,53 +60,26 @@ export function App() {
 
         <Route path="developer" element={<Developer />} />
         <Route path="developer/api-keys" element={<NestedResource />} />
-        <Route
-          path="developer/service-accounts"
-          element={<NestedResource />}
-        />
-        <Route
-          path="developer/authentication"
-          element={<NestedResource />}
-        />
-        <Route
-          path="developer/tenant-context"
-          element={<NestedResource />}
-        />
+        <Route path="developer/service-accounts" element={<NestedResource />} />
+        <Route path="developer/authentication" element={<NestedResource />} />
+        <Route path="developer/tenant-context" element={<NestedResource />} />
         <Route path="developer/webhooks" element={<NestedResource />} />
         <Route path="developer/events" element={<NestedResource />} />
-        <Route
-          path="developer/environments"
-          element={<NestedResource />}
-        />
+        <Route path="developer/environments" element={<NestedResource />} />
         <Route path="developer/sdks" element={<NestedResource />} />
         <Route path="developer/cli" element={<NestedResource />} />
         <Route path="developer/terraform" element={<NestedResource />} />
-        <Route
-          path="developer/api-reference"
-          element={<NestedResource />}
-        />
+        <Route path="developer/api-reference" element={<NestedResource />} />
 
         <Route path="settings" element={<SettingsHub />} />
         <Route path="notifications" element={<Notifications />} />
-        <Route
-          path="settings/members"
-          element={<NestedResource />}
-        />
-        <Route
-          path="settings/authentication"
-          element={<NestedResource />}
-        />
-        <Route path="settings/identity" element={<NestedResource />} />
+        <Route path="settings/members" element={<NestedResource />} />
+        <Route path="settings/authentication" element={<NestedResource />} />
+        <Route path="settings/identity" element={<IdentitySettings />} />
         <Route path="settings/api" element={<NestedResource />} />
         <Route path="settings/security" element={<NestedResource />} />
-        <Route
-          path="settings/environments"
-          element={<NestedResource />}
-        />
-        <Route
-          path="settings/notifications"
-          element={<NestedResource />}
-        />
+        <Route path="settings/environments" element={<NestedResource />} />
+        <Route path="settings/notifications" element={<NestedResource />} />
         <Route path="settings/danger" element={<NestedResource />} />
 
         <Route path="support" element={<Support />} />
