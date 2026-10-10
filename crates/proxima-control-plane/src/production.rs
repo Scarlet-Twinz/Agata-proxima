@@ -1528,6 +1528,345 @@ pub(crate) async fn portal(State(s): State<AppState>, headers: HeaderMap) -> Res
     Json(json!({"ok":true,"provider":"paddle","portal_url":url})).into_response()
 }
 
+
+pub(crate) async fn paddle_webhook(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    body: String,
+) -> Response {
+    let signature = match headers.get("Paddle-Signature").and_then(|value| value.to_str().ok()) {
+        Some(value) => value,
+        None => return StatusCode::BAD_REQUEST.into_response(),
+    };
+    let secret = match env::var("PADDLE_WEBHOOK_SECRET") {
+        Ok(value) if !value.trim().is_empty() => value.trim().to_owned(),
+        _ => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
+    };
+    if !verify_paddle_signature(&body, signature, &secret) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    let event: Value = match serde_json::from_str(&body) {
+        Ok(value) => value,
+        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
+    };
+    let event_id = event.get("event_id").and_then(Value::as_str).unwrap_or_default();
+    let event_type = event.get("event_type").and_then(Value::as_str).unwrap_or_default();
+    let data = event.get("data").cloned().unwrap_or(Value::Null);
+    let object_id = data.get("id").and_then(Value::as_str).unwrap_or_default();
+    if event_id.is_empty() || event_type.is_empty() || object_id.is_empty() {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+
+    let event_claimed = match sqlx::query(
+        "INSERT INTO billing_events(provider,provider_event_id,event_type,payload,status,processing_started_at,attempt_count)
+         VALUES('paddle',$1,$2,$3,'processing',now(),1)
+         ON CONFLICT(provider,provider_event_id) DO UPDATE
+           SET status='processing',processing_started_at=now(),attempt_count=billing_events.attempt_count+1,
+               payload=EXCLUDED.payload,event_type=EXCLUDED.event_type
+         WHERE billing_events.status NOT IN ('processed','ignored')
+           AND (billing_events.processing_started_at IS NULL OR billing_events.processing_started_at < now()-interval '1 minute')
+         RETURNING id",
+    )
+    .bind(event_id)
+    .bind(event_type)
+    .bind(&event)
+    .fetch_optional(&s.db)
+    .await
+    {
+        Ok(row) => row.is_some(),
+        Err(error) => return db_error(error),
+    };
+    if !event_claimed {
+        let previous = match sqlx::query("SELECT status FROM billing_events WHERE provider='paddle' AND provider_event_id=$1")
+            .bind(event_id)
+            .fetch_optional(&s.db)
+            .await
+        {
+            Ok(row) => row,
+            Err(error) => return db_error(error),
+        };
+        return match previous.map(|row| row.get::<String,_>("status")).as_deref() {
+            Some("processed") | Some("ignored") => Json(json!({"received":true,"duplicate":true})).into_response(),
+            _ => StatusCode::SERVICE_UNAVAILABLE.into_response(),
+        };
+    }
+
+    let custom = data.get("custom_data").cloned().unwrap_or(Value::Null);
+    let custom_org = custom.get("organization_id").and_then(Value::as_str)
+        .and_then(|value| Uuid::parse_str(value).ok());
+    let checkout_reference = custom.get("checkout_reference").and_then(Value::as_str);
+    let customer_id = data.get("customer_id").and_then(Value::as_str).map(str::to_owned);
+    let subscription_id = if event_type.starts_with("subscription.") {
+        Some(object_id.to_owned())
+    } else {
+        data.get("subscription_id").and_then(Value::as_str).map(str::to_owned)
+    };
+    let price_id = data.pointer("/items/0/price/id").and_then(Value::as_str)
+        .or_else(|| data.pointer("/items/0/price_id").and_then(Value::as_str))
+        .map(str::to_owned);
+    let plan = plan_for_paddle_price(price_id.as_deref());
+    let is_transaction = event_type.starts_with("transaction.");
+    let is_subscription = event_type.starts_with("subscription.");
+
+    let local_checkout = if let Some(reference) = checkout_reference {
+        match sqlx::query(
+            "SELECT organization_id,plan_key,plan_code,status FROM billing_transactions
+             WHERE provider='paddle' AND reference=$1",
+        )
+        .bind(reference)
+        .fetch_optional(&s.db)
+        .await
+        {
+            Ok(row) => row,
+            Err(error) => return db_error(error),
+        }
+    } else {
+        None
+    };
+
+    let mut organization_id = custom_org;
+    if let Some(row) = &local_checkout {
+        let checkout_org: Uuid = row.get("organization_id");
+        let checkout_price: Option<String> = row.get("plan_code");
+        if organization_id.is_some_and(|value| value != checkout_org)
+            || (price_id.is_some() && checkout_price.as_deref() != price_id.as_deref())
+        {
+            let _ = sqlx::query("UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='paddle' AND provider_event_id=$1")
+                .bind(event_id).execute(&s.db).await;
+            return (StatusCode::FORBIDDEN, Json(json!({"received":false,"error":"checkout_mismatch"}))).into_response();
+        }
+        organization_id = Some(checkout_org);
+    }
+
+    if organization_id.is_none() {
+        if let Some(subscription) = subscription_id.as_deref() {
+            organization_id = match sqlx::query_scalar::<_, Uuid>(
+                "SELECT organization_id FROM billing_accounts WHERE paddle_subscription_id=$1",
+            )
+            .bind(subscription)
+            .fetch_optional(&s.db)
+            .await
+            {
+                Ok(value) => value,
+                Err(error) => return db_error(error),
+            };
+        }
+    }
+    if organization_id.is_none() {
+        if let Some(customer) = customer_id.as_deref() {
+            organization_id = match sqlx::query_scalar::<_, Uuid>(
+                "SELECT organization_id FROM billing_accounts WHERE paddle_customer_id=$1",
+            )
+            .bind(customer)
+            .fetch_optional(&s.db)
+            .await
+            {
+                Ok(value) => value,
+                Err(error) => return db_error(error),
+            };
+        }
+    }
+    let Some(organization_id) = organization_id else {
+        let _ = sqlx::query("UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='paddle' AND provider_event_id=$1")
+            .bind(event_id).execute(&s.db).await;
+        return Json(json!({"received":true,"ignored":"organization_not_resolved"})).into_response();
+    };
+
+    if is_transaction && event_type == "transaction.completed" {
+        let Some(plan) = plan else {
+            let _ = sqlx::query("UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='paddle' AND provider_event_id=$1")
+                .bind(event_id).execute(&s.db).await;
+            return Json(json!({"received":true,"ignored":"unrecognized_price"})).into_response();
+        };
+        if let Some(reference) = checkout_reference {
+            if local_checkout.is_none() {
+                return (StatusCode::FORBIDDEN, Json(json!({"received":false,"error":"unknown_checkout_reference"}))).into_response();
+            }
+            if let Err(error) = sqlx::query(
+                "UPDATE billing_transactions SET status='success',provider_checkout_id=$1,payload=$2,updated_at=now()
+                 WHERE provider='paddle' AND reference=$3 AND organization_id=$4 AND plan_key=$5 AND plan_code=$6",
+            )
+            .bind(object_id)
+            .bind(&event)
+            .bind(reference)
+            .bind(organization_id)
+            .bind(plan)
+            .bind(price_id.as_deref().unwrap_or_default())
+            .execute(&s.db)
+            .await
+            {
+                return db_error(error);
+            }
+        } else if let Some(subscription) = subscription_id.as_deref() {
+            let known = match sqlx::query_scalar::<_, bool>(
+                "SELECT EXISTS(SELECT 1 FROM billing_accounts WHERE organization_id=$1 AND paddle_subscription_id=$2 AND paddle_price_id=$3)",
+            )
+            .bind(organization_id)
+            .bind(subscription)
+            .bind(price_id.as_deref().unwrap_or_default())
+            .fetch_one(&s.db)
+            .await
+            {
+                Ok(value) => value,
+                Err(error) => return db_error(error),
+            };
+            if !known {
+                return (StatusCode::FORBIDDEN, Json(json!({"received":false,"error":"unmatched_recurring_transaction"}))).into_response();
+            }
+            if let Err(error) = sqlx::query(
+                "INSERT INTO billing_transactions(organization_id,provider,reference,provider_checkout_id,plan_key,plan_code,amount,currency,status,metadata,payload,created_at,updated_at)
+                 VALUES($1,'paddle',$2,$3,$4,$5,$6,'USD','success',$7,$8,now(),now())
+                 ON CONFLICT(provider,reference) DO UPDATE SET status='success',payload=EXCLUDED.payload,updated_at=now()",
+            )
+            .bind(organization_id)
+            .bind(format!("transaction:{object_id}"))
+            .bind(object_id)
+            .bind(plan)
+            .bind(price_id.as_deref().unwrap_or_default())
+            .bind(data.pointer("/details/totals/grand_total").and_then(Value::as_str).and_then(|value| value.parse::<i64>().ok()))
+            .bind(&custom)
+            .bind(&event)
+            .execute(&s.db)
+            .await
+            {
+                return db_error(error);
+            }
+        } else {
+            return (StatusCode::FORBIDDEN, Json(json!({"received":false,"error":"subscription_missing"}))).into_response();
+        }
+        if let Err(error) = apply_entitlements(&s.db, organization_id, plan).await {
+            return db_error(error);
+        }
+    } else if is_transaction && event_type == "transaction.payment_failed" {
+        if let Some(subscription) = subscription_id.as_deref() {
+            let _ = sqlx::query(
+                "UPDATE organization_entitlements SET billing_status='past_due',billing_grace_until=COALESCE(billing_grace_until,now()+interval '7 days'),updated_at=now()
+                 WHERE organization_id=$1 AND EXISTS(SELECT 1 FROM billing_accounts WHERE organization_id=$1 AND paddle_subscription_id=$2)",
+            )
+            .bind(organization_id)
+            .bind(subscription)
+            .execute(&s.db)
+            .await;
+        }
+    } else if is_transaction && event_type == "transaction.refunded" {
+        let _ = sqlx::query(
+            "UPDATE billing_transactions SET status='refunded',refund_status='refunded',payload=$1,updated_at=now()
+             WHERE provider='paddle' AND provider_checkout_id=$2 AND organization_id=$3",
+        )
+        .bind(&event)
+        .bind(object_id)
+        .bind(organization_id)
+        .execute(&s.db)
+        .await;
+    }
+
+    if is_subscription {
+        let Some(plan) = plan.or_else(|| {
+            price_id.as_deref().and_then(|price| {
+                // Existing subscriptions retain their recorded price mapping during renewal events.
+                let _ = price;
+                None
+            })
+        }) else {
+            let _ = sqlx::query("UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='paddle' AND provider_event_id=$1")
+                .bind(event_id).execute(&s.db).await;
+            return Json(json!({"received":true,"ignored":"unrecognized_subscription_price"})).into_response();
+        };
+        if local_checkout.is_none() {
+            let existing = match sqlx::query_scalar::<_, bool>(
+                "SELECT EXISTS(SELECT 1 FROM billing_accounts WHERE organization_id=$1 AND paddle_subscription_id=$2)",
+            )
+            .bind(organization_id)
+            .bind(subscription_id.as_deref().unwrap_or_default())
+            .fetch_one(&s.db)
+            .await
+            {
+                Ok(value) => value,
+                Err(error) => return db_error(error),
+            };
+            if !existing {
+                return (StatusCode::FORBIDDEN, Json(json!({"received":false,"error":"subscription_not_linked_to_checkout"}))).into_response();
+            }
+        }
+        let provider_status = data.get("status").and_then(Value::as_str).unwrap_or_default();
+        let scheduled_cancel = data.pointer("/scheduled_change/action").and_then(Value::as_str) == Some("cancel");
+        let canceled = event_type == "subscription.canceled" || provider_status == "canceled";
+        let active = matches!(provider_status, "active" | "trialing");
+        let mapped = if canceled { "canceled" } else if scheduled_cancel && active { "non-renewing" } else if provider_status == "past_due" { "attention" } else if provider_status == "paused" { "paused" } else if active { "active" } else { "pending" };
+        let period = data.pointer("/current_billing_period/ends_at")
+            .and_then(Value::as_str)
+            .or_else(|| data.get("next_billed_at").and_then(Value::as_str))
+            .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+            .map(|value| value.with_timezone(&chrono::Utc));
+        let subscription = subscription_id.as_deref().unwrap_or_default();
+        if subscription.is_empty() {
+            return StatusCode::BAD_REQUEST.into_response();
+        }
+        if active && !scheduled_cancel {
+            if let Err(error) = apply_entitlements(&s.db, organization_id, plan).await {
+                return db_error(error);
+            }
+        }
+        if canceled {
+            if let Err(error) = apply_entitlements(&s.db, organization_id, "free").await {
+                return db_error(error);
+            }
+            if let Err(error) = sqlx::query(
+                "UPDATE organization_entitlements SET billing_status='canceled',billing_grace_until=NULL,updated_at=now() WHERE organization_id=$1",
+            )
+            .bind(organization_id)
+            .execute(&s.db)
+            .await
+            {
+                return db_error(error);
+            }
+        }
+        if let Err(error) = sqlx::query(
+            "INSERT INTO billing_accounts(organization_id,provider,paddle_customer_id,paddle_subscription_id,paddle_price_id,plan_key,status,current_period_end,cancel_at_period_end,updated_at)
+             VALUES($1,'paddle',$2,$3,$4,$5,$6,$7,$8,now())
+             ON CONFLICT(organization_id) DO UPDATE SET provider='paddle',
+               paddle_customer_id=COALESCE(EXCLUDED.paddle_customer_id,billing_accounts.paddle_customer_id),
+               paddle_subscription_id=COALESCE(EXCLUDED.paddle_subscription_id,billing_accounts.paddle_subscription_id),
+               paddle_price_id=COALESCE(EXCLUDED.paddle_price_id,billing_accounts.paddle_price_id),
+               plan_key=EXCLUDED.plan_key,status=EXCLUDED.status,
+               current_period_end=COALESCE(EXCLUDED.current_period_end,billing_accounts.current_period_end),
+               cancel_at_period_end=EXCLUDED.cancel_at_period_end,updated_at=now()",
+        )
+        .bind(organization_id)
+        .bind(customer_id)
+        .bind(subscription)
+        .bind(price_id.as_deref())
+        .bind(plan)
+        .bind(mapped)
+        .bind(period)
+        .bind(scheduled_cancel)
+        .execute(&s.db)
+        .await
+        {
+            return db_error(error);
+        }
+        if provider_status == "past_due" {
+            let _ = sqlx::query(
+                "UPDATE organization_entitlements SET billing_status='past_due',billing_grace_until=COALESCE(billing_grace_until,now()+interval '7 days'),updated_at=now() WHERE organization_id=$1",
+            )
+            .bind(organization_id)
+            .execute(&s.db)
+            .await;
+        }
+    }
+
+    if let Err(error) = sqlx::query(
+        "UPDATE billing_events SET status='processed',processed_at=now(),processing_started_at=NULL WHERE provider='paddle' AND provider_event_id=$1",
+    )
+    .bind(event_id)
+    .execute(&s.db)
+    .await
+    {
+        return db_error(error);
+    }
+    Json(json!({"received":true,"processed":true,"event_type":event_type})).into_response()
+}
+
 pub(crate) async fn lemonsqueezy_webhook(State(s):State<AppState>,headers:HeaderMap,body:String)->Response{
  let sig=match headers.get("x-signature").and_then(|v|v.to_str().ok()){Some(v)=>v,None=>return StatusCode::BAD_REQUEST.into_response()};
  let secret=match env::var("LEMON_SQUEEZY_WEBHOOK_SECRET"){Ok(v)if !v.trim().is_empty()=>v,_=>return StatusCode::SERVICE_UNAVAILABLE.into_response()};
