@@ -203,6 +203,10 @@ export function SupportRequest() {
                 <div className="public-request-note" role="status" aria-live="polite">
                   <p>{result.message}</p>
                   {result.request_id && <p><strong>Request ID:</strong> {result.request_id}</p>}
+                  <div className="support-delivery-status">
+                    <p>Confirmation email: <strong>{result.requester_email_status ?? "not reported"}</strong></p>
+                    <p>Support team notification: <strong>{result.support_email_status ?? "not reported"}</strong></p>
+                  </div>
                   {result.requester_email_status && result.requester_email_status !== "sent" && (
                     <p>We could not send a confirmation email. Please keep the request ID for reference.</p>
                   )}
