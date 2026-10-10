@@ -416,7 +416,7 @@ function BillingPlans() {
 
   return <div className="resource-page billing-plans-page">
     <div className="page-heading">
-      <div><span className="eyebrow">BILLING · LEMON SQUEEZY</span><h1>Plans and billing</h1><p>Choose a monthly plan. Agata verifies the configured provider variant and confirms paid access only from a signed webhook.</p></div>
+      <div><span className="eyebrow">BILLING · PADDLE</span><h1>Plans and billing</h1><p>Choose a monthly plan. Agata verifies the configured provider variant and confirms paid access only from a signed webhook.</p></div>
       {account?.subscription_id && <button type="button" className="console-refresh-button" onClick={() => void openPortal()} disabled={busyPlan !== ""}>{busyPlan === "portal" ? "Opening portal…" : "Manage subscription"}</button>}
     </div>
     {account && <section className="surface billing-current-plan">
@@ -446,7 +446,7 @@ function BillingPlans() {
         </section>;
       })}
     </div>}
-    {!loading && catalog && !catalog.plans.some((plan) => plan.checkout_available) && <div className="empty-state"><strong>Checkout is not configured yet.</strong><span>The server needs the Lemon Squeezy Test Mode API key, store ID, webhook secret, and three unique monthly variant IDs before paid checkout is enabled.</span></div>}
+    {!loading && catalog && !catalog.plans.some((plan) => plan.checkout_available) && <div className="empty-state"><strong>Checkout is not configured yet.</strong><span>The server needs the Paddle Test Mode API key, store ID, webhook secret, and three unique monthly variant IDs before paid checkout is enabled.</span></div>}
   </div>;
 }
 
