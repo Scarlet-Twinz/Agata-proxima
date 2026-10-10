@@ -1285,6 +1285,10 @@ pub(crate) async fn checkout(
         Ok(value) if !value.trim().is_empty() => value.trim().to_owned(),
         _ => return service_unavailable("Paddle API key is not configured."),
     };
+    let client_token = match env::var("PADDLE_CLIENT_TOKEN") {
+        Ok(value) if !value.trim().is_empty() => value.trim().to_owned(),
+        _ => return service_unavailable("Paddle client-side token is not configured."),
+    };
     if !configured_paddle_prices_unique() {
         return service_unavailable("Paddle Starter, Growth, and Scale monthly price IDs must be configured and unique.");
     }
@@ -1379,9 +1383,8 @@ pub(crate) async fn checkout(
     };
     let data = body.get("data").cloned().unwrap_or(Value::Null);
     let transaction_id = data.get("id").and_then(Value::as_str).unwrap_or_default();
-    let checkout_url = data.pointer("/checkout/url").and_then(Value::as_str).unwrap_or_default();
-    if transaction_id.is_empty() || !checkout_url.starts_with("https://") {
-        return service_unavailable("Paddle returned no secure checkout URL. Configure and approve the default checkout domain in Paddle.");
+    if transaction_id.is_empty() {
+        return service_unavailable("Paddle returned no transaction ID for checkout.");
     }
     if let Err(error) = sqlx::query(
         "INSERT INTO billing_transactions
@@ -1413,8 +1416,9 @@ pub(crate) async fn checkout(
     Json(json!({
         "ok": true,
         "provider": "paddle",
-        "checkout_url": checkout_url,
         "transaction_id": transaction_id,
+        "client_token": client_token,
+        "environment": if paddle_api_base().contains("sandbox") { "sandbox" } else { "production" },
         "reference": reference
     })).into_response()
 }
@@ -2432,6 +2436,7 @@ pub(crate) async fn purge_expired_audit_events(db: &sqlx::PgPool) -> Result<i64,
 pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
     let db_ok = sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
     let paddle_configured = env::var("PADDLE_API_KEY").map(|value| !value.trim().is_empty()).unwrap_or(false)
+        && env::var("PADDLE_CLIENT_TOKEN").map(|value| !value.trim().is_empty()).unwrap_or(false)
         && env::var("PADDLE_WEBHOOK_SECRET").map(|value| !value.trim().is_empty()).unwrap_or(false);
     let paddle_prices = configured_paddle_prices_unique();
     let configured = |key: &str| env::var(key).map(|value| !value.trim().is_empty()).unwrap_or(false);
