@@ -99,6 +99,77 @@ fn verify_lemonsqueezy_signature(payload:&str,signature:&str,secret:&str)->bool{
     let mut mac=match HmacSha256::new_from_slice(secret.as_bytes()){Ok(v)=>v,Err(_)=>return false};mac.update(payload.as_bytes());
     constant_time_equal(&hex::encode(mac.finalize().into_bytes()),signature.trim())
 }
+
+fn paddle_price_id(plan: &str) -> Option<String> {
+    let key = match plan {
+        "starter" => "PADDLE_STARTER_PRICE_ID",
+        "growth" => "PADDLE_GROWTH_PRICE_ID",
+        "scale" => "PADDLE_SCALE_PRICE_ID",
+        _ => return None,
+    };
+    env::var(key)
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| value.starts_with("pri_") && value.len() > 8)
+}
+
+fn configured_paddle_prices_unique() -> bool {
+    let prices = [
+        paddle_price_id("starter"),
+        paddle_price_id("growth"),
+        paddle_price_id("scale"),
+    ];
+    prices.iter().all(Option::is_some)
+        && prices[0] != prices[1]
+        && prices[0] != prices[2]
+        && prices[1] != prices[2]
+}
+
+fn paddle_api_base() -> &'static str {
+    if env::var("PADDLE_ENVIRONMENT")
+        .map(|value| value.trim().eq_ignore_ascii_case("production"))
+        .unwrap_or(false)
+    {
+        "https://api.paddle.com"
+    } else {
+        "https://sandbox-api.paddle.com"
+    }
+}
+
+fn verify_paddle_signature(payload: &str, signature_header: &str, secret: &str) -> bool {
+    let mut timestamp = None;
+    let mut signatures = Vec::new();
+    for part in signature_header.split(';') {
+        if let Some((key, value)) = part.trim().split_once('=') {
+            match key {
+                "ts" => timestamp = value.parse::<i64>().ok(),
+                "h1" => signatures.push(value.trim().to_owned()),
+                _ => {}
+            }
+        }
+    }
+    let Some(timestamp) = timestamp else { return false };
+    if signatures.is_empty() || (chrono::Utc::now().timestamp() - timestamp).abs() > 300 {
+        return false;
+    }
+    type HmacSha256 = Hmac<sha2::Sha256>;
+    let Ok(mut mac) = HmacSha256::new_from_slice(secret.as_bytes()) else {
+        return false;
+    };
+    mac.update(format!("{timestamp}:{payload}").as_bytes());
+    let expected = hex::encode(mac.finalize().into_bytes());
+    signatures
+        .iter()
+        .any(|signature| super::constant_time_equal(&expected, signature))
+}
+
+fn plan_for_paddle_price(price_id: Option<&str>) -> Option<&'static str> {
+    let price_id = price_id?;
+    ["starter", "growth", "scale"]
+        .into_iter()
+        .find(|plan| paddle_price_id(plan).as_deref() == Some(price_id))
+}
+
 fn plan_limits(plan: &str) -> (i32, i32, i32, i32, bool, bool, bool, bool, bool) {
     match plan {
         "starter" => (2, 25, 2, 30, false, true, false, false, false),
