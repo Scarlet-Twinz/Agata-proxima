@@ -116,11 +116,13 @@ export function Overview() {
 
             {!data?.tenants?.length && (
               <div className="empty-state">
-                <strong>No tenant records available.</strong>
+                <strong>No tenants in this organization yet.</strong>
                 <span>
-                  Tenant protection will appear here after the control plane
-                  reports tenant state.
+                  The Protection Matrix is built from real tenant records. Create
+                  a tenant first; verification runs without a tenant will not
+                  populate tenant rows here.
                 </span>
+                <Link className="secondary-action" to="/app/tenants">Create a tenant</Link>
               </div>
             )}
           </div>
