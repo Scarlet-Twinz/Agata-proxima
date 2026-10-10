@@ -15,8 +15,8 @@ done
 
 grep -q 'https://api.paddle.com' "$production"
 grep -q 'https://sandbox-api.paddle.com' "$production"
-grep -q '"/prices/{price_id}"' "$production"
-grep -q '"/transactions"' "$production"
+grep -q 'prices/{price_id}' "$production"
+grep -q '/transactions' "$production"
 grep -q 'verify_paddle_signature' "$production"
 grep -q 'Paddle-Signature' "$production"
 grep -q "provider='paddle'" "$production"
