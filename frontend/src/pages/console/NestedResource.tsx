@@ -4,6 +4,48 @@ import { Link, useLocation, useParams, useSearchParams } from "react-router-dom"
 import { ResourceSurface } from "../../components/console/ResourceSurface";
 import { api, type ApiError } from "../../api/client";
 
+type PaddleCheckoutApi = {
+  Environment: { set: (environment: "sandbox") => void };
+  Initialize: (options: { token: string }) => void;
+  Checkout: { open: (options: { transactionId: string }) => void };
+};
+
+declare global {
+  interface Window {
+    Paddle?: PaddleCheckoutApi;
+  }
+}
+
+let initializedPaddleToken = "";
+
+async function openPaddleCheckout(transactionId: string, clientToken: string, environment: string) {
+  if (!window.Paddle) {
+    await new Promise<void>((resolve, reject) => {
+      const existing = document.querySelector<HTMLScriptElement>('script[data-paddle-js="true"]');
+      if (existing) {
+        existing.addEventListener("load", () => resolve(), { once: true });
+        existing.addEventListener("error", () => reject(new Error("Paddle Checkout could not load.")), { once: true });
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = "https://cdn.paddle.com/paddle/v2/paddle.js";
+      script.async = true;
+      script.dataset.paddleJs = "true";
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("Paddle Checkout could not load. Check your connection and content-security policy."));
+      document.head.appendChild(script);
+    });
+  }
+  const paddle = window.Paddle;
+  if (!paddle) throw new Error("Paddle Checkout did not initialize.");
+  if (environment !== "production") paddle.Environment.set("sandbox");
+  if (initializedPaddleToken !== clientToken) {
+    paddle.Initialize({ token: clientToken });
+    initializedPaddleToken = clientToken;
+  }
+  paddle.Checkout.open({ transactionId });
+}
+
 type Config = {
   eyebrow: string;
   title: string;
@@ -388,11 +430,18 @@ function BillingPlans() {
     setError("");
     setNotice("");
     try {
-      const result = await api.post<{ checkout_url: string }>("/api/v1/billing/checkout", { price_id: plan.key });
-      if (!result.checkout_url || !result.checkout_url.startsWith("https://")) throw new Error("The billing provider did not return a secure checkout URL.");
-      window.location.assign(result.checkout_url);
+      const result = await api.post<{ transaction_id: string; client_token: string; environment: string }>(
+        "/api/v1/billing/checkout",
+        { price_id: plan.key },
+      );
+      if (!result.transaction_id || !result.client_token) {
+        throw new Error("Paddle did not return the checkout transaction and client token.");
+      }
+      await openPaddleCheckout(result.transaction_id, result.client_token, result.environment);
+      setNotice("Paddle Checkout opened. Paid access changes only after the server verifies Paddle's signed billing events.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to start secure checkout.");
+      setError(err instanceof Error ? err.message : "Unable to start Paddle Checkout.");
+    } finally {
       setBusyPlan("");
     }
   }
@@ -416,7 +465,7 @@ function BillingPlans() {
 
   return <div className="resource-page billing-plans-page">
     <div className="page-heading">
-      <div><span className="eyebrow">BILLING · LEMON SQUEEZY</span><h1>Plans and billing</h1><p>Choose a monthly plan. Agata verifies the configured provider variant and confirms paid access only from a signed webhook.</p></div>
+      <div><span className="eyebrow">BILLING · PADDLE</span><h1>Plans and billing</h1><p>Choose a monthly plan. Agata verifies the configured provider variant and confirms paid access only from a signed webhook.</p></div>
       {account?.subscription_id && <button type="button" className="console-refresh-button" onClick={() => void openPortal()} disabled={busyPlan !== ""}>{busyPlan === "portal" ? "Opening portal…" : "Manage subscription"}</button>}
     </div>
     {account && <section className="surface billing-current-plan">
@@ -446,7 +495,7 @@ function BillingPlans() {
         </section>;
       })}
     </div>}
-    {!loading && catalog && !catalog.plans.some((plan) => plan.checkout_available) && <div className="empty-state"><strong>Checkout is not configured yet.</strong><span>The server needs the Lemon Squeezy Test Mode API key, store ID, webhook secret, and three unique monthly variant IDs before paid checkout is enabled.</span></div>}
+    {!loading && catalog && !catalog.plans.some((plan) => plan.checkout_available) && <div className="empty-state"><strong>Checkout is not configured yet.</strong><span>The server needs a Paddle API key, client-side token, notification destination secret, and three unique monthly price IDs before paid checkout is enabled.</span></div>}
   </div>;
 }
 
