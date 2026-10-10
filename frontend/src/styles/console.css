@@ -1377,3 +1377,135 @@ a {
     max-height: 260px;
   }
 }
+
+.api-keys-manager {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.api-key-policy-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px;
+  color: var(--agata-midnight);
+  background: var(--agata-blue-soft);
+  border: 1px solid #cfe0ff;
+  border-radius: 12px;
+}
+
+.api-key-policy-note > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--agata-blue);
+}
+
+.api-key-policy-note p {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.api-key-policy-note p span {
+  color: #475467;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.api-key-list {
+  display: grid;
+  gap: 12px;
+}
+
+.api-key-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.api-key-details {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.api-key-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.api-key-title > svg {
+  color: var(--agata-blue);
+}
+
+.api-key-title strong {
+  overflow-wrap: anywhere;
+}
+
+.api-key-status {
+  padding: 3px 8px;
+  color: #027a48;
+  background: #ecfdf3;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.api-key-status--revoked {
+  color: #b42318;
+  background: #fef3f2;
+}
+
+.api-key-details code {
+  width: fit-content;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  padding: 5px 8px;
+  color: #344054;
+  background: #f2f4f7;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.api-key-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.api-key-revoke {
+  flex: 0 0 auto;
+  padding: 9px 12px;
+  color: #b42318;
+  background: #fff;
+  border: 1px solid #fecdca;
+  border-radius: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.api-key-revoke:hover:not(:disabled) {
+  background: #fef3f2;
+}
+
+.api-key-revoke:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+@media (max-width: 620px) {
+  .api-key-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .api-key-revoke {
+    align-self: flex-start;
+  }
+}
