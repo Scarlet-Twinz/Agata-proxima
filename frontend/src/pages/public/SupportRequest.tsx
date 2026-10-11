@@ -93,8 +93,6 @@ export function SupportRequest() {
   }
 
   if (result) {
-    const requesterSubmitted = result.requester_email_status === "sent";
-    const supportSubmitted = result.support_email_status === "sent";
     return (
       <div className="public-page">
         <section className="public-page-hero">
