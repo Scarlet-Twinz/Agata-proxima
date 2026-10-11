@@ -121,7 +121,7 @@ fn paddle_live_enabled() -> bool {
 }
 
 fn paddle_api_base() -> &'static str {
-    // Agata Proxima is configured for Paddle Live only; there is no Sandbox URL.
+    // Agata Proxima uses Paddle Live only; Sandbox endpoints are intentionally unsupported.
     "https://api.paddle.com"
 }
 
