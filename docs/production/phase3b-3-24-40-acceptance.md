@@ -29,8 +29,8 @@ This page is the single checkpoint summary for 3.24–3.40. See [repository cons
 
 ## Required evidence before closing 3.24–3.40
 
-- [x] Consolidated PR #91 is merged to `main` at `77495095fb32178722029b51141a8053eab84648`; Frontend #634, Rust #1231 and Supply chain #34 passed on the exact reviewed PR head before the squash merge.
-- [x] Superseded implementation PRs #90, #88, #87, #86, #85, #84, #83, #82, #81, #80, #79, #77 and #41 are closed with canonical notes. Legacy PRs #58, #48, #42, #31, #30, #22 and #10 remain explicitly blocked for selective review; all branch refs are preserved.
+- [x] Consolidated PR #91 is merged to `main` at `77495095fb32178722029b51141a8053eab84648`; Frontend #634, Rust #1231 and Supply chain #34 passed on the exact reviewed PR head before the squash merge. The subsequent main-head checks also passed: [Frontend #635](https://github.com/Scarlet-Twinz/Agata-proxima/actions/runs/38122370863) on the unchanged frontend tree, [Rust #1239](https://github.com/Scarlet-Twinz/Agata-proxima/actions/runs/38122511969), and [Supply chain security #42](https://github.com/Scarlet-Twinz/Agata-proxima/actions/runs/38122512011) on `4302e2df06f5bd22ce406f76e823c43bc9ee45ef`.
+- [x] Superseded implementation PRs #90, #88, #87, #86, #85, #84, #83, #82, #81, #80, #79, #77 and #41 are closed with canonical notes. Legacy PRs #58, #48, #42, #31, #30, #22 and #10 remain explicitly blocked for selective review; all branch refs are preserved. The 98-branch audit identified 18 refs fully behind `main` and two exact duplicate-tip pairs; see the branch inventory in [repository consolidation](repository-consolidation.md).
 - [ ] Live DNS/HTTPS, production secret store and managed database are verified.
 - [ ] Paddle Live account/domain approval, price IDs, signed webhook lifecycle and approved charge/refund acceptance are recorded.
 - [ ] Entra sign-in, Resend delivery, backup/restore, monitoring/alerts and multi-tenant external-SaaS/security acceptance are evidenced.
