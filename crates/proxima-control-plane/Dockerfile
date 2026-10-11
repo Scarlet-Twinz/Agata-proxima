@@ -4,6 +4,10 @@ COPY . .
 RUN cargo build --release --locked -p proxima-control-plane
 
 FROM debian:bookworm-slim
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 RUN useradd --system --create-home --uid 10001 proxima
 COPY --from=build /src/target/release/proxima-control-plane /usr/local/bin/proxima-control-plane
 USER 10001
