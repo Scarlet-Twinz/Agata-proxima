@@ -1714,3 +1714,18 @@ a {
     align-self: stretch;
   }
 }
+
+
+.secret-reveal .secret-copy-confirmation {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  color: #b7f7d4;
+  background: rgba(18, 183, 106, 0.12);
+  border: 1px solid rgba(93, 227, 154, 0.35);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 700;
+}
