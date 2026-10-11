@@ -16,11 +16,11 @@ export function AppProviders({
   children: ReactNode;
 }) {
   useEffect(() => {
-    const invalidateOverviewAfterMutation = () => {
-      void queryClient.invalidateQueries({ queryKey: ["console", "overview"] });
+    const refreshAfterMutation = () => {
+      void queryClient.invalidateQueries();
     };
-    window.addEventListener("agata:data-changed", invalidateOverviewAfterMutation);
-    return () => window.removeEventListener("agata:data-changed", invalidateOverviewAfterMutation);
+    window.addEventListener("agata:data-changed", refreshAfterMutation);
+    return () => window.removeEventListener("agata:data-changed", refreshAfterMutation);
   }, []);
 
   return (
