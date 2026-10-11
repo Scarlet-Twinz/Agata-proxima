@@ -1,7 +1,7 @@
 # Local acceptance — Phase 3.22/3.23 (Entra SSO + Resend)
 
 This checklist is for running the existing code locally after pulling the
-`phase3-21-lemonsqueezy-billing` branch. It does not claim that an
+`main` branch after the reviewed integration PR is merged. It does not claim that an
 external Microsoft sign-in or a real Resend delivery has passed merely because
 CI passes.
 
@@ -9,12 +9,12 @@ CI passes.
 
 ```powershell
 git fetch origin
-git switch phase3-21-lemonsqueezy-billing
-git pull --ff-only origin phase3-21-lemonsqueezy-billing
+git switch main
+git pull --ff-only origin main
 ```
 
 If the branch is not present locally, use
-`git switch --track origin/phase3-21-lemonsqueezy-billing`.
+`git switch main` after confirming your local working tree is clean; do not discard local changes to switch branches.
 
 ## 2. Prepare a private local environment
 
