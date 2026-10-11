@@ -9,7 +9,7 @@ from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parents[2]
 SKIP_DIRS = {".git", "node_modules", "target", "dist", ".next", "coverage"}
-LINK_RE = re.compile(r"!?[[^\]]*\]\(([^)]+)\)")
+LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
 ROOT_FILE_PREFIXES = (
     "/docs/", "/scripts/", "/tests/", "/control-plane/", "/crates/",
     "/frontend/", "/packages/", "/security/", "/cloud/", "/dashboard/",
