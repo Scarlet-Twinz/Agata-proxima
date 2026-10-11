@@ -23,8 +23,19 @@ jobs:
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
 
+      - name: Verify vulnerable optional SQLx MySQL backend is not active
+        run: |
+          cargo tree --locked -i sqlx-mysql > "$RUNNER_TEMP/sqlx-mysql-tree.txt" 2>/dev/null || true
+          if [ -s "$RUNNER_TEMP/sqlx-mysql-tree.txt" ]; then
+            cat "$RUNNER_TEMP/sqlx-mysql-tree.txt"
+            echo "::error::SQLx MySQL backend is active; remove the exception and remediate RUSTSEC-2023-0071."
+            exit 1
+          fi
+
       - name: Audit Rust dependencies
-        run: cargo audit
+        # RUSTSEC-2023-0071 is only pulled into Cargo.lock by SQLx's optional MySQL driver.
+        # The preceding gate proves that driver is not in the active dependency graph.
+        run: cargo audit --ignore RUSTSEC-2023-0071
 
       - uses: actions/setup-node@v4
         with:
