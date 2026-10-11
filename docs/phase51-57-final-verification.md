@@ -6,7 +6,7 @@ This document records the repository-side completion boundary for Phases 51–57
 
 - Phase 51: Microsoft Entra OIDC implementation groundwork, tenant-bound organization mapping, state/nonce handling, identity linking, optional JIT provisioning, SSO audit events and an external SaaS acceptance fixture. A real Entra sign-in remains an external acceptance gate.
 - Phase 52: Free/Starter/Growth/Scale/Enterprise entitlement matrix with server-side capacity and feature enforcement.
-- Phase 53: billing plan catalogue, entitlement endpoint, Lemon Squeezy checkout/webhook contract and customer billing surface.
+- Phase 53: billing plan catalogue, entitlement endpoint, Paddle Live checkout/webhook contract and customer billing surface.
 - Phase 54: production Resend integration contract for verification, reset, invitation and billing email flows.
 - Phase 55: production deployment configuration, secret contract, health/readiness surfaces and deployment runbooks.
 - Phase 56: adversarial verification matrix, security boundary checks and production gate documentation.
@@ -22,7 +22,7 @@ This document records the repository-side completion boundary for Phases 51–57
 | Scale | $1,199 |
 | Enterprise | Custom |
 
-The Free plan does not require a Lemon Squeezy subscription. Paid checkout resolves the Starter, Growth, and Scale plan keys to the configured Lemon Squeezy variant IDs. The server validates store currency, product/variant publication, mode, monthly interval, and exact amount before checkout. Verify the actual Test Mode variants against this table; do not create or enable live variants solely from documentation.
+The Free plan does not require a Paddle subscription. Paid checkout resolves Starter, Growth, and Scale to configured Paddle Live price IDs. The server verifies that each price is active, recurring monthly, USD, unique, and matches the exact amount before checkout. Sandbox routing is unsupported. Live checkout is not accepted until Paddle approves the business and `agataproxima.com`, and real Live credentials, price IDs, and signed webhook delivery are verified.
 
 ## What repository CI can prove
 
@@ -34,7 +34,7 @@ These require real external systems and are deployment gates rather than reposit
 
 1. Public HTTPS Control Plane deployment.
 2. Real Microsoft Entra application registration and end-to-end callback.
-3. Real Lemon Squeezy plan/code configuration, webhook delivery and checkout/payment round trip.
+3. Paddle Live business/domain approval, price configuration, signed webhook delivery and approved checkout/payment lifecycle.
 4. Agata-owned Resend domain with DNS verification and real delivery.
 5. Production secret rotation.
 6. Production backup/restore drill with measured RPO/RTO.
