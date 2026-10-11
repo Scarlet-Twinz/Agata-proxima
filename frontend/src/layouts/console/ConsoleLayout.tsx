@@ -22,7 +22,6 @@ import {
 } from "lucide-react";
 import { getSession, logout, type Session } from "../../api/auth";
 import { api } from "../../api/client";
-import { AgataLogo } from "../../components/brand/AgataLogo";
 
 const primaryNavigation = [
   { label: "Overview", href: "/app", icon: Gauge },
@@ -227,11 +226,13 @@ export function ConsoleLayout() {
         ].join(" ")}
       >
         <div className="console-brand">
-          <AgataLogo compact />
+          <span className="console-brand-mark" aria-label={organizationName}>
+            {organizationInitial}
+          </span>
 
           {!collapsed && (
             <div className="console-brand-copy">
-              <strong>AGATA PROXIMA</strong>
+              <strong>{organizationName}</strong>
               <span>Control Plane</span>
             </div>
           )}
