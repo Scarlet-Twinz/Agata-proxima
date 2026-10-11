@@ -7,7 +7,7 @@
 
 ## One source of truth
 
-Pull request **#91 — Consolidate Phase 3B platform, Paddle Live billing, Entra, and support** is the single merge candidate for the current Phase 3B repository work. It should be squash-merged to `main) only after the current Frontend, Rust, supply-chain, route, migration, Paddle-contract and secret-scan checks all pass on the same head commit.
+Pull request **#91 — Consolidate Phase 3B platform, Paddle Live billing, Entra, and support** is the single merge candidate for the current Phase 3B repository work. It should be squash-merged to `main` only after the current Frontend, Rust, supply-chain, route, migration, Paddle-contract and secret-scan checks all pass on the same head commit.
 
 Do not merge intermediate PRs into one another or treat a green run on an older head as proof that the latest head is green.
 
