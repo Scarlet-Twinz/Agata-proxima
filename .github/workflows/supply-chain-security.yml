@@ -91,6 +91,7 @@ jobs:
           "$(go env GOPATH)/bin/gitleaks" detect \
             --source . \
             --no-git \
+            --config .gitleaks.toml \
             --redact \
             --exit-code 2 \
             --report-format sarif \
