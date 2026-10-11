@@ -33,20 +33,8 @@ export function ActivityChart({ points, height = 250 }: Props) {
     return { coordinates, path };
   }, [points, height]);
 
-  if (points.length === 0) {
-    return (
-      <div className="chart-empty">
-        <strong>No verification history yet.</strong>
-        <span>
-          Run a verification to record the first result. The activity trend will
-          update automatically.
-        </span>
-      </div>
-    );
-  }
-
   return (
-    <div className="chart-shell">
+    <div className={points.length === 0 ? "chart-shell chart-shell--empty" : "chart-shell"}>
       <svg
         className="activity-chart"
         viewBox={`0 0 900 ${height}`}
@@ -61,6 +49,10 @@ export function ActivityChart({ points, height = 250 }: Props) {
           </linearGradient>
         </defs>
 
+        {[0, 1, 2, 3].map((step) => {
+          const y = 28 + (step / 3) * (height - 56);
+          return <line key={step} x1="28" x2="872" y1={y} y2={y} className="chart-gridline" />;
+        })}
         <line
           x1="28"
           x2="872"
@@ -92,6 +84,12 @@ export function ActivityChart({ points, height = 250 }: Props) {
           </circle>
         ))}
       </svg>
+      {points.length === 0 && (
+        <div className="chart-empty-overlay" role="status">
+          <strong>No verification history yet</strong>
+          <span>Run a verification to populate this graph. No sample telemetry is being invented.</span>
+        </div>
+      )}
       {points.length === 1 && (
         <p className="chart-caption">
           First recorded verification · {points[0].value} run
