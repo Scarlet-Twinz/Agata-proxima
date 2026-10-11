@@ -1,0 +1,11 @@
+[allowlist]
+description = "Resend template UUIDs are non-secret resource identifiers, not API keys."
+condition = "AND"
+paths = [
+  '''^\\.env\\.example$''',
+  '''^crates/proxima-control-plane/\\.env\\.example$'''
+]
+regexes = [
+  '''RESEND_TEMPLATE_[A-Z_]+_ID=[0-9a-fA-F-]{36}'''
+]
+regexTarget = "line"
