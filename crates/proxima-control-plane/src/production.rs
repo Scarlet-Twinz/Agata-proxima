@@ -114,14 +114,9 @@ fn configured_paddle_prices_unique() -> bool {
 }
 
 fn paddle_api_base() -> &'static str {
-    if env::var("PADDLE_ENVIRONMENT")
-        .map(|value| value.trim().eq_ignore_ascii_case("production"))
-        .unwrap_or(false)
-    {
-        "https://api.paddle.com"
-    } else {
-        "https://sandbox-api.paddle.com"
-    }
+    // Agata Proxima is configured for Paddle Live only. Never silently route
+    // billing requests to Sandbox when the environment variable is missing or mistyped.
+    "https://api.paddle.com"
 }
 
 fn verify_paddle_signature(payload: &str, signature_header: &str, secret: &str) -> bool {
@@ -1399,7 +1394,7 @@ pub(crate) async fn checkout(
         "provider": "paddle",
         "transaction_id": transaction_id,
         "client_token": client_token,
-        "environment": if paddle_api_base().contains("sandbox") { "sandbox" } else { "production" },
+        "environment": "production",
         "reference": reference
     })).into_response()
 }
