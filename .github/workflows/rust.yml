@@ -47,6 +47,14 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+      - name: Export resolved lockfile for reconciliation
+        if: always()
+        run: |
+          echo "LOCKFILE_BASE64_BEGIN"
+          base64 -w0 Cargo.lock
+          echo
+          echo "LOCKFILE_BASE64_END"
+
       - name: Test
         run: cargo test --workspace --all-targets
 
