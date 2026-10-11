@@ -1612,3 +1612,88 @@ a {
     max-height: 240px;
   }
 }
+
+
+/* Live summary metrics for the Command Center. */
+.overview-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin: 18px 0 22px;
+}
+
+.overview-metric {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 12px;
+  padding: 17px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--console-border);
+  border-radius: 13px;
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+
+.overview-metric:hover {
+  border-color: rgba(23, 107, 255, 0.42);
+  transform: translateY(-1px);
+}
+
+.overview-metric-icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  color: var(--agata-blue);
+  background: var(--agata-blue-soft);
+  border-radius: 11px;
+}
+
+.overview-metric-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.overview-metric-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.overview-metric-copy strong {
+  color: var(--agata-midnight);
+  font-size: 25px;
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.overview-metric-copy small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.overview-metric-link {
+  color: #98a2b3;
+}
+
+@media (max-width: 1100px) {
+  .overview-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .overview-metrics {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .overview-metric {
+    padding: 14px;
+  }
+}
