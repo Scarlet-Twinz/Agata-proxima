@@ -52,6 +52,8 @@ The 25–40 platform layer adds an authenticated, durable control plane with org
 - [Developer/API guide](docs/developer-guide.md) — authenticated API routes and integration contracts.
 - [Customer integration guide](docs/customer-integration.md) — connecting an existing SaaS application to Proxima.
 - [Security verification](docs/verification.md) — RLS, protocol tests and adversarial verification.
+- [Failure engineering](docs/failure-engineering.md) — expected behavior when the Control Plane, PostgreSQL, policies, nodes or TLS fail.
+- [Performance engineering](docs/performance.md) — reproducible benchmark dimensions; no unmeasured SLA claims.
 - [Phase 3.22 entitlement contract](docs/billing/phase3-22-entitlement-contract.md) — pricing, quotas and A–H acceptance map.
 - [Microsoft Entra SSO runbook](docs/identity/microsoft-entra-oidc.md) — OIDC configuration and remaining activation gates.
 - [Paddle Live billing runbook](docs/production/paddle-billing.md) — Live credentials, price IDs, signed webhooks and activation gates.
