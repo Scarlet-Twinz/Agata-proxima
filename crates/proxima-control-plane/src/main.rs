@@ -2849,6 +2849,117 @@ fn escape_template_value(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
+async fn send_support_notification_copy(
+    destination: &str,
+    subject: &str,
+    body: &str,
+    reply_to: &str,
+    request_id: Uuid,
+    destination_label: &str,
+) -> bool {
+    if !valid_public_support_email(destination) {
+        tracing::error!(request_id = %request_id, destination_label, "support notification destination is invalid");
+        return false;
+    }
+    match production::send_text_email(destination, subject, body, "support", reply_to).await {
+        Ok(()) => true,
+        Err(error) => {
+            error!(request_id = %request_id, destination_label, %error, "support notification email submission failed");
+            false
+        }
+    }
+}
+
+async fn send_support_notifications(
+    subject: &str,
+    body: &str,
+    reply_to: &str,
+    request_id: Uuid,
+) -> (bool, bool, bool, bool) {
+    let primary = env::var("AGATA_SUPPORT_INBOX_EMAIL").ok();
+    let fallback = env::var("AGATA_SUPPORT_NOTIFICATION_FALLBACK_EMAIL").ok();
+    let primary_configured = primary.as_deref().is_some_and(|value| !value.trim().is_empty());
+    let fallback_configured = fallback.as_deref().is_some_and(|value| !value.trim().is_empty());
+    let primary_valid = primary.as_deref().is_some_and(|value| valid_public_support_email(value.trim()));
+    let fallback_valid = fallback.as_deref().is_some_and(|value| valid_public_support_email(value.trim()));
+
+    if primary_configured && !primary_valid {
+        tracing::error!(request_id = %request_id, "AGATA_SUPPORT_INBOX_EMAIL is invalid");
+    }
+    if fallback_configured && !fallback_valid {
+        tracing::error!(request_id = %request_id, "AGATA_SUPPORT_NOTIFICATION_FALLBACK_EMAIL is invalid");
+    }
+
+    let primary_submitted = if primary_valid {
+        send_support_notification_copy(
+            primary.as_deref().unwrap().trim(),
+            subject,
+            body,
+            reply_to,
+            request_id,
+            "primary inbox",
+        )
+        .await
+    } else {
+        false
+    };
+
+    let fallback_is_primary = primary.as_deref().zip(fallback.as_deref()).is_some_and(
+        |(primary, fallback)| primary.trim().eq_ignore_ascii_case(fallback.trim()),
+    );
+    let fallback_submitted = if fallback_valid && fallback_is_primary {
+        primary_submitted
+    } else if fallback_valid {
+        send_support_notification_copy(
+            fallback.as_deref().unwrap().trim(),
+            subject,
+            body,
+            reply_to,
+            request_id,
+            "fallback inbox",
+        )
+        .await
+    } else {
+        false
+    };
+
+    (
+        primary_configured,
+        primary_submitted,
+        fallback_configured,
+        fallback_submitted,
+    )
+}
+
+fn support_email_status(
+    primary_configured: bool,
+    primary_submitted: bool,
+    fallback_configured: bool,
+    fallback_submitted: bool,
+) -> &'static str {
+    if primary_submitted || fallback_submitted {
+        "sent"
+    } else if primary_configured || fallback_configured {
+        "failed"
+    } else {
+        "not_configured"
+    }
+}
+
+fn public_support_link() -> String {
+    let base = env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_default();
+    let base = base.trim().trim_end_matches('/');
+    let is_public_https = base.starts_with("https://")
+        && !base.contains("localhost")
+        && !base.contains("127.0.0.1")
+        && !base.contains("0.0.0.0");
+    if is_public_https {
+        format!("{base}/support")
+    } else {
+        "Open Agata Proxima and navigate to Support.".to_string()
+    }
+}
+
 async fn create_public_support_request(
     State(s): State<AppState>,
     Json(input): Json<PublicSupportInput>,
@@ -2975,45 +3086,31 @@ async fn create_public_support_request(
         requester_email_status = "sent";
     }
 
-    let mut support_email_status = "not_configured";
-    match env::var("AGATA_SUPPORT_INBOX_EMAIL") {
-        Ok(destination) if destination.trim().is_empty() => {
-            tracing::warn!(request_id = %request_id, "AGATA_SUPPORT_INBOX_EMAIL is empty; public request is stored but staff notification was not sent");
-        }
-        Ok(destination) if valid_public_support_email(destination.trim()) => {
-            let public_base = env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_default();
-            let support_link = if public_base.trim().is_empty() {
-                "Not configured".to_string()
-            } else {
-                format!("{}/support", public_base.trim_end_matches('/'))
-            };
-            let staff_message = format!(
-                "New Agata Proxima public support request\n\nRequest ID: {request_id}\nTopic: {topic}\nName: {stored_name}\nEmail: {email}\nSubject: {subject}\n\nMessage:\n{message}\n\nOpen support: {support_link}"
-            );
-            match production::send_text_email(
-                destination.trim(),
-                &format!("[Agata Proxima] {topic}: {subject}"),
-                &staff_message,
-                "support",
-                &email,
-            )
-            .await
-            {
-                Ok(()) => support_email_status = "sent",
-                Err(e) => {
-                    support_email_status = "failed";
-                    error!(request_id = %request_id, %e, "support team notification email failed");
-                }
-            }
-        }
-        Ok(_) => {
-            support_email_status = "failed";
-            tracing::error!(request_id = %request_id, "AGATA_SUPPORT_INBOX_EMAIL is invalid; public request is stored but staff notification was not sent");
-        }
-        Err(_) => {
-            tracing::warn!(request_id = %request_id, "AGATA_SUPPORT_INBOX_EMAIL is not configured; public request is stored but staff notification was not sent");
-        }
-    }
+    let support_link = public_support_link();
+    let staff_message = format!(
+        "New Agata Proxima public support request\n\nRequest ID: {request_id}\nTopic: {topic}\nName: {stored_name}\nEmail: {email}\nSubject: {subject}\n\nMessage:\n{message}\n\nOpen support: {support_link}"
+    );
+    let (primary_configured, primary_submitted, fallback_configured, fallback_submitted) =
+        send_support_notifications(
+            &format!("[Agata Proxima] {topic}: {subject}"),
+            &staff_message,
+            &email,
+            request_id,
+        )
+        .await;
+    let support_email_status = support_email_status(
+        primary_configured,
+        primary_submitted,
+        fallback_configured,
+        fallback_submitted,
+    );
+    let support_fallback_email_status = if fallback_submitted {
+        "sent"
+    } else if fallback_configured {
+        "failed"
+    } else {
+        "not_configured"
+    };
 
     if let Err(e) = sqlx::query(
         "UPDATE public_support_requests
@@ -3044,6 +3141,7 @@ async fn create_public_support_request(
             "request_id":request_id,
             "requester_email_status":requester_email_status,
             "support_email_status":support_email_status,
+            "support_fallback_email_status":support_fallback_email_status,
             "message":message
         })),
     )
@@ -3118,6 +3216,40 @@ async fn create_support(
     .await
     {
         Ok(_) => {
+            let requester_email = sqlx::query_scalar::<_, String>(
+                "SELECT email FROM users WHERE id=$1",
+            )
+            .bind(ctx.user_id)
+            .fetch_optional(&s.db)
+            .await
+            .ok()
+            .flatten();
+            let reply_to = requester_email
+                .as_deref()
+                .filter(|email| valid_public_support_email(email))
+                .unwrap_or("support@agataproxima.com");
+            let support_link = public_support_link();
+            let notification_body = format!(
+                "New Agata Proxima dashboard support request\n\nRequest ID: {id}\nOrganization ID: {}\nSubmitted by: {reply_to}\nPriority: {priority}\nSubject: {}\n\nMessage:\n{}\n\nOpen support: {support_link}",
+                ctx.organization_id,
+                input.subject,
+                input.message,
+            );
+            let (primary_configured, primary_submitted, fallback_configured, fallback_submitted) =
+                send_support_notifications(
+                    &format!("[Agata Proxima] {priority} support: {}", input.subject),
+                    &notification_body,
+                    reply_to,
+                    id,
+                )
+                .await;
+            let notification_status = if primary_submitted || fallback_submitted {
+                "submitted"
+            } else if primary_configured || fallback_configured {
+                "failed"
+            } else {
+                "not_configured"
+            };
             audit(
                 &s.db,
                 ctx.organization_id,
@@ -3125,10 +3257,20 @@ async fn create_support(
                 "support.requested",
                 "support_request",
                 Some(id),
-                json!({}),
+                json!({"notification_email_status":notification_status}),
             )
             .await;
-            Json(json!({"id":id,"status":"open"})).into_response()
+            let message = match notification_status {
+                "submitted" => "Support request created. The notification was submitted to the email provider; final delivery is not confirmed.",
+                "failed" => "Support request created, but the notification email could not be submitted. Check the support email configuration.",
+                _ => "Support request created, but no support notification recipient is configured.",
+            };
+            Json(json!({
+                "id": id,
+                "status": "open",
+                "notification_email_status": notification_status,
+                "message": message
+            })).into_response()
         }
         Err(e) => db_error(e),
     }
