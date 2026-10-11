@@ -100,8 +100,8 @@ export function SupportRequest() {
         <section className="public-page-hero">
           <div className="agata-container public-page-hero-inner">
             <div className="public-eyebrow">Request received</div>
-            <h1>Your message has been recorded.</h1>
-            <p>Thank you, {name.trim() || "there"}. Your request is saved in Agata Proxima.</p>
+            <h1>{isSupport ? "Support request sent successfully." : "Your message has been sent successfully."}</h1>
+            <p>Thank you, {name.trim() || "there"}. Our team will review your request and get back to you as soon as possible.</p>
           </div>
         </section>
         <section className="public-content">
@@ -109,21 +109,8 @@ export function SupportRequest() {
             <article className="public-request-success" role="status" aria-live="polite">
               <div className="public-request-success-icon"><CheckCircle2 size={38} aria-hidden="true" /></div>
               <h2>{isSupport ? "Support request received" : "Contact request received"}</h2>
-              <p>Your request has been saved. Keep the reference below if you need to follow up.</p>
+              <p>Your request has been received successfully. Our team will review it and get back to you as soon as possible. Please check your inbox, including your spam or junk folder, for updates.</p>
               {result.request_id && <div className="public-request-reference"><span>Request reference</span><strong>{result.request_id}</strong></div>}
-              <div className="support-delivery-status">
-                <p>Confirmation email: <strong>{requesterSubmitted ? "Submitted to email provider — delivery not confirmed" : "Not submitted"}</strong></p>
-                <p>Support notification: <strong>{supportSubmitted ? "Submitted to email provider — delivery not confirmed" : result.support_email_status === "not_configured" ? "Not configured" : "Not submitted"}</strong></p>
-                {result.support_fallback_email_status && result.support_fallback_email_status !== "not_configured" && (
-                  <p>Backup notification: <strong>{result.support_fallback_email_status === "sent" ? "Submitted to email provider — delivery not confirmed" : "Submission failed"}</strong></p>
-                )}
-              </div>
-              {supportSubmitted ? (
-                <p className="public-request-delivery-note">The email provider accepted the support notification request. Final delivery to the support inbox can still be delayed or rejected by the recipient's mail provider.</p>
-              ) : (
-                <p className="public-request-delivery-warning">Your request is saved, but the support notification could not be submitted. Keep the reference number for follow-up.</p>
-              )}
-              {!requesterSubmitted && <p className="public-request-delivery-warning">We could not submit the confirmation email. Your request is still recorded.</p>}
               <div className="public-request-success-actions">
                 <Link to={isSupport ? "/support" : "/contact"} className="agata-button agata-button-primary">
                   <ArrowLeft size={16} /> Back to {isSupport ? "support" : "contact"}
