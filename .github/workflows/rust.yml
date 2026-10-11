@@ -90,7 +90,8 @@ jobs:
           grep -q "PADDLE_API_KEY" .env.example
           grep -q "PADDLE_CLIENT_TOKEN" .env.example
           grep -q "PADDLE_WEBHOOK_SECRET" .env.example
-          grep -q "PADDLE_ENVIRONMENT=sandbox" .env.example
+          grep -q "PADDLE_ENVIRONMENT=production" .env.example
+          ! grep -q "PADDLE_ENVIRONMENT=sandbox" .env.example
           ! grep -q "PAYSTACK_" .env.example
           ! grep -q "STRIPE_" .env.example
           grep -q "RESEND_API_KEY" .env.example
