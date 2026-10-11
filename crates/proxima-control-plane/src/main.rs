@@ -3127,11 +3127,11 @@ async fn create_public_support_request(
     }
 
     let message = if support_email_status == "sent" && requester_email_status == "sent" {
-        "Your request was recorded, the confirmation email was sent, and the support team was notified."
+        "Your request was recorded. Both email notifications were submitted to the email provider; final delivery is not confirmed."
     } else if support_email_status == "sent" {
-        "Your request was recorded and the support team was notified. The confirmation email could not be sent, so keep the request ID for reference."
+        "Your request was recorded. A support notification was submitted to the email provider, but the confirmation email could not be submitted. Keep the request ID for reference."
     } else {
-        "Your request was recorded. Keep the request ID for reference and review the delivery statuses below."
+        "Your request was recorded, but the support notification could not be submitted. Keep the request ID for reference; follow-up may be delayed."
     };
 
     (
