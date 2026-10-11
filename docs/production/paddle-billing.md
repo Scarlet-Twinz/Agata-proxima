@@ -10,9 +10,9 @@ Configure these variables on the Control Plane:
 - `PADDLE_CLIENT_TOKEN` — Paddle client-side token used by Paddle.js to open the transaction. It is a public client token, not the server API key.
 - `PADDLE_WEBHOOK_SECRET` — secret generated for the Paddle notification destination. Do not reuse the API key.
 - `PADDLE_STARTER_PRICE_ID`, `PADDLE_GROWTH_PRICE_ID`, `PADDLE_SCALE_PRICE_ID` — unique active recurring monthly price IDs. These must be `pri_...` IDs, not product IDs.
-- `PADDLE_ENVIRONMENT=sandbox` for initial integration testing. Set `production` only after live account and checkout-domain approval.
+- `PADDLE_ENVIRONMENT=production` selects the Paddle Live API. Agata Proxima's active billing integration is Live-only; configure only Live API credentials and Live `pri_...` price IDs.
 
-The repository defaults to Sandbox if `PADDLE_ENVIRONMENT` is unset. Do not put real credentials in Git, issue comments, or chat messages.
+The integration always targets `https://api.paddle.com`; it never falls back to Paddle Sandbox. Do not put real credentials in Git, issue comments, or chat messages. Keep Live secrets in the deployment secret store. If the account/domain or Live credentials are not approved and configured, checkout is not launch-ready.
 
 ## Catalog contract
 
@@ -48,7 +48,7 @@ The handler verifies the raw request body using the `Paddle-Signature` header (`
 
 ## Acceptance checklist
 
-- [ ] Sandbox API key, client token, notification secret, and three unique price IDs are configured.
+- [ ] Approved Live API key, client token, notification secret, and three unique Live price IDs are configured in the deployment secret store.
 - [ ] Each price is active, monthly, USD, and matches the expected catalog amount.
 - [ ] Checkout opens for an authorized organization owner/admin.
 - [ ] No plan entitlement changes before a valid Paddle event is processed.
@@ -56,7 +56,7 @@ The handler verifies the raw request body using the `Paddle-Signature` header (`
 - [ ] Successful payment updates the organization plan and billing status.
 - [ ] Payment failure starts the configured grace period; cancellation and expiry reconcile entitlements correctly.
 - [ ] Customer portal links are generated securely and only for a known Paddle customer.
-- [ ] Production checkout domain and Paddle account are approved before switching to `PADDLE_ENVIRONMENT=production`.
+- [ ] Paddle business and `agataproxima.com` checkout domain are approved, and `PADDLE_ENVIRONMENT=production` is configured.
 - [ ] Production readiness is rechecked after all environment variables are configured.
 
 ## Official Paddle references
