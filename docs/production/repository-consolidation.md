@@ -13,15 +13,15 @@ Do not merge intermediate PRs into one another or treat a green run on an older 
 
 ## PRs superseded by the consolidated change
 
-#91 is now merged to `main`. Close the following superseded PRs with a short note pointing to the merged implementation. Their changed-file lists and unique paths were checked against the consolidated tree; this is PR cleanup, not permission to delete their branch history.
+#91 is now merged to `main`. The following superseded PRs have been reviewed, commented with the canonical destination, and closed: #90, #88, #87, #86, #85, #84, #83, #82, #81, #80, #79, #77 and #41. Their changed-file lists and unique paths were checked against the consolidated tree. Their branch refs remain preserved; no branch deletion was performed.
 
-- **#90** — Paddle migration, included in #91.
-- **#88** — dashboard/API-key/support schema, included in #91.
-- **#87** — Entra settings UI; the active router uses the richer identity flow in `NestedResource.tsx`, and the unused duplicate route tree/component was removed.
-- **#86, #85, #84** — environment/Entra onboarding, local acceptance/auth guard, and Axum route fixes are represented in the consolidated tree.
-- **#83, #82, #81, #80, #79** — obsolete Lemon Squeezy provider variants. Paddle is active; historical migrations and a clearly marked historical pointer remain for migration history.
-- **#77** — Resend transactional email, included in #91.
-- **#41** — its final environment/CI guard is superseded by the stricter current repository launch gate.
+- **Closed #90** — Paddle migration, included in #91.
+- **Closed #88** — dashboard/API-key/support schema, included in #91.
+- **Closed #87** — Entra settings UI; equivalent settings and identity-linking behavior is integrated into the active `NestedResource.tsx` route, and the duplicate root route tree was removed.
+- **Closed #86, #85, #84** — environment/Entra onboarding, local acceptance/auth guard, and Axum route fixes are represented in the consolidated tree.
+- **Closed #83, #82, #81, #80, #79** — obsolete Lemon Squeezy provider variants. Paddle is active; historical migration 0017 remains for auditability, while provider-specific Lemon Squeezy implementation modules are not active.
+- **Closed #77** — Resend transactional email, included in #91.
+- **Closed #41** — the older environment/CI guard is superseded by the stricter current repository launch gate.
 
 Do not delete these branch refs as part of PR closure. The squash commit is present on `main`; keep historical refs until the separate legacy-branch review proves their unique behavior is accounted for.
 
