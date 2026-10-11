@@ -20,6 +20,7 @@ const configs:Record<string,{eyebrow:string;title:string;description:string;kind
 export function ActionPage(){
  const {pathname}=useLocation(); const navigate=useNavigate(); const config=configs[pathname]??configs["/app/tenants/new"];
  const [session,setSession]=useState<Session|null>(null); const [options,setOptions]=useState<Option[]>([]); const [form,setForm]=useState<Record<string,string>>({}); const [busy,setBusy]=useState(false); const [error,setError]=useState(""); const [result,setResult]=useState<Record<string,unknown>|null>(null);
+ const [secretCopied,setSecretCopied]=useState(false); const [secretConfirmed,setSecretConfirmed]=useState(false); const [copyError,setCopyError]=useState("");
  useEffect(()=>{let active=true;(async()=>{try{const s=await api.get<Session>("/api/v1/session");if(active)setSession(s);if(config.kind==="deployment"){const n=await api.get<Option[]>("/api/v1/nodes");if(active)setOptions(n)}if(config.kind==="verification"){const t=await api.get<Array<Option&{slug?:string}>>("/api/v1/tenants");if(active)setOptions(t)}}catch(e){if(active)setError((e as ApiError)?.message??"Unable to load the workspace session.")}})();return()=>{active=false}},[config.kind]);
  function set(key:string,value:string){setForm(v=>({...v,[key]:value}))}
  async function submit(e:FormEvent){e.preventDefault();if(!session)return;setBusy(true);setError("");
@@ -37,7 +38,46 @@ export function ActionPage(){
   }catch(e){setError((e as ApiError)?.message??(e instanceof Error?e.message:"The operation failed."))}finally{setBusy(false)}
  }
  const secret=typeof result?.key==="string"?result.key:typeof result?.signing_secret==="string"?result.signing_secret:"";
- if(result) return <div className="resource-page"><Link className="back-link" to="/app"><ArrowLeft size={16}/> Command Center</Link><div className="page-heading"><div><span className="eyebrow">{config.eyebrow}</span><h1>{config.kind==="api-key"?"API key created":config.kind==="webhook"?"Webhook created":"Operation completed"}</h1><p>The control plane accepted the request and returned the created resource.</p></div></div><section className="surface success-panel"><CheckCircle2 size={28}/><h2>Created successfully.</h2><p>{String(result.message??"The resource is now available in the workspace.")}</p>{secret&&<div className="secret-reveal"><span>Save this secret now</span><code>{secret}</code><button onClick={()=>navigator.clipboard?.writeText(secret)}><Copy size={15}/> Copy</button></div>}<div className="context-next"><button className="primary-action" onClick={()=>navigate(config.kind==="api-key"?"/app/developer/api-keys":config.kind==="webhook"?"/app/developer/webhooks":pathname.replace("/new",""))}>Open resource</button><button className="secondary-action" onClick={()=>setResult(null)}>Create another</button></div></section></div>;
+ function fallbackCopySecret(value:string){
+  const field=document.createElement("textarea");
+  field.value=value;
+  field.setAttribute("readonly","");
+  field.style.position="fixed";
+  field.style.opacity="0";
+  field.style.pointerEvents="none";
+  document.body.appendChild(field);
+  field.focus();
+  field.select();
+  field.setSelectionRange(0,field.value.length);
+  let copied=false;
+  try{copied=document.execCommand("copy");}finally{document.body.removeChild(field);}
+  if(!copied) throw new Error("The browser did not allow copying to the clipboard.");
+ }
+ async function copySecret(){
+  if(!secret)return;
+  setCopyError("");
+  try{
+   if(navigator.clipboard?.writeText) await navigator.clipboard.writeText(secret);
+   else fallbackCopySecret(secret);
+   setSecretCopied(true);
+  }catch{
+   try{
+    fallbackCopySecret(secret);
+    setSecretCopied(true);
+   }catch{
+    setSecretCopied(false);
+    setCopyError("Copy was blocked by the browser. Select the key and copy it manually before confirming.");
+   }
+  }
+ }
+ function createAnother(){
+  setResult(null);
+  setSecretCopied(false);
+  setSecretConfirmed(false);
+  setCopyError("");
+ }
+ const maskedSecret=secret?secret.slice(0,Math.min(8,secret.length))+"••••••••":"";
+ if(result) return <div className="resource-page"><Link className="back-link" to="/app"><ArrowLeft size={16}/> Command Center</Link><div className="page-heading"><div><span className="eyebrow">{config.eyebrow}</span><h1>{config.kind==="api-key"?"API key created":config.kind==="webhook"?"Webhook created":"Operation completed"}</h1><p>The control plane accepted the request and returned the created resource.</p></div></div><section className="surface success-panel"><CheckCircle2 size={28}/><h2>Created successfully.</h2><p>{String(result.message??"The resource is now available in the workspace.")}</p>{secret&&<div className="secret-reveal"><span>{secretConfirmed?"Secret hidden after confirmation":"Save this secret now. It cannot be retrieved again after you confirm."}</span><code>{secretConfirmed?maskedSecret:secret}</code>{!secretConfirmed&&<><button type="button" onClick={()=>void copySecret()}><Copy size={15}/>{secretCopied?"Copied":"Copy"}</button>{config.kind==="api-key"&&<button type="button" className="secondary-action" onClick={()=>setSecretConfirmed(true)}>I have copied it</button>}</>}{secretCopied&&!secretConfirmed&&<span role="status">Copied to clipboard.</span>}{copyError&&!secretConfirmed&&<span role="alert">{copyError}</span>}</div>}{secretConfirmed&&config.kind==="api-key"&&<p role="status">The full API key is now hidden. This page will not reveal it again.</p>}<div className="context-next"><button className="primary-action" onClick={()=>navigate(config.kind==="api-key"?"/app/developer/api-keys":config.kind==="webhook"?"/app/developer/webhooks":pathname.replace("/new",""))}>Open resource</button><button className="secondary-action" onClick={createAnother}>Create another</button></div></section></div>;
  const field=(label:string,key:string,placeholder:string,opts?:{type?:string})=><label className="action-field"><span>{label}</span><input type={opts?.type??"text"} value={form[key]??""} onChange={e=>set(key,e.target.value)} placeholder={placeholder} required /></label>;
  return <div className="resource-page"><Link className="back-link" to="/app"><ArrowLeft size={16}/> Command Center</Link><div className="page-heading"><div><span className="eyebrow">{config.eyebrow}</span><h1>{config.title}</h1><p>{config.description}</p></div></div><section className="surface action-card">{error&&<div className="console-inline-error">{error}</div>}<form onSubmit={submit} className="action-form">
  {["tenant","policy","node","api-key","webhook"].includes(config.kind)&&field("Name","name","Production tenant")}
