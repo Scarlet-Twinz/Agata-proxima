@@ -46,6 +46,7 @@ type SupportRequestResponse = {
   request_id?: string;
   requester_email_status?: "sent" | "failed";
   support_email_status?: "sent" | "failed" | "not_configured";
+  support_fallback_email_status?: "sent" | "failed" | "not_configured";
   message: string;
 };
 
@@ -111,8 +112,11 @@ export function SupportRequest() {
               <p>Your request has been saved. Keep the reference below if you need to follow up.</p>
               {result.request_id && <div className="public-request-reference"><span>Request reference</span><strong>{result.request_id}</strong></div>}
               <div className="support-delivery-status">
-                <p>Confirmation email: <strong>{requesterSubmitted ? "Submitted to email provider" : "Not submitted"}</strong></p>
+                <p>Confirmation email: <strong>{requesterSubmitted ? "Submitted to email provider — delivery not confirmed" : "Not submitted"}</strong></p>
                 <p>Support notification: <strong>{supportSubmitted ? "Submitted to email provider — delivery not confirmed" : result.support_email_status === "not_configured" ? "Not configured" : "Not submitted"}</strong></p>
+                {result.support_fallback_email_status && result.support_fallback_email_status !== "not_configured" && (
+                  <p>Backup notification: <strong>{result.support_fallback_email_status === "sent" ? "Submitted to email provider — delivery not confirmed" : "Submission failed"}</strong></p>
+                )}
               </div>
               {supportSubmitted ? (
                 <p className="public-request-delivery-note">The email provider accepted the support notification request. Final delivery to the support inbox can still be delayed or rejected by the recipient's mail provider.</p>
