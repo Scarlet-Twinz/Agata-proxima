@@ -25,10 +25,14 @@ jobs:
 
       - name: Verify vulnerable optional SQLx MySQL backend is not active
         run: |
-          cargo tree --locked -i sqlx-mysql > "$RUNNER_TEMP/sqlx-mysql-tree.txt" 2>/dev/null || true
-          if [ -s "$RUNNER_TEMP/sqlx-mysql-tree.txt" ]; then
-            cat "$RUNNER_TEMP/sqlx-mysql-tree.txt"
-            echo "::error::SQLx MySQL backend is active; remove the exception and remediate RUSTSEC-2023-0071."
+          if cargo tree --locked -i sqlx-mysql > "$RUNNER_TEMP/sqlx-mysql-tree.txt" 2> "$RUNNER_TEMP/sqlx-mysql-tree.err"; then
+            if [ -s "$RUNNER_TEMP/sqlx-mysql-tree.txt" ]; then
+              cat "$RUNNER_TEMP/sqlx-mysql-tree.txt"
+              echo "::error::SQLx MySQL backend is active; remove the exception and remediate RUSTSEC-2023-0071."
+              exit 1
+            fi
+          elif ! grep -q "did not match any packages" "$RUNNER_TEMP/sqlx-mysql-tree.err"; then
+            cat "$RUNNER_TEMP/sqlx-mysql-tree.err"
             exit 1
           fi
 
