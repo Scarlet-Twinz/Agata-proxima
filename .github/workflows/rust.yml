@@ -116,6 +116,7 @@ jobs:
         run: |
           bash -n tests/control-plane/api_smoke.sh
           python scripts/ops/check-doc-links.py
+          ! grep -R -n "agata-proxima\\.com" README.md .env.example crates/proxima-control-plane/.env.example docs frontend/vercel.json
           bash -n scripts/proxima-platform.sh
           bash -n scripts/ops/check-control-plane.sh scripts/ops/backup-control-plane.sh
           test -f docs/usage.md
