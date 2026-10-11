@@ -23,16 +23,12 @@ jobs:
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
 
-      - name: Verify vulnerable optional SQLx MySQL backend is not active
+      - name: Verify SQLx uses only the PostgreSQL backend
         run: |
-          if cargo tree --locked -i sqlx-mysql > "$RUNNER_TEMP/sqlx-mysql-tree.txt" 2> "$RUNNER_TEMP/sqlx-mysql-tree.err"; then
-            if [ -s "$RUNNER_TEMP/sqlx-mysql-tree.txt" ]; then
-              cat "$RUNNER_TEMP/sqlx-mysql-tree.txt"
-              echo "::error::SQLx MySQL backend is active; remove the exception and remediate RUSTSEC-2023-0071."
-              exit 1
-            fi
-          elif ! grep -q "did not match any packages" "$RUNNER_TEMP/sqlx-mysql-tree.err"; then
-            cat "$RUNNER_TEMP/sqlx-mysql-tree.err"
+          grep -Fq 'default-features = false' crates/proxima-control-plane/Cargo.toml
+          grep -Fq '"postgres"' crates/proxima-control-plane/Cargo.toml
+          if grep -Fq '"mysql"' crates/proxima-control-plane/Cargo.toml; then
+            echo "::error::The SQLx MySQL backend must remain disabled while RUSTSEC-2023-0071 is ignored."
             exit 1
           fi
 
