@@ -7,13 +7,13 @@
 
 ## One source of truth
 
-Pull request **#91 — Consolidate Phase 3B platform, Paddle Live billing, Entra, and support** is the single merge candidate for the current Phase 3B repository work. It should be squash-merged to `main` only after the current Frontend, Rust, supply-chain, route, migration, Paddle-contract and secret-scan checks all pass on the same head commit.
+Pull request **#91 — Consolidate Phase 3B platform, Paddle Live billing, Entra, and support** was squash-merged to `main` on 2026-10-11 as commit `77495095fb32178722029b51141a8053eab84648`. The reviewed PR head `e7eb28ebfc10c82fb473bf3d9321cc0c42e9a766` passed Frontend workflow run #634, Rust workflow run #1231, and Supply chain security workflow run #34. These checks were on the exact reviewed PR head; the merged tree was verified on `main`.
 
-Do not merge intermediate PRs into one another or treat a green run on an older head as proof that the latest head is green.
+Do not merge intermediate PRs into one another or treat a green run on an older head as proof that a later code change is green.
 
 ## PRs superseded by the consolidated change
 
-After #91 is merged and verified on `main`, close these PRs with a short note pointing to #91. Their functionality has been reviewed against the consolidated tree; this is PR cleanup, not permission to delete their branch history.
+#91 is now merged to `main`. Close the following superseded PRs with a short note pointing to the merged implementation. Their changed-file lists and unique paths were checked against the consolidated tree; this is PR cleanup, not permission to delete their branch history.
 
 - **#90** — Paddle migration, included in #91.
 - **#88** — dashboard/API-key/support schema, included in #91.
@@ -23,7 +23,7 @@ After #91 is merged and verified on `main`, close these PRs with a short note po
 - **#77** — Resend transactional email, included in #91.
 - **#41** — its final environment/CI guard is superseded by the stricter current repository launch gate.
 
-Do not delete these branch refs as part of PR closure. First recheck that `main` contains the merged squash commit and that no unique file or migration exists only on an old branch.
+Do not delete these branch refs as part of PR closure. The squash commit is present on `main`; keep historical refs until the separate legacy-branch review proves their unique behavior is accounted for.
 
 ## Legacy PRs that must remain blocked for selective review
 
