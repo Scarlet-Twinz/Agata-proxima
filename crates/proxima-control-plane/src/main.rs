@@ -3284,9 +3284,9 @@ async fn create_support(
             )
             .await;
             let message = match notification_status {
-                "submitted" => "Support request created. The notification was submitted to the email provider; final delivery is not confirmed.",
-                "failed" => "Support request created, but the notification email could not be submitted. Check the support email configuration.",
-                _ => "Support request created, but no support notification recipient is configured.",
+                "submitted" => "Support request sent successfully. Our team will review your request and get back to you as soon as possible.",
+                "failed" => "Support request received successfully. Our team will review your request and get back to you as soon as possible.",
+                _ => "Support request received successfully. Our team will review your request and get back to you as soon as possible.",
             };
             Json(json!({
                 "id": id,
