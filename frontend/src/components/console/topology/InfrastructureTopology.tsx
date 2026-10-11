@@ -11,18 +11,6 @@ type Props = {
 };
 
 export function InfrastructureTopology({ nodes }: Props) {
-  if (!nodes.length) {
-    return (
-      <div className="topology-empty">
-        <strong>No infrastructure nodes registered.</strong>
-        <span>
-          Node topology will appear here when Proxima has registered
-          infrastructure.
-        </span>
-      </div>
-    );
-  }
-
   return (
     <div className="topology">
       <div className="topology-core">
@@ -31,8 +19,8 @@ export function InfrastructureTopology({ nodes }: Props) {
         <small>enforcement boundary</small>
       </div>
 
-      <div className="topology-links">
-        {nodes.map((node) => (
+      <div className="topology-links" aria-label="Registered infrastructure nodes">
+        {nodes.length ? nodes.map((node) => (
           <div className="topology-node" key={node.id}>
             <span className="node-dot" />
             <div>
@@ -46,7 +34,15 @@ export function InfrastructureTopology({ nodes }: Props) {
               {node.status ?? "UNKNOWN"}
             </span>
           </div>
-        ))}
+        )) : (
+          <div className="topology-node topology-node--empty" role="status">
+            <span className="node-dot node-dot--idle" />
+            <div>
+              <strong>No infrastructure nodes registered</strong>
+              <small>Register a node to populate the live topology. No sample nodes are shown.</small>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

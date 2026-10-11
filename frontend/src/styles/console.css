@@ -1509,3 +1509,191 @@ a {
     align-self: flex-start;
   }
 }
+
+
+/* Phase 3B dashboard recovery: keep visualizations inside their cards. */
+.command-grid {
+  align-items: start;
+}
+
+.command-grid > .surface {
+  min-width: 0;
+  align-self: start;
+}
+
+.chart-shell {
+  position: relative;
+}
+
+.chart-gridline {
+  stroke: #e9eef5;
+  stroke-width: 1;
+  stroke-dasharray: 3 5;
+}
+
+.chart-shell--empty .activity-chart {
+  opacity: 0.72;
+}
+
+.chart-empty-overlay {
+  position: absolute;
+  inset: 18px 0 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 18px;
+  text-align: center;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(255,255,255,0.58), rgba(255,255,255,0.82), rgba(255,255,255,0.58));
+}
+
+.chart-empty-overlay strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.chart-empty-overlay span {
+  max-width: 360px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.topology {
+  height: 300px;
+  min-height: 270px;
+  align-items: stretch;
+  grid-template-columns: minmax(150px, 210px) minmax(0, 1fr);
+}
+
+.topology-links {
+  min-height: 0;
+  max-height: 250px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  align-content: start;
+  padding-right: 3px;
+}
+
+.topology-node--empty {
+  min-height: 112px;
+  border-style: dashed;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.node-dot--idle {
+  background: #98a2b3;
+  box-shadow: 0 0 0 5px rgba(152, 162, 179, 0.12);
+}
+
+.activity-stream {
+  max-height: 300px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 3px;
+}
+
+@media (max-width: 900px) {
+  .topology {
+    height: auto;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+    padding: 16px;
+  }
+
+  .topology-core {
+    min-height: 110px;
+  }
+
+  .topology-links {
+    max-height: 240px;
+  }
+}
+
+
+/* Live summary metrics for the Command Center. */
+.overview-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin: 18px 0 22px;
+}
+
+.overview-metric {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 12px;
+  padding: 17px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--console-border);
+  border-radius: 13px;
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+
+.overview-metric:hover {
+  border-color: rgba(23, 107, 255, 0.42);
+  transform: translateY(-1px);
+}
+
+.overview-metric-icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  color: var(--agata-blue);
+  background: var(--agata-blue-soft);
+  border-radius: 11px;
+}
+
+.overview-metric-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.overview-metric-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.overview-metric-copy strong {
+  color: var(--agata-midnight);
+  font-size: 25px;
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.overview-metric-copy small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.overview-metric-link {
+  color: #98a2b3;
+}
+
+@media (max-width: 1100px) {
+  .overview-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .overview-metrics {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .overview-metric {
+    padding: 14px;
+  }
+}

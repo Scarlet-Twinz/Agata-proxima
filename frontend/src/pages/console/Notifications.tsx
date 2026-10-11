@@ -21,19 +21,9 @@ export function Notifications(){
       const result=await api.get<{notifications:Notification[]}>("/api/v1/notifications");
       const notifications=result.notifications;
       setItems(notifications);
-      const unread=notifications.filter(n=>!n.read).length;
-      if(unread>0){
-        try{
-          await api.post("/api/v1/notifications/read-all",{});
-          setItems(notifications.map(n=>({...n,read:true})));
-          publishUnreadCount(0);
-        }catch(err){
-          publishUnreadCount(unread);
-          setError(err instanceof Error?err.message:"Unable to mark notifications as read.");
-        }
-      }else{
-        publishUnreadCount(0);
-      }
+      // Opening the notifications page is read-only. Only an explicit user
+      // action may mark an individual notification or all notifications read.
+      publishUnreadCount(notifications.filter(n=>!n.read).length);
     }catch(err){setError(err instanceof Error?err.message:"Unable to load notifications.");}
     finally{setLoading(false);}
   }

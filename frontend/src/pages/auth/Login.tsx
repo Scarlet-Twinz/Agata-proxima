@@ -1,4 +1,4 @@
-import { ArrowRight, CheckCircle2, Eye, EyeOff, ShieldCheck, KeyRound } from "lucide-react";
+import { ArrowRight, CheckCircle2, Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { login, resendVerification, verifyEmailCode } from "../../api/auth";
@@ -15,7 +15,6 @@ export default function Login() {
   const [verificationRequired,setVerificationRequired]=useState(false);
   const [resendBusy,setResendBusy]=useState(false);
   const [resendMessage,setResendMessage]=useState("");
-  const [showSsoForm,setShowSsoForm]=useState(false);
   const [organizationSlug,setOrganizationSlug]=useState("");
   const [ssoBusy,setSsoBusy]=useState(false);
   const locationState=location.state as {verified?:boolean;sessionExpired?:boolean}|null;
@@ -118,11 +117,14 @@ export default function Login() {
     </form>
     {verificationRequired && <div className="auth-security-callout"><ShieldCheck size={18}/><div><strong>Email verification required</strong><span>Your password is correct, but your email address must be verified. Enter the 6-digit code from your latest email.</span><div className="auth-code-row"><input aria-label="Verification code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,"").slice(0,6))} placeholder="000000"/><button className="auth-inline-action" type="button" disabled={busy || code.length!==6} onClick={handleVerifyCode}>Verify</button></div><button className="auth-inline-action" type="button" disabled={resendBusy || !email} onClick={handleResendVerification}>{resendBusy ? "Sending verification code…" : "Resend verification code"}</button>{resendMessage && <small>{resendMessage}</small>}</div></div>}
     <div className="auth-separator"><span>OR</span></div>
-    <button className="auth-sso" type="button" disabled={ssoBusy} aria-expanded={showSsoForm} onClick={()=>{setShowSsoForm(v=>!v);setError("");}}><KeyRound size={17}/><span>{showSsoForm?"Hide SSO sign-in":"Continue with SSO"}</span></button>
-    {showSsoForm && <form className="agata-form auth-sso-form" onSubmit={handleSso}>
+    <form className="agata-form auth-sso-form" onSubmit={handleSso}>
+      <div className="auth-form-heading">
+        <span className="auth-kicker auth-kicker-dark">MICROSOFT ENTRA SSO</span>
+        <p>Sign in to an existing organization using its Microsoft identity provider.</p>
+      </div>
       <div className="agata-field"><label htmlFor="login-sso-organization">Organization slug</label><input id="login-sso-organization" name="organization_slug" required value={organizationSlug} onChange={e=>setOrganizationSlug(e.target.value)} autoComplete="organization" placeholder="your-workspace"/><small className="auth-note">Enter the workspace slug provided by your organization administrator.</small></div>
       <button className="auth-submit" type="submit" disabled={ssoBusy}><span>{ssoBusy?"Connecting to Microsoft…":"Continue with Microsoft Entra"}</span><ArrowRight size={17}/></button>
-    </form>}
+    </form>
     <div className="auth-switch"><span>New to Agata?</span><Link to="/signup">Create a workspace</Link></div>
     <p className="auth-note">By signing in, you access your organization’s Proxima control plane.</p>
   </div>;
