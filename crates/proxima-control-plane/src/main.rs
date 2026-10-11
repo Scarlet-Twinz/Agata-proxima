@@ -3240,14 +3240,13 @@ async fn create_support(
     .await
     {
         Ok(_) => {
-            let requester_email = sqlx::query_scalar::<_, String>(
-                "SELECT email FROM users WHERE id=$1",
-            )
-            .bind(ctx.user_id)
-            .fetch_optional(&s.db)
-            .await
-            .ok()
-            .flatten();
+            let requester_email =
+                sqlx::query_scalar::<_, String>("SELECT email FROM users WHERE id=$1")
+                    .bind(ctx.user_id)
+                    .fetch_optional(&s.db)
+                    .await
+                    .ok()
+                    .flatten();
             let reply_to = requester_email
                 .as_deref()
                 .filter(|email| valid_public_support_email(email))
