@@ -1,6 +1,6 @@
 # Agata Proxima — Phases 41–50
 
-This release moved the platform from a private-beta foundation into production-oriented identity, commercial, integration and operational contracts. The provider-specific billing notes in this historical record are superseded by the Lemon Squeezy implementation and pricing contract in Phase 3.21.
+This release moved the platform from a private-beta foundation into production-oriented identity, commercial, integration and operational contracts. This is a historical phase record. Its provider-specific billing section is superseded by the current Paddle Live integration documented in `docs/production/paddle-billing.md`.
 
 ## Phase gates
 
@@ -9,7 +9,7 @@ This release moved the platform from a private-beta foundation into production-o
 | 41 | Production identity, verification, password reset, invitations | Implemented |
 | 42 | Secret/configuration boundary | Implemented |
 | 43 | Transactional email integration | Implemented |
-| 44 | Production billing integration | Repository billing foundation implemented; provider later standardized on Lemon Squeezy |
+| 44 | Production billing integration | Billing foundation implemented; current provider is Paddle Live |
 | 45 | Billing webhook idempotency and entitlement state | Repository lifecycle and idempotency gates implemented |
 | 46 | Customer onboarding/integration contract | Implemented |
 | 47 | Operational readiness endpoint and CI gates | Implemented |
@@ -23,21 +23,21 @@ The Control Plane has a direct Resend REST integration for email verification, p
 
 Production configuration uses `RESEND_API_KEY`, `RESEND_FROM_EMAIL` and `AGATA_PUBLIC_BASE_URL`. Missing credentials fail safely rather than becoming a hidden dependency. Live delivery still requires the Agata-owned sending domain to be verified.
 
-## Current billing provider: Lemon Squeezy
+## Current billing provider: Paddle Live
 
-Lemon Squeezy is the active provider for Agata Proxima. The current provider-specific integration and pricing contract is documented in Phase 3.21.
+Paddle is the only active billing provider. The Control Plane targets Paddle's Live API; Sandbox routing is intentionally unsupported. The current provider contract is documented in [Paddle Billing](production/paddle-billing.md).
 
-The Control Plane uses environment-configured Agata-specific Lemon Squeezy variant IDs:
+Configure these variables in the production secret store:
 
-- `LEMON_SQUEEZY_API_KEY`
-- `LEMON_SQUEEZY_STORE_ID`
-- `LEMON_SQUEEZY_WEBHOOK_SECRET`
-- `LEMON_SQUEEZY_TEST_MODE=true` for initial acceptance
-- `LEMON_SQUEEZY_STARTER_VARIANT_ID`
-- `LEMON_SQUEEZY_GROWTH_VARIANT_ID`
-- `LEMON_SQUEEZY_SCALE_VARIANT_ID`
+- `PADDLE_API_KEY`
+- `PADDLE_CLIENT_TOKEN`
+- `PADDLE_WEBHOOK_SECRET`
+- `PADDLE_ENVIRONMENT=production`
+- `PADDLE_STARTER_PRICE_ID`
+- `PADDLE_GROWTH_PRICE_ID`
+- `PADDLE_SCALE_PRICE_ID`
 
-The canonical monthly launch prices are Starter **$149**, Growth **$499**, and Scale **$1,199**. Free requires no provider subscription; Enterprise is contract-managed. The configured store must be USD; each variant must belong to that store, be published, be monthly, match the exact price, and match the configured Test/Live mode before checkout is enabled. Do not reuse unrelated products or accept a browser-supplied plan as proof of payment.
+The canonical monthly prices are Starter **$149**, Growth **$499**, and Scale **$1,199**. Free requires no provider subscription; Enterprise is contract-managed. Each configured `pri_...` price must be active, recurring monthly, USD, match the exact plan amount, and be unique. Checkout remains unavailable until approved Live credentials, prices, and the notification destination are configured. A repository configuration example is not evidence that live payment acceptance has passed.
 
 ## Identity
 
@@ -51,4 +51,4 @@ Billing, identity, audit and the Control Plane remain management-plane concerns.
 
 Repository CI must pass formatting, workspace check, workspace tests, Clippy with warnings denied, RLS verification, migration verification, OpenAPI validation, operational script syntax, production environment contract checks and the Phase 3.22-A–H entitlement gates.
 
-External production gates remain explicit: live Lemon Squeezy plan/code validation and webhook delivery, real SSO provider acceptance, production secret management, public deployment URL, backup/restore drill, centralized observability, independent security assessment and a real external SaaS attack/acceptance run.
+External production gates remain explicit: Paddle Live account/domain approval, price validation and signed webhook delivery, real SSO provider acceptance, production secret management, public deployment URL, backup/restore drill, centralized observability, independent security assessment and a real external SaaS attack/acceptance run.
