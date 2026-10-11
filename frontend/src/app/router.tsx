@@ -105,6 +105,7 @@ const nestedConsoleRoutes = [
   "developer/terraform",
   "settings/members",
   "settings/authentication",
+  "settings/identity",
   "settings/security",
   "settings/api",
   "settings/environments",
