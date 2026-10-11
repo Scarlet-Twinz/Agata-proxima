@@ -1,4 +1,4 @@
-import { ArrowRight, CheckCircle2, Eye, EyeOff, ShieldCheck, KeyRound } from "lucide-react";
+import { ArrowRight, CheckCircle2, Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { login, resendVerification, verifyEmailCode } from "../../api/auth";
