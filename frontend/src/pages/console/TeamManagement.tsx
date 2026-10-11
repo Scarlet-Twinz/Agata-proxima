@@ -24,16 +24,19 @@ export function TeamManagement() {
   async function load() {
     setLoading(true); setError("");
     try {
-      const [session, memberResult, invitationResult, entitlementResult] = await Promise.all([
+      const [session, memberResult, invitationResult] = await Promise.all([
         api.get<Session>("/api/v1/session"),
         api.get<Member[]>("/api/v1/organization/team"),
         api.get<Invitation[]>("/api/v1/organization/invitations"),
-        api.get<TeamEntitlements>("/api/v1/billing/entitlements"),
       ]);
       setOrganizationId(session.organization_id);
       setMembers(memberResult);
       setInvitations(invitationResult);
-      setEntitlements(entitlementResult);
+      try {
+        setEntitlements(await api.get<TeamEntitlements>("/api/v1/billing/entitlements"));
+      } catch {
+        setEntitlements(null);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load organization access.");
     } finally { setLoading(false); }
