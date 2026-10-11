@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { getSession, logout, type Session } from "../../api/auth";
 import { api } from "../../api/client";
+import { AgataLogo } from "../../components/brand/AgataLogo";
 
 const primaryNavigation = [
   { label: "Overview", href: "/app", icon: Gauge },
@@ -226,9 +227,7 @@ export function ConsoleLayout() {
         ].join(" ")}
       >
         <div className="console-brand">
-          <span className="console-brand-mark" aria-label={organizationName}>
-            {organizationInitial}
-          </span>
+          <AgataLogo compact />
 
           {!collapsed && (
             <div className="console-brand-copy">
