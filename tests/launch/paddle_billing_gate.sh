@@ -14,6 +14,8 @@ for key in PADDLE_API_KEY PADDLE_CLIENT_TOKEN PADDLE_WEBHOOK_SECRET PADDLE_START
 done
 
 grep -q 'https://api.paddle.com' "$production"
+grep -q 'fn paddle_live_enabled()' "$production"
+grep -q 'paddle_live_environment' "$production"
 ! grep -q 'https://sandbox-api.paddle.com' "$production"
 grep -q 'prices/{price_id}' "$production"
 grep -q '/transactions' "$production"
