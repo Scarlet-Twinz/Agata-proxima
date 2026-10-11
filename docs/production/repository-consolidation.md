@@ -49,3 +49,57 @@ These are **not safe to merge wholesale** and must remain visible until their un
 ## Production acceptance is a separate gate
 
 Repository CI can prove source-level checks, but cannot prove provider approval, public DNS/TLS, Live Paddle charges/webhooks, managed-database backup/restore, real support inbox delivery, alert delivery, independent red-team review, or a deployment rollback. Track those in [Phase 3B acceptance status](phase3b-3-24-40-acceptance.md); do not mark them passed without external evidence.
+
+
+## Branch-reference audit (2026-10-11)
+
+The repository had **98 branch refs**, including `main`. All 97 non-main refs were compared with the current `main` tip for commit ancestry; branch names alone were not used to infer that a ref was disposable.
+
+### Exact duplicate tips
+
+These pairs point to the same commit SHA and therefore represent duplicate branch names for identical source snapshots:
+
+- `phase51-57-final-gate-5` and `phase51-sso-external-acceptance` — `d2bd27c6808a1bf94921edb4a978928fa9294d36`.
+- `phase7-17-all-gates-green` and `phase7-17-final-green-gate` — `e0f2839c7d7fbf9fbaef73e44c7c7e2a0ded566e`.
+
+The `phase51-57-final-gate-5` pair is fully behind `main`; the `phase7-17` pair is **divergent from `main`** and must retain at least one ref until its unique security/auth behavior is reviewed. Never delete both refs in a duplicate-tip pair merely because their names look redundant.
+
+### Branch refs fully behind `main`
+
+These refs have no commits ahead of `main` in Git ancestry and are not the heads of any currently open PR. They are cleanup candidates, not proof that every old PR's feature was independently reviewed. Preserve any ref still needed as an ancestry/forensic anchor until the dependent legacy review is finished.
+
+```text
+finish-dashboard-auth-docs-repair
+fix/account-deletion-safety
+fix/public-docs-jsx
+phase25-40-final
+phase3-frontend-complete
+phase3a-final-auth-settings
+phase3a-final-settings-notifications
+phase3a-product-completion
+phase3a-route-completeness
+phase41-50-production
+phase51-57-final-gate
+phase51-57-final-gate-2
+phase51-57-final-gate-3
+phase51-57-final-gate-4
+phase51-57-final-gate-5
+phase51-sso-external-acceptance
+phase58-59-launch-hardening
+verify-final-mainline
+```
+
+### Refs deliberately preserved
+
+The following seven open draft PRs have divergent histories and unique or potentially unique behavior. They must not be deleted or merged wholesale based on ancestry alone:
+
+- #58 — Phase 3A integrations and environment-bound customer credentials; migration numbers conflict with the current sequence.
+- #48 — older dashboard/resource/docs changes; compare against the active React router and current API.
+- #42 — legacy embedded static UI and Control Plane code; do not restore a second frontend/router.
+- #31 and #30 — older Phase 25–40 platform implementations; compare feature-by-feature against the current Rust Control Plane.
+- #22 — older TLS/session hardening; compare certificate validation and session invariants against current Engine tests.
+- #10 — older auth/session binding and RLS fixtures; port only missing security invariants and re-run PostgreSQL isolation tests.
+
+### Deletion safety
+
+No branch ref was deleted during this audit. A branch is eligible for deletion only after confirming it is not the head/base of an active PR, is not referenced by deployment automation, has no unique tree content or required forensic value, and all needed behavior is present on `main`. The refs listed above are candidates only; complete the final deletion in the GitHub repository UI and verify that each removed ref is absent. Do not mark branch cleanup complete until that check is recorded.

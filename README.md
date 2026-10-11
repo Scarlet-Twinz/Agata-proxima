@@ -63,6 +63,7 @@ The 25–40 platform layer adds an authenticated, durable control plane with org
 - [Production smoke workflow](.github/workflows/production-smoke.yml) — scheduled liveness checks and a manual full-readiness gate once the public URL is configured.
 - [Remaining launch work map](docs/production/remaining-launch-work-map.md) — Paddle Live acceptance, Microsoft Entra SSO, hosting and production acceptance.
 - [Phase 3B checkpoints 3.24–3.40](docs/production/phase3b-3-24-40-acceptance.md) — one status matrix separating repository evidence from live launch blockers.
+- [Repository map and branch policy](docs/production/repository-consolidation.md) — canonical `main` workflow, reviewed PRs, preserved legacy branches, and safe cleanup rules.
 - [OpenAPI contract](control-plane/openapi.json) — machine-readable Control Plane API.
 
 ## License
