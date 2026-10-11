@@ -4,6 +4,12 @@
 };
 
 export type OverviewData = {
+  metrics?: {
+    tenants?: number;
+    policies?: number;
+    nodes?: number;
+    active_deployments?: number;
+  };
   protection?: {
     tenantIsolation?: string;
     policyEnforcement?: string;
