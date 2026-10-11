@@ -136,8 +136,8 @@ Do not declare production ready until all are evidenced:
 - [ ] Public HTTPS frontend and Control Plane are deployed.
 - [ ] Production database is separate from local Compose and its connection is verified.
 - [ ] Migrations 0001–0015 are applied and schema state is checked.
-- [ ] Paddle Sandbox price IDs match $149 / $499 / $1,199 per month.
-- [ ] Paddle Sandbox checkout → signed webhook → entitlement update succeeds.
+- [ ] Paddle Live price IDs match $149 / $499 / $1,199 per month and are stored only in the production secret store.
+- [ ] Paddle Live checkout → signed webhook → entitlement update succeeds under the approved acceptance procedure.
 - [ ] Microsoft Entra sign-in works against the real registered application.
 - [ ] Resend domain is verified and real email delivery succeeds.
 - [ ] Liveness/readiness probes and alerting are configured.
