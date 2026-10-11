@@ -33,6 +33,18 @@ jobs:
             echo "::error::The SQLx MySQL backend must remain disabled while RUSTSEC-2023-0071 is ignored."
             exit 1
           fi
+          if cargo tree --locked -i sqlx-mysql > "$RUNNER_TEMP/sqlx-mysql-tree.txt" 2>&1; then
+            echo "::error::SQLx MySQL is present in the active dependency graph; remove the RSA advisory exception or disable MySQL."
+            cat "$RUNNER_TEMP/sqlx-mysql-tree.txt"
+            exit 1
+          elif grep -Fq 'did not match any packages' "$RUNNER_TEMP/sqlx-mysql-tree.txt"; then
+            echo "PASS: SQLx MySQL is absent from the active dependency graph."
+          else
+            cat "$RUNNER_TEMP/sqlx-mysql-tree.txt"
+            exit 1
+          fi
+          test -f docs/security/dependency-advisory-exceptions.md
+          grep -q 'RUSTSEC-2023-0071' docs/security/dependency-advisory-exceptions.md
 
       - name: Audit Rust dependencies
         # RUSTSEC-2023-0071 is only pulled into Cargo.lock by SQLx's optional MySQL driver.
