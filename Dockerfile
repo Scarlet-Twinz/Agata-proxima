@@ -2,7 +2,7 @@ FROM rust:1.98-bookworm AS builder
 
 WORKDIR /app
 COPY . .
-RUN cargo build --release -p proxima-engine
+RUN cargo build --release --locked -p proxima-engine
 
 FROM debian:bookworm-slim
 RUN useradd --create-home --uid 10001 proxima
