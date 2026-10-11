@@ -1734,19 +1734,41 @@ pub(crate) async fn paddle_webhook(
         send_billing_notice(&s.db, organization_id, event_id, "Paddle payment received", &details).await;
     } else if is_transaction && event_type == "transaction.payment_failed" {
         if let Some(subscription) = subscription_id.as_deref() {
-            let _ = sqlx::query(
-                "UPDATE organization_entitlements SET billing_status='past_due',billing_grace_until=COALESCE(billing_grace_until,now()+interval '7 days'),updated_at=now()
-                 WHERE organization_id=$1 AND EXISTS(SELECT 1 FROM billing_accounts WHERE organization_id=$1 AND paddle_subscription_id=$2)",
+            if let Err(error) = sqlx::query(
+                "UPDATE organization_entitlements
+                    SET billing_status='past_due',
+                        billing_grace_until=COALESCE(billing_grace_until,now()+interval '7 days'),
+                        updated_at=now()
+                  WHERE organization_id=$1
+                    AND EXISTS(
+                        SELECT 1 FROM billing_accounts
+                         WHERE organization_id=$1 AND paddle_subscription_id=$2
+                    )",
             )
             .bind(organization_id)
             .bind(subscription)
             .execute(&s.db)
-            .await;
+            .await
+            {
+                return db_error(error);
+            }
+            if let Err(error) = sqlx::query(
+                "UPDATE billing_accounts
+                    SET status='attention',updated_at=now()
+                  WHERE organization_id=$1 AND provider='paddle' AND paddle_subscription_id=$2",
+            )
+            .bind(organization_id)
+            .bind(subscription)
+            .execute(&s.db)
+            .await
+            {
+                return db_error(error);
+            }
             let details = "Paddle reported a failed subscription payment. Review your billing details to avoid interruption.";
             send_billing_notice(&s.db, organization_id, event_id, "Paddle payment failed", details).await;
         }
     } else if is_transaction && event_type == "transaction.refunded" {
-        let _ = sqlx::query(
+        if let Err(error) = sqlx::query(
             "UPDATE billing_transactions SET status='refunded',refund_status='refunded',payload=$1,updated_at=now()
              WHERE provider='paddle' AND provider_checkout_id=$2 AND organization_id=$3",
         )
@@ -1754,7 +1776,10 @@ pub(crate) async fn paddle_webhook(
         .bind(object_id)
         .bind(organization_id)
         .execute(&s.db)
-        .await;
+        .await
+        {
+            return db_error(error);
+        }
     }
 
     if is_subscription {
