@@ -49,7 +49,7 @@ Configure these service variables in the provider's secret/configuration UI:
 - `PROXIMA_COOKIE_SECURE=true`.
 - `AGATA_PUBLIC_BASE_URL=https://agataproxima.com`.
 - `RESEND_API_KEY`, the five purpose-specific `RESEND_FROM_*_EMAIL` identities, all six `RESEND_TEMPLATE_*_ID` values, and `AGATA_SUPPORT_INBOX_EMAIL` after the sending domain is verified. Keep the API key server-side; the support inbox must be an actually monitored mailbox. `RESEND_FROM_EMAIL` is only a compatibility fallback.
-- `PADDLE_API_KEY`, `PADDLE_CLIENT_TOKEN`, `PADDLE_WEBHOOK_SECRET`, `PADDLE_STARTER_PRICE_ID`, `PADDLE_GROWTH_PRICE_ID`, `PADDLE_SCALE_PRICE_ID`, and `PADDLE_ENVIRONMENT=sandbox` while testing.
+- `PADDLE_API_KEY`, `PADDLE_CLIENT_TOKEN`, `PADDLE_WEBHOOK_SECRET`, `PADDLE_STARTER_PRICE_ID`, `PADDLE_GROWTH_PRICE_ID`, `PADDLE_SCALE_PRICE_ID`, and `PADDLE_ENVIRONMENT=production` in the production secret store.
 - `PROXIMA_OIDC_CLIENT_ID` and `PROXIMA_OIDC_CLIENT_SECRET` after Microsoft Entra registration. The current implementation derives and validates the issuer from the organization's configured Entra tenant ID; there is no separate `PROXIMA_OIDC_ISSUER` runtime variable.
 
 Do not store any secret in Git, Vercel's public build variables, or this documentation. The Control Plane applies its versioned database migrations at startup; verify migration logs and readiness after the first deploy.
@@ -76,7 +76,7 @@ The API hostname must be live before the frontend is promoted. Do not send custo
 ### 5. Finish SSO and Paddle provider setup
 
 - **SSO:** set the Microsoft Entra Web redirect URI to `https://agataproxima.com/api/v1/auth/oidc/callback`, matching the frontend-origin proxy. Set the exact public base URL and provider credentials in the Control Plane's secret store, then test a real login.
-- **Paddle:** start in Sandbox. Configure the notification destination at `https://api.agataproxima.com/api/v1/webhooks/paddle` only after the API is deployed. Configure active monthly USD **price IDs** (`pri_...`) at $149, $499 and $1,199; the API requires price IDs, not product IDs. Verify checkout, `Paddle-Signature` validation, duplicate delivery, payment failure/recovery, cancellation and expiry. Do not switch to `PADDLE_ENVIRONMENT=production` until Paddle approves the business and checkout domain.
+- **Paddle Live:** configure approved Live credentials and active monthly USD **price IDs** (`pri_...`) at $149, $499 and $1,199; the API requires price IDs, not product IDs. Configure the notification destination at `https://api.agataproxima.com/api/v1/webhooks/paddle` only after the API is deployed and the business/domain are approved. Verify `Paddle-Signature` validation, duplicate delivery, payment failure/recovery, cancellation and expiry using the approved Live acceptance process. Sandbox is not used by this deployment.
 - **Email:** verify the Agata-owned Resend sending domain and test verification, password-reset and invitation delivery.
 
 ### 6. Turn on monitoring and recovery
@@ -97,7 +97,7 @@ The production deployment is not accepted until all of the following are evidenc
 - production Control Plane uses the managed database, not localhost or the laptop;
 - migrations 0001–0020 are applied and schema state is verified;
 - `/api/v1/production/readiness` returns `ready`;
-- Paddle Sandbox checkout and signed webhook lifecycle passes;
+- Paddle Live checkout and signed webhook lifecycle passes;
 - real Entra SSO and Resend verification, recovery, invitation, security, billing, and support delivery tests pass;
 - database restore drill and alerting/rollback checks pass;
 - external three-tenant SaaS isolation acceptance and load/security checks pass.
