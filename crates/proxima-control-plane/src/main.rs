@@ -2858,13 +2858,22 @@ async fn send_support_notification_copy(
     destination_label: &str,
 ) -> bool {
     if !valid_public_support_email(destination) {
-        tracing::error!(request_id = %request_id, destination_label, "support notification destination is invalid");
+        tracing::error!(
+            request_id = %request_id,
+            destination_label,
+            "support notification destination is invalid"
+        );
         return false;
     }
     match production::send_text_email(destination, subject, body, "support", reply_to).await {
         Ok(()) => true,
         Err(error) => {
-            error!(request_id = %request_id, destination_label, %error, "support notification email submission failed");
+            error!(
+                request_id = %request_id,
+                destination_label,
+                %error,
+                "support notification email submission failed"
+            );
             false
         }
     }
@@ -2878,16 +2887,36 @@ async fn send_support_notifications(
 ) -> (bool, bool, bool, bool) {
     let primary = env::var("AGATA_SUPPORT_INBOX_EMAIL").ok();
     let fallback = env::var("AGATA_SUPPORT_NOTIFICATION_FALLBACK_EMAIL").ok();
-    let primary_configured = primary.as_deref().is_some_and(|value| !value.trim().is_empty());
-    let fallback_configured = fallback.as_deref().is_some_and(|value| !value.trim().is_empty());
-    let primary_valid = primary.as_deref().is_some_and(|value| valid_public_support_email(value.trim()));
-    let fallback_valid = fallback.as_deref().is_some_and(|value| valid_public_support_email(value.trim()));
+    let fallback_is_primary = primary
+        .as_deref()
+        .zip(fallback.as_deref())
+        .is_some_and(|(primary, fallback)| primary.trim().eq_ignore_ascii_case(fallback.trim()));
+    let primary_configured = primary
+        .as_deref()
+        .is_some_and(|value| !value.trim().is_empty());
+    let fallback_configured = fallback
+        .as_deref()
+        .is_some_and(|value| !value.trim().is_empty())
+        && !fallback_is_primary;
+    let primary_valid = primary
+        .as_deref()
+        .is_some_and(|value| valid_public_support_email(value.trim()));
+    let fallback_valid = fallback
+        .as_deref()
+        .is_some_and(|value| valid_public_support_email(value.trim()))
+        && !fallback_is_primary;
 
     if primary_configured && !primary_valid {
-        tracing::error!(request_id = %request_id, "AGATA_SUPPORT_INBOX_EMAIL is invalid");
+        tracing::error!(
+            request_id = %request_id,
+            "AGATA_SUPPORT_INBOX_EMAIL is invalid"
+        );
     }
     if fallback_configured && !fallback_valid {
-        tracing::error!(request_id = %request_id, "AGATA_SUPPORT_NOTIFICATION_FALLBACK_EMAIL is invalid");
+        tracing::error!(
+            request_id = %request_id,
+            "AGATA_SUPPORT_NOTIFICATION_FALLBACK_EMAIL is invalid"
+        );
     }
 
     let primary_submitted = if primary_valid {
@@ -2904,12 +2933,7 @@ async fn send_support_notifications(
         false
     };
 
-    let fallback_is_primary = primary.as_deref().zip(fallback.as_deref()).is_some_and(
-        |(primary, fallback)| primary.trim().eq_ignore_ascii_case(fallback.trim()),
-    );
-    let fallback_submitted = if fallback_valid && fallback_is_primary {
-        primary_submitted
-    } else if fallback_valid {
+    let fallback_submitted = if fallback_valid {
         send_support_notification_copy(
             fallback.as_deref().unwrap().trim(),
             subject,
@@ -3270,7 +3294,8 @@ async fn create_support(
                 "status": "open",
                 "notification_email_status": notification_status,
                 "message": message
-            })).into_response()
+            }))
+            .into_response()
         }
         Err(e) => db_error(e),
     }
