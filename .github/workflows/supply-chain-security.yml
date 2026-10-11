@@ -1,0 +1,56 @@
+name: Supply chain security
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  schedule:
+    - cron: "23 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Dependency audit, secret scan and SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Audit Rust dependencies
+        run: cargo audit
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Audit frontend dependencies
+        run: npm audit --audit-level=high
+        working-directory: frontend
+
+      - name: Generate frontend CycloneDX SBOM
+        run: npm sbom --sbom-format=cyclonedx > "$RUNNER_TEMP/frontend-sbom.cdx.json"
+        working-directory: frontend
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: agata-proxima-frontend-sbom
+          path: ${{ runner.temp }}/frontend-sbom.cdx.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Scan changes for leaked secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
