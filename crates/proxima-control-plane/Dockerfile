@@ -1,7 +1,7 @@
 FROM rust:1.98-bookworm AS build
 WORKDIR /src
 COPY . .
-RUN cargo build --release -p proxima-control-plane
+RUN cargo build --release --locked -p proxima-control-plane
 
 FROM debian:bookworm-slim
 RUN useradd --system --create-home --uid 10001 proxima
