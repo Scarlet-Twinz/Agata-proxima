@@ -1,6 +1,6 @@
 # Agata Proxima — Deployment Architecture and First Production Path
 
-Status: **prepared in the repository, not deployed**. No hosting service, domain record, database, provider secret or paid plan has been created or changed by this document.
+Status: **repository prepared; frontend hosting partially provisioned; not launch-ready**. A Vercel project named `agata-proxima` exists, with a deployment marked `target=production` and `READY` at the generated `agata-proxima.vercel.app` domain. The project has SSO protection enabled for all non-custom domains, and `agataproxima.com` is not attached; do not treat the generated URL as a public customer URL. The connected Railway workspace returned no projects, so a Railway Control Plane deployment is not evidenced there. The managed-database and deployment-secret-store state has not been independently verified. No secrets or provider settings were changed during this inspection.
 
 ## Recommended topology
 
@@ -11,7 +11,7 @@ Use the following first deployment path to preserve the existing React frontend 
 - **Database:** a separate managed PostgreSQL project, with TLS, access restrictions, automated recovery capability and a production connection string. Neon is one compatible option; verify its current restore window and usage costs before selecting a plan.
 - **Engine:** deploy separately to the customer/database environment where it can securely reach the protected PostgreSQL service. Do not treat the Control Plane host as the Engine's trust boundary.
 
-This is a recommendation, not a claim that these accounts or resources already exist. **Do not use Vercel Hobby for the commercial production SaaS:** Vercel's current Terms limit Hobby to personal or non-commercial use. Use Vercel Pro (currently listed at $20/month) or select a different host whose terms permit commercial deployment. Railway Hobby has a $5/month base subscription and usage charges beyond included credit; Neon usage depends on compute, storage and recovery retention. These are provider list prices checked on 9 October 2026, not a quote for your exact workload. Review current prices and required payment methods before enabling paid services.
+This remains the target topology, not a completed production deployment. The current Vercel frontend project is only partially configured; the public domain and API/backend/database path are not launch-accepted. **Do not use Vercel Hobby for the commercial production SaaS:** Vercel's current Terms limit Hobby to personal or non-commercial use. Use Vercel Pro (currently listed at $20/month) or select a different host whose terms permit commercial deployment. Railway Hobby has a $5/month base subscription and usage charges beyond included credit; Neon usage depends on compute, storage and recovery retention. These are provider list prices checked on 9 October 2026, not a quote for your exact workload. Review current prices and required payment methods before enabling paid services.
 
 ## Why the API is proxied through the frontend origin
 
