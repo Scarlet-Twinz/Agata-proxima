@@ -88,3 +88,29 @@ jobs:
           path: ${{ runner.temp }}/gitleaks.sarif
           if-no-files-found: ignore
           retention-days: 30
+
+      - name: Build Engine container image
+        run: docker build --pull -f Dockerfile -t agata-proxima-engine:ci .
+
+      - name: Scan Engine container image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: agata-proxima-engine:ci
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+
+      - name: Build Control Plane container image
+        run: docker build --pull -f crates/proxima-control-plane/Dockerfile -t agata-proxima-control-plane:ci .
+
+      - name: Scan Control Plane container image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: agata-proxima-control-plane:ci
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
