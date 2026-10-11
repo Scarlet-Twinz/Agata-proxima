@@ -14,7 +14,7 @@ for key in PADDLE_API_KEY PADDLE_CLIENT_TOKEN PADDLE_WEBHOOK_SECRET PADDLE_START
 done
 
 grep -q 'https://api.paddle.com' "$production"
-grep -q 'https://sandbox-api.paddle.com' "$production"
+! grep -q 'https://sandbox-api.paddle.com' "$production"
 grep -q 'prices/{price_id}' "$production"
 grep -q '/transactions' "$production"
 grep -q 'enable_checkout' "$production"
@@ -35,4 +35,6 @@ grep -q 'docs/production/paddle-billing.md' README.md
 ! grep -q 'lemonsqueezy_webhook' "$main"
 ! grep -q '/api/v1/webhooks/lemonsqueezy' "$main"
 
-echo "PASS: Paddle Billing environment, checkout, webhook and migration contract"
+grep -q 'PADDLE_ENVIRONMENT=production' "$root_env"
+grep -q 'PADDLE_ENVIRONMENT=production' "$control_env"
+echo "PASS: Paddle Live-only environment, checkout, webhook and migration contract"
