@@ -100,4 +100,4 @@ The following seven open draft PRs have divergent histories and unique or potent
 
 ### Deletion safety
 
-No branch ref was deleted during this audit. A branch is eligible for deletion only after confirming it is not the head/base of an active PR, is not referenced by deployment automation, has no unique tree content or required forensic value, and all needed behavior is present on `main`. The GitHub write controls used for this audit can inspect and update refs but do not expose a branch-delete operation; the reviewed candidate list is retained here rather than pretending deletion occurred.
+No branch ref was deleted during this audit. A branch is eligible for deletion only after confirming it is not the head/base of an active PR, is not referenced by deployment automation, has no unique tree content or required forensic value, and all needed behavior is present on `main`. The refs listed above are candidates only; complete the final deletion in the GitHub repository UI and verify that each removed ref is absent. Do not mark branch cleanup complete until that check is recorded.
