@@ -113,6 +113,7 @@ fn configured_paddle_prices_unique() -> bool {
         && prices[1] != prices[2]
 }
 
+// The setting is required by readiness and checkout; the API base itself is Live-only.
 fn paddle_live_enabled() -> bool {
     env::var("PADDLE_ENVIRONMENT")
         .map(|value| value.trim().eq_ignore_ascii_case("production"))
