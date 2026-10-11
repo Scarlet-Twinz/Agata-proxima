@@ -38,3 +38,10 @@ This page is the single checkpoint summary for 3.24–3.40. The detailed runbook
 - [ ] Deployment and rollback evidence is recorded.
 
 Until the external items are verified, checkpoints with blocked or incomplete evidence remain **not passed**. This prevents a new contributor or customer from mistaking repository preparation for a live, production-accepted service.
+
+
+## Separate legacy implementation blocker
+
+The earlier [Phase 3A integration branch, PR #58](https://github.com/Scarlet-Twinz/Agata-proxima/pull/58), contains unique customer-integration/environment-credential behavior but cannot be merged wholesale: its migrations 0008–0011 conflict with the current migration history. It is intentionally kept as a draft with a port plan. Preserve its branch, port any required behavior using new forward-only migration numbers after 0020, reconcile the handlers and Engine context, and rerun all security/migration tests before closing it. This blocker is separate from 3.24–3.40 and must not be silently treated as complete.
+
+The other legacy PRs marked **BLOCKED** are also retained as branches for selective review. Their status means “not safe to merge as-is,” not “their unique behavior has been completed.”
