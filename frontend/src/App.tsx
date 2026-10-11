@@ -15,6 +15,7 @@ import {
   Verification,
 } from "./pages/console/ConsoleSurfaces";
 import { NestedResource } from "./pages/console/NestedResource";
+import { IdentitySettings } from "./pages/console/IdentitySettings";
 import { SettingsHub } from "./pages/console/SettingsHub";
 import { Notifications } from "./pages/console/Notifications";
 
@@ -98,7 +99,7 @@ export function App() {
           path="settings/authentication"
           element={<NestedResource />}
         />
-        <Route path="settings/identity" element={<NestedResource />} />
+        <Route path="settings/identity" element={<IdentitySettings />} />
         <Route path="settings/api" element={<NestedResource />} />
         <Route path="settings/security" element={<NestedResource />} />
         <Route
