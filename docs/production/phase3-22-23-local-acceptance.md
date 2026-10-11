@@ -94,3 +94,12 @@ Microsoft identity provider, verify a real tenant, or send mail.
   observed end-to-end.
 
 Do not label the final category passed until it has actually been exercised.
+
+
+## Email DNS and receiving-inbox notes
+
+The earlier local-acceptance record reports that a DMARC TXT record was created in WhoGoHost with name `_dmarc` and value `v=DMARC1; p=none;`. This is an owner-reported configuration, not proof that the record is currently visible in authoritative DNS. Verify public DNS before marking DNS acceptance passed; do not create a second DMARC record.
+
+Resend sending-domain verification does not create an inbound mailbox. Set `AGATA_SUPPORT_INBOX_EMAIL` to a real, monitored inbox and verify that support notifications arrive and replies are received. Do not assume `support@agataproxima.com` can receive mail unless an actual mailbox or inbound routing has been configured.
+
+The prior DNS-zone review recorded the apex `@` A record as `127.0.0.1`, which is a loopback address and not a public website destination. Re-check the current authoritative DNS zone; only replace it after the actual hosting target is known. Never guess an IP address or change nameservers as a cleanup shortcut.
