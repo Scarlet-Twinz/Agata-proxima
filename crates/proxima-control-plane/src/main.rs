@@ -2931,7 +2931,7 @@ async fn send_support_notifications(
     )
 }
 
-fn support_email_status(
+fn combined_support_email_status(
     primary_configured: bool,
     primary_submitted: bool,
     fallback_configured: bool,
@@ -3098,7 +3098,7 @@ async fn create_public_support_request(
             request_id,
         )
         .await;
-    let support_email_status = support_email_status(
+    let support_email_status = combined_support_email_status(
         primary_configured,
         primary_submitted,
         fallback_configured,
