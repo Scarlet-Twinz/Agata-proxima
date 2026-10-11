@@ -19,7 +19,7 @@ CI verifies repository implementation and regression gates; external account set
 
 | Track | Primary owner | Dependency | Definition of done |
 |---|---|---|---|
-| Paddle account and plan setup | Founder/account owner, then repository verification | Paddle business approval and approved checkout domain | Configure API key, client token, notification secret, and three unique active monthly USD price IDs (`pri_...`) at $149/$499/$1,199; start in Sandbox and test checkout → signed webhook → correct entitlement, duplicate delivery, renewal failure/recovery, cancellation and expiry. See `docs/production/paddle-billing.md`. |
+| Paddle account and plan setup | Founder/account owner, then repository verification | Paddle business approval and approved checkout domain | Configure approved Paddle Live API key, client token, notification secret, and three unique active monthly USD Live price IDs (`pri_...`) at $149/$499/$1,199; verify checkout → signed webhook → correct entitlement, duplicate delivery, renewal failure/recovery, cancellation and expiry using Live acceptance procedures that do not create unintended charges. See `docs/production/paddle-billing.md`. |
 | Microsoft Entra SSO | Founder creates app registration; repository/deployment work completes integration | Public HTTPS Control Plane callback URL | Multitenant Web app registered; exact callback set; client ID and secret safely configured; organization Entra tenant ID bound; real login creates the correct Agata session and audit event. The UI start flow exists, but SSO is not production-accepted until the real end-to-end test passes. |
 | Production hosting and database | Account owner creates the selected provider resources; repository deployment preparation is ready | Stable public backend URL and managed database | Follow `docs/production/deployment-architecture.md`: Vercel Pro (or another host whose terms permit commercial use) frontend at `agataproxima.com`, Control Plane container at `api.agataproxima.com`, separate managed PostgreSQL, same-origin API proxy, TLS, restricted access, migrations 0001–0020 and smoke tests. No provider resources have been created yet. |
 | Production email | Founder/domain owner plus deployment configuration | Agata-owned domain and Resend access | Sending domain DNS is verified; production sender and API key configured in secret store; verification, password reset and invitations are delivered in a real test. |
@@ -32,10 +32,10 @@ CI verifies repository implementation and regression gates; external account set
 1. Complete Paddle business verification and obtain approval for the live checkout domain.
 2. Create the Agata Proxima Starter, Growth and Scale products in Paddle, each with an active monthly USD recurring price at $149, $499 and $1,199.
 3. Copy each **price ID** (`pri_...`) into the matching `PADDLE_*_PRICE_ID` variable. Product IDs alone are not sufficient for checkout.
-4. Configure `PADDLE_API_KEY`, `PADDLE_CLIENT_TOKEN`, `PADDLE_WEBHOOK_SECRET`, and `PADDLE_ENVIRONMENT=sandbox` in the Control Plane secret/configuration store.
-5. Configure the Sandbox notification destination at `https://api.agataproxima.com/api/v1/webhooks/paddle` only after the API is deployed; subscribe to the transaction and subscription lifecycle events documented in `docs/production/paddle-billing.md`.
-6. Run a real Sandbox payment round trip and confirm signed webhooks, idempotency, correct plan mapping, failure/recovery and cancellation before considering Live Mode.
-7. Switch `PADDLE_ENVIRONMENT=production` only after the business, checkout domain, live credentials and live price IDs are approved and independently verified.
+4. Configure the approved Paddle Live `PADDLE_API_KEY`, `PADDLE_CLIENT_TOKEN`, `PADDLE_WEBHOOK_SECRET`, three Live `pri_...` price IDs, and `PADDLE_ENVIRONMENT=production` in the Control Plane secret store.
+5. After the API is deployed and the Paddle business/domain are approved, configure the Live notification destination at `https://api.agataproxima.com/api/v1/webhooks/paddle`; subscribe to the transaction and subscription lifecycle events documented in `docs/production/paddle-billing.md`.
+6. Complete the provider-approved Live acceptance procedure with explicit charge/refund handling; verify signed webhooks, idempotency, correct plan mapping, failure/recovery and cancellation without using Sandbox.
+7. Confirm the Live account, checkout domain, credentials and price IDs are approved and independently verified before opening public self-service checkout.
 
 ## Microsoft Entra SSO sequence
 
