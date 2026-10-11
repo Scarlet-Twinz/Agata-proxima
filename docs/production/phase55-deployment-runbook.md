@@ -34,7 +34,7 @@ Use a deployment secret store, not a committed `.env` file. Do not paste secret 
 - `PADDLE_API_KEY`
 - `PADDLE_CLIENT_TOKEN`
 - `PADDLE_WEBHOOK_SECRET`
-- `PADDLE_ENVIRONMENT=sandbox` for initial acceptance
+- `PADDLE_ENVIRONMENT=production` for the Paddle Live-only integration
 - `PADDLE_STARTER_PRICE_ID`
 - `PADDLE_GROWTH_PRICE_ID`
 - `PADDLE_SCALE_PRICE_ID`
@@ -47,7 +47,7 @@ Before enabling checkout, verify that the configured Paddle price IDs (`pri_...`
 - Growth — $499/month
 - Scale — $1,199/month
 
-Free has no recurring Paddle price. Enterprise is contract-managed. Configure the Paddle notification destination at `/api/v1/webhooks/paddle` after the Control Plane is deployed; verify `Paddle-Signature` and event processing with a real Sandbox payment round trip. Do not switch to production until Paddle approves the business and checkout domain.
+Free has no recurring Paddle price. Enterprise is contract-managed. After the Control Plane is deployed and Paddle approves the business and `agataproxima.com` checkout domain, configure the Live notification destination at `https://api.agataproxima.com/api/v1/webhooks/paddle`. Verify `Paddle-Signature`, event idempotency, and entitlement processing using the approved Live acceptance procedure. This deployment does not use Sandbox.
 
 ### Resend email
 
