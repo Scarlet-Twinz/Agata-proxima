@@ -3086,6 +3086,15 @@ async fn create_support(
     }
 
     let priority = input.priority.unwrap_or_else(|| "normal".into());
+    if !matches!(priority.as_str(), "low" | "normal" | "high" | "urgent") {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "error": "Priority must be low, normal, high, or urgent."
+            })),
+        )
+            .into_response();
+    }
     if matches!(priority.as_str(), "high" | "urgent") {
         if let Err(response) =
             production::require_feature(&s.db, ctx.organization_id, "priority_support").await
