@@ -113,9 +113,14 @@ fn configured_paddle_prices_unique() -> bool {
         && prices[1] != prices[2]
 }
 
+fn paddle_live_enabled() -> bool {
+    env::var("PADDLE_ENVIRONMENT")
+        .map(|value| value.trim().eq_ignore_ascii_case("production"))
+        .unwrap_or(false)
+}
+
 fn paddle_api_base() -> &'static str {
-    // Agata Proxima is configured for Paddle Live only. Never silently route
-    // billing requests to Sandbox when the environment variable is missing or mistyped.
+    // Agata Proxima is configured for Paddle Live only; there is no Sandbox URL.
     "https://api.paddle.com"
 }
 
@@ -1264,6 +1269,9 @@ pub(crate) async fn checkout(
     if let Err(code) = require_admin(&ctx, &headers) {
         return code.into_response();
     }
+    if !paddle_live_enabled() {
+        return service_unavailable("Paddle Live billing is not enabled; set PADDLE_ENVIRONMENT=production.");
+    }
     let key = match env::var("PADDLE_API_KEY") {
         Ok(value) if !value.trim().is_empty() => value.trim().to_owned(),
         _ => return service_unavailable("Paddle API key is not configured."),
@@ -1443,6 +1451,9 @@ pub(crate) async fn portal(State(s): State<AppState>, headers: HeaderMap) -> Res
     };
     if let Err(code) = require_admin(&ctx, &headers) {
         return code.into_response();
+    }
+    if !paddle_live_enabled() {
+        return service_unavailable("Paddle Live billing is not enabled; set PADDLE_ENVIRONMENT=production.");
     }
     let account = match sqlx::query(
         "SELECT paddle_customer_id,paddle_subscription_id FROM billing_accounts WHERE organization_id=$1 AND provider='paddle'",
@@ -2357,7 +2368,9 @@ pub(crate) async fn purge_expired_audit_events(db: &sqlx::PgPool) -> Result<i64,
 
 pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
     let db_ok = sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
-    let paddle_configured = env::var("PADDLE_API_KEY").map(|value| !value.trim().is_empty()).unwrap_or(false)
+    let paddle_live_environment = paddle_live_enabled();
+    let paddle_configured = paddle_live_environment
+        && env::var("PADDLE_API_KEY").map(|value| !value.trim().is_empty()).unwrap_or(false)
         && env::var("PADDLE_CLIENT_TOKEN").map(|value| !value.trim().is_empty()).unwrap_or(false)
         && env::var("PADDLE_WEBHOOK_SECRET").map(|value| !value.trim().is_empty()).unwrap_or(false);
     let paddle_prices = configured_paddle_prices_unique();
@@ -2390,6 +2403,7 @@ pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
         "checks": {
             "database": db_ok,
             "paddle_configured": paddle_configured,
+            "paddle_live_environment": paddle_live_environment,
             "paddle_prices": paddle_prices,
             "resend_api_key": resend,
             "resend_fallback_sender": fallback_from,
