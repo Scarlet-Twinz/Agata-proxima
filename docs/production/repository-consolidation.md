@@ -62,6 +62,8 @@ These pairs point to the same commit SHA and therefore represent duplicate branc
 - `phase51-57-final-gate-5` and `phase51-sso-external-acceptance` — `d2bd27c6808a1bf94921edb4a978928fa9294d36`.
 - `phase7-17-all-gates-green` and `phase7-17-final-green-gate` — `e0f2839c7d7fbf9fbaef73e44c7c7e2a0ded566e`.
 
+The `phase51-57-final-gate-5` pair is fully behind `main`; the `phase7-17` pair is **divergent from `main`** and must retain at least one ref until its unique security/auth behavior is reviewed. Never delete both refs in a duplicate-tip pair merely because their names look redundant.
+
 ### Branch refs fully behind `main`
 
 These refs have no commits ahead of `main` in Git ancestry and are not the heads of any currently open PR. They are cleanup candidates, not proof that every old PR's feature was independently reviewed. Preserve any ref still needed as an ancestry/forensic anchor until the dependent legacy review is finished.
