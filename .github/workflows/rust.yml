@@ -122,6 +122,7 @@ jobs:
           test -f docs/usage.md
           test -f docs/production/operational-readiness-runbook.md
           ! grep -qi 'Stripe webhooks' docs/developer-guide.md
+          bash tests/launch/frontend_route_contract.sh
 
       - name: Paddle Billing integration
         run: bash tests/launch/paddle_billing_gate.sh
