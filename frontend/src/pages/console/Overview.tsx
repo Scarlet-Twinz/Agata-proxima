@@ -1,5 +1,5 @@
 ﻿import { Link } from "react-router-dom";
-import { ArrowUpRight, ChevronRight, ShieldCheck } from "lucide-react";
+import { ArrowUpRight, Building2, ChevronRight, Database, FileCheck2, Rocket, ShieldCheck } from "lucide-react";
 import { ActivityChart } from "../../components/console/charts/ActivityChart";
 import { ActivityStream } from "../../components/console/activity/ActivityStream";
 import { InfrastructureTopology } from "../../components/console/topology/InfrastructureTopology";
@@ -9,6 +9,12 @@ export function Overview() {
   const { data, isLoading, isError, isFetching, dataUpdatedAt } = useOverview();
 
   const protection = data?.protection;
+  const metrics = [
+    { label: "Tenants", value: data?.metrics?.tenants, detail: "Customer boundaries", href: "/app/tenants", Icon: Building2 },
+    { label: "Policies", value: data?.metrics?.policies, detail: "Enforcement rules", href: "/app/policies", Icon: FileCheck2 },
+    { label: "Infrastructure nodes", value: data?.metrics?.nodes, detail: "Registered nodes", href: "/app/nodes", Icon: Database },
+    { label: "Active deployments", value: data?.metrics?.active_deployments, detail: "Needs attention or rollout", href: "/app/deployments", Icon: Rocket },
+  ];
 
   return (
     <div className="command-center">
@@ -68,6 +74,20 @@ export function Overview() {
             <span>{label}</span>
             <strong>{isLoading ? "Loading…" : value ?? "NO DATA"}</strong>
           </div>
+        ))}
+      </section>
+
+      <section className="overview-metrics" aria-label="Workspace metrics">
+        {metrics.map(({ label, value, detail, href, Icon }) => (
+          <Link className="overview-metric" to={href} key={label}>
+            <span className="overview-metric-icon"><Icon size={18} /></span>
+            <span className="overview-metric-copy">
+              <span className="overview-metric-label">{label}</span>
+              <strong>{isLoading ? "—" : value ?? "—"}</strong>
+              <small>{detail}</small>
+            </span>
+            <ArrowUpRight className="overview-metric-link" size={15} />
+          </Link>
         ))}
       </section>
 
