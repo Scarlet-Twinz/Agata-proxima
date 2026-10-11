@@ -165,6 +165,17 @@ export function ConsoleLayout() {
   }
 
   useEffect(() => {
+    function handleUnreadNotificationsChange(event: Event) {
+      const detail = (event as CustomEvent<{ unread?: number }>).detail;
+      if (typeof detail?.unread === "number" && Number.isFinite(detail.unread)) {
+        setUnreadNotifications(Math.max(0, Math.floor(detail.unread)));
+      }
+    }
+    window.addEventListener("agata:notifications-unread-change", handleUnreadNotificationsChange);
+    return () => window.removeEventListener("agata:notifications-unread-change", handleUnreadNotificationsChange);
+  }, []);
+
+  useEffect(() => {
     function handleSessionExpired() {
       setAccountOpen(false);
       navigate("/login", { replace: true, state: { from: window.location.pathname, sessionExpired: true } });

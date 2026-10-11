@@ -552,6 +552,14 @@ function ApiKeysManager() {
 
   return (
     <div className="api-keys-manager">
+      <div className="page-heading">
+        <div>
+          <span className="eyebrow">DEVELOPER · API KEYS</span>
+          <h1>API keys</h1>
+          <p>Create credentials for integrations and revoke any key that is no longer trusted. The full secret is shown only once.</p>
+        </div>
+        <Link className="primary-action" to="/app/developer/api-keys/new"><KeyRound size={15}/>Create API key</Link>
+      </div>
       <div className="api-key-policy-note">
         <ShieldCheck size={17} />
         <p><strong>Credential safety</strong><span>Revocation is immediate and is never capped by a lifetime counter. Confirm each action carefully; the API records successful revocations in the organization audit log.</span></p>
@@ -561,7 +569,7 @@ function ApiKeysManager() {
       {loading ? (
         <div className="surface empty-state"><strong>Loading API keys…</strong><span>Reading keys for the active organization.</span></div>
       ) : keys.length === 0 ? (
-        <div className="surface empty-state"><KeyRound size={24}/><strong>No API keys yet.</strong><span>Create a key for an integration. The full secret is displayed only once.</span><Link className="primary-action" to="/app/developer/api-keys/new">Create API key</Link></div>
+        <div className="surface empty-state"><KeyRound size={24}/><strong>No API keys yet.</strong><span>Create a key for an integration. The full secret is displayed only once.</span></div>
       ) : (
         <div className="api-key-list">
           {keys.map((key) => (

@@ -12,20 +12,45 @@ export function Notifications(){
   const [items,setItems]=useState<Notification[]>([]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
+  function publishUnreadCount(unread:number){
+    window.dispatchEvent(new CustomEvent("agata:notifications-unread-change",{detail:{unread}}));
+  }
   async function load(){
     setLoading(true); setError("");
-    try{const result=await api.get<{notifications:Notification[]}>("/api/v1/notifications");setItems(result.notifications);}
-    catch(err){setError(err instanceof Error?err.message:"Unable to load notifications.");}
+    try{
+      const result=await api.get<{notifications:Notification[]}>("/api/v1/notifications");
+      const notifications=result.notifications;
+      setItems(notifications);
+      const unread=notifications.filter(n=>!n.read).length;
+      if(unread>0){
+        try{
+          await api.post("/api/v1/notifications/read-all",{});
+          setItems(notifications.map(n=>({...n,read:true})));
+          publishUnreadCount(0);
+        }catch(err){
+          publishUnreadCount(unread);
+          setError(err instanceof Error?err.message:"Unable to mark notifications as read.");
+        }
+      }else{
+        publishUnreadCount(0);
+      }
+    }catch(err){setError(err instanceof Error?err.message:"Unable to load notifications.");}
     finally{setLoading(false);}
   }
   useEffect(()=>{void load();},[]);
   async function mark(id:string){
-    try{await api.post("/api/v1/notifications/"+id+"/read",{});setItems(v=>v.map(n=>n.id===id?{...n,read:true}:n));}
-    catch(err){setError(err instanceof Error?err.message:"Unable to update notification.");}
+    try{
+      await api.post("/api/v1/notifications/"+id+"/read",{});
+      setItems(v=>v.map(n=>n.id===id?{...n,read:true}:n));
+      publishUnreadCount(Math.max(0,unread-1));
+    }catch(err){setError(err instanceof Error?err.message:"Unable to update notification.");}
   }
   async function markAll(){
-    try{await api.post("/api/v1/notifications/read-all",{});setItems(v=>v.map(n=>({...n,read:true})));}
-    catch(err){setError(err instanceof Error?err.message:"Unable to update notifications.");}
+    try{
+      await api.post("/api/v1/notifications/read-all",{});
+      setItems(v=>v.map(n=>({...n,read:true})));
+      publishUnreadCount(0);
+    }catch(err){setError(err instanceof Error?err.message:"Unable to update notifications.");}
   }
   const unread=items.filter(n=>!n.read).length;
   return <div className="notifications-page">
