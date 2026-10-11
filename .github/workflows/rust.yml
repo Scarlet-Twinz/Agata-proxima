@@ -36,30 +36,13 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Check
-        run: cargo check --workspace --all-targets
-
-      - name: Upload resolved lockfile for reconciliation
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: resolved-cargo-lock
-          path: Cargo.lock
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Export resolved lockfile for reconciliation
-        if: always()
-        run: |
-          echo "LOCKFILE_BASE64_BEGIN"
-          base64 -w0 Cargo.lock
-          echo
-          echo "LOCKFILE_BASE64_END"
+        run: cargo check --workspace --all-targets --locked
 
       - name: Test
-        run: cargo test --workspace --all-targets
+        run: cargo test --workspace --all-targets --locked
 
       - name: Clippy
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
       - name: Verification harness syntax
         run: bash -n tools/proxima-verify.sh tools/proxima-verify-3tenant.sh
