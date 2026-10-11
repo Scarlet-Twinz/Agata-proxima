@@ -16,6 +16,34 @@ export default function Signup() {
   const [message,setMessage]=useState("");
   const [busy,setBusy]=useState(false);
   const [resendBusy,setResendBusy]=useState(false);
+  const [ssoOrganizationSlug,setSsoOrganizationSlug]=useState("");
+  const [ssoBusy,setSsoBusy]=useState(false);
+
+  async function continueWithSso(event:React.FormEvent) {
+    event.preventDefault();
+    setError(""); setMessage("");
+    const slug=ssoOrganizationSlug.trim();
+    if(!slug){setError("Enter the organization slug shown in workspace settings.");return;}
+    setSsoBusy(true);
+    const controller=new AbortController();
+    const timeout=window.setTimeout(()=>controller.abort(),12_000);
+    try{
+      const response=await fetch(`/api/v1/auth/oidc/start?organization_slug=${encodeURIComponent(slug)}`,{
+        method:"GET",credentials:"include",cache:"no-store",headers:{Accept:"application/json"},signal:controller.signal
+      });
+      const body=await response.json().catch(()=>({})) as {authorization_url?:unknown;message?:unknown};
+      if(!response.ok||typeof body.authorization_url!=="string"){
+        throw new Error(typeof body.message==="string"?body.message:`Microsoft Entra SSO could not start (HTTP ${response.status}). Check the organization SSO configuration.`);
+      }
+      const authorizationUrl=new URL(body.authorization_url);
+      if(authorizationUrl.origin!=="https://login.microsoftonline.com")throw new Error("The SSO authorization endpoint was not trusted.");
+      window.location.assign(authorizationUrl.toString());
+    }catch(err){
+      if(err instanceof DOMException&&err.name==="AbortError")setError("The Control Plane did not respond to the SSO request within 12 seconds. Check the backend terminal.");
+      else setError(err instanceof Error?err.message:"Unable to start Microsoft Entra SSO.");
+      setSsoBusy(false);
+    }finally{window.clearTimeout(timeout);}
+  }
 
   async function submit(event:React.FormEvent) {
     event.preventDefault(); setError(""); setMessage(""); setBusy(true);
@@ -23,7 +51,7 @@ export default function Signup() {
       const result=await signup({name,organization,email,password});
       if(result.verification_required){
         setVerificationMode(true);
-        setMessage(result.message || "A 6-digit verification code has been sent to your email.");
+        setMessage(result.message || (result.email_sent === false ? "Your workspace was kept. Email delivery failed; fix the email configuration and use Send a new code to retry." : "A 6-digit verification code has been sent to your email."));
       }
     } catch(err) {
       setError(err instanceof Error ? err.message : "Unable to create workspace.");
@@ -53,7 +81,7 @@ export default function Signup() {
         <div className="auth-form-mark"><CheckCircle2 size={19}/></div>
         <span className="auth-kicker auth-kicker-dark">EMAIL VERIFICATION</span>
         <h2>Enter your verification code.</h2>
-        <p>We sent a 6-digit code to <strong>{email}</strong>. Keep this page open and enter the code here.</p>
+        <p>Verification is required for <strong>{email}</strong>. If the email did not arrive, use Send a new code after checking the email configuration.</p>
       </div>
       {error && <div className="auth-error" role="alert">{error}</div>}
       {message && <div className="auth-security-callout"><ShieldCheck size={18}/><div><strong>Check your inbox</strong><span>{message}</span></div></div>}
@@ -83,6 +111,15 @@ export default function Signup() {
       <div className="agata-field"><label htmlFor="signup-password">Password</label><div className="auth-password-field"><input id="signup-password" name="password" required minLength={12} type={showPassword?"text":"password"} value={password} onChange={e=>setPassword(e.target.value)} placeholder="Create a strong password" autoComplete="new-password"/><button type="button" className="auth-password-toggle" onClick={()=>setShowPassword(v=>!v)} aria-label={showPassword?"Hide password":"Show password"}>{showPassword?<EyeOff size={17}/>:<Eye size={17}/>}</button></div></div>
       <label className="auth-check"><input type="checkbox" required/><span>I agree to the Agata Proxima terms and acknowledge the privacy policy.</span></label>
       <button className="auth-submit" type="submit" disabled={busy}><span>{busy?"Creating workspace…":"Create Proxima workspace"}</span><ArrowRight size={17}/></button>
+    </form>
+    <div className="auth-sso-divider"><span>OR</span></div>
+    <form className="agata-form" onSubmit={continueWithSso}>
+      <div className="auth-form-heading">
+        <span className="auth-kicker auth-kicker-dark">EXISTING ORGANIZATION</span>
+        <p>Already belong to an organization that uses Microsoft Entra? Continue with your organization's SSO.</p>
+      </div>
+      <div className="agata-field"><label htmlFor="signup-sso-slug">Organization slug</label><input id="signup-sso-slug" value={ssoOrganizationSlug} onChange={e=>setSsoOrganizationSlug(e.target.value)} placeholder="your-organization-slug" autoComplete="organization" /></div>
+      <button className="auth-submit" type="submit" disabled={ssoBusy}><span>{ssoBusy?"Connecting to Microsoft…":"Continue with Microsoft Entra"}</span><ArrowRight size={17}/></button>
     </form>
     <div className="auth-switch"><span>Already have a workspace?</span><Link to="/login">Sign in</Link></div>
   </div>;

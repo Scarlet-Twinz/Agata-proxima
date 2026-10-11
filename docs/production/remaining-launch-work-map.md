@@ -1,17 +1,17 @@
 # Agata Proxima — Remaining Launch Work Map
 
-This map follows the completed Phase 3.22-A–H repository gates. It separates code work that can be completed in GitHub from tasks that require the founder's Paystack/Entra accounts or a real production environment. It does not mark an external task complete because documentation or code exists.
+This map follows the completed Phase 3.22-A–H repository gates. It separates code work that can be completed in GitHub from tasks that require the founder's Paddle/Entra accounts or a real production environment. It does not mark an external task complete because documentation or code exists.
 
 ## Completed repository work
 
 - [x] Restore canonical monthly prices: Free $0, Starter $149, Growth $499, Scale $1,199, Enterprise custom.
 - [x] Implement Phase 3.22-A–H entitlement controls and acceptance gates.
-- [x] Add Paystack provider-plan preflight: plan code, USD currency, monthly interval and exact amount must match before checkout starts.
-- [x] Verify transaction amount, currency, organization and plan code before paid entitlements are applied.
-- [x] Add regression tests for wrong amount/currency/provider plan and prevent the callback from displaying successful billing completion unless the local transaction is verified.
+- [x] Add Paddle price preflight: active price, monthly interval, USD currency and exact amount must match before checkout starts.
+- [x] Verify Paddle's timestamped raw-body signature, organization, local checkout reference and configured price before paid entitlements are applied.
+- [x] Add regression tests for wrong amount/currency/provider plan and ensure the checkout return does not itself claim payment success; webhook-confirmed local status is authoritative.
 - [x] Add the practical usage guide at `docs/usage.md` and public route `/docs/usage`.
 - [x] Add production operations guidance and on-demand health/backup scripts.
-- [x] Update the OpenAPI contract and developer billing documentation to Paystack.
+- [x] Update the billing documentation and environment contract to Paddle.
 
 CI verifies repository implementation and regression gates; external account setup and runtime acceptance remain separate launch requirements.
 
@@ -19,22 +19,23 @@ CI verifies repository implementation and regression gates; external account set
 
 | Track | Primary owner | Dependency | Definition of done |
 |---|---|---|---|
-| Paystack USD account and plan setup | Founder/account owner, then repository verification | Paystack business approval; USD payout account if USD settlement is required | USD collections enabled; USD settlement account verified; three Agata plan codes point to monthly USD plans at $149/$499/$1,199; test checkout → signed webhook → correct entitlement; test renewal failure/recovery/cancellation. |
+| Paddle account and plan setup | Founder/account owner, then repository verification | Paddle business approval and approved checkout domain | Configure approved Paddle Live API key, client token, notification secret, and three unique active monthly USD Live price IDs (`pri_...`) at $149/$499/$1,199; verify checkout → signed webhook → correct entitlement, duplicate delivery, renewal failure/recovery, cancellation and expiry using Live acceptance procedures that do not create unintended charges. See `docs/production/paddle-billing.md`. |
 | Microsoft Entra SSO | Founder creates app registration; repository/deployment work completes integration | Public HTTPS Control Plane callback URL | Multitenant Web app registered; exact callback set; client ID and secret safely configured; organization Entra tenant ID bound; real login creates the correct Agata session and audit event. The UI start flow exists, but SSO is not production-accepted until the real end-to-end test passes. |
-| Production hosting and database | Account owner creates the selected provider resources; repository deployment preparation is ready | Stable public backend URL and managed database | Follow `docs/production/deployment-architecture.md`: Vercel Pro (or another host whose terms permit commercial use) frontend at `agataproxima.com`, Control Plane container at `api.agataproxima.com`, separate managed PostgreSQL, same-origin API proxy, TLS, restricted access, migrations 0001–0015 and smoke tests. No provider resources have been created yet. |
+| Production hosting and database | Account owner creates the selected provider resources; repository deployment preparation is ready | Stable public backend URL and managed database | Follow `docs/production/deployment-architecture.md`: Vercel Pro (or another host whose terms permit commercial use) frontend at `agataproxima.com`, Control Plane container at `api.agataproxima.com`, separate managed PostgreSQL, same-origin API proxy, TLS, restricted access, migrations 0001–0020 and smoke tests. No provider resources have been created yet. |
 | Production email | Founder/domain owner plus deployment configuration | Agata-owned domain and Resend access | Sending domain DNS is verified; production sender and API key configured in secret store; verification, password reset and invitations are delivered in a real test. |
 | Operational readiness | Repository scripts/runbooks plus hosting configuration | Production deployment and database | Health/readiness probes alert correctly; automated backups/PITR enabled; restore drill to an isolated database records RPO/RTO; alerting and rollback are tested. |
 | External SaaS/security acceptance | Engineering + security reviewer | Deployed Control Plane, Engine and customer-like test app | Three-tenant acceptance verifies tenant-local operations, rejects cross-tenant reads/writes, checks expired context, and records evidence; load testing and independent security assessment are completed. |
 | Launch sign-off | Founder and engineering | All tracks above | No critical open launch gates; runbooks and incident ownership are clear; production launch checklist has evidence for every item. |
 
-## Paystack setup sequence
+## Paddle setup sequence
 
-1. Complete Paystack business activation and request international payments if not already enabled.
-2. Confirm whether the business needs payouts in USD or only wants to charge international customers. Paystack documents different payout requirements for those cases.
-3. If USD payouts are required for a Nigeria-based business, obtain and verify the required Zenith Bank USD domiciliary account in Paystack.
-4. In Paystack, create or inspect only the three Agata Proxima monthly USD plans. Do not reuse unrelated plans.
-5. Configure the three plan-code environment variables in the deployment secret store.
-6. Deploy the code with the new plan preflight and run a real payment round trip before allowing customers to subscribe.
+1. Complete Paddle business verification and obtain approval for the live checkout domain.
+2. Create the Agata Proxima Starter, Growth and Scale products in Paddle, each with an active monthly USD recurring price at $149, $499 and $1,199.
+3. Copy each **price ID** (`pri_...`) into the matching `PADDLE_*_PRICE_ID` variable. Product IDs alone are not sufficient for checkout.
+4. Configure the approved Paddle Live `PADDLE_API_KEY`, `PADDLE_CLIENT_TOKEN`, `PADDLE_WEBHOOK_SECRET`, three Live `pri_...` price IDs, and `PADDLE_ENVIRONMENT=production` in the Control Plane secret store.
+5. After the API is deployed and the Paddle business/domain are approved, configure the Live notification destination at `https://api.agataproxima.com/api/v1/webhooks/paddle`; subscribe to the transaction and subscription lifecycle events documented in `docs/production/paddle-billing.md`.
+6. Complete the provider-approved Live acceptance procedure with explicit charge/refund handling; verify signed webhooks, idempotency, correct plan mapping, failure/recovery and cancellation without using Sandbox.
+7. Confirm the Live account, checkout domain, credentials and price IDs are approved and independently verified before opening public self-service checkout.
 
 ## Microsoft Entra SSO sequence
 

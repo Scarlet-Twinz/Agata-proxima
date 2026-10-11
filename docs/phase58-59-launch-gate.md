@@ -8,7 +8,7 @@ Completed in the repository:
 
 - Billing checkout and customer billing response contracts are aligned with the customer UI.
 - The canonical plan catalogue is Free $0, Starter $149/month, Growth $499/month, Scale $1,199/month and Enterprise custom.
-- Paystack checkout uses Agata-specific environment-configured plan codes; production plan amounts and codes still require live verification.
+- Paddle Live checkout uses three unique environment-configured `pri_...` price IDs; account/domain approval, Live prices, credentials and signed webhook acceptance remain external launch gates. Sandbox routing is unsupported.
 - Plan capacity enforcement covers nodes, tenants and environments.
 - Plan quotas cover active webhook integrations, monthly verifications, team seats/invitations, API keys and API requests.
 - Plan feature enforcement covers policy management, fleet controls, advanced verification, priority support, Microsoft Entra OIDC and private deployment.
@@ -27,7 +27,7 @@ Repository-side acceptance requires:
 3. `cargo test --workspace --all-targets` passes.
 4. `cargo clippy --workspace --all-targets --all-features -- -D warnings` passes.
 5. PostgreSQL RLS verification passes.
-6. Control Plane migration verification passes for the repository's current migrations (0001–0015).
+6. Control Plane migration verification passes across the full repository migration chain (0001–0020 and any later numbered migrations).
 7. OpenAPI JSON validates.
 8. External SaaS fixture syntax validates.
 9. Production environment contract validates.
@@ -39,7 +39,7 @@ Repository-side acceptance requires:
 These are **not** falsely marked complete by repository code:
 
 - public HTTPS deployment;
-- real Paystack plan amounts/codes, checkout and live webhook delivery;
+- Paddle Live account/domain approval, exact monthly price amounts, checkout and signed webhook delivery;
 - Agata-owned Resend domain and DNS verification;
 - real Microsoft Entra application registration and end-to-end SSO;
 - production secret rotation;

@@ -38,7 +38,7 @@ Security guarantees will be documented against an explicit threat model. Proxima
 
 ## Status
 
-The repository now includes the Proxima Engine, a durable Control Plane, a public React frontend, the Phase 3.22-A–H entitlement enforcement workstreams, Paystack billing integration, Microsoft Entra OIDC groundwork, operational runbooks and acceptance gates. Repository CI has passed for the canonical entitlement gates. Live provider activation and production operational acceptance remain separate launch gates.
+The repository now includes the Proxima Engine, a durable Control Plane, a public React frontend, the Phase 3.22-A–H entitlement enforcement workstreams, Paddle Billing integration, Microsoft Entra OIDC groundwork, operational runbooks and acceptance gates. Repository CI has passed for the canonical entitlement gates. Live provider activation and production operational acceptance remain separate launch gates.
 
 The current engine establishes a verified tenant context, maps it to a PostgreSQL role, brokers the PostgreSQL authentication/startup exchange, and then enters the normal query stream only after PostgreSQL reports a ready session.
 
@@ -52,13 +52,17 @@ The 25–40 platform layer adds an authenticated, durable control plane with org
 - [Developer/API guide](docs/developer-guide.md) — authenticated API routes and integration contracts.
 - [Customer integration guide](docs/customer-integration.md) — connecting an existing SaaS application to Proxima.
 - [Security verification](docs/verification.md) — RLS, protocol tests and adversarial verification.
+- [Failure engineering](docs/failure-engineering.md) — expected behavior when the Control Plane, PostgreSQL, policies, nodes or TLS fail.
+- [Performance engineering](docs/performance.md) — reproducible benchmark dimensions; no unmeasured SLA claims.
 - [Phase 3.22 entitlement contract](docs/billing/phase3-22-entitlement-contract.md) — pricing, quotas and A–H acceptance map.
 - [Microsoft Entra SSO runbook](docs/identity/microsoft-entra-oidc.md) — OIDC configuration and remaining activation gates.
+- [Paddle Live billing runbook](docs/production/paddle-billing.md) — Live credentials, price IDs, signed webhooks and activation gates.
 - [Production deployment runbook](docs/production/phase55-deployment-runbook.md) — production environment requirements.
 - [Deployment architecture](docs/production/deployment-architecture.md) — prepared Vercel frontend, container API, managed PostgreSQL and same-origin routing path.
 - [Operational readiness runbook](docs/production/operational-readiness-runbook.md) — health, backups, restore drills, monitoring and incident response.
 - [Production smoke workflow](.github/workflows/production-smoke.yml) — scheduled liveness checks and a manual full-readiness gate once the public URL is configured.
-- [Remaining launch work map](docs/production/remaining-launch-work-map.md) — Paystack USD, Microsoft Entra SSO, hosting and production acceptance.
+- [Remaining launch work map](docs/production/remaining-launch-work-map.md) — Paddle Live acceptance, Microsoft Entra SSO, hosting and production acceptance.
+- [Phase 3B checkpoints 3.24–3.40](docs/production/phase3b-3-24-40-acceptance.md) — one status matrix separating repository evidence from live launch blockers.
 - [OpenAPI contract](control-plane/openapi.json) — machine-readable Control Plane API.
 
 ## License

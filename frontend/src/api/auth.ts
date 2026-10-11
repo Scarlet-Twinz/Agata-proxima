@@ -15,6 +15,7 @@ export type AuthResponse = {
 export type SignupResponse = {
   ok: boolean;
   verification_required: boolean;
+  email_sent?: boolean;
   user_id: string;
   organization_id: string;
   message: string;

@@ -40,7 +40,7 @@ Enterprise values are determined by an authorized agreement and provisioning; a 
 - Missing or untrusted paid entitlement state fails closed for protected operations.
 - Capacity checks must remain safe under concurrent creation attempts.
 - A downgrade does not delete customer resources or disable isolation. If current usage exceeds the destination plan, preserve existing data, block capacity-increasing writes above the limit, and allow safe remediation.
-- Free is an Agata entitlement and does not require a Paystack subscription.
+- Free is an Agata entitlement and does not require a Lemon Squeezy subscription.
 
 ## Metering and enforcement contract
 
@@ -55,27 +55,27 @@ Phase 3.22-A–H repository acceptance is complete and its targeted gates pass i
 7. Feature gates, Enterprise provisioning restrictions and support-level entitlements.
 8. Billing lifecycle transitions, fixed seven-day failed-renewal grace, cancellation at the recorded period end, downgrade preservation, idempotent webhook processing and regression checks.
 
-Passing repository gates proves the code/test acceptance boundary, not live production provider activation. The production environment still needs a Paystack payment round trip, database rollout, real SSO acceptance and operational verification.
+Passing repository gates proves the code/test acceptance boundary, not live production provider activation. The production environment still needs a Lemon Squeezy payment round trip, database rollout, real SSO acceptance and operational verification.
 
 ## Billing source of truth
 
-Paystack is the provider for paid subscription lifecycle. Agata's database stores normalized billing state, organization membership, resolved entitlements and audit history. Signed provider events are processed idempotently. A browser redirect or client-supplied plan value never proves payment.
+Lemon Squeezy is the provider for paid subscription lifecycle. Agata's database stores normalized billing state, organization membership, resolved entitlements and audit history. Signed provider events are processed idempotently. A browser redirect or client-supplied plan value never proves payment.
 
-Only the Agata-specific environment-configured plan codes are accepted:
+Only the Agata-specific environment-configured Lemon Squeezy variant IDs are accepted:
 
-- `AGATA_PAYSTACK_STARTER_PLAN_CODE`
-- `AGATA_PAYSTACK_GROWTH_PLAN_CODE`
-- `AGATA_PAYSTACK_SCALE_PLAN_CODE`
+- `LEMON_SQUEEZY_STARTER_VARIANT_ID`
+- `LEMON_SQUEEZY_GROWTH_VARIANT_ID`
+- `LEMON_SQUEEZY_SCALE_VARIANT_ID`
 
-The backend checks each configured provider plan against the canonical USD amount and monthly interval before checkout. Expected amounts in minor units are Starter `14900`, Growth `49900` and Scale `119900`. Transaction verification and signed webhook processing must also validate the expected amount, currency, organization and plan before paid entitlements are applied.
+Before checkout, the backend validates the USD store, product/variant store relationship, published status, Test/Live mode, monthly interval, and exact variant price. Expected amounts in minor units are Starter `14900`, Growth `49900` and Scale `119900`. The signed webhook validates its raw-body signature, store, mode, organization, local checkout reference, and configured variant before paid entitlements are applied.
 
 ## Upgrade and downgrade behavior
 
 ### Upgrade
 
 1. The customer starts checkout for a supported paid plan.
-2. Paystack verifies the transaction and sends its signed webhook.
-3. Agata validates the provider event, amount, currency and Agata plan code.
+2. Lemon Squeezy verifies the transaction and sends its signed webhook.
+3. Agata validates the provider signature, store/mode, organization, local checkout reference and configured variant; catalog amount/currency checks occur before checkout.
 4. The billing state and resolved entitlement are updated idempotently.
 5. The plan transition is audited.
 
@@ -89,10 +89,10 @@ The backend checks each configured provider plan against the canonical USD amoun
 
 ## Provider catalog
 
-The intended monthly Paystack plans are:
+The intended monthly Lemon Squeezy plans are:
 
 - Agata Proxima Starter — $149/month
 - Agata Proxima Growth — $499/month
 - Agata Proxima Scale — $1,199/month
 
-Do not reuse unrelated products or change provider plans solely because this document exists. Before enabling live checkout, confirm that the actual Paystack plan codes and amounts match this catalogue and complete a real checkout → signed webhook → entitlement acceptance test. Annual billing is not part of the current active Paystack contract.
+Do not reuse unrelated products or change provider plans solely because this document exists. Before enabling live checkout, confirm that the actual Lemon Squeezy variant IDs and amounts match this catalogue and complete a real checkout → signed webhook → entitlement acceptance test. Annual billing is not part of the current active Lemon Squeezy contract.

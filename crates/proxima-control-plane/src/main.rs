@@ -10,7 +10,7 @@ use argon2::{
 };
 use axum::{
     extract::{Path, State},
-    http::{header, HeaderMap, HeaderValue, StatusCode},
+    http::{header, HeaderMap, HeaderName, HeaderValue, StatusCode},
     response::{Html, IntoResponse, Response},
     routing::{delete, get, post},
     Json, Router,
@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use sqlx::{postgres::PgPoolOptions, PgPool, Row};
-use std::{env, net::SocketAddr};
+use std::{env, net::SocketAddr, path::Path as FsPath};
 use tower_http::trace::TraceLayer;
 use tracing::{error, info};
 use uuid::Uuid;
@@ -131,6 +131,16 @@ struct SupportInput {
 }
 
 #[derive(Deserialize)]
+struct PublicSupportInput {
+    name: Option<String>,
+    email: String,
+    subject: String,
+    message: String,
+    topic: Option<String>,
+    website: Option<String>,
+}
+
+#[derive(Deserialize)]
 struct ApiKeyInput {
     name: String,
 }
@@ -155,10 +165,39 @@ struct AuthOutput {
     csrf_token: String,
 }
 
+// Load local configuration from predictable locations even when `cargo run` is
+// invoked from the workspace root or another working directory. Existing process
+// environment variables intentionally take precedence over files (dotenvy default).
+fn load_environment_files() {
+    let manifest_dir = FsPath::new(env!("CARGO_MANIFEST_DIR"));
+    let candidates = [
+        manifest_dir.join("../../.env.local"),
+        manifest_dir.join(".env.local"),
+        FsPath::new(".env.local").to_path_buf(),
+        manifest_dir.join("../../.env"),
+        manifest_dir.join(".env"),
+        FsPath::new(".env").to_path_buf(),
+    ];
+    let mut loaded = std::collections::HashSet::new();
+    for path in candidates {
+        let canonical = path.canonicalize().unwrap_or(path.clone());
+        if !canonical.is_file() || !loaded.insert(canonical.clone()) {
+            continue;
+        }
+        if let Err(error) = dotenvy::from_path(&canonical) {
+            eprintln!(
+                "Could not load environment file {}: {error}",
+                canonical.display()
+            );
+        } else {
+            eprintln!("Loaded environment file: {}", canonical.display());
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    let _ = dotenvy::from_filename(".env.local");
-    let _ = dotenvy::dotenv();
+    load_environment_files();
     tracing_subscriber::fmt().with_target(false).init();
 
     let database_url = env::var("PROXIMA_CONTROL_DATABASE_URL").unwrap_or_else(|_| {
@@ -220,6 +259,25 @@ async fn main() -> Result<()> {
     ))
     .execute(&db)
     .await?;
+    sqlx::raw_sql(include_str!(
+        "../migrations/0016_public_support_requests.sql"
+    ))
+    .execute(&db)
+    .await?;
+    sqlx::raw_sql(include_str!("../migrations/0017_lemonsqueezy_billing.sql"))
+        .execute(&db)
+        .await?;
+    sqlx::raw_sql(include_str!("../migrations/0018_oidc_identity_linking.sql"))
+        .execute(&db)
+        .await?;
+    sqlx::raw_sql(include_str!(
+        "../migrations/0019_support_requests_compat.sql"
+    ))
+    .execute(&db)
+    .await?;
+    sqlx::raw_sql(include_str!("../migrations/0020_paddle_billing.sql"))
+        .execute(&db)
+        .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
@@ -240,6 +298,14 @@ async fn main() -> Result<()> {
                 }
                 Ok(_) => {}
                 Err(e) => error!(%e, "API rate-limit cleanup failed"),
+            }
+            if let Err(e) = sqlx::query(
+                "DELETE FROM public_support_rate_limits WHERE window_started_at < now()-interval '24 hours'",
+            )
+            .execute(&retention_db)
+            .await
+            {
+                error!(%e, "public support rate-limit cleanup failed");
             }
             match production::reconcile_billing_lifecycle(&retention_db).await {
                 Ok(transitioned) if transitioned > 0 => {
@@ -306,7 +372,7 @@ async fn main() -> Result<()> {
             post(mark_all_notifications_read),
         )
         .route(
-            "/api/v1/notifications/:id/read",
+            "/api/v1/notifications/{id}/read",
             post(mark_notification_read),
         )
         .route("/api/v1/account", delete(delete_account))
@@ -320,6 +386,7 @@ async fn main() -> Result<()> {
             "/api/v1/organizations",
             get(organizations).post(create_organization),
         )
+        .route("/api/v1/organizations/{id}", delete(delete_organization))
         .route("/api/v1/tenants", get(tenants).post(create_tenant))
         .route("/api/v1/policies", get(policies).post(create_policy))
         .route("/api/v1/nodes", get(nodes).post(create_node))
@@ -333,6 +400,10 @@ async fn main() -> Result<()> {
         )
         .route("/api/v1/audit", get(audit_events))
         .route("/api/v1/support", get(support).post(create_support))
+        .route(
+            "/api/v1/public/support-requests",
+            post(create_public_support_request),
+        )
         .route(
             "/api/v1/developer/api-keys",
             get(api_keys).post(create_api_key),
@@ -370,20 +441,17 @@ async fn main() -> Result<()> {
         )
         .route("/api/v1/billing/checkout", post(production::checkout))
         .route("/api/v1/billing/portal", post(production::portal))
-        .route(
-            "/api/v1/billing/paystack/callback",
-            get(production::paystack_callback),
-        )
         .route("/api/v1/billing/verify", get(production::billing_verify))
-        .route(
-            "/api/v1/webhooks/paystack",
-            post(production::paystack_webhook),
-        )
+        .route("/api/v1/webhooks/paddle", post(production::paddle_webhook))
         .route(
             "/api/v1/organization/oidc/entra",
             get(production::entra_status).post(production::configure_entra),
         )
         .route("/api/v1/auth/oidc/start", get(production::entra_start))
+        .route(
+            "/api/v1/auth/oidc/link/start",
+            post(production::entra_link_start),
+        )
         .route(
             "/api/v1/auth/oidc/callback",
             get(production::entra_callback),
@@ -399,7 +467,8 @@ async fn main() -> Result<()> {
         )
         .route("/api/v1/production/readiness", get(production::readiness))
         .with_state(state)
-        .layer(TraceLayer::new_for_http());
+        .layer(TraceLayer::new_for_http())
+        .layer(axum::middleware::from_fn(security_headers));
 
     // Explicit bind configuration wins. Container platforms such as Railway inject
     // PORT dynamically; bind to all interfaces when that variable is present. Local
@@ -416,6 +485,38 @@ async fn main() -> Result<()> {
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+async fn security_headers(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Response {
+    let secure_cookie = env::var("PROXIMA_COOKIE_SECURE").ok().as_deref() == Some("true");
+    let mut response = next.run(request).await;
+    let headers = response.headers_mut();
+    headers.insert(
+        HeaderName::from_static("x-content-type-options"),
+        HeaderValue::from_static("nosniff"),
+    );
+    headers.insert(
+        HeaderName::from_static("x-frame-options"),
+        HeaderValue::from_static("DENY"),
+    );
+    headers.insert(
+        HeaderName::from_static("referrer-policy"),
+        HeaderValue::from_static("strict-origin-when-cross-origin"),
+    );
+    headers.insert(
+        HeaderName::from_static("permissions-policy"),
+        HeaderValue::from_static("camera=(), microphone=(), geolocation=()"),
+    );
+    if secure_cookie {
+        headers.insert(
+            HeaderName::from_static("strict-transport-security"),
+            HeaderValue::from_static("max-age=31536000; includeSubDomains"),
+        );
+    }
+    response
 }
 
 async fn home() -> Html<&'static str> {
@@ -566,20 +667,18 @@ async fn signup(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Resp
     if let Err(e) = production::send_verification_email(&s.db, user_id, &email, &display_name).await
     {
         tracing::error!(%e, "verification email delivery failed");
-        let _ = sqlx::query("DELETE FROM organizations WHERE id=$1")
-            .bind(organization_id)
-            .execute(&s.db)
-            .await;
-        let _ = sqlx::query("DELETE FROM users WHERE id=$1")
-            .bind(user_id)
-            .execute(&s.db)
-            .await;
+        // Keep the newly created account and workspace if email delivery is unavailable.
+        // The verification code/hash remains stored, and the user can retry via the resend endpoint.
         return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(Message {
-                ok: false,
-                message: "Workspace creation was rolled back because the verification email could not be sent. Check the Resend configuration and try again.".into(),
-            }),
+            StatusCode::ACCEPTED,
+            Json(json!({
+                "ok": true,
+                "verification_required": true,
+                "email_sent": false,
+                "user_id": user_id,
+                "organization_id": organization_id,
+                "message": "Your workspace was created and kept, but the verification email could not be sent. Fix the email configuration and choose Send a new code to retry."
+            })),
         )
             .into_response();
     }
@@ -597,7 +696,7 @@ async fn signup(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Resp
 async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Response {
     let email = input.email.trim().to_lowercase();
     let row = match sqlx::query(
-        "SELECT id,password_hash,email_verified_at FROM users WHERE email=$1 AND status='active'",
+        "SELECT id,password_hash,email_verified_at,display_name FROM users WHERE email=$1 AND status='active'",
     )
     .bind(&email)
     .fetch_optional(&s.db)
@@ -673,10 +772,40 @@ async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Respo
     )
     .await;
 
-    match create_session(&s.db, user_id, organization_id).await {
+    let response = match create_session(&s.db, user_id, organization_id).await {
         Ok((token, csrf)) => auth_response(&s, user_id, organization_id, csrf, token),
-        Err(e) => db_error(e),
-    }
+        Err(e) => return db_error(e),
+    };
+
+    // Security notifications are best-effort: a Resend outage must never block a valid sign-in.
+    let recipient = email.clone();
+    let display_name: String = row.get("display_name");
+    let organization_name =
+        sqlx::query_scalar::<_, String>("SELECT name FROM organizations WHERE id=$1")
+            .bind(organization_id)
+            .fetch_one(&s.db)
+            .await
+            .unwrap_or_else(|_| "your workspace".to_string());
+    let login_time = chrono::Utc::now().to_rfc3339();
+    tokio::spawn(async move {
+        if let Err(e) = production::send_template_email_as(
+            &recipient,
+            "new-login-alert",
+            json!({
+                "DISPLAY_NAME": escape_template_value(&display_name),
+                "LOGIN_TIME": login_time,
+                "ORGANIZATION": escape_template_value(&organization_name),
+                "IP_ADDRESS": "Not collected by this deployment"
+            }),
+            "security",
+        )
+        .await
+        {
+            error!(%e, "new-login security email delivery failed");
+        }
+    });
+
+    response
 }
 
 async fn logout(State(s): State<AppState>, headers: HeaderMap) -> Response {
@@ -1653,10 +1782,11 @@ async fn change_email(
         return db_error(e);
     }
 
-    if let Err(e) = production::send_template_email(
+    if let Err(e) = production::send_template_email_as(
         &email,
-        "091dbdb2-21ed-444f-a209-6f44e55d192d",
-        json!({"DISPLAY_NAME":display_name,"CODE":code}),
+        "verify-email",
+        json!({"DISPLAY_NAME":escape_template_value(&display_name),"CODE":code}),
+        "no-reply",
     )
     .await
     {
@@ -1983,6 +2113,175 @@ async fn organizations(State(s): State<AppState>, headers: HeaderMap) -> Respons
         .into_response(),
         Err(e) => db_error(e),
     }
+}
+
+async fn delete_organization(
+    State(s): State<AppState>,
+    Path(organization_id): Path<Uuid>,
+    headers: HeaderMap,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(value) => value,
+        Err(response) => return response.into_response(),
+    };
+    if ctx.api_key {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    if let Err(response) = require_write(&ctx, &headers) {
+        return response.into_response();
+    }
+
+    let mut tx = match s.db.begin().await {
+        Ok(value) => value,
+        Err(error) => return db_error(error),
+    };
+
+    let role = match sqlx::query_scalar::<_, String>(
+        "SELECT role FROM memberships WHERE user_id=$1 AND organization_id=$2",
+    )
+    .bind(ctx.user_id)
+    .bind(organization_id)
+    .fetch_optional(&mut *tx)
+    .await
+    {
+        Ok(Some(value)) => value,
+        Ok(None) => return (
+            StatusCode::NOT_FOUND,
+            Json(
+                json!({"ok":false,"message":"That organization is not available to this account."}),
+            ),
+        )
+            .into_response(),
+        Err(error) => return db_error(error),
+    };
+    if role != "owner" {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"ok":false,"message":"Only an organization owner can delete that organization."})),
+        )
+            .into_response();
+    }
+
+    let member_count = match sqlx::query_scalar::<_, i64>(
+        "SELECT count(*) FROM memberships WHERE organization_id=$1",
+    )
+    .bind(organization_id)
+    .fetch_one(&mut *tx)
+    .await
+    {
+        Ok(value) => value,
+        Err(error) => return db_error(error),
+    };
+    if member_count > 1 {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({"ok":false,"message":"This organization has other members. Remove or transfer their access before deleting the organization."})),
+        )
+            .into_response();
+    }
+
+    let organization_count =
+        match sqlx::query_scalar::<_, i64>("SELECT count(*) FROM memberships WHERE user_id=$1")
+            .bind(ctx.user_id)
+            .fetch_one(&mut *tx)
+            .await
+        {
+            Ok(value) => value,
+            Err(error) => return db_error(error),
+        };
+    if organization_count <= 1 {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({"ok":false,"message":"You cannot delete your last organization. Create or join another organization first, or use the separate account-deletion flow if that is your intention."})),
+        )
+            .into_response();
+    }
+
+    let active_billing = match sqlx::query_scalar::<_, i64>(
+        "SELECT count(*) FROM billing_accounts WHERE organization_id=$1 AND status NOT IN ('inactive','canceled')",
+    )
+    .bind(organization_id)
+    .fetch_one(&mut *tx)
+    .await
+    {
+        Ok(value) => value,
+        Err(error) => return db_error(error),
+    };
+    if active_billing > 0 {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({"ok":false,"message":"This organization has active billing. Cancel or deactivate its subscription before deleting the organization."})),
+        )
+            .into_response();
+    }
+
+    let replacement_organization = match sqlx::query_scalar::<_, Uuid>(
+        "SELECT organization_id FROM memberships
+         WHERE user_id=$1 AND organization_id<>$2
+         ORDER BY created_at, organization_id LIMIT 1",
+    )
+    .bind(ctx.user_id)
+    .bind(organization_id)
+    .fetch_optional(&mut *tx)
+    .await
+    {
+        Ok(Some(value)) => value,
+        Ok(None) => {
+            return (
+                StatusCode::CONFLICT,
+                Json(json!({"ok":false,"message":"Create or join another organization before deleting this one."})),
+            )
+                .into_response()
+        }
+        Err(error) => return db_error(error),
+    };
+
+    if let Err(error) = sqlx::query(
+        "UPDATE sessions SET organization_id=$1
+         WHERE user_id=$2 AND organization_id=$3",
+    )
+    .bind(replacement_organization)
+    .bind(ctx.user_id)
+    .bind(organization_id)
+    .execute(&mut *tx)
+    .await
+    {
+        return db_error(error);
+    }
+
+    if let Err(error) = sqlx::query("DELETE FROM organizations WHERE id=$1")
+        .bind(organization_id)
+        .execute(&mut *tx)
+        .await
+    {
+        return db_error(error);
+    }
+
+    if let Err(error) = sqlx::query(
+        "INSERT INTO audit_events(organization_id,user_id,action,resource_type,resource_id,metadata)
+         VALUES($1,$2,'organization.deleted','organization',$3,$4)",
+    )
+    .bind(replacement_organization)
+    .bind(ctx.user_id)
+    .bind(organization_id)
+    .bind(json!({"deleted_organization_id": organization_id, "source": "organization_settings"}))
+    .execute(&mut *tx)
+    .await
+    {
+        return db_error(error);
+    }
+
+    if let Err(error) = tx.commit().await {
+        return db_error(error);
+    }
+
+    Json(json!({
+        "ok": true,
+        "deleted_organization_id": organization_id,
+        "active_organization_id": if ctx.organization_id == organization_id { replacement_organization } else { ctx.organization_id },
+        "message": "Organization deleted. Other organizations and your account remain intact."
+    }))
+    .into_response()
 }
 
 async fn create_organization(
@@ -2431,13 +2730,14 @@ async fn verifications(State(s): State<AppState>, headers: HeaderMap) -> Respons
         Err(c) => return c.into_response(),
     };
     match sqlx::query(
-        "SELECT id,tenant_id,kind,status,evidence FROM verification_results
+        "SELECT id,tenant_id,kind,status,evidence,created_at FROM verification_results
          WHERE organization_id=$1 ORDER BY created_at DESC"
     ).bind(ctx.organization_id).fetch_all(&s.db).await {
         Ok(rows) => Json(rows.iter().map(|r| json!({
             "id":r.get::<Uuid,_>("id"), "tenant_id":r.get::<Option<Uuid>,_>("tenant_id"),
             "kind":r.get::<String,_>("kind"), "status":r.get::<String,_>("status"),
-            "evidence":r.get::<Value,_>("evidence")
+            "evidence":r.get::<Value,_>("evidence"),
+            "created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at")
         })).collect::<Vec<_>>()).into_response(),
         Err(e) => db_error(e),
     }
@@ -2546,6 +2846,365 @@ async fn audit_events(State(s): State<AppState>, headers: HeaderMap) -> Response
     }
 }
 
+fn valid_public_support_email(email: &str) -> bool {
+    if email.len() > 254
+        || email.chars().any(char::is_whitespace)
+        || email.matches('@').count() != 1
+    {
+        return false;
+    }
+    let Some((local, domain)) = email.split_once('@') else {
+        return false;
+    };
+    !local.is_empty() && domain.contains('.') && !domain.starts_with('.') && !domain.ends_with('.')
+}
+
+fn valid_public_support_topic(topic: &str) -> bool {
+    matches!(
+        topic,
+        "general"
+            | "documentation"
+            | "troubleshooting"
+            | "security"
+            | "customer"
+            | "customers"
+            | "developers"
+            | "partnerships"
+    )
+}
+
+fn escape_template_value(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+async fn send_support_notification_copy(
+    destination: &str,
+    subject: &str,
+    body: &str,
+    reply_to: &str,
+    request_id: Uuid,
+    destination_label: &str,
+) -> bool {
+    if !valid_public_support_email(destination) {
+        tracing::error!(
+            request_id = %request_id,
+            destination_label,
+            "support notification destination is invalid"
+        );
+        return false;
+    }
+    match production::send_text_email(destination, subject, body, "support", reply_to).await {
+        Ok(()) => true,
+        Err(error) => {
+            error!(
+                request_id = %request_id,
+                destination_label,
+                %error,
+                "support notification email submission failed"
+            );
+            false
+        }
+    }
+}
+
+async fn send_support_notifications(
+    subject: &str,
+    body: &str,
+    reply_to: &str,
+    request_id: Uuid,
+) -> (bool, bool, bool, bool) {
+    let primary = env::var("AGATA_SUPPORT_INBOX_EMAIL").ok();
+    let fallback = env::var("AGATA_SUPPORT_NOTIFICATION_FALLBACK_EMAIL").ok();
+    let fallback_is_primary = primary
+        .as_deref()
+        .zip(fallback.as_deref())
+        .is_some_and(|(primary, fallback)| primary.trim().eq_ignore_ascii_case(fallback.trim()));
+    let primary_configured = primary
+        .as_deref()
+        .is_some_and(|value| !value.trim().is_empty());
+    let fallback_configured = fallback
+        .as_deref()
+        .is_some_and(|value| !value.trim().is_empty())
+        && !fallback_is_primary;
+    let primary_valid = primary
+        .as_deref()
+        .is_some_and(|value| valid_public_support_email(value.trim()));
+    let fallback_valid = fallback
+        .as_deref()
+        .is_some_and(|value| valid_public_support_email(value.trim()))
+        && !fallback_is_primary;
+
+    if primary_configured && !primary_valid {
+        tracing::error!(
+            request_id = %request_id,
+            "AGATA_SUPPORT_INBOX_EMAIL is invalid"
+        );
+    }
+    if fallback_configured && !fallback_valid {
+        tracing::error!(
+            request_id = %request_id,
+            "AGATA_SUPPORT_NOTIFICATION_FALLBACK_EMAIL is invalid"
+        );
+    }
+
+    let primary_submitted = if primary_valid {
+        send_support_notification_copy(
+            primary.as_deref().unwrap().trim(),
+            subject,
+            body,
+            reply_to,
+            request_id,
+            "primary inbox",
+        )
+        .await
+    } else {
+        false
+    };
+
+    let fallback_submitted = if fallback_valid {
+        send_support_notification_copy(
+            fallback.as_deref().unwrap().trim(),
+            subject,
+            body,
+            reply_to,
+            request_id,
+            "fallback inbox",
+        )
+        .await
+    } else {
+        false
+    };
+
+    (
+        primary_configured,
+        primary_submitted,
+        fallback_configured,
+        fallback_submitted,
+    )
+}
+
+fn combined_support_email_status(
+    primary_configured: bool,
+    primary_submitted: bool,
+    fallback_configured: bool,
+    fallback_submitted: bool,
+) -> &'static str {
+    if primary_submitted || fallback_submitted {
+        "sent"
+    } else if primary_configured || fallback_configured {
+        "failed"
+    } else {
+        "not_configured"
+    }
+}
+
+fn public_support_link() -> String {
+    let base = env::var("AGATA_PUBLIC_BASE_URL").unwrap_or_default();
+    let base = base.trim().trim_end_matches('/');
+    let is_public_https = base.starts_with("https://")
+        && !base.contains("localhost")
+        && !base.contains("127.0.0.1")
+        && !base.contains("0.0.0.0");
+    if is_public_https {
+        format!("{base}/support")
+    } else {
+        "Open Agata Proxima and navigate to Support.".to_string()
+    }
+}
+
+async fn create_public_support_request(
+    State(s): State<AppState>,
+    Json(input): Json<PublicSupportInput>,
+) -> Response {
+    // A hidden honeypot catches simple automated submissions without disclosing the filter.
+    if input
+        .website
+        .as_deref()
+        .is_some_and(|value| !value.trim().is_empty())
+    {
+        return (
+            StatusCode::ACCEPTED,
+            Json(json!({"ok":true,"message":"Your request has been received."})),
+        )
+            .into_response();
+    }
+
+    let email = input.email.trim().to_lowercase();
+    let name = input.name.unwrap_or_default().trim().to_owned();
+    let subject = input.subject.trim().to_owned();
+    let message = input.message.trim().to_owned();
+    let topic = input.topic.unwrap_or_else(|| "general".to_string());
+
+    if !valid_public_support_email(&email) {
+        return bad("Enter a valid email address.");
+    }
+    if name.len() > 120 || name.chars().any(char::is_control) {
+        return bad("Name must be 120 characters or fewer and cannot contain control characters.");
+    }
+    if subject.chars().count() < 4
+        || subject.chars().count() > 200
+        || subject.chars().any(char::is_control)
+    {
+        return bad("Subject must be between 4 and 200 characters and cannot contain line breaks.");
+    }
+    if message.chars().count() < 10 || message.chars().count() > 10_000 {
+        return bad("Message must be between 10 and 10,000 characters.");
+    }
+    if message
+        .chars()
+        .any(|character| character.is_control() && !matches!(character, '\n' | '\r' | '\t'))
+    {
+        return bad("Message contains unsupported control characters.");
+    }
+    if !valid_public_support_topic(&topic) {
+        return bad("Choose a valid support topic.");
+    }
+
+    // Rate-limit by a one-way hash of the normalized email; raw addresses are not stored
+    // in the rate-limit table and the counter update is atomic under concurrent requests.
+    let email_hash = Sha256::digest(email.as_bytes()).to_vec();
+    let request_count = match sqlx::query_scalar::<_, i32>(
+        "INSERT INTO public_support_rate_limits(email_hash,window_started_at,request_count,updated_at)
+         VALUES($1,now(),1,now())
+         ON CONFLICT(email_hash) DO UPDATE SET
+           request_count=CASE
+             WHEN public_support_rate_limits.window_started_at < now()-interval '1 hour' THEN 1
+             ELSE public_support_rate_limits.request_count+1
+           END,
+           window_started_at=CASE
+             WHEN public_support_rate_limits.window_started_at < now()-interval '1 hour' THEN now()
+             ELSE public_support_rate_limits.window_started_at
+           END,
+           updated_at=now()
+         RETURNING request_count",
+    )
+    .bind(email_hash)
+    .fetch_one(&s.db)
+    .await
+    {
+        Ok(count) => count,
+        Err(e) => return db_error(e),
+    };
+    if request_count > 5 {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({
+                "ok":false,
+                "message":"Too many requests from this email address. Please try again later."
+            })),
+        )
+            .into_response();
+    }
+
+    let request_id = Uuid::new_v4();
+    let stored_name = if name.is_empty() {
+        "Customer"
+    } else {
+        name.as_str()
+    };
+    if let Err(e) = sqlx::query(
+        "INSERT INTO public_support_requests
+          (id,requester_name,requester_email,subject,message,topic,status)
+         VALUES($1,$2,$3,$4,$5,$6,'received')",
+    )
+    .bind(request_id)
+    .bind(stored_name)
+    .bind(&email)
+    .bind(&subject)
+    .bind(&message)
+    .bind(&topic)
+    .execute(&s.db)
+    .await
+    {
+        return db_error(e);
+    }
+
+    let mut requester_email_status = "failed";
+    if let Err(e) = production::send_template_email_as(
+        &email,
+        "support-request-received",
+        json!({
+            "DISPLAY_NAME": escape_template_value(stored_name),
+            "ORGANIZATION": escape_template_value(&format!("Public inquiry · {topic}")),
+            "SUBJECT": escape_template_value(&subject),
+            "REQUEST_ID": request_id.to_string()
+        }),
+        "support",
+    )
+    .await
+    {
+        error!(request_id = %request_id, %e, "support requester confirmation email failed");
+    } else {
+        requester_email_status = "sent";
+    }
+
+    let support_link = public_support_link();
+    let staff_message = format!(
+        "New Agata Proxima public support request\n\nRequest ID: {request_id}\nTopic: {topic}\nName: {stored_name}\nEmail: {email}\nSubject: {subject}\n\nMessage:\n{message}\n\nOpen support: {support_link}"
+    );
+    let (primary_configured, primary_submitted, fallback_configured, fallback_submitted) =
+        send_support_notifications(
+            &format!("[Agata Proxima] {topic}: {subject}"),
+            &staff_message,
+            &email,
+            request_id,
+        )
+        .await;
+    let support_email_status = combined_support_email_status(
+        primary_configured,
+        primary_submitted,
+        fallback_configured,
+        fallback_submitted,
+    );
+    let support_fallback_email_status = if fallback_submitted {
+        "sent"
+    } else if fallback_configured {
+        "failed"
+    } else {
+        "not_configured"
+    };
+
+    if let Err(e) = sqlx::query(
+        "UPDATE public_support_requests
+         SET requester_email_status=$1,support_email_status=$2,updated_at=now()
+         WHERE id=$3",
+    )
+    .bind(requester_email_status)
+    .bind(support_email_status)
+    .bind(request_id)
+    .execute(&s.db)
+    .await
+    {
+        error!(request_id = %request_id, %e, "support request email status update failed");
+    }
+
+    let message = if support_email_status == "sent" && requester_email_status == "sent" {
+        "Your request was recorded. Both email notifications were submitted to the email provider; final delivery is not confirmed."
+    } else if support_email_status == "sent" {
+        "Your request was recorded. A support notification was submitted to the email provider, but the confirmation email could not be submitted. Keep the request ID for reference."
+    } else {
+        "Your request was recorded, but the support notification could not be submitted. Keep the request ID for reference; follow-up may be delayed."
+    };
+
+    (
+        StatusCode::ACCEPTED,
+        Json(json!({
+            "ok":true,
+            "request_id":request_id,
+            "requester_email_status":requester_email_status,
+            "support_email_status":support_email_status,
+            "support_fallback_email_status":support_fallback_email_status,
+            "message":message
+        })),
+    )
+        .into_response()
+}
+
 async fn support(State(s): State<AppState>, headers: HeaderMap) -> Response {
     let ctx = match authenticate(&s, &headers).await {
         Ok(v) => v,
@@ -2582,6 +3241,15 @@ async fn create_support(
     }
 
     let priority = input.priority.unwrap_or_else(|| "normal".into());
+    if !matches!(priority.as_str(), "low" | "normal" | "high" | "urgent") {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "error": "Priority must be low, normal, high, or urgent."
+            })),
+        )
+            .into_response();
+    }
     if matches!(priority.as_str(), "high" | "urgent") {
         if let Err(response) =
             production::require_feature(&s.db, ctx.organization_id, "priority_support").await
@@ -2605,6 +3273,39 @@ async fn create_support(
     .await
     {
         Ok(_) => {
+            let requester_email =
+                sqlx::query_scalar::<_, String>("SELECT email FROM users WHERE id=$1")
+                    .bind(ctx.user_id)
+                    .fetch_optional(&s.db)
+                    .await
+                    .ok()
+                    .flatten();
+            let reply_to = requester_email
+                .as_deref()
+                .filter(|email| valid_public_support_email(email))
+                .unwrap_or("support@agataproxima.com");
+            let support_link = public_support_link();
+            let notification_body = format!(
+                "New Agata Proxima dashboard support request\n\nRequest ID: {id}\nOrganization ID: {}\nSubmitted by: {reply_to}\nPriority: {priority}\nSubject: {}\n\nMessage:\n{}\n\nOpen support: {support_link}",
+                ctx.organization_id,
+                input.subject,
+                input.message,
+            );
+            let (primary_configured, primary_submitted, fallback_configured, fallback_submitted) =
+                send_support_notifications(
+                    &format!("[Agata Proxima] {priority} support: {}", input.subject),
+                    &notification_body,
+                    reply_to,
+                    id,
+                )
+                .await;
+            let notification_status = if primary_submitted || fallback_submitted {
+                "submitted"
+            } else if primary_configured || fallback_configured {
+                "failed"
+            } else {
+                "not_configured"
+            };
             audit(
                 &s.db,
                 ctx.organization_id,
@@ -2612,10 +3313,21 @@ async fn create_support(
                 "support.requested",
                 "support_request",
                 Some(id),
-                json!({}),
+                json!({"notification_email_status":notification_status}),
             )
             .await;
-            Json(json!({"id":id,"status":"open"})).into_response()
+            let message = match notification_status {
+                "submitted" => "Support request sent successfully. Our team will review your request and get back to you as soon as possible.",
+                "failed" => "Support request received successfully. Our team will review your request and get back to you as soon as possible.",
+                _ => "Support request received successfully. Our team will review your request and get back to you as soon as possible.",
+            };
+            Json(json!({
+                "id": id,
+                "status": "open",
+                "notification_email_status": notification_status,
+                "message": message
+            }))
+            .into_response()
         }
         Err(e) => db_error(e),
     }
@@ -3050,5 +3762,34 @@ mod tests {
         let hash = hash_password("correct horse battery staple").unwrap();
         assert!(verify_password("correct horse battery staple", &hash));
         assert!(!verify_password("wrong password", &hash));
+    }
+
+    #[test]
+    fn public_support_email_validation_rejects_malformed_addresses() {
+        assert!(valid_public_support_email("customer@example.com"));
+        assert!(!valid_public_support_email("customer@example"));
+        assert!(!valid_public_support_email("customer@@example.com"));
+        assert!(!valid_public_support_email("customer @example.com"));
+        assert!(!valid_public_support_email("@example.com"));
+        assert!(!valid_public_support_email(&format!(
+            "{}@example.com",
+            "a".repeat(250)
+        )));
+    }
+
+    #[test]
+    fn public_support_topic_is_allowlisted() {
+        assert!(valid_public_support_topic("security"));
+        assert!(valid_public_support_topic("partnerships"));
+        assert!(valid_public_support_topic("general"));
+        assert!(!valid_public_support_topic("arbitrary-topic"));
+    }
+
+    #[test]
+    fn email_template_values_are_html_escaped() {
+        assert_eq!(
+            escape_template_value("<script>alert('x')</script>"),
+            "&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;"
+        );
     }
 }

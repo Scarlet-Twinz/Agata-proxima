@@ -9,7 +9,7 @@ HTTPS
 Agata Proxima Control Plane
   |
   +--> Control PostgreSQL
-  +--> Paystack
+  +--> Paddle Billing
   +--> Resend
   +--> Microsoft Entra ID (SSO, after external acceptance)
   +--> Proxima Engine nodes
@@ -29,22 +29,25 @@ Use a deployment secret store, not a committed `.env` file. Do not paste secret 
 - `PROXIMA_COOKIE_SECURE=true`
 - `AGATA_PUBLIC_BASE_URL=https://<your-public-control-plane-host>`
 
-### Paystack billing
+### Paddle Billing
 
-- `PAYSTACK_SECRET_KEY`
-- `AGATA_PAYSTACK_STARTER_PLAN_CODE`
-- `AGATA_PAYSTACK_GROWTH_PLAN_CODE`
-- `AGATA_PAYSTACK_SCALE_PLAN_CODE`
+- `PADDLE_API_KEY`
+- `PADDLE_CLIENT_TOKEN`
+- `PADDLE_WEBHOOK_SECRET`
+- `PADDLE_ENVIRONMENT=production` for the Paddle Live-only integration
+- `PADDLE_STARTER_PRICE_ID`
+- `PADDLE_GROWTH_PRICE_ID`
+- `PADDLE_SCALE_PRICE_ID`
 
 Set `AGATA_PUBLIC_BASE_URL` to the browser-facing app origin. In production, route `/api/v1/*`, the OIDC callback and health/readiness endpoints from that origin to the Rust Control Plane (for example, through a same-origin reverse proxy). The OIDC callback sets a host-only session cookie and redirects to `/app`; a separate frontend/backend origin without an explicit cookie/proxy design will break sign-in.
 
-Before enabling checkout, verify that the configured Paystack plans are Agata Proxima plans with the canonical monthly prices:
+Before enabling checkout, verify that the configured Paddle price IDs (`pri_...`) are active Agata Proxima monthly USD recurring prices with the canonical amounts:
 
 - Starter — $149/month
 - Growth — $499/month
 - Scale — $1,199/month
 
-Free has no Paystack subscription. Enterprise is contract-managed. Configure the production Paystack webhook endpoint to the route implemented by the Control Plane, and verify the provider signature and event processing with a real payment round trip. Do not assume a successful CI run proves live provider configuration.
+Free has no recurring Paddle price. Enterprise is contract-managed. After the Control Plane is deployed and Paddle approves the business and `agataproxima.com` checkout domain, configure the Live notification destination at `https://api.agataproxima.com/api/v1/webhooks/paddle`. Verify `Paddle-Signature`, event idempotency, and entitlement processing using the approved Live acceptance procedure. This deployment does not use Sandbox.
 
 ### Resend email
 
@@ -65,8 +68,8 @@ Do not mark SSO live until the multitenant Entra application, exact production H
 - HTTPS terminates correctly and secure cookies are enabled.
 - Control Plane health/readiness endpoints are reachable.
 - Database migrations are applied in order and schema state is verified without destructive resets.
-- Paystack plan codes and amounts match the canonical catalogue.
-- The Paystack webhook endpoint is reachable and signature verification passes.
+- Paddle price IDs, USD currency, monthly intervals and amounts match the canonical catalogue.
+- The Paddle webhook endpoint is reachable and signature verification passes.
 - Resend sending domain is verified and a real delivery test succeeds.
 - Entra redirect URI exactly matches the production callback before SSO is enabled.
 - Backups exist and a restore has been exercised with measured RPO/RTO.

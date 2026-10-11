@@ -1,10 +1,14 @@
-FROM rust:1-bookworm AS builder
+FROM rust:1.98-bookworm AS builder
 
 WORKDIR /app
 COPY . .
-RUN cargo build --release -p proxima-engine
+RUN cargo build --release --locked -p proxima-engine
 
 FROM debian:bookworm-slim
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 RUN useradd --create-home --uid 10001 proxima
 COPY --from=builder /app/target/release/proxima-engine /usr/local/bin/proxima-engine
 

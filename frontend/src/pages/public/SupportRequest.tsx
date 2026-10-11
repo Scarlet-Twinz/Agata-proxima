@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { ArrowLeft, Send } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Send } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
+import { api } from "../../api/client";
 
 const contextMap: Record<string, { subject: string; message: string; title: string }> = {
   documentation: {
@@ -31,32 +32,94 @@ const contextMap: Record<string, { subject: string; message: string; title: stri
   developers: {
     subject: "Developer inquiry",
     message: "I have a developer or integration question about Agata Proxima.\n\nDetails:\n",
-    title: "Developers",
+    title: "Developer inquiry",
   },
   partnerships: {
     subject: "Partnership inquiry",
     message: "I would like to discuss an infrastructure, platform, or technology partnership with Agata.\n\nDetails:\n",
-    title: "Partnerships",
+    title: "Partnership inquiry",
   },
+};
+
+type SupportRequestResponse = {
+  ok: boolean;
+  request_id?: string;
+  requester_email_status?: "sent" | "failed";
+  support_email_status?: "sent" | "failed" | "not_configured";
+  support_fallback_email_status?: "sent" | "failed" | "not_configured";
+  message: string;
 };
 
 export function SupportRequest() {
   const [searchParams] = useSearchParams();
-  const context = contextMap[searchParams.get("topic") ?? ""];
+  const requestedTopic = searchParams.get("topic") ?? "general";
+  const context = contextMap[requestedTopic];
+  const topic = context ? requestedTopic : "general";
   const isSupport = searchParams.get("from") !== "contact";
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [subject, setSubject] = useState(context?.subject ?? "");
   const [message, setMessage] = useState(context?.message ?? "");
-  const [submitted, setSubmitted] = useState(false);
+  const [website, setWebsite] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<SupportRequestResponse | null>(null);
 
   useEffect(() => {
     document.title = `${isSupport ? "Open Support" : "Contact Agata"} · Agata Proxima`;
   }, [isSupport]);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSubmitted(true);
+    if (submitting) return;
+    setSubmitting(true);
+    setError("");
+    setResult(null);
+    try {
+      const response = await api.post<SupportRequestResponse>("/api/v1/public/support-requests", {
+        name,
+        email,
+        subject,
+        message,
+        topic,
+        website,
+      });
+      setResult(response);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "We could not submit your request. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (result) {
+    return (
+      <div className="public-page">
+        <section className="public-page-hero">
+          <div className="agata-container public-page-hero-inner">
+            <div className="public-eyebrow">Request received</div>
+            <h1>{isSupport ? "Support request sent successfully." : "Your message has been sent successfully."}</h1>
+            <p>Thank you, {name.trim() || "there"}. Our team will review your request and get back to you as soon as possible.</p>
+          </div>
+        </section>
+        <section className="public-content">
+          <div className="agata-container public-request-layout">
+            <article className="public-request-success" role="status" aria-live="polite">
+              <div className="public-request-success-icon"><CheckCircle2 size={38} aria-hidden="true" /></div>
+              <h2>{isSupport ? "Support request received" : "Contact request received"}</h2>
+              <p>Your request has been received successfully. Our team will review it and get back to you as soon as possible. Please check your inbox, including your spam or junk folder, for updates.</p>
+              {result.request_id && <div className="public-request-reference"><span>Request reference</span><strong>{result.request_id}</strong></div>}
+              <div className="public-request-success-actions">
+                <Link to={isSupport ? "/support" : "/contact"} className="agata-button agata-button-primary">
+                  <ArrowLeft size={16} /> Back to {isSupport ? "support" : "contact"}
+                </Link>
+                <Link to="/" className="public-inline-link">Return home</Link>
+              </div>
+            </article>
+          </div>
+        </section>
+      </div>
+    );
   }
 
   return (
@@ -86,34 +149,88 @@ export function SupportRequest() {
             <div className="public-request-field-grid">
               <label>
                 Name
-                <input value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" placeholder="Your name" />
+                <input
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  autoComplete="name"
+                  placeholder="Your name"
+                  maxLength={120}
+                />
               </label>
               <label>
                 Email
-                <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" placeholder="you@company.com" required />
+                <input
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  type="email"
+                  autoComplete="email"
+                  placeholder="you@company.com"
+                  maxLength={254}
+                  required
+                />
               </label>
             </div>
 
             <label>
               Subject
-              <input value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="What can we help with?" required />
+              <input
+                value={subject}
+                onChange={(event) => setSubject(event.target.value)}
+                placeholder="What can we help with?"
+                minLength={4}
+                maxLength={200}
+                required
+              />
             </label>
 
             <label>
               Message
-              <textarea value={message} onChange={(event) => setMessage(event.target.value)} rows={12} placeholder="Write your request here..." required />
+              <textarea
+                value={message}
+                onChange={(event) => setMessage(event.target.value)}
+                rows={12}
+                minLength={10}
+                maxLength={10000}
+                placeholder="Write your request here..."
+                required
+              />
+            </label>
+
+            <label
+              aria-hidden="true"
+              className="public-support-honeypot"
+              style={{
+                position: "absolute",
+                width: 1,
+                height: 1,
+                padding: 0,
+                margin: -1,
+                overflow: "hidden",
+                clip: "rect(0, 0, 0, 0)",
+                whiteSpace: "nowrap",
+                border: 0,
+              }}
+            >
+              Website
+              <input
+                value={website}
+                onChange={(event) => setWebsite(event.target.value)}
+                tabIndex={-1}
+                autoComplete="off"
+              />
             </label>
 
             <div className="public-request-actions">
-              <button type="submit" className="agata-button agata-button-primary">
+              <button type="submit" className="agata-button agata-button-primary" disabled={submitting}>
                 <Send size={16} />
-                {submitted ? "Request prepared" : "Prepare request"}
+                {submitting ? "Sending request…" : "Send request"}
               </button>
-              {submitted && (
-                <p className="public-request-note">
-                  Your message is ready with the context you entered. The public frontend does not currently expose a live submission endpoint, so nothing has been falsely marked as sent.
+              {error && (
+                <p className="public-request-note" role="alert">
+                  {error}
                 </p>
               )}
+
             </div>
           </form>
         </div>

@@ -1294,3 +1294,218 @@ a {
 :root[data-theme="dark"] .create-organization-form input{background:#0a141c}
 :root[data-theme="dark"] .notification-item:hover{background:#111e2a;border-color:#36516a}
 @media(max-width:650px){.email-confirm-row,.create-organization-form{flex-direction:column;align-items:stretch}.email-confirm-row .primary-action{align-self:flex-start}.notification-item{grid-template-columns:36px minmax(0,1fr)}.notification-item>svg:last-child{display:none}}
+
+/* Lemon Squeezy plan selection and secure checkout states */
+.billing-plans-page .page-heading { align-items: center; }
+.billing-current-plan { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:20px; margin-bottom:16px; }
+.billing-current-plan h2 { margin:5px 0; color:var(--text); font-size:18px; }
+.billing-current-plan p { margin:0; color:var(--muted); font-size:12px; }
+.billing-plan-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin:16px 0 20px; align-items:stretch; }
+.billing-plan-card { display:flex; flex-direction:column; gap:13px; min-width:0; padding:20px; }
+.billing-plan-card--current { border-color:rgba(23,107,255,.55); box-shadow:0 0 0 2px rgba(23,107,255,.07); }
+.billing-plan-card-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:20px; }
+.billing-plan-card h2 { margin:0; color:var(--text); font-size:20px; letter-spacing:-.02em; }
+.billing-plan-description { min-height:36px; margin:0; color:var(--muted); font-size:12px; line-height:1.55; }
+.billing-plan-price { display:flex; align-items:baseline; gap:6px; padding:5px 0 10px; border-bottom:1px solid var(--console-border); }
+.billing-plan-price strong { color:var(--text); font-size:30px; letter-spacing:-.04em; }
+.billing-plan-price span { color:var(--muted); font-size:12px; }
+.billing-plan-detail { display:grid; grid-template-columns:auto 1fr; gap:6px 12px; padding:12px; background:var(--console-bg); border-radius:9px; font-size:12px; }
+.billing-plan-detail strong { color:var(--text); text-align:right; }
+.billing-plan-detail span { color:var(--muted); }
+.billing-plan-features { flex:1; color:var(--muted); font-size:12px; }
+.billing-plan-features>strong { color:var(--text); }
+.billing-plan-features ul { display:grid; gap:7px; margin:10px 0 4px; padding-left:18px; }
+.billing-plan-features li { line-height:1.4; }
+.billing-plan-card .primary-action { width:100%; justify-content:center; border:0; cursor:pointer; text-decoration:none; }
+.billing-plan-card .primary-action:disabled { opacity:.55; box-shadow:none; cursor:not-allowed; }
+.billing-plans-page .settings-banner { margin-bottom:14px; }
+@media(max-width:1050px) { .billing-plan-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:680px) {
+  .billing-plan-grid { grid-template-columns:minmax(0,1fr); }
+  .billing-current-plan { align-items:flex-start; flex-direction:column; }
+  .billing-plan-description { min-height:0; }
+}
+
+/* Keep high-volume dashboard widgets inside their cards. */
+.activity-stream {
+  max-height: 320px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 6px;
+}
+
+.topology-links {
+  min-width: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  align-content: start;
+  padding-right: 6px;
+}
+
+.topology-node strong,
+.topology-node small {
+  overflow-wrap: anywhere;
+}
+
+.chart-point {
+  fill: var(--agata-blue);
+  stroke: #ffffff;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.chart-caption {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .topology {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .topology-core {
+    min-height: 120px;
+  }
+
+  .topology-links {
+    max-height: 260px;
+  }
+}
+
+.api-keys-manager {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.api-key-policy-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px;
+  color: var(--agata-midnight);
+  background: var(--agata-blue-soft);
+  border: 1px solid #cfe0ff;
+  border-radius: 12px;
+}
+
+.api-key-policy-note > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--agata-blue);
+}
+
+.api-key-policy-note p {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.api-key-policy-note p span {
+  color: #475467;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.api-key-list {
+  display: grid;
+  gap: 12px;
+}
+
+.api-key-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.api-key-details {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.api-key-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.api-key-title > svg {
+  color: var(--agata-blue);
+}
+
+.api-key-title strong {
+  overflow-wrap: anywhere;
+}
+
+.api-key-status {
+  padding: 3px 8px;
+  color: #027a48;
+  background: #ecfdf3;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.api-key-status--revoked {
+  color: #b42318;
+  background: #fef3f2;
+}
+
+.api-key-details code {
+  width: fit-content;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  padding: 5px 8px;
+  color: #344054;
+  background: #f2f4f7;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.api-key-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.api-key-revoke {
+  flex: 0 0 auto;
+  padding: 9px 12px;
+  color: #b42318;
+  background: #fff;
+  border: 1px solid #fecdca;
+  border-radius: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.api-key-revoke:hover:not(:disabled) {
+  background: #fef3f2;
+}
+
+.api-key-revoke:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+@media (max-width: 620px) {
+  .api-key-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .api-key-revoke {
+    align-self: flex-start;
+  }
+}
