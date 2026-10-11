@@ -5,7 +5,6 @@ import { ResourceSurface } from "../../components/console/ResourceSurface";
 import { api, type ApiError } from "../../api/client";
 
 type PaddleCheckoutApi = {
-  Environment: { set: (environment: "sandbox") => void };
   Initialize: (options: { token: string }) => void;
   Checkout: { open: (options: { transactionId: string }) => void };
 };
@@ -18,7 +17,7 @@ declare global {
 
 let initializedPaddleToken = "";
 
-async function openPaddleCheckout(transactionId: string, clientToken: string, environment: string) {
+async function openPaddleCheckout(transactionId: string, clientToken: string) {
   if (!window.Paddle) {
     await new Promise<void>((resolve, reject) => {
       const existing = document.querySelector<HTMLScriptElement>('script[data-paddle-js="true"]');
@@ -38,7 +37,6 @@ async function openPaddleCheckout(transactionId: string, clientToken: string, en
   }
   const paddle = window.Paddle;
   if (!paddle) throw new Error("Paddle Checkout did not initialize.");
-  if (environment !== "production") paddle.Environment.set("sandbox");
   if (initializedPaddleToken !== clientToken) {
     paddle.Initialize({ token: clientToken });
     initializedPaddleToken = clientToken;
@@ -437,7 +435,10 @@ function BillingPlans() {
       if (!result.transaction_id || !result.client_token) {
         throw new Error("Paddle did not return the checkout transaction and client token.");
       }
-      await openPaddleCheckout(result.transaction_id, result.client_token, result.environment);
+      if (result.environment !== "production") {
+        throw new Error("Only Paddle Live checkout is supported. The server must be configured for Paddle Live.");
+      }
+      await openPaddleCheckout(result.transaction_id, result.client_token);
       setNotice("Paddle Checkout opened. Paid access changes only after the server verifies Paddle's signed billing events.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to start Paddle Checkout.");
