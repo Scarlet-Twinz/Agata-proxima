@@ -28,10 +28,33 @@ def markdown_files():
 
 def is_external(target: str) -> bool:
     lowered = target.lower()
-    return (
-        lowered.startswith(("http://", "https://", "mailto:", "tel:", "data:", "javascript:", "//"))
-        or target.startswith("#")
-    )
+    return lowered.startswith(("http://", "https://", "mailto:", "tel:", "data:", "javascript:", "//"))
+
+
+def heading_anchors(path: Path) -> set[str]:
+    """Return common GitHub-style Markdown heading and explicit HTML anchors."""
+    if not path.exists() or path.suffix.lower() not in {".md", ".mdx", ".html"}:
+        return set()
+
+    content = path.read_text(encoding="utf-8", errors="replace")
+    anchors = set(re.findall(r"""\bid\s*=\s*["']([^"']+)["']""", content, flags=re.IGNORECASE))
+    anchors.update(re.findall(r"""<a\s+[^>]*name\s*=\s*["']([^"']+)["']""", content, flags=re.IGNORECASE))
+
+    counts: dict[str, int] = {}
+    for match in re.finditer(r"^#{1,6}\s+(.+?)\s*#*\s*$", content, flags=re.MULTILINE):
+        heading = match.group(1).strip()
+        heading = re.sub(r"!\[([^\]]*)\]\([^)]*\)", r"\1", heading)
+        heading = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", heading)
+        heading = re.sub(r"[\x60]([^\x60]*)[\x60]", r"\1", heading)
+        heading = re.sub(r"<[^>]+>", "", heading).lower()
+        heading = re.sub(r"[^\w\- ]", "", heading, flags=re.UNICODE)
+        slug = re.sub(r"\s+", "-", heading.strip())
+        if not slug:
+            continue
+        count = counts.get(slug, 0)
+        counts[slug] = count + 1
+        anchors.add(slug if count == 0 else f"{slug}-{count}")
+    return anchors
 
 
 def resolve_target(source: Path, raw_target: str) -> Path | None:
@@ -47,7 +70,7 @@ def resolve_target(source: Path, raw_target: str) -> Path | None:
     parsed = urlsplit(target)
     path_text = unquote(parsed.path)
     if not path_text:
-        return None
+        return source.resolve() if parsed.fragment else None
 
     if path_text.startswith("/"):
         # Root-relative app routes such as /app/settings are not repository files.
@@ -97,8 +120,15 @@ def main() -> int:
             except ValueError:
                 broken.append((source, text.count("\n", 0, match.start()) + 1, destination, "target escapes repository"))
                 continue
+            line_number = text.count("\n", 0, match.start()) + 1
             if not target.exists():
-                broken.append((source, text.count("\n", 0, match.start()) + 1, destination, "target does not exist"))
+                broken.append((source, line_number, destination, "target does not exist"))
+                continue
+
+            fragment = unquote(urlsplit(destination.strip().split()[0]).fragment) if destination.strip() else ""
+            if fragment and target.suffix.lower() in {".md", ".mdx", ".html"}:
+                if fragment not in heading_anchors(target):
+                    broken.append((source, line_number, destination, f"fragment '#{fragment}' does not exist in {target.relative_to(ROOT)}"))
 
     if broken:
         print(f"FAIL: {len(broken)} broken local Markdown link(s) across {checked} checked links:")
