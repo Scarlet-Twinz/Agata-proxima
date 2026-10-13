@@ -257,7 +257,7 @@ export function PublicDetail() {
                   <h2>{section.title}</h2>
                   {section.paragraphs?.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
                   {section.bullets && <ul>{section.bullets.map((bullet) => <li key={bullet}>{bullet}</li>)}</ul>}
-                  {section.code && <pre className="public-code-block"><code>{section.code}</code></pre>
+                  {section.code && <pre className="public-code-block"><code>{section.code}</code></pre>}
                 </section>
               ))}
               {detail.links && (
