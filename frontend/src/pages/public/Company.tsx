@@ -42,6 +42,24 @@ export function Company() {
               </p>
             </article>
           </div>
+          <div className="public-prose company-details">
+            <section>
+              <h2>The problem we are focused on</h2>
+              <p>As SaaS products grow, tenant access rules can become scattered across application handlers, background jobs and database queries. Agata Proxima focuses on making the tenant boundary explicit, enforceable and testable across the protected request path.</p>
+            </section>
+            <section>
+              <h2>Who it is for</h2>
+              <p>Agata Proxima is intended for engineering, platform and security teams building multi-tenant software that need clear organization administration, tenant-scoped controls, policy management, verification and operational evidence.</p>
+            </section>
+            <section>
+              <h2>What Agata Proxima is not</h2>
+              <p>It is not a substitute for secure application design, least-privilege database roles, correctly configured PostgreSQL row-level security, operational monitoring or independent security review. A configured dashboard record is not proof that a deployed runtime enforces the intended policy. Certifications, contractual service commitments and unverified integrations must not be inferred from product screens.</p>
+            </section>
+            <section>
+              <h2>How we measure progress</h2>
+              <p>We measure progress through repeatable tests: permitted tenant-local operations succeed, cross-tenant reads and writes are rejected, invalid context is handled as expected, evidence is inspectable, and integration behavior is verified in the target environment. Results that have not been tested are recorded as unverified rather than passed.</p>
+            </section>
+          </div>
         </div>
       </section>
     </PublicPage>
