@@ -11,7 +11,7 @@ const detail = read("frontend/src/pages/public/PublicDetail.tsx");
 const checks = [
   ["Dedicated dashboard guide route exists", /path: "guide", element: <DashboardGuide \/>/.test(router)],
   ["Overview links to detailed dashboard guide", /to="\/app\/guide"/.test(overview) && /Dashboard guide/.test(overview)],
-  ["Guide gives detailed API-key creation steps", /Create an API key and make an API request/.test(guide) && /secure secret store/.test(guide)],
+  ["Guide gives detailed API-key creation steps", /Create an API key and make an API request/.test(guide) && /secure local secret store/.test(guide)],
   ["Guide links to support", /Contact support/.test(guide) && /to="\/app\/support"/.test(guide)],
   ["Guide includes tenant, policy, deployment and verification workflows", ["Create and manage tenants", "Configure policies, nodes and deployments", "Run verification and inspect evidence"].every((s) => guide.includes(s))],
   ["Guide warns that configuration is not proof of runtime enforcement", /does not prove that a runtime has received or enforced it/.test(guide)],
