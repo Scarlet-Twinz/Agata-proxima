@@ -28,6 +28,7 @@ import Signup from "../pages/auth/Signup";
 import Recovery from "../pages/auth/Recovery";
 
 import { Overview } from "../pages/console/Overview";
+import { DashboardGuide } from "../pages/console/DashboardGuide";
 import {
   Audit,
   Billing,
@@ -154,6 +155,7 @@ export const router = createBrowserRouter([
     element: <ConsoleLayout />,
     children: [
       { index: true, element: <Overview /> },
+      { path: "guide", element: <DashboardGuide /> },
       ...consoleResourceRoutes,
       ...nestedConsoleRoutes,
       { path: "tenants/new", element: <ActionPage /> },

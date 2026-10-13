@@ -1,5 +1,5 @@
 ﻿import { Link } from "react-router-dom";
-import { ArrowUpRight, Building2, ChevronRight, Database, FileCheck2, Rocket, ShieldCheck } from "lucide-react";
+import { ArrowUpRight, BookOpen, Building2, ChevronRight, Database, FileCheck2, Rocket, ShieldCheck } from "lucide-react";
 import { ActivityChart } from "../../components/console/charts/ActivityChart";
 import { ActivityStream } from "../../components/console/activity/ActivityStream";
 import { InfrastructureTopology } from "../../components/console/topology/InfrastructureTopology";
@@ -27,7 +27,10 @@ export function Overview() {
           </p>
         </div>
 
-        <div className="live-overview-status"><span className={isFetching ? "live-dot live-dot--syncing" : "live-dot"} />{isFetching ? "Syncing live data" : dataUpdatedAt ? `Live · updated ${new Date(dataUpdatedAt).toLocaleTimeString()}` : "Live telemetry"}</div>
+        <div className="overview-heading-tools">
+          <Link className="dashboard-guide-shortcut" to="/app/guide"><BookOpen size={15} /> Dashboard guide <ArrowUpRight size={13} /></Link>
+          <div className="live-overview-status"><span className={isFetching ? "live-dot live-dot--syncing" : "live-dot"} />{isFetching ? "Syncing live data" : dataUpdatedAt ? `Live · updated ${new Date(dataUpdatedAt).toLocaleTimeString()}` : "Live telemetry"}</div>
+        </div>
 
         <div className="heading-actions">
           <Link className="primary-action" to="/app/verification">
