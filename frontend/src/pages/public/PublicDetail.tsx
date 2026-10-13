@@ -6,6 +6,7 @@ type Section = {
   title: string;
   paragraphs?: string[];
   bullets?: string[];
+  code?: string;
 };
 
 type Detail = {
@@ -143,24 +144,24 @@ const details: Record<string, Detail> = {
     links:[{label:"Webhooks",to:"/developers/webhooks"},{label:"Audit evidence",to:"/product/evidence"}],
   },
   "/developers/sdks": {
-    eyebrow:"Developers · SDKs", title:"Integrate from the language your team already uses.", description:"The SDK surface is designed to keep application integration focused on explicit Proxima contracts.",
-    sections:[{title:"SDK responsibilities",paragraphs:["SDKs should make authentication, tenant context and API calls predictable without hiding the security boundary."]}],
-    links:[{label:"API reference",to:"/developers/api-reference"},{label:"Documentation",to:"/docs"}],
+    eyebrow:"Developers · SDKs", title:"Build a client against the documented HTTP API.", description:"Use the versioned HTTP API as the supported integration surface. This guide explains how to build and test an application-owned client; it does not claim that an official Agata Proxima SDK package has been released.",
+    sections:[{title:"Current availability",paragraphs:["Before installing a package, verify its official package name, publisher, version, source repository and release artifact. Do not install an assumed package name. Until an official SDK package is published and verified, use the documented HTTP API from trusted server-side code."]},{title:"Example server-side request",paragraphs:["Set AGATA_API_BASE_URL and AGATA_API_KEY through your secret store or process environment. The key must be organization-scoped and must never be included in browser code."],code:"const baseUrl = process.env.AGATA_API_BASE_URL;\nconst apiKey = process.env.AGATA_API_KEY;\nif (!baseUrl || !apiKey) throw new Error('Agata API configuration is missing');\nconst response = await fetch(\u0060\u0024{baseUrl.replace(/\\\\/$/, '')}/api/v1/tenants\u0060, {\n  headers: { Authorization: \u0060Bearer \u0024{apiKey}\u0060, Accept: 'application/json' }\n});\nif (!response.ok) throw new Error(\u0060Agata API returned \u0024{response.status}\u0060);\nconst tenants = await response.json();"}],
+    links:[{label:"API reference",to:"/developers/api-reference"},{label:"Quickstart",to:"/developers/quickstart"},{label:"Documentation",to:"/docs"}],
   },
   "/developers/cli": {
-    eyebrow:"Developers · CLI", title:"Operate Proxima from the command line.", description:"A CLI surface gives engineers a direct workflow for inspecting configuration, verification and operational state.",
-    sections:[{title:"CLI workflow",bullets:["Authenticate","Select the target environment","Inspect configuration","Run verification","Review results"]}],
-    links:[{label:"Terraform",to:"/developers/terraform"},{label:"Operations",to:"/docs/operations"}],
+    eyebrow:"Developers · CLI", title:"Automate API workflows from your terminal.", description:"Use PowerShell, Bash or another HTTP-capable shell to call the documented API. This is an API automation guide, not a claim that a first-party CLI binary or package is available.",
+    sections:[{title:"Use the HTTP API from PowerShell",paragraphs:["Set the real API origin and load an organization-scoped API key from a secure local secret store. The example checks configuration before sending a request and does not embed a credential."],code:"if ([string]::IsNullOrWhiteSpace($env:AGATA_API_BASE_URL)) { throw 'AGATA_API_BASE_URL is not set' }\nif ([string]::IsNullOrWhiteSpace($env:AGATA_API_KEY)) { throw 'AGATA_API_KEY is not set' }\n$headers = @{ Authorization = \"Bearer $env:AGATA_API_KEY\"; Accept = 'application/json' }\n$base = $env:AGATA_API_BASE_URL.TrimEnd('/')\nInvoke-RestMethod -Method Get -Uri \"$base/api/v1/tenants\" -Headers $headers"},{title:"First-party CLI availability",paragraphs:["Do not install guessed commands or binaries. Confirm the official Agata Proxima CLI binary or package is actually published before following any first-party CLI installation instructions. Until then, use the HTTP API examples in this guide and the API reference."]}],
+    links:[{label:"API reference",to:"/developers/api-reference"},{label:"Terraform guide",to:"/developers/terraform"},{label:"Operations",to:"/docs/operations"}],
   },
   "/developers/terraform": {
-    eyebrow:"Developers · Terraform", title:"Infrastructure as code for Proxima.", description:"Connect Proxima provisioning and configuration to infrastructure workflows built around Terraform.",
-    sections:[{title:"Terraform integration",paragraphs:["Terraform can describe infrastructure configuration as code and keep changes reviewable and repeatable. Proxima's Terraform experience should follow the same principle: explicit configuration, predictable plans and auditable changes."]},{title:"Official Terraform documentation",paragraphs:["Use HashiCorp's official Terraform documentation for the Terraform language, CLI and provider ecosystem."]}],
-    links:[{label:"Terraform documentation",to:"https://developer.hashicorp.com/terraform/docs",external:true},{label:"Terraform CLI",to:"https://developer.hashicorp.com/terraform/cli",external:true},{label:"Proxima developer platform",to:"/developers"}],
+    eyebrow:"Developers · Terraform", title:"Plan infrastructure changes without guessing provider availability.", description:"Use Terraform for infrastructure it actually manages. This guide does not imply that an Agata-specific provider is released.",
+    sections:[{title:"Official provider availability",paragraphs:["Confirm the official Agata Proxima Terraform provider is currently published in a verified registry namespace before adding it to required_providers. Do not guess a provider address or version. If no official provider is published, use your existing deployment pipeline to call the documented API where appropriate, and manage infrastructure with providers that are actually available."]},{title:"Safe infrastructure workflow",bullets:["Keep API credentials and state files in protected secret storage.","Review plans before applying changes to shared environments.","Test create, read, update, import, drift and destroy behavior in a disposable environment.","Avoid destructive defaults for tenants, policies, nodes or deployments.","Treat Terraform documentation as generic Terraform guidance, not proof of an Agata-specific provider release."]}],
+    links:[{label:"Terraform documentation",to:"https://developer.hashicorp.com/terraform/docs",external:true},{label:"API reference",to:"/developers/api-reference"},{label:"Proxima developer platform",to:"/developers"}],
   },
   "/developers/api-reference": {
-    eyebrow:"Developers · API reference", title:"The control-plane contracts.", description:"Reference the API surfaces used for organizations, tenants, policies, deployments, verification, audit and developer operations.",
-    sections:[{title:"Core resource groups",bullets:["Organizations and membership","Tenants and policies","Nodes and deployments","Verification and audit","Developer credentials and events"]},{title:"Contract discipline",paragraphs:["API behavior should be explicit, authenticated and compatible with the control-plane authority boundary described in the platform architecture."]}],
-    links:[{label:"OpenAPI surface",to:"/docs/api-reference"},{label:"Developer platform",to:"/developers"}],
+    eyebrow:"Developers · API reference", title:"The control-plane API reference.", description:"Use the versioned HTTP API and confirm exact request and response schemas against the OpenAPI document exposed by your deployed service.",
+    sections:[{title:"Core resource groups",bullets:["Organizations and membership","Tenants and policies","Nodes and deployments","Verification and audit","Developer credentials and events"]},{title:"Authenticated request example",paragraphs:["Create an organization-scoped API key in the authenticated console and load it into AGATA_API_KEY from a secure secret store. Set AGATA_API_BASE_URL to the actual control-plane origin. Do not put a real key in this documentation or a frontend bundle."],code:"if (!process.env.AGATA_API_BASE_URL) throw new Error('AGATA_API_BASE_URL is not set');\nif (!process.env.AGATA_API_KEY) throw new Error('AGATA_API_KEY is not set');\nconst base = process.env.AGATA_API_BASE_URL.replace(/\\\\/$/, '');\nconst response = await fetch(\u0060\u0024{base}/api/v1/tenants\u0060, {\n  headers: { Authorization: \u0060Bearer \u0024{process.env.AGATA_API_KEY}\u0060, Accept: 'application/json' }\n});\nif (!response.ok) throw new Error(\u0060Agata API returned \u0024{response.status}\u0060);\nconst tenants = await response.json();"}],
+    links:[{label:"OpenAPI surface",to:"/docs/api-reference"},{label:"Authentication guide",to:"/developers/authentication"},{label:"Developer platform",to:"/developers"}],
   },
   "/docs/getting-started": {
     eyebrow:"Docs · Getting started", title:"Get from zero to a verified integration.", description:"Start with the architecture and move through the smallest useful integration path.",
@@ -256,6 +257,7 @@ export function PublicDetail() {
                   <h2>{section.title}</h2>
                   {section.paragraphs?.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
                   {section.bullets && <ul>{section.bullets.map((bullet) => <li key={bullet}>{bullet}</li>)}</ul>}
+                  {section.code && <pre className="public-code-block"><code>{section.code}</code></pre>
                 </section>
               ))}
               {detail.links && (
