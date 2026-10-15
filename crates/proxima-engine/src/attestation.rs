@@ -1,6 +1,7 @@
 //! Deterministic hash-chain primitives for security-state attestation.
 //! Hash chaining detects edits and reordering; deployments must additionally sign
 //! block hashes with a separately managed private key before claiming authenticity.
+use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,6 +63,35 @@ impl AttestationBlock {
             && self.block_hash_signature == self.calculate_hash()
     }
 }
+
+/// Sign the canonical block hash with a separately managed HMAC key.
+/// HMAC is appropriate for a trusted deployment boundary where the same secret
+/// is provisioned to the node and verifier; use asymmetric signatures when
+/// verifiers must not possess a signing-capable secret.
+pub fn sign_hash_hmac(block_hash: &str, key: &[u8]) -> Result<String, &'static str> {
+    if key.len() < 32 { return Err("attestation HMAC key must be at least 32 bytes"); }
+    let mut mac = Hmac::<Sha256>::new_from_slice(key).map_err(|_| "invalid attestation HMAC key")?;
+    mac.update(block_hash.as_bytes());
+    Ok(hex_lower(&mac.finalize().into_bytes()))
+}
+
+pub fn verify_hash_hmac(block_hash: &str, signature_hex: &str, key: &[u8]) -> bool {
+    if key.len() < 32 { return false; }
+    let Ok(signature) = decode_hex(signature_hex) else { return false; };
+    let Ok(mut mac) = Hmac::<Sha256>::new_from_slice(key) else { return false; };
+    mac.update(block_hash.as_bytes());
+    mac.verify_slice(&signature).is_ok()
+}
+
+fn decode_hex(value: &str) -> Result<Vec<u8>, ()> {
+    if value.len() % 2 != 0 { return Err(()); }
+    value.as_bytes().chunks_exact(2).map(|pair| {
+        let high = (pair[0] as char).to_digit(16).ok_or(())?;
+        let low = (pair[1] as char).to_digit(16).ok_or(())?;
+        Ok(((high << 4) | low) as u8)
+    }).collect()
+}
+
 fn hex_lower(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut out = String::with_capacity(bytes.len() * 2);
@@ -81,6 +111,12 @@ mod tests {
         assert!(block.verify());
         block.telemetry_summary.total_processed_queries += 1;
         assert!(!block.verify());
+    }
+    #[test] fn hmac_signature_detects_tampering() {
+        let key = b"01234567890123456789012345678901";
+        let signature = sign_hash_hmac("block-hash", key).unwrap();
+        assert!(verify_hash_hmac("block-hash", &signature, key));
+        assert!(!verify_hash_hmac("different-hash", &signature, key));
     }
     #[test] fn rejects_invalid_epoch() {
         assert!(AttestationBlock::new("org".into(), "node".into(), 201, 200,
