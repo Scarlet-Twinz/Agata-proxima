@@ -8,3 +8,4 @@ pub mod tls;
 pub mod attestation;
 pub mod breaker;
 pub mod monitor;
+pub mod attestation_reporter;
