@@ -73,7 +73,9 @@ impl AttestationBlock {
             self.telemetry_summary.total_processed_queries,
             self.telemetry_summary.authenticated_tenant_sessions,
             self.telemetry_summary.blocked_unauthorized_violations,
-            self.telemetry_summary.p99_latency_overhead_ms.unwrap_or(0.0),
+            self.telemetry_summary
+                .p99_latency_overhead_ms
+                .unwrap_or(0.0),
             self.security_state.force_rls_active,
             self.security_state.tls_termination_enforced,
             self.security_state.circuit_breaker_tripped,
