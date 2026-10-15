@@ -265,6 +265,8 @@ mod tests {
         metrics.connection_accepted();
         metrics.session_started(true);
         metrics.session_finished(100, 80, 2_500);
+        metrics.observe_query_latency(500);
+        metrics.observe_query_latency(50_000);
         let output = metrics.render_prometheus();
         assert!(output.contains("proxima_engine_active_connections 0\n"));
         assert!(output.contains("proxima_engine_connections_accepted_total 1\n"));
@@ -272,5 +274,8 @@ mod tests {
         assert!(output.contains("proxima_engine_database_bytes_total 80\n"));
         assert!(output.contains("proxima_engine_session_duration_seconds_total 0.002500\n"));
         assert!(output.contains("proxima_engine_authenticated_tenant_sessions_total 1\n"));
+        assert!(output.contains("proxima_engine_query_roundtrip_latency_seconds_bucket{le=\"0.001\"} 1\n"));
+        assert!(output.contains("proxima_engine_query_roundtrip_latency_seconds_bucket{le=\"0.05\"} 2\n"));
+        assert!(output.contains("proxima_engine_query_roundtrip_latency_seconds_count 2\n"));
     }
 }
