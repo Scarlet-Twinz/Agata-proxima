@@ -223,7 +223,7 @@ grep -Fq 'headers.get("verif-hash")' crates/proxima-control-plane/src/production
 ! grep -Fqi 'paystack' crates/proxima-control-plane/src/production.rs || fail "legacy billing provider remains in active control-plane code"
 grep -Fq 'unknown_local_transaction' crates/proxima-control-plane/src/production.rs || fail "verification does not require a server-stored transaction"
 grep -Fq 'billing_grace_until=COALESCE(billing_grace_until,now()+interval' crates/proxima-control-plane/src/production.rs || fail "payment failure does not establish a fixed grace window"
-grep -Fq 'organization_not_resolved' crates/proxima-control-plane/src/production.rs || fail "unknown webhook organizations are not ignored safely"
+grep -Fq 'unknown_reference' crates/proxima-control-plane/src/production.rs && grep -Fq '"ignored": "unknown_reference"' crates/proxima-control-plane/src/production.rs || fail "unknown webhook references are not ignored safely"
 grep -Fq 'include_str!("' crates/proxima-control-plane/src/main.rs || fail "startup migration wiring missing"
 grep -Fq '0015_billing_lifecycle_downgrade.sql' crates/proxima-control-plane/src/main.rs || fail "lifecycle migration is not applied on startup"
 grep -Fq 'production::reconcile_billing_lifecycle' crates/proxima-control-plane/src/main.rs || fail "billing lifecycle reconciler is not scheduled"
