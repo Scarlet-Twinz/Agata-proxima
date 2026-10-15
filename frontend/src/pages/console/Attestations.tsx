@@ -41,20 +41,20 @@ function buildPdf(lines: string[]) {
       "48 754 Td",
       ...pageLines.flatMap((line, lineIndex) => lineIndex ? ["0 -16 Td", `(${pdfEscape(line)}) Tj`] : [`(${pdfEscape(line)}) Tj`]),
       "ET",
-    ].join("\\n");
+    ].join("\n");
     objects[pageId] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentId} 0 R >>`;
-    objects[contentId] = `<< /Length ${new TextEncoder().encode(stream).length} >>\\nstream\\n${stream}\\nendstream`;
+    objects[contentId] = `<< /Length ${new TextEncoder().encode(stream).length} >>\nstream\n${stream}\nendstream`;
   });
-  let pdf = "%PDF-1.4\\n";
+  let pdf = "%PDF-1.4\n";
   const offsets = [0];
   for (let id = 1; id < objects.length; id++) {
     offsets[id] = new TextEncoder().encode(pdf).length;
-    pdf += `${id} 0 obj\\n${objects[id]}\\nendobj\\n`;
+    pdf += `${id} 0 obj\n${objects[id]}\nendobj\n`;
   }
   const xref = new TextEncoder().encode(pdf).length;
-  pdf += `xref\\n0 ${objects.length}\\n0000000000 65535 f \\n`;
-  for (let id = 1; id < objects.length; id++) pdf += `${String(offsets[id]).padStart(10, "0")} 00000 n \\n`;
-  pdf += `trailer\\n<< /Size ${objects.length} /Root 1 0 R >>\\nstartxref\\n${xref}\\n%%EOF`;
+  pdf += `xref\n0 ${objects.length}\n0000000000 65535 f \n`;
+  for (let id = 1; id < objects.length; id++) pdf += `${String(offsets[id]).padStart(10, "0")} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
   return new Blob([pdf], { type: "application/pdf" });
 }
 
