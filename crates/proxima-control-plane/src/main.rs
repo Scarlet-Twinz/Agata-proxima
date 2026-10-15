@@ -3258,8 +3258,12 @@ async fn security_attestations(State(s): State<AppState>, headers: HeaderMap) ->
                 encode(signature, 'hex') AS signature_hex
          FROM security_attestation_blocks
          WHERE organization_id=$1
-         ORDER BY epoch_timestamp_start DESC LIMIT 500"
-    ).bind(ctx.organization_id).fetch_all(&s.db).await {
+         ORDER BY epoch_timestamp_start DESC LIMIT 500",
+    )
+    .bind(ctx.organization_id)
+    .fetch_all(&s.db)
+    .await
+    {
         Ok(rows) => rows,
         Err(error) => return db_error(error),
     };
@@ -3342,17 +3346,32 @@ fn calculate_attestation_hash(
     hex::encode(Sha256::digest(canonical.as_bytes()))
 }
 
-fn verify_attestation_signature(block_hash: &str, algorithm: &str, key_id: &str, signature_hex: &str) -> bool {
+fn verify_attestation_signature(
+    block_hash: &str,
+    algorithm: &str,
+    key_id: &str,
+    signature_hex: &str,
+) -> bool {
     use hmac::{Hmac, Mac};
-    if algorithm != "HMAC-SHA256" { return false; }
+    if algorithm != "HMAC-SHA256" {
+        return false;
+    }
     let configured_key_id = env::var("PROXIMA_ATTESTATION_SIGNING_KEY_ID").unwrap_or_default();
-    if configured_key_id.is_empty() || configured_key_id != key_id { return false; }
+    if configured_key_id.is_empty() || configured_key_id != key_id {
+        return false;
+    }
     let key = match env::var("PROXIMA_ATTESTATION_SIGNING_KEY") {
         Ok(value) if value.len() >= 32 => value,
         _ => return false,
     };
-    let signature = match hex::decode(signature_hex) { Ok(value) => value, Err(_) => return false };
-    let mut mac = match Hmac::<Sha256>::new_from_slice(key.as_bytes()) { Ok(value) => value, Err(_) => return false };
+    let signature = match hex::decode(signature_hex) {
+        Ok(value) => value,
+        Err(_) => return false,
+    };
+    let mut mac = match Hmac::<Sha256>::new_from_slice(key.as_bytes()) {
+        Ok(value) => value,
+        Err(_) => return false,
+    };
     mac.update(block_hash.as_bytes());
     mac.verify_slice(&signature).is_ok()
 }
