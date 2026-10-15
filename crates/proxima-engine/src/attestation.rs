@@ -45,8 +45,8 @@ impl AttestationBlock {
         if organization_id.trim().is_empty() || node_id.trim().is_empty() {
             return Err("organization_id and node_id are required");
         }
-        if end < start {
-            return Err("epoch_timestamp_end must be >= epoch_timestamp_start");
+        if end <= start {
+            return Err("epoch_timestamp_end must be > epoch_timestamp_start");
         }
         let mut block = Self {
             attestation_version: 1,
@@ -169,6 +169,29 @@ mod tests {
         assert!(block.verify());
         block.telemetry_summary.total_processed_queries += 1;
         assert!(!block.verify());
+    }
+
+    #[test]
+    fn rejects_empty_epoch() {
+        assert!(AttestationBlock::new(
+            "org".into(),
+            "node".into(),
+            200,
+            200,
+            TelemetrySummary {
+                total_processed_queries: 0,
+                authenticated_tenant_sessions: 0,
+                blocked_unauthorized_violations: 0,
+                p99_latency_overhead_ms: None,
+            },
+            SecurityState {
+                force_rls_active: false,
+                tls_termination_enforced: false,
+                circuit_breaker_tripped: false,
+            },
+            String::new(),
+        )
+        .is_err());
     }
 
     #[test]
