@@ -39,6 +39,12 @@ impl ReporterConfig {
             .iter().any(|value| value.trim().is_empty()) {
             return Err("attestation reporting requires PROXIMA_CONTROL_PLANE_URL, PROXIMA_CONTROL_PLANE_API_KEY, PROXIMA_ORGANIZATION_ID, PROXIMA_NODE_ID, PROXIMA_ATTESTATION_SIGNING_KEY_ID and PROXIMA_ATTESTATION_SIGNING_KEY together".into());
         }
+        if !is_canonical_uuid(&organization_id) {
+            return Err("PROXIMA_ORGANIZATION_ID must be a canonical UUID".into());
+        }
+        if node_id.trim().is_empty() || node_id.len() > 200 {
+            return Err("PROXIMA_NODE_ID must contain 1-200 characters".into());
+        }
         if signing_key.len() < 32 {
             return Err("PROXIMA_ATTESTATION_SIGNING_KEY must contain at least 32 bytes".into());
         }
@@ -169,6 +175,17 @@ async fn submit_epoch(
         .error_for_status().map_err(|error| format!("attestation submission rejected: {error}"))?;
     info!(node_id = %config.node_id, epoch_start = start, epoch_end = now, %block_hash, "signed security attestation accepted");
     Ok(())
+}
+
+fn is_canonical_uuid(value: &str) -> bool {
+    value.len() == 36
+        && value.chars().enumerate().all(|(index, character)| {
+            if [8, 13, 18, 23].contains(&index) {
+                character == '-'
+            } else {
+                character.is_ascii_hexdigit()
+            }
+        })
 }
 
 fn hex_lower(bytes: &[u8]) -> String {
