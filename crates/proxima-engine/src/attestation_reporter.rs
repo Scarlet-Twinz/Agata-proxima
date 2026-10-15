@@ -121,10 +121,10 @@ pub async fn run(
     ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
     // Do not emit an immediate partial-hour block at startup.
     ticker.tick().await;
-    let mut previous_queries = metrics.total_processed_queries();
-    let mut previous_sessions = metrics.authenticated_tenant_sessions();
-    let mut previous_violations = metrics.blocked_unauthorized_violations();
-    let reporter_started_at = std::time::SystemTime::now()
+    let mut reported_queries = metrics.total_processed_queries();
+    let mut reported_sessions = metrics.authenticated_tenant_sessions();
+    let mut reported_violations = metrics.blocked_unauthorized_violations();
+    let mut last_successful_end = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_secs() as i64)
         .unwrap_or(0);
@@ -134,27 +134,32 @@ pub async fn run(
         let current_sessions = metrics.authenticated_tenant_sessions();
         let current_violations = metrics.blocked_unauthorized_violations();
         let summary = (
-            current_queries.saturating_sub(previous_queries),
-            current_sessions.saturating_sub(previous_sessions),
-            current_violations.saturating_sub(previous_violations),
+            current_queries.saturating_sub(reported_queries),
+            current_sessions.saturating_sub(reported_sessions),
+            current_violations.saturating_sub(reported_violations),
         );
-        previous_queries = current_queries;
-        previous_sessions = current_sessions;
-        previous_violations = current_violations;
-        if let Err(error) = submit_epoch(
+        match submit_epoch(
             &client,
             &config,
             summary.0,
             summary.1,
             summary.2,
-            reporter_started_at,
+            last_successful_end,
             force_rls_active,
             tls_termination_enforced,
             breaker.any_peer_blocked(),
         )
         .await
         {
-            warn!(%error, "security attestation epoch was not accepted; evidence will not be represented as verified");
+            Ok(epoch_end) => {
+                reported_queries = current_queries;
+                reported_sessions = current_sessions;
+                reported_violations = current_violations;
+                last_successful_end = epoch_end;
+            }
+            Err(error) => {
+                warn!(%error, "security attestation epoch was not accepted; evidence will not be represented as verified");
+            }
         }
     }
 }
@@ -165,11 +170,11 @@ async fn submit_epoch(
     queries: u64,
     sessions: u64,
     violations: u64,
-    reporter_started_at: i64,
+    last_successful_end: i64,
     force_rls_active: bool,
     tls_termination_enforced: bool,
     breaker_tripped: bool,
-) -> Result<(), String> {
+) -> Result<i64, String> {
     let endpoint = format!("{}/api/v1/attestations", config.base_url);
     let latest: Value = client
         .get(&endpoint)
@@ -217,8 +222,8 @@ async fn submit_epoch(
     let previous_end = previous
         .and_then(|record| record.get("epoch_timestamp_end").and_then(Value::as_i64));
     let start = previous_end
-        .map(|end| end.max(reporter_started_at))
-        .unwrap_or_else(|| now.saturating_sub(3600));
+        .map(|end| end.max(last_successful_end))
+        .unwrap_or(last_successful_end);
     if start >= now {
         return Err("system clock has not advanced beyond the previous attestation epoch".into());
     }
@@ -269,8 +274,14 @@ async fn submit_epoch(
         .map_err(|error| format!("submit attestation: {error}"))?
         .error_for_status()
         .map_err(|error| format!("attestation submission rejected: {error}"))?;
-    info!(node_id = %config.node_id, epoch_start = start, epoch_end = now, %block_hash, "signed security attestation accepted");
-    Ok(())
+    info!(
+        node_id = %config.node_id,
+        epoch_start = start,
+        epoch_end = now,
+        %block_hash,
+        "signed security attestation accepted"
+    );
+    Ok(now)
 }
 
 
