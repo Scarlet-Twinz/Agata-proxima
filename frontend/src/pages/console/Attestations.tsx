@@ -21,7 +21,11 @@ type Attestation = {
 };
 
 function formatEpoch(value: number) {
-  return new Date(value * 1000).toISOString();
+  if (!Number.isSafeInteger(value) || value < 0 || value > 8_640_000_000_000) {
+    return "INVALID EPOCH";
+  }
+  const date = new Date(value * 1000);
+  return Number.isNaN(date.getTime()) ? "INVALID EPOCH" : date.toISOString();
 }
 
 function pdfEscape(value: string) {
