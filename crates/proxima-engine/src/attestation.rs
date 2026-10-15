@@ -55,12 +55,12 @@ impl AttestationLedger {
             .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "invalid attestation signing key"))?;
         mac.update(digest.as_bytes());
         let signature = hex_bytes(&mac.finalize().into_bytes());
-        let record = format!("{{\"attestation_version\":1,\"organization_id\":\"{}\",\"node_id\":\"{}\",\"epoch_timestamp_start\":{},\"epoch_timestamp_end\":{},\"telemetry_summary\":{{\"total_processed_queries\":{},\"authenticated_tenant_sessions\":{},\"blocked_unauthorized_violations\":{},\"p99_latency_overhead_ms\":{}}},\"security_state\":{{\"force_rls_active\":{},\"tls_termination_enforced\":{},\"circuit_breaker_tripped\":{}}},\"previous_block_hash\":\"{}\",\"block_hash\":\"{}\",\"block_hash_signature\":\"{}\"}}\n",
+        let record = format!("{{\"attestation_version\":1,\"organization_id\":\"{}\",\"node_id\":\"{}\",\"epoch_timestamp_start\":{},\"epoch_timestamp_end\":{},\"telemetry_summary\":{{\"total_processed_queries\":{},\"authenticated_tenant_sessions\":{},\"blocked_unauthorized_violations\":{},\"p99_latency_overhead_ms\":{}}},\"security_state\":{{\"force_rls_active\":{},\"tls_termination_enforced\":{},\"circuit_breaker_tripped\":{}}},\"previous_block_hash\":\"{}\",\"canonical_payload\":\"{}\",\"block_hash\":\"{}\",\"block_hash_signature\":\"{}\"}}\n",
             json_escape(&self.config.organization_id), json_escape(&self.config.node_id), start, end,
             telemetry.total_processed_queries, telemetry.authenticated_tenant_sessions,
             telemetry.blocked_unauthorized_violations, telemetry.p99_latency_overhead_ms,
             state.force_rls_active, state.tls_termination_enforced, state.circuit_breaker_tripped,
-            previous_hash, digest, signature
+            previous_hash, json_escape(&canonical), digest, signature
         );
         if let Some(parent) = self.config.ledger_path.parent() {
             tokio::fs::create_dir_all(parent).await?;
@@ -88,6 +88,12 @@ impl AttestationLedger {
             let Some(hash) = json_field(line, "block_hash") else {
                 return Ok(ChainVerification { valid: false, records: count, error: Some(format!("missing block hash at line {}", index + 1)) });
             };
+            let Some(payload) = json_field(line, "canonical_payload") else {
+                return Ok(ChainVerification { valid: false, records: count, error: Some(format!("missing canonical payload at line {}", index + 1)) });
+            };
+            if hex_sha256(json_unescape(&payload).as_bytes()) != hash {
+                return Ok(ChainVerification { valid: false, records: count, error: Some(format!("payload hash mismatch at line {}", index + 1)) });
+            }
             let Some(signature) = json_field(line, "block_hash_signature") else {
                 return Ok(ChainVerification { valid: false, records: count, error: Some(format!("missing signature at line {}", index + 1)) });
             };
@@ -135,6 +141,26 @@ async fn previous_hash(path: &Path) -> io::Result<String> {
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok("GENESIS".into()),
         Err(error) => Err(error),
     }
+}
+
+fn json_unescape(value: &str) -> String {
+    let mut output = String::with_capacity(value.len());
+    let mut chars = value.chars();
+    while let Some(ch) = chars.next() {
+        if ch == '\\' {
+            match chars.next() {
+                Some('n') => output.push('\n'),
+                Some('r') => output.push('\r'),
+                Some('\\') => output.push('\\'),
+                Some('"') => output.push('"'),
+                Some(other) => { output.push('\\'); output.push(other); }
+                None => output.push('\\'),
+            }
+        } else {
+            output.push(ch);
+        }
+    }
+    output
 }
 
 fn json_field<'a>(line: &'a str, field: &str) -> Option<String> {
