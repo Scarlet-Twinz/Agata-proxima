@@ -291,7 +291,7 @@ fn json_unescape(value: &str) -> String {
     output
 }
 
-fn json_field<'a>(line: &'a str, field: &str) -> Option<String> {
+fn json_field(line: &str, field: &str) -> Option<String> {
     let marker = format!("\"{field}\":\"");
     let start = line.find(&marker)? + marker.len();
     let end = line[start..].find('"')? + start;
