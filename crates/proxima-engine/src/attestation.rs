@@ -57,7 +57,10 @@ impl AttestationLedger {
         let _guard = self.lock.lock().await;
         let existing_chain = self.verify_chain_unlocked().await?;
         if !existing_chain.valid {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "existing attestation ledger failed verification; refusing to append"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "existing attestation ledger failed verification; refusing to append",
+            ));
         }
         if self.config.signing_key.is_none() {
             return Err(io::Error::new(io::ErrorKind::PermissionDenied, "PROXIMA_ATTESTATION_SIGNING_KEY must be at least 32 bytes before signing attestations"));
@@ -235,7 +238,10 @@ async fn previous_hash(path: &Path) -> io::Result<String> {
     match tokio::fs::read_to_string(path).await {
         Ok(content) => match content.lines().last() {
             Some(line) => json_field(line, "block_hash").ok_or_else(|| {
-                io::Error::new(io::ErrorKind::InvalidData, "last attestation ledger record has no block hash")
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "last attestation ledger record has no block hash",
+                )
             }),
             None => Ok("GENESIS".into()),
         },
