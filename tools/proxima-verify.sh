@@ -30,7 +30,7 @@ fi
 make_token() {
   local tenant="$1"
   local ttl="${2:-3600}"
-  python3 - "$PROXIMA_VERIFY_SIGNING_KEY" "$tenant" <<'PY'
+  python3 - "$PROXIMA_VERIFY_SIGNING_KEY" "$tenant" "$ttl" <<'PY'
 import hashlib
 import hmac
 import sys
