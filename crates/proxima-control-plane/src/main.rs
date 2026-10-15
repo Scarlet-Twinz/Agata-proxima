@@ -3134,7 +3134,7 @@ async fn create_attestation(
         return bad("Attestation security_state is missing circuit_breaker_tripped.");
     };
     let canonical_expected = format!(
-        "attestation_version=1\\norganization_id={}\\nnode_id={}\\nepoch_timestamp_start={}\\nepoch_timestamp_end={}\\ntotal_processed_queries={}\\nauthenticated_tenant_sessions={}\\nblocked_unauthorized_violations={}\\np99_latency_overhead_ms={}\\nforce_rls_active={}\\ntls_termination_enforced={}\\ncircuit_breaker_tripped={}\\nprevious_block_hash={}\\n",
+        "attestation_version=1\norganization_id={}\nnode_id={}\nepoch_timestamp_start={}\nepoch_timestamp_end={}\ntotal_processed_queries={}\nauthenticated_tenant_sessions={}\nblocked_unauthorized_violations={}\np99_latency_overhead_ms={}\nforce_rls_active={}\ntls_termination_enforced={}\ncircuit_breaker_tripped={}\nprevious_block_hash={}\n",
         ctx.organization_id,
         safe_attestation_identifier(&input.node_id),
         input.epoch_timestamp_start,
