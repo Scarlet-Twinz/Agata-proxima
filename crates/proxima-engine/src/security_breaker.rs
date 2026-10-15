@@ -44,10 +44,13 @@ impl BreakerConfig {
     }
 }
 
+const MAX_TRACKED_PEERS: usize = 10_000;
+
 #[derive(Default)]
 struct PeerState {
     violations: VecDeque<Instant>,
     blocked_until: Option<Instant>,
+    last_seen: Option<Instant>,
 }
 
 #[derive(Clone)]
@@ -74,6 +77,7 @@ impl SecurityBreaker {
         let Some(state) = peers.get_mut(&peer) else {
             return false;
         };
+        state.last_seen = Some(Instant::now());
         match state.blocked_until {
             Some(until) if until > Instant::now() => true,
             Some(_) => {
@@ -92,8 +96,23 @@ impl SecurityBreaker {
         let Ok(mut peers) = self.peers.lock() else {
             return true;
         };
-        let state = peers.entry(peer).or_default();
         let now = Instant::now();
+        if !peers.contains_key(&peer) && peers.len() >= MAX_TRACKED_PEERS {
+            peers.retain(|_, state| {
+                state.blocked_until.is_some_and(|until| until > now)
+                    || state.violations.back().is_some_and(|at| now.duration_since(*at) <= self.config.observation_window)
+            });
+            if peers.len() >= MAX_TRACKED_PEERS {
+                if let Some(oldest) = peers.iter()
+                    .min_by_key(|(_, state)| state.last_seen.unwrap_or(now))
+                    .map(|(ip, _)| *ip)
+                {
+                    peers.remove(&oldest);
+                }
+            }
+        }
+        let state = peers.entry(peer).or_default();
+        state.last_seen = Some(now);
         while state
             .violations
             .front()
