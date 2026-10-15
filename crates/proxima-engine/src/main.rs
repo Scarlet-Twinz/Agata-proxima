@@ -170,6 +170,7 @@ async fn main() -> io::Result<()> {
                                 connection_metrics.unauthorized_violation();
                                 if connection_breaker.record_failure(peer.ip()) {
                                     connection_metrics.breaker_trip_event();
+                                    connection_metrics.set_breaker_open(connection_breaker.any_peer_blocked());
                                     error!(peer = %peer, "security breaker opened for peer after repeated malformed or unauthorized handshakes");
                                     let event_peer = peer.ip().to_string();
                                     tokio::spawn(async move {
