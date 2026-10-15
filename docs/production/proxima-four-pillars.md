@@ -30,7 +30,7 @@ Required settings for hourly evidence emission:
 
 The engine begins emitting after its first full hour of runtime; records describe the most recent hour's observed counter deltas. If the signing key or measured p99 value is absent, signed hourly evidence remains disabled rather than fabricating proof. The TLS flag is true only when client TLS is required and a certificate/key pair is configured. These records are evidence, not a claim of SOC 2, HIPAA, or FedRAMP certification.
 
-The control plane validates that the canonical payload matches the structured telemetry/security fields, validates the payload hash and HMAC signature, and checks the expected predecessor before inserting a record. The Attest workspace is organization-scoped and can export a PDF representation of an ingested record. Preserve the signed ledger JSONL as the machine-verifiable source; a PDF is a human-readable report, not a replacement for signature verification.
+Run `cargo run -p proxima-engine --bin proxima-attest-verify` to independently verify the local JSONL chain and signatures. The control plane validates that the canonical payload matches the structured telemetry/security fields, validates the payload hash and HMAC signature, and checks the expected predecessor before inserting a record. The Attest workspace is organization-scoped and can export a PDF representation of an ingested record. Preserve the signed ledger JSONL as the machine-verifiable source; a PDF is a human-readable report, not a replacement for signature verification.
 
 ## Verify and adversarial checks
 
