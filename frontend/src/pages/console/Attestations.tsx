@@ -81,7 +81,7 @@ export function Attestations() {
       "AGATA PROXIMA - SECURITY ATTESTATION REPORT",
       `Generated: ${new Date().toISOString()}`,
       `Workspace attestation records: ${attestations.length}`,
-      "Integrity note: a record is verified only when its signature_valid value is true.",
+      "Integrity note: a record is fully verified only when both its signature and available chain link validate.",
       "",
       ...attestations.flatMap((item, index) => [
         `${index + 1}. Node: ${item.node_id} | Period: ${formatEpoch(item.epoch_timestamp_start)} - ${formatEpoch(item.epoch_timestamp_end)}`,
