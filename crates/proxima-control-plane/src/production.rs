@@ -81,7 +81,7 @@ pub(crate) struct PasswordResetConfirm {
 }
 #[cfg(test)]
 fn expected_plan_amount(plan: &str) -> Option<i64> {
-    match plan { "starter" => Some(14_000), "growth" => Some(49_000), "scale" => Some(119_000), _ => None }
+    match plan { "starter" => Some(149), "growth" => Some(499), "scale" => Some(1199), _ => None }
 }
 fn flutterwave_plan_id(plan: &str) -> Option<String> {
     let key = match plan { "starter" => "FLUTTERWAVE_STARTER_PLAN_ID", "growth" => "FLUTTERWAVE_GROWTH_PLAN_ID", "scale" => "FLUTTERWAVE_SCALE_PLAN_ID", _ => return None };
@@ -587,7 +587,7 @@ pub(crate) async fn require_feature(
 }
 
 pub(crate) async fn plans() -> Response {
-    let catalog=[("free","Free",0_i32,"Evaluation and small proofs of concept"),("starter","Starter",140_i32,"First production SaaS deployments"),("growth","Growth",490_i32,"Multi-tenant production workloads"),("scale","Scale",1190_i32,"Larger fleets and security operations"),("enterprise","Enterprise",0_i32,"Contracted enterprise deployments")];
+    let catalog=[("free","Free",0_i32,"Evaluation and small proofs of concept"),("starter","Starter",149_i32,"First production SaaS deployments"),("growth","Growth",499_i32,"Multi-tenant production workloads"),("scale","Scale",1199_i32,"Larger fleets and security operations"),("enterprise","Enterprise",0_i32,"Contracted enterprise deployments")];
     let plans=catalog.iter().map(|(key,name,monthly_usd,description)|{
         let plan_code=flutterwave_plan_id(key);
         let (nodes,tenants,environments,retention,advanced,fleet,priority,entra,private_deployment)=plan_limits(key);
