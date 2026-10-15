@@ -302,7 +302,7 @@ async fn handle_connection(
 
 
 /// Count PostgreSQL simple-query (Q) and extended Execute (E) frontend
-/// messages while forwarding the original byte stream unchanged.
+/// messages while rejecting malformed or oversized frames before forwarding.
 async fn copy_client_messages<R, W>(
     reader: &mut R,
     writer: &mut W,
@@ -327,6 +327,7 @@ where
             writer.shutdown().await?;
             return Ok(total_bytes);
         }
+        let mut queries_in_chunk = 0u64;
         for byte in &buffer[..read] {
             if payload_remaining > 0 {
                 payload_remaining -= 1;
@@ -348,7 +349,7 @@ where
                     ));
                 }
                 if matches!(frame_type, Some(b'Q' | b'E')) {
-                    metrics.query_processed();
+                    queries_in_chunk = queries_in_chunk.saturating_add(1);
                 }
                 payload_remaining = length - 4;
                 frame_type = None;
@@ -357,6 +358,9 @@ where
         }
         writer.write_all(&buffer[..read]).await?;
         total_bytes = total_bytes.saturating_add(read as u64);
+        for _ in 0..queries_in_chunk {
+            metrics.query_processed();
+        }
     }
 }
 
