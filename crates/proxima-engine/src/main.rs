@@ -4,10 +4,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use proxima_engine::{
+    breaker::PeerCircuitBreaker,
     config::{Config, UpstreamTlsMode},
     dashboard,
     monitor::EngineMetrics,
-    breaker::PeerCircuitBreaker,
     protocol::SSL_REQUEST_CODE,
     session::{establish, BoxedPgStream},
     tenant::TenantTokenVerifier,
@@ -390,7 +390,6 @@ async fn handle_connection(
     );
     Ok((client_bytes, upstream_bytes))
 }
-
 
 enum PendingResponse {
     SimpleQuery(Instant),
