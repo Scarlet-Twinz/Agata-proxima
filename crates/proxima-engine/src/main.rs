@@ -26,6 +26,13 @@ async fn main() -> io::Result<()> {
         .init();
 
     let config = Config::from_env()?;
+    let max_frontend_frame_bytes = std::env::var("PROXIMA_MAX_FRONTEND_FRAME_BYTES")
+        .unwrap_or_else(|_| (64 * 1024 * 1024_u32).to_string())
+        .parse::<u32>()
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, format!("invalid PROXIMA_MAX_FRONTEND_FRAME_BYTES: {error}")))?;
+    if !(4..=1024 * 1024 * 1024_u32).contains(&max_frontend_frame_bytes) {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "PROXIMA_MAX_FRONTEND_FRAME_BYTES must be between 4 and 1073741824"));
+    }
     let metrics = Arc::new(EngineMetrics::default());
     let breaker = Arc::new(PeerCircuitBreaker::from_env()?);
     let force_rls_active = std::env::var("PROXIMA_ATTEST_FORCE_RLS_ACTIVE")
@@ -152,6 +159,7 @@ async fn main() -> io::Result<()> {
                         require_client_tls,
                         upstream_tls_mode,
                         upstream_tls_server_name.as_deref(),
+                        max_frontend_frame_bytes,
                         connection_metrics.clone(),
                     ).await {
                         Ok((client_bytes, upstream_bytes)) => {
@@ -202,6 +210,7 @@ async fn handle_connection(
     require_client_tls: bool,
     upstream_tls_mode: UpstreamTlsMode,
     upstream_tls_server_name: Option<&str>,
+    max_frontend_frame_bytes: u32,
     metrics: Arc<EngineMetrics>,
 ) -> io::Result<(u64, u64)> {
     info!(peer = %peer, "client connected");
@@ -277,6 +286,7 @@ async fn handle_connection(
         &mut client_read,
         &mut upstream_write,
         metrics.clone(),
+        max_frontend_frame_bytes,
     );
     let upstream_to_client = tokio::io::copy(&mut upstream_read, &mut client_write);
     let (client_bytes, upstream_bytes) = tokio::try_join!(client_to_upstream, upstream_to_client)?;
@@ -297,6 +307,7 @@ async fn copy_client_messages<R, W>(
     reader: &mut R,
     writer: &mut W,
     metrics: Arc<EngineMetrics>,
+    max_frame_bytes: u32,
 ) -> io::Result<u64>
 where
     R: tokio::io::AsyncRead + Unpin,
@@ -330,7 +341,7 @@ where
             length_read += 1;
             if length_read == 4 {
                 let length = u32::from_be_bytes(length_bytes);
-                if length < 4 || length > 64 * 1024 * 1024 {
+                if length < 4 || length > max_frame_bytes {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
                         format!("malformed or oversized PostgreSQL frontend frame length: {length}"),
