@@ -137,6 +137,7 @@ async fn main() -> io::Result<()> {
                         require_client_tls,
                         upstream_tls_mode,
                         upstream_tls_server_name.as_deref(),
+                        connection_metrics.clone(),
                     ).await {
                         Ok((client_bytes, upstream_bytes)) => {
                             connection_metrics.connection_finished(false, client_bytes, upstream_bytes);
@@ -180,6 +181,7 @@ async fn handle_connection(
     require_client_tls: bool,
     upstream_tls_mode: UpstreamTlsMode,
     upstream_tls_server_name: Option<&str>,
+    metrics: Arc<EngineMetrics>,
 ) -> io::Result<(u64, u64)> {
     info!(peer = %peer, "client connected");
 
@@ -232,6 +234,10 @@ async fn handle_connection(
     let (mut client, mut upstream, session) =
         establish(client, upstream, verifier, tenant_role_prefix).await?;
 
+    let authenticated_tenant = session.tenant_context.is_some();
+    if authenticated_tenant {
+        metrics.tenant_session_authenticated();
+    }
     info!(
         peer = %peer,
         tenant = session
@@ -244,7 +250,15 @@ async fn handle_connection(
         "PostgreSQL session established"
     );
 
-    let (client_bytes, upstream_bytes) = copy_bidirectional(&mut client, &mut upstream).await?;
+    let (mut client_read, mut client_write) = tokio::io::split(client);
+    let (mut upstream_read, mut upstream_write) = tokio::io::split(upstream);
+    let client_to_upstream = copy_client_messages(
+        &mut client_read,
+        &mut upstream_write,
+        metrics.clone(),
+    );
+    let upstream_to_client = tokio::io::copy(&mut upstream_read, &mut client_write);
+    let (client_bytes, upstream_bytes) = tokio::try_join!(client_to_upstream, upstream_to_client)?;
 
     info!(
         peer = %peer,
@@ -253,6 +267,68 @@ async fn handle_connection(
         "connection closed"
     );
     Ok((client_bytes, upstream_bytes))
+}
+
+
+/// Count PostgreSQL simple-query (Q) and extended Execute (E) frontend
+/// messages while forwarding the original byte stream unchanged.
+async fn copy_client_messages<R, W>(
+    reader: &mut R,
+    writer: &mut W,
+    metrics: Arc<EngineMetrics>,
+) -> io::Result<u64>
+where
+    R: tokio::io::AsyncRead + Unpin,
+    W: tokio::io::AsyncWrite + Unpin,
+{
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut buffer = [0u8; 16 * 1024];
+    let mut frame_type: Option<u8> = None;
+    let mut length_bytes = [0u8; 4];
+    let mut length_read = 0usize;
+    let mut payload_remaining = 0u32;
+    let mut total_bytes = 0u64;
+
+    loop {
+        let read = reader.read(&mut buffer).await?;
+        if read == 0 {
+            writer.shutdown().await?;
+            return Ok(total_bytes);
+        }
+        writer.write_all(&buffer[..read]).await?;
+        total_bytes = total_bytes.saturating_add(read as u64);
+
+        for byte in &buffer[..read] {
+            if payload_remaining > 0 {
+                payload_remaining -= 1;
+                continue;
+            }
+            if frame_type.is_none() {
+                frame_type = Some(*byte);
+                length_read = 0;
+                continue;
+            }
+            length_bytes[length_read] = *byte;
+            length_read += 1;
+            if length_read == 4 {
+                let length = u32::from_be_bytes(length_bytes);
+                if length < 4 || length > 64 * 1024 * 1024 {
+                    // Telemetry parser fails open: it never changes forwarded
+                    // bytes or protocol handling. Reset so subsequent frames
+                    // can still be observed after malformed input.
+                    frame_type = None;
+                    length_read = 0;
+                    continue;
+                }
+                if matches!(frame_type, Some(b'Q' | b'E')) {
+                    metrics.query_processed();
+                }
+                payload_remaining = length - 4;
+                frame_type = None;
+                length_read = 0;
+            }
+        }
+    }
 }
 
 async fn client_wants_tls(client: &TcpStream) -> io::Result<bool> {
