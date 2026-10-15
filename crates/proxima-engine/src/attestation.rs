@@ -94,6 +94,12 @@ impl AttestationLedger {
             if hex_sha256(json_unescape(&payload).as_bytes()) != hash {
                 return Ok(ChainVerification { valid: false, records: count, error: Some(format!("payload hash mismatch at line {}", index + 1)) });
             }
+            if !record_matches_payload(line, &json_unescape(&payload))
+                || json_field(line, "organization_id").as_deref() != Some(safe(&self.config.organization_id).as_str())
+                || json_field(line, "node_id").as_deref() != Some(safe(&self.config.node_id).as_str())
+            {
+                return Ok(ChainVerification { valid: false, records: count, error: Some(format!("record fields mismatch at line {}", index + 1)) });
+            }
             let Some(signature) = json_field(line, "block_hash_signature") else {
                 return Ok(ChainVerification { valid: false, records: count, error: Some(format!("missing signature at line {}", index + 1)) });
             };
@@ -141,6 +147,18 @@ async fn previous_hash(path: &Path) -> io::Result<String> {
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok("GENESIS".into()),
         Err(error) => Err(error),
     }
+}
+
+fn record_matches_payload(record: &str, canonical: &str) -> bool {
+    for line in canonical.lines() {
+        let Some((key, value)) = line.split_once('=') else { return false; };
+        let expected = match key {
+            "organization_id" | "node_id" | "previous_block_hash" => format!("\"{key}\":\"{value}\""),
+            _ => format!("\"{key}\":{value}"),
+        };
+        if !record.contains(&expected) { return false; }
+    }
+    true
 }
 
 fn json_unescape(value: &str) -> String {
