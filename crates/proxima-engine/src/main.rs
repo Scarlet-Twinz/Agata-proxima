@@ -163,6 +163,12 @@ async fn main() -> io::Result<()> {
                                 if connection_breaker.record_failure(peer.ip()) {
                                     connection_metrics.breaker_trip_event();
                                     error!(peer = %peer, "security breaker opened for peer after repeated malformed or unauthorized handshakes");
+                                    let event_peer = peer.ip().to_string();
+                                    tokio::spawn(async move {
+                                        if let Err(error) = proxima_engine::attestation_reporter::report_breaker_event(event_peer.clone()).await {
+                                            error!(%error, peer = %event_peer, "critical security event could not be delivered to the control plane");
+                                        }
+                                    });
                                 }
                             }
                             error!(peer = %peer, error = %err, "connection failed");
