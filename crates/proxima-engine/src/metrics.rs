@@ -1,7 +1,10 @@
 use std::io;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::collections::VecDeque;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Instant;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
@@ -20,6 +23,39 @@ pub struct EngineMetrics {
     database_bytes: AtomicU64,
     session_duration_micros: AtomicU64,
     completed_sessions: AtomicU64,
+    query_latency_count: AtomicU64,
+    query_latency_sum_micros: AtomicU64,
+    query_latency_le_1ms: AtomicU64,
+    query_latency_le_5ms: AtomicU64,
+    query_latency_le_10ms: AtomicU64,
+    query_latency_le_50ms: AtomicU64,
+    query_latency_le_100ms: AtomicU64,
+    query_latency_le_500ms: AtomicU64,
+    query_latency_le_1s: AtomicU64,
+}
+
+#[derive(Default)]
+pub struct QueryLatencyTracker {
+    starts: Mutex<VecDeque<Instant>>,
+}
+
+impl QueryLatencyTracker {
+    pub fn start(&self) {
+        if let Ok(mut starts) = self.starts.lock() {
+            if starts.len() >= 1024 {
+                starts.pop_front();
+            }
+            starts.push_back(Instant::now());
+        }
+    }
+
+    pub fn finish(&self) {
+        let started = self.starts.lock().ok().and_then(|mut starts| starts.pop_front());
+        if let Some(started) = started {
+            let elapsed = started.elapsed().as_micros().min(u64::MAX as u128) as u64;
+            global().observe_query_latency(elapsed);
+        }
+    }
 }
 
 static METRICS: OnceLock<Arc<EngineMetrics>> = OnceLock::new();
@@ -72,6 +108,18 @@ impl EngineMetrics {
     pub fn violation_blocked(&self) {
         self.blocked_violations.fetch_add(1, Ordering::Relaxed);
     }
+    pub fn observe_query_latency(&self, elapsed_micros: u64) {
+        self.query_latency_count.fetch_add(1, Ordering::Relaxed);
+        self.query_latency_sum_micros.fetch_add(elapsed_micros, Ordering::Relaxed);
+        if elapsed_micros <= 1_000 { self.query_latency_le_1ms.fetch_add(1, Ordering::Relaxed); }
+        else if elapsed_micros <= 5_000 { self.query_latency_le_5ms.fetch_add(1, Ordering::Relaxed); }
+        else if elapsed_micros <= 10_000 { self.query_latency_le_10ms.fetch_add(1, Ordering::Relaxed); }
+        else if elapsed_micros <= 50_000 { self.query_latency_le_50ms.fetch_add(1, Ordering::Relaxed); }
+        else if elapsed_micros <= 100_000 { self.query_latency_le_100ms.fetch_add(1, Ordering::Relaxed); }
+        else if elapsed_micros <= 500_000 { self.query_latency_le_500ms.fetch_add(1, Ordering::Relaxed); }
+        else if elapsed_micros <= 1_000_000 { self.query_latency_le_1s.fetch_add(1, Ordering::Relaxed); }
+    }
+
     pub fn session_finished(&self, client_bytes: u64, database_bytes: u64, duration_micros: u64) {
         self.active_connections.fetch_sub(1, Ordering::Relaxed);
         self.client_bytes.fetch_add(client_bytes, Ordering::Relaxed);
@@ -85,7 +133,7 @@ impl EngineMetrics {
     pub fn render_prometheus(&self) -> String {
         let completed = self.completed_sessions.load(Ordering::Relaxed);
         let duration = self.session_duration_micros.load(Ordering::Relaxed);
-        format!(concat!(
+        let mut output = format!(concat!(
             "# HELP proxima_engine_processed_queries_total PostgreSQL simple and extended Execute query messages observed.\n",
             "# TYPE proxima_engine_processed_queries_total counter\n",
             "proxima_engine_processed_queries_total {}\n",
@@ -139,7 +187,28 @@ impl EngineMetrics {
             self.database_bytes.load(Ordering::Relaxed),
             duration as f64 / 1_000_000.0,
             completed
-        )
+        );
+        output.push_str("# HELP proxima_engine_query_roundtrip_latency_seconds PostgreSQL request-to-completion latency observed by the proxy.\\n");
+        output.push_str("# TYPE proxima_engine_query_roundtrip_latency_seconds histogram\\n");
+        let buckets = [
+            ("0.001", self.query_latency_le_1ms.load(Ordering::Relaxed)),
+            ("0.005", self.query_latency_le_5ms.load(Ordering::Relaxed)),
+            ("0.01", self.query_latency_le_10ms.load(Ordering::Relaxed)),
+            ("0.05", self.query_latency_le_50ms.load(Ordering::Relaxed)),
+            ("0.1", self.query_latency_le_100ms.load(Ordering::Relaxed)),
+            ("0.5", self.query_latency_le_500ms.load(Ordering::Relaxed)),
+            ("1", self.query_latency_le_1s.load(Ordering::Relaxed)),
+        ];
+        let mut cumulative = 0u64;
+        for (bound, count) in buckets {
+            cumulative = cumulative.saturating_add(count);
+            output.push_str(&format!("proxima_engine_query_roundtrip_latency_seconds_bucket{{le=\\\"{bound}\\\"}} {cumulative}\\n"));
+        }
+        let count = self.query_latency_count.load(Ordering::Relaxed);
+        output.push_str(&format!("proxima_engine_query_roundtrip_latency_seconds_bucket{{le=\\\"+Inf\\\"}} {count}\\n"));
+        output.push_str(&format!("proxima_engine_query_roundtrip_latency_seconds_sum {:.9}\\n", self.query_latency_sum_micros.load(Ordering::Relaxed) as f64 / 1_000_000.0));
+        output.push_str(&format!("proxima_engine_query_roundtrip_latency_seconds_count {count}\\n"));
+        output
     }
 }
 
