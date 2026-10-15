@@ -214,6 +214,7 @@ async fn main() -> io::Result<()> {
                         upstream_tls_mode,
                         upstream_tls_server_name.as_deref(),
                         max_frontend_frame_bytes,
+                        max_backend_frame_bytes,
                         connection_metrics.clone(),
                     ).await {
                         Ok((client_bytes, upstream_bytes)) => {
