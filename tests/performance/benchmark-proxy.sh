@@ -35,9 +35,9 @@ mkdir -p "$OUTPUT_DIR"
 for target in direct proxied; do
   if [[ "$target" == direct ]]; then url="$DIRECT_DATABASE_URL"; else url="$PROXIMA_DATABASE_URL"; fi
   echo "Warm-up: $target"
-  pgbench "$url" --client="$CLIENTS" --jobs="$JOBS" --time="$WARMUP" --no-vacuum >"$OUTPUT_DIR/$target-warmup.txt" 2>&1
+  pgbench "$url" --select-only --client="$CLIENTS" --jobs="$JOBS" --time="$WARMUP" --no-vacuum >"$OUTPUT_DIR/$target-warmup.txt" 2>&1
   echo "Measured run: $target"
-  pgbench "$url" --client="$CLIENTS" --jobs="$JOBS" --time="$DURATION" --report-per-command --log --log-prefix="$OUTPUT_DIR/$target" --no-vacuum >"$OUTPUT_DIR/$target-measured.txt" 2>&1
+  pgbench "$url" --select-only --client="$CLIENTS" --jobs="$JOBS" --time="$DURATION" --report-per-command --log --log-prefix="$OUTPUT_DIR/$target" --no-vacuum >"$OUTPUT_DIR/$target-measured.txt" 2>&1
   python3 scripts/ops/summarize-pgbench.py "$OUTPUT_DIR" "$target" "$DURATION"
 done
 
