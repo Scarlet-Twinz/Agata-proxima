@@ -6,6 +6,7 @@ use proxima_engine::{
     config::{Config, UpstreamTlsMode},
     dashboard,
     metrics,
+    attestation::{AttestationConfig, AttestationLedger, SecurityState, TelemetrySummary},
     security_breaker::{BreakerConfig, SecurityBreaker},
     protocol::{parse_frontend_frame, SSL_REQUEST_CODE},
     session::{establish, BoxedPgStream},
@@ -59,6 +60,41 @@ async fn main() -> io::Result<()> {
         }
     });
     let breaker = SecurityBreaker::new(BreakerConfig::from_env());
+    let attestation_config = AttestationConfig::from_env();
+    let attestation_signing_ready = attestation_config.signing_key.is_some();
+    let attestation_p99 = std::env::var("PROXIMA_ATTESTATION_P99_OVERHEAD_MS")
+        .ok().and_then(|value| value.parse::<f64>().ok()).filter(|value| value.is_finite() && *value >= 0.0);
+    if attestation_signing_ready && attestation_p99.is_some() {
+        let ledger = Arc::new(AttestationLedger::new(attestation_config.clone()));
+        let engine_config = config.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval_at(
+                tokio::time::Instant::now() + std::time::Duration::from_secs(3600),
+                std::time::Duration::from_secs(3600),
+            );
+            loop {
+                interval.tick().await;
+                let snapshot = metrics::global();
+                let telemetry = TelemetrySummary {
+                    total_processed_queries: snapshot.processed_queries(),
+                    authenticated_tenant_sessions: snapshot.authenticated_tenant_sessions(),
+                    blocked_unauthorized_violations: snapshot.blocked_violations(),
+                    p99_latency_overhead_ms: attestation_p99.unwrap_or(0.0),
+                };
+                let state = SecurityState {
+                    force_rls_active: std::env::var("PROXIMA_ATTESTATION_FORCE_RLS_ACTIVE").ok().as_deref() == Some("true"),
+                    tls_termination_enforced: engine_config.require_client_tls && engine_config.tls_cert_file.is_some(),
+                    circuit_breaker_tripped: snapshot.breaker_has_tripped(),
+                };
+                if let Err(error) = ledger.append_hourly(telemetry, state).await {
+                    error!(%error, "hourly security attestation could not be written");
+                }
+            }
+        });
+        info!("hourly signed attestation ledger enabled");
+    } else {
+        info!("hourly signed attestation ledger disabled until PROXIMA_ATTESTATION_SIGNING_KEY and measured PROXIMA_ATTESTATION_P99_OVERHEAD_MS are configured");
+    }
     let connection_limit = Arc::new(Semaphore::new(config.max_connections));
 
     if config.dashboard_enabled {
