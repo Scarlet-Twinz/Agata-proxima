@@ -3159,7 +3159,7 @@ async fn ingest_security_event(
         _ => {
             return (
                 StatusCode::BAD_REQUEST,
-                "node_id must be a canonical UUID for an enrolled Proxima node.",
+                "node_id must be a canonical UUID for a registered Proxima node.",
             )
                 .into_response();
         }
@@ -3178,7 +3178,7 @@ async fn ingest_security_event(
     if !registered_node {
         return (
             StatusCode::NOT_FOUND,
-            "Node is not enrolled in the authenticated organization.",
+            "Node is not registered to the authenticated organization.",
         )
             .into_response();
     }
@@ -3283,7 +3283,7 @@ async fn ingest_security_attestation(
         _ => {
             return (
                 StatusCode::BAD_REQUEST,
-                "node_id must be a canonical UUID for an enrolled Proxima node.",
+                "node_id must be a canonical UUID for a registered Proxima node.",
             )
                 .into_response();
         }
@@ -3302,7 +3302,7 @@ async fn ingest_security_attestation(
     if !registered_node {
         return (
             StatusCode::NOT_FOUND,
-            "Node is not enrolled in the authenticated organization.",
+            "Node is not registered to the authenticated organization.",
         )
             .into_response();
     }
