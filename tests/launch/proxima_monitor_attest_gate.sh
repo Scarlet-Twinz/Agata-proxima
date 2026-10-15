@@ -15,6 +15,9 @@ grep -q 'prevent_attestation_mutation' crates/proxima-control-plane/migrations/0
 grep -q 'prevent_security_event_mutation' crates/proxima-control-plane/migrations/0024_security_events.sql
 grep -q 'path: "attestations"' frontend/src/app/router.tsx
 grep -q 'Download PDF' frontend/src/pages/console/Attestations.tsx
+grep -q 'Download JSON' frontend/src/pages/console/Attestations.tsx
+test -f crates/proxima-engine/src/bin/proxima-attest-verify.rs
+grep -q 'signature_hex' crates/proxima-control-plane/src/main.rs
 bash -n tests/performance/benchmark-proxy.sh
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
