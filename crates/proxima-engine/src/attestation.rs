@@ -117,12 +117,12 @@ pub fn verify_hash_hmac(block_hash: &str, signature_hex: &str, key: &[u8]) -> bo
 }
 
 fn decode_hex(value: &str) -> Result<Vec<u8>, ()> {
-    if value.len() % 2 != 0 {
+    let (pairs, remainder) = value.as_bytes().as_chunks::<2>();
+    if !remainder.is_empty() {
         return Err(());
     }
-    value
-        .as_bytes()
-        .chunks_exact(2)
+    pairs
+        .iter()
         .map(|pair| {
             let high = (pair[0] as char).to_digit(16).ok_or(())?;
             let low = (pair[1] as char).to_digit(16).ok_or(())?;
