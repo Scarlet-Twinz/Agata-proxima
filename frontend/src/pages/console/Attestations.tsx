@@ -17,6 +17,7 @@ type Attestation = {
   previous_block_hash: string;
   block_hash_signature: string;
   signature_valid: boolean;
+  chain_link_valid: boolean | null;
 };
 
 function pdfEscape(value: string) {
@@ -76,7 +77,7 @@ export function Attestations() {
       "",
       ...attestations.flatMap((item, index) => [
         `${index + 1}. Node: ${item.node_id} | Period: ${item.epoch_timestamp_start} - ${item.epoch_timestamp_end}`,
-        `   Signature verified: ${item.signature_valid ? "YES" : "NO"} | RLS: ${item.force_rls_active === null ? "UNKNOWN" : item.force_rls_active ? "ACTIVE" : "INACTIVE"} | TLS: ${item.tls_termination_enforced === null ? "UNKNOWN" : item.tls_termination_enforced ? "ENFORCED" : "NOT ENFORCED"}`,
+        `   Signature verified: ${item.signature_valid ? "YES" : "NO"} | Chain link: ${item.chain_link_valid === null ? "UNKNOWN (truncated history)" : item.chain_link_valid ? "VALID" : "INVALID"} | RLS: ${item.force_rls_active === null ? "UNKNOWN" : item.force_rls_active ? "ACTIVE" : "INACTIVE"} | TLS: ${item.tls_termination_enforced === null ? "UNKNOWN" : item.tls_termination_enforced ? "ENFORCED" : "NOT ENFORCED"}`,
         `   Queries: ${item.total_processed_queries} | Tenant sessions: ${item.authenticated_tenant_sessions} | Blocked violations: ${item.blocked_unauthorized_violations} | P99 overhead ms: ${item.p99_latency_overhead_ms === null ? "UNKNOWN" : item.p99_latency_overhead_ms}`,
         `   Previous hash: ${item.previous_block_hash || "GENESIS"}`,
         `   Block hash: ${item.block_hash_signature}`,
@@ -110,7 +111,7 @@ export function Attestations() {
         ) : (
           <div className="resource-list">{attestations.map((item) => <article className="resource-list-item" key={item.id}>
             <div><strong>{item.node_id}</strong><p>{item.epoch_timestamp_start} — {item.epoch_timestamp_end}</p><small>Hash: {item.block_hash_signature}</small></div>
-            <span className={item.signature_valid ? "status-pill status-pill--healthy" : "status-pill status-pill--danger"}>{item.signature_valid ? "Verified" : "Invalid signature"}</span>
+            <span className={item.signature_valid ? "status-pill status-pill--healthy" : "status-pill status-pill--danger"}>{item.signature_valid && item.chain_link_valid !== false ? "Verified" : "Integrity issue"}</span>
           </article>)}</div>
         )}
       </section>
