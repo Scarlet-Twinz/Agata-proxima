@@ -54,7 +54,6 @@ const searchNavigation = [
   { label: "Billing invoices", href: "/app/billing/invoices", icon: CreditCard },
   { label: "Tenant isolation", href: "/app/security/tenant-isolation", icon: ShieldCheck },
   { label: "Security events", href: "/app/security/events", icon: FileSearch },
-  { label: "Security attestations", href: "/app/attestations", icon: FileCheck2 },
   { label: "Developer API keys", href: "/app/developer/api-keys", icon: KeyRound },
   { label: "Developer tenant context", href: "/app/developer/tenant-context", icon: KeyRound },
   { label: "Developer webhooks", href: "/app/developer/webhooks", icon: KeyRound },
