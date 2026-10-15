@@ -24,25 +24,37 @@ function pdfEscape(value: string) {
 }
 
 function buildPdf(lines: string[]) {
-  const visible = lines.slice(0, 42);
-  const stream = ["BT", "/F1 10 Tf", "48 754 Td", ...visible.flatMap((line, index) => index ? ["0 -16 Td", `(${pdfEscape(line)}) Tj`] : [`(${pdfEscape(line)}) Tj`]), "ET"].join("\n");
-  const objects = [
-    "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-    `<< /Length ${new TextEncoder().encode(stream).length} >>\nstream\n${stream}\nendstream`,
-  ];
-  let pdf = "%PDF-1.4\n";
+  const pages: string[][] = [];
+  for (let index = 0; index < lines.length; index += 42) pages.push(lines.slice(index, index + 42));
+  if (!pages.length) pages.push(["No attestation evidence available."]);
+  const objects: string[] = [];
+  objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
+  const pageIds = pages.map((_, index) => 4 + index * 2);
+  objects[2] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pages.length} >>`;
+  objects[3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
+  pages.forEach((pageLines, index) => {
+    const pageId = 4 + index * 2;
+    const contentId = pageId + 1;
+    const stream = [
+      "BT",
+      "/F1 9 Tf",
+      "48 754 Td",
+      ...pageLines.flatMap((line, lineIndex) => lineIndex ? ["0 -16 Td", `(${pdfEscape(line)}) Tj`] : [`(${pdfEscape(line)}) Tj`]),
+      "ET",
+    ].join("\\n");
+    objects[pageId] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentId} 0 R >>`;
+    objects[contentId] = `<< /Length ${new TextEncoder().encode(stream).length} >>\\nstream\\n${stream}\\nendstream`;
+  });
+  let pdf = "%PDF-1.4\\n";
   const offsets = [0];
-  for (let i = 0; i < objects.length; i++) {
-    offsets.push(new TextEncoder().encode(pdf).length);
-    pdf += `${i + 1} 0 obj\n${objects[i]}\nendobj\n`;
+  for (let id = 1; id < objects.length; id++) {
+    offsets[id] = new TextEncoder().encode(pdf).length;
+    pdf += `${id} 0 obj\\n${objects[id]}\\nendobj\\n`;
   }
   const xref = new TextEncoder().encode(pdf).length;
-  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  for (const offset of offsets.slice(1)) pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
-  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  pdf += `xref\\n0 ${objects.length}\\n0000000000 65535 f \\n`;
+  for (let id = 1; id < objects.length; id++) pdf += `${String(offsets[id]).padStart(10, "0")} 00000 n \\n`;
+  pdf += `trailer\\n<< /Size ${objects.length} /Root 1 0 R >>\\nstartxref\\n${xref}\\n%%EOF`;
   return new Blob([pdf], { type: "application/pdf" });
 }
 
