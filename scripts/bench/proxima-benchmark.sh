@@ -42,7 +42,7 @@ run_case() {
   if [[ "$label" == "proxima" && -n "${PROXIMA_BENCH_PGOPTIONS:-}" ]]; then
     PGOPTIONS="$PROXIMA_BENCH_PGOPTIONS" "${cmd[@]}" 2>&1 | tee "$OUTPUT_DIR/$label.txt"
   else
-    "${cmd[@]}" 2>&1 | tee "$OUTPUT_DIR/$label.txt"
+    env -u PGOPTIONS "${cmd[@]}" 2>&1 | tee "$OUTPUT_DIR/$label.txt"
   fi
 }
 
@@ -64,7 +64,8 @@ for label in ("direct", "proxima"):
     files = glob.glob(os.path.join(root, f"{label}-tx*"))
     for path in files:
         with open(path, encoding="utf-8", errors="replace") as stream:
-            for row in csv.reader(stream):
+            for line in stream:
+                row = line.split()
                 # pgbench transaction logs record duration in microseconds in column 4.
                 if len(row) >= 4:
                     try:
