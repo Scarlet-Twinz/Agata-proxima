@@ -44,7 +44,7 @@ Do not put real secrets in source control, frontend variables, logs, issue repor
 
 The engine attempts to submit one signed telemetry epoch per hour to `POST /api/v1/attestations`. Each block includes a SHA-256 hash chained to the previous block and an HMAC-SHA256 signature over that hash. The control plane recomputes the block hash, verifies the signature, checks the expected predecessor under a transaction lock, and stores the record in append-only PostgreSQL tables. The attestation ledger and security-event ledger reject updates/deletes.
 
-The Console's **Attestations** page reads only the current authenticated workspace and can export the returned evidence to a multi-page PDF. The report explicitly labels invalid signatures and missing/truncated chain history. It cannot manufacture evidence if no node has submitted it. The API returns at most the latest 500 blocks, so the export is a recent-evidence report, not a complete archival export for arbitrarily long retention periods.
+The Console's **Attestations** page reads only the current authenticated workspace and can export the returned evidence to a multi-page PDF. It also exports the signed JSON evidence bundle for independent verification with `cargo run -p proxima-engine --bin proxima-attest-verify -- evidence.json` after configuring the appropriate active or retained verification key in the environment. The report explicitly labels invalid signatures and missing/truncated chain history. It cannot manufacture evidence if no node has submitted it. The API returns at most the latest 500 blocks, so the export is a recent-evidence report, not a complete archival export for arbitrarily long retention periods.
 
 ### Trust boundaries and limitations
 
