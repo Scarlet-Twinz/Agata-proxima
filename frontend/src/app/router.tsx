@@ -28,6 +28,7 @@ import Signup from "../pages/auth/Signup";
 import Recovery from "../pages/auth/Recovery";
 
 import { Overview } from "../pages/console/Overview";
+import { Attestations } from "../pages/console/Attestations";
 import {
   Audit,
   Billing,
