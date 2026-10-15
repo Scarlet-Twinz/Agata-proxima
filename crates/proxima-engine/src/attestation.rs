@@ -4,12 +4,12 @@
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TelemetrySummary {
     pub total_processed_queries: u64,
     pub authenticated_tenant_sessions: u64,
     pub blocked_unauthorized_violations: u64,
-    pub p99_latency_overhead_ms: u64,
+    pub p99_latency_overhead_ms: Option<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -19,7 +19,7 @@ pub struct SecurityState {
     pub circuit_breaker_tripped: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AttestationBlock {
     pub attestation_version: u32,
     pub organization_id: String,
@@ -53,7 +53,7 @@ impl AttestationBlock {
             self.telemetry_summary.total_processed_queries,
             self.telemetry_summary.authenticated_tenant_sessions,
             self.telemetry_summary.blocked_unauthorized_violations,
-            self.telemetry_summary.p99_latency_overhead_ms,
+            self.telemetry_summary.p99_latency_overhead_ms.unwrap_or(0.0),
             self.security_state.force_rls_active, self.security_state.tls_termination_enforced,
             self.security_state.circuit_breaker_tripped, self.previous_block_hash, "agata-proxima-attestation-v1");
         hex_lower(&Sha256::digest(canonical.as_bytes()))
