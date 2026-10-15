@@ -176,10 +176,16 @@ impl EngineMetrics {
         ));
         output.push_str("# HELP proxima_processed_queries_total PostgreSQL simple Query and extended Execute messages forwarded.\n");
         output.push_str("# TYPE proxima_processed_queries_total counter\n");
-        output.push_str(&format!("proxima_processed_queries_total {}\n", self.total_processed_queries()));
+        output.push_str(&format!(
+            "proxima_processed_queries_total {}\n",
+            self.total_processed_queries()
+        ));
         output.push_str("# HELP proxima_authenticated_tenant_sessions_total Established sessions with verified tenant context.\n");
         output.push_str("# TYPE proxima_authenticated_tenant_sessions_total counter\n");
-        output.push_str(&format!("proxima_authenticated_tenant_sessions_total {}\n", self.authenticated_tenant_sessions()));
+        output.push_str(&format!(
+            "proxima_authenticated_tenant_sessions_total {}\n",
+            self.authenticated_tenant_sessions()
+        ));
         const BUCKETS_MS: [u64; 9] = [1, 5, 10, 25, 50, 100, 250, 500, 1000];
         output.push_str("# HELP proxima_simple_query_latency_seconds End-to-end simple Query round-trip latency through Proxima.\n");
         output.push_str("# TYPE proxima_simple_query_latency_seconds histogram\n");
@@ -271,10 +277,12 @@ mod tests {
         let metrics = EngineMetrics::default();
         metrics.connection_started();
         metrics.connection_finished(false, 12, 20);
+        metrics.observe_simple_query_latency(Duration::from_millis(7));
         let text = metrics.prometheus();
         assert!(text.contains("proxima_active_connections 0"));
         assert!(text.contains("proxima_client_bytes_total 12"));
         assert!(text.contains("proxima_upstream_bytes_total 20"));
+        assert!(text.contains("proxima_simple_query_latency_seconds_bucket{le=\\"10\\"} 1"));
     }
 
     #[test]
