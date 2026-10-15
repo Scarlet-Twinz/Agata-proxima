@@ -4,7 +4,8 @@ use std::sync::Arc;
 use proxima_engine::{
     config::{Config, UpstreamTlsMode},
     dashboard,
-    monitor::EngineMetrics,\n    breaker::PeerCircuitBreaker,
+    monitor::EngineMetrics,
+    breaker::PeerCircuitBreaker,
     protocol::SSL_REQUEST_CODE,
     session::{establish, BoxedPgStream},
     tenant::TenantTokenVerifier,
@@ -25,7 +26,8 @@ async fn main() -> io::Result<()> {
         .init();
 
     let config = Config::from_env()?;
-    let metrics = Arc::new(EngineMetrics::default());\n    let breaker = Arc::new(PeerCircuitBreaker::from_env()?);
+    let metrics = Arc::new(EngineMetrics::default());
+    let breaker = Arc::new(PeerCircuitBreaker::from_env()?);
     let metrics_enabled = std::env::var("PROXIMA_METRICS_ENABLED")
         .map(|value| !matches!(value.trim().to_ascii_lowercase().as_str(), "0" | "false" | "no" | "off"))
         .unwrap_or(true);
@@ -89,6 +91,11 @@ async fn main() -> io::Result<()> {
         tokio::select! {
             accept = listener.accept() => {
                 let (client, peer) = accept?;
+                if breaker.is_blocked(peer.ip()) {
+                    metrics.connection_rejected();
+                    drop(client);
+                    continue;
+                }
                 let permit = match connection_limit.clone().try_acquire_owned() {
                     Ok(permit) => permit,
                     Err(_) => {
@@ -110,7 +117,8 @@ async fn main() -> io::Result<()> {
                 let require_client_tls = config.require_client_tls;
                 let upstream_tls_mode = config.upstream_tls_mode;
                 let upstream_tls_server_name = config.upstream_tls_server_name.clone();
-                let connection_metrics = metrics.clone();\n                let connection_breaker = breaker.clone();
+                let connection_metrics = metrics.clone();
+                let connection_breaker = breaker.clone();
                 connection_metrics.connection_started();
 
                 tokio::spawn(async move {
