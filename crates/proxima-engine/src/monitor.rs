@@ -191,13 +191,13 @@ impl EngineMetrics {
         output.push_str("# TYPE proxima_simple_query_latency_seconds histogram\n");
         for (index, bound) in BUCKETS_MS.iter().enumerate() {
             output.push_str(&format!(
-                "proxima_simple_query_latency_seconds_bucket{{le=\\"{}\\"}} {}\n",
+                "proxima_simple_query_latency_seconds_bucket{{le=\"{}\"}} {}\n",
                 bound,
                 self.simple_query_latency_buckets[index].load(Ordering::Relaxed)
             ));
         }
         output.push_str(&format!(
-            "proxima_simple_query_latency_seconds_bucket{{le=\\"+Inf\\"}} {}\n",
+            "proxima_simple_query_latency_seconds_bucket{{le=\"+Inf\"}} {}\n",
             self.simple_query_latency_count.load(Ordering::Relaxed)
         ));
         output.push_str(&format!(
