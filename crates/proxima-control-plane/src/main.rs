@@ -3186,7 +3186,7 @@ async fn security_attestations(State(s): State<AppState>, headers: HeaderMap) ->
         Ok(rows) => rows,
         Err(error) => return db_error(error),
     };
-    let attestations = rows.iter().map(|row| {
+    let attestations = rows.iter().enumerate().map(|(index, row)| {
         let signature_hex: String = row.get("signature_hex");
         let stored_hash: String = row.get("block_hash");
         let recomputed_hash = calculate_attestation_hash(
@@ -3209,9 +3209,19 @@ async fn security_attestations(State(s): State<AppState>, headers: HeaderMap) ->
             row.get::<String, _>("signing_key_id").as_str(),
             &signature_hex,
         );
+        let node_id: String = row.get("node_id");
+        let previous_hash: String = row.get("previous_block_hash");
+        let older_same_node = rows.iter().skip(index + 1).find(|candidate| {
+            candidate.get::<String, _>("node_id") == node_id
+        });
+        let chain_link_valid: Option<bool> = match older_same_node {
+            Some(older) => Some(previous_hash == older.get::<String, _>("block_hash")),
+            None if previous_hash.is_empty() => Some(true),
+            None => None,
+        };
         json!({
             "id": row.get::<Uuid, _>("id"),
-            "node_id": row.get::<String, _>("node_id"),
+            "node_id": node_id,
             "epoch_timestamp_start": row.get::<i64, _>("epoch_timestamp_start"),
             "epoch_timestamp_end": row.get::<i64, _>("epoch_timestamp_end"),
             "total_processed_queries": row.get::<i64, _>("total_processed_queries"),
@@ -3221,9 +3231,10 @@ async fn security_attestations(State(s): State<AppState>, headers: HeaderMap) ->
             "force_rls_active": row.get::<Option<bool>, _>("force_rls_active"),
             "tls_termination_enforced": row.get::<Option<bool>, _>("tls_termination_enforced"),
             "circuit_breaker_tripped": row.get::<Option<bool>, _>("circuit_breaker_tripped"),
-            "previous_block_hash": row.get::<String, _>("previous_block_hash"),
+            "previous_block_hash": previous_hash,
             "block_hash_signature": row.get::<String, _>("block_hash"),
-            "signature_valid": signature_valid
+            "signature_valid": signature_valid,
+            "chain_link_valid": chain_link_valid
         })
     }).collect::<Vec<_>>();
     Json(json!({"status": if attestations.is_empty() { "awaiting_node_evidence" } else { "available" }, "attestations": attestations})).into_response()
