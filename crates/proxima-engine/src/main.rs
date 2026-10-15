@@ -59,9 +59,9 @@ async fn main() -> io::Result<()> {
                 format!("invalid PROXIMA_METRICS_LISTEN_ADDR: {error}"),
             )
         })?;
-    let metrics_addr_for_task = metrics_addr;
+    let metrics_listener = TcpListener::bind(metrics_addr).await?;
     tokio::spawn(async move {
-        if let Err(error) = metrics::serve(metrics_addr_for_task).await {
+        if let Err(error) = metrics::serve_listener(metrics_listener).await {
             error!(%error, "Prometheus metrics listener stopped");
         }
     });
