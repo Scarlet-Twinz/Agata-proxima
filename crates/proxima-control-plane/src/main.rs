@@ -2428,6 +2428,29 @@ async fn delete_organization(
             .into_response();
     }
 
+    let retained_security_evidence = match sqlx::query_scalar::<_, i64>(
+        "SELECT
+            (SELECT count(*) FROM security_attestation_blocks WHERE organization_id=$1)
+            + (SELECT count(*) FROM security_events WHERE organization_id=$1)",
+    )
+    .bind(organization_id)
+    .fetch_one(&mut *tx)
+    .await
+    {
+        Ok(value) => value,
+        Err(error) => return db_error(error),
+    };
+    if retained_security_evidence > 0 {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({
+                "ok": false,
+                "message": "This organization has append-only security evidence. Self-service deletion is blocked to preserve the audit trail; contact support for a retention-compliant closure."
+            })),
+        )
+            .into_response();
+    }
+
     let replacement_organization = match sqlx::query_scalar::<_, Uuid>(
         "SELECT organization_id FROM memberships
          WHERE user_id=$1 AND organization_id<>$2
