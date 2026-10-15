@@ -259,21 +259,3 @@ fn is_canonical_uuid(value: &str) -> bool {
         })
 }
 
-fn hex_lower(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut output = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        output.push(HEX[(byte >> 4) as usize] as char);
-        output.push(HEX[(byte & 15) as usize] as char);
-    }
-    output
-}
-
-#[cfg(test)]
-mod tests {
-    use super::hex_lower;
-    #[test]
-    fn hex_encoding_is_lowercase_and_stable() {
-        assert_eq!(hex_lower(&[0, 15, 16, 255]), "000f10ff");
-    }
-}
