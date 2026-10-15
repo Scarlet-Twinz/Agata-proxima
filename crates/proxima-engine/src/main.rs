@@ -1,4 +1,5 @@
 use std::io;
+use bytes::{Buf, BytesMut};
 use std::sync::Arc;
 
 use proxima_engine::{
@@ -6,12 +7,12 @@ use proxima_engine::{
     dashboard,
     metrics,
     security_breaker::{BreakerConfig, SecurityBreaker},
-    protocol::SSL_REQUEST_CODE,
+    protocol::{parse_frontend_frame, SSL_REQUEST_CODE},
     session::{establish, BoxedPgStream},
     tenant::TenantTokenVerifier,
     tls::{accept_client_tls, client_acceptor, connect_upstream_tls, upstream_connector},
 };
-use tokio::io::{copy_bidirectional, AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Semaphore;
 use tokio::time::timeout;
@@ -139,6 +140,7 @@ async fn main() -> io::Result<()> {
                         if security_failure {
                             metrics::global().violation_blocked();
                             if breaker.record_violation(peer.ip()) {
+                                metrics::global().breaker_tripped();
                                 error!(peer = %peer, "security breaker tripped for peer; cooldown enforced");
                             }
                         }
@@ -224,7 +226,7 @@ async fn handle_connection(
         establish(client, upstream, verifier, tenant_role_prefix).await?;
 
     let session_started_at = Instant::now();
-    metrics::global().session_started();
+    metrics::global().session_started(session.tenant_context.is_some());
     info!(
         peer = %peer,
         tenant = session
@@ -237,7 +239,12 @@ async fn handle_connection(
         "PostgreSQL session established"
     );
 
-    let copy_result = copy_bidirectional(&mut client, &mut upstream).await;
+    let (mut client_reader, mut client_writer) = tokio::io::split(client);
+    let (mut upstream_reader, mut upstream_writer) = tokio::io::split(upstream);
+    let copy_result = tokio::try_join!(
+        copy_frontend_messages(&mut client_reader, &mut upstream_writer),
+        copy_stream(&mut upstream_reader, &mut client_writer),
+    );
     let duration_micros = session_started_at.elapsed().as_micros().min(u64::MAX as u128) as u64;
     match copy_result {
         Ok((client_bytes, upstream_bytes)) => {
@@ -253,6 +260,64 @@ async fn handle_connection(
         Err(error) => {
             metrics::global().session_finished(0, 0, duration_micros);
             Err(error)
+        }
+    }
+}
+
+async fn copy_stream<R, W>(reader: &mut R, writer: &mut W) -> io::Result<u64>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
+    let mut buffer = [0u8; 16 * 1024];
+    let mut total = 0u64;
+    loop {
+        let size = reader.read(&mut buffer).await?;
+        if size == 0 {
+            writer.shutdown().await?;
+            return Ok(total);
+        }
+        writer.write_all(&buffer[..size]).await?;
+        total = total.saturating_add(size as u64);
+    }
+}
+
+async fn copy_frontend_messages<R, W>(reader: &mut R, writer: &mut W) -> io::Result<u64>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
+    let mut buffer = [0u8; 16 * 1024];
+    let mut pending = BytesMut::with_capacity(8 * 1024);
+    let mut total = 0u64;
+    loop {
+        let size = reader.read(&mut buffer).await?;
+        if size == 0 {
+            writer.shutdown().await?;
+            return Ok(total);
+        }
+        writer.write_all(&buffer[..size]).await?;
+        total = total.saturating_add(size as u64);
+        pending.extend_from_slice(&buffer[..size]);
+        loop {
+            match parse_frontend_frame(&pending) {
+                Ok(Some((message, consumed))) => {
+                    if matches!(message.tag, b'Q' | b'E') {
+                        metrics::global().query_processed();
+                    }
+                    pending.advance(consumed);
+                }
+                Ok(None) => break,
+                Err(_) => {
+                    // The original bytes are forwarded unchanged. Drop only the observer buffer
+                    // on malformed framing so it cannot grow without bound or alter traffic.
+                    pending.clear();
+                    break;
+                }
+            }
+        }
+        if pending.len() > 16 * 1024 * 1024 + 5 {
+            pending.clear();
         }
     }
 }
