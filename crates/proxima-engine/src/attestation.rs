@@ -71,6 +71,14 @@ impl AttestationLedger {
         Ok(digest)
     }
 
+    pub async fn latest_record(&self) -> io::Result<Option<String>> {
+        match tokio::fs::read_to_string(&self.config.ledger_path).await {
+            Ok(content) => Ok(content.lines().last().map(str::to_owned)),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
+
     pub async fn verify_chain(&self) -> io::Result<ChainVerification> {
         let _guard = self.lock.lock().await;
         let content = match tokio::fs::read_to_string(&self.config.ledger_path).await {
