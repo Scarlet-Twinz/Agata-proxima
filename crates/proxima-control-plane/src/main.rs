@@ -3154,6 +3154,34 @@ async fn ingest_security_event(
         )
             .into_response();
     }
+    let node_uuid = match Uuid::parse_str(input.node_id.trim()) {
+        Ok(value) if value.to_string() == input.node_id.trim() => value,
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                "node_id must be a canonical UUID for an enrolled Proxima node.",
+            )
+                .into_response();
+        }
+    };
+    let registered_node = match sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM nodes WHERE id=$1 AND organization_id=$2)",
+    )
+    .bind(node_uuid)
+    .bind(ctx.organization_id)
+    .fetch_one(&s.db)
+    .await
+    {
+        Ok(value) => value,
+        Err(error) => return db_error(error),
+    };
+    if !registered_node {
+        return (
+            StatusCode::NOT_FOUND,
+            "Node is not enrolled in the authenticated organization.",
+        )
+            .into_response();
+    }
     match sqlx::query(
         "INSERT INTO security_events (organization_id,node_id,event_type,severity,source_peer,details,observed_at)
          VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, created_at"
@@ -3247,6 +3275,34 @@ async fn ingest_security_attestation(
         return (
             StatusCode::BAD_REQUEST,
             "Attestation fields are invalid or incomplete.",
+        )
+            .into_response();
+    }
+    let node_uuid = match Uuid::parse_str(input.node_id.trim()) {
+        Ok(value) if value.to_string() == input.node_id.trim() => value,
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                "node_id must be a canonical UUID for an enrolled Proxima node.",
+            )
+                .into_response();
+        }
+    };
+    let registered_node = match sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM nodes WHERE id=$1 AND organization_id=$2)",
+    )
+    .bind(node_uuid)
+    .bind(ctx.organization_id)
+    .fetch_one(&s.db)
+    .await
+    {
+        Ok(value) => value,
+        Err(error) => return db_error(error),
+    };
+    if !registered_node {
+        return (
+            StatusCode::NOT_FOUND,
+            "Node is not enrolled in the authenticated organization.",
         )
             .into_response();
     }
