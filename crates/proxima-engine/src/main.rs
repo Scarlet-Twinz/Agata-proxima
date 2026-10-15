@@ -316,9 +316,6 @@ where
             writer.shutdown().await?;
             return Ok(total_bytes);
         }
-        writer.write_all(&buffer[..read]).await?;
-        total_bytes = total_bytes.saturating_add(read as u64);
-
         for byte in &buffer[..read] {
             if payload_remaining > 0 {
                 payload_remaining -= 1;
@@ -334,12 +331,10 @@ where
             if length_read == 4 {
                 let length = u32::from_be_bytes(length_bytes);
                 if length < 4 || length > 64 * 1024 * 1024 {
-                    // Telemetry parser fails open: it never changes forwarded
-                    // bytes or protocol handling. Reset so subsequent frames
-                    // can still be observed after malformed input.
-                    frame_type = None;
-                    length_read = 0;
-                    continue;
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("malformed or oversized PostgreSQL frontend frame length: {length}"),
+                    ));
                 }
                 if matches!(frame_type, Some(b'Q' | b'E')) {
                     metrics.query_processed();
@@ -349,6 +344,8 @@ where
                 length_read = 0;
             }
         }
+        writer.write_all(&buffer[..read]).await?;
+        total_bytes = total_bytes.saturating_add(read as u64);
     }
 }
 
