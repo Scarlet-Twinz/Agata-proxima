@@ -108,6 +108,11 @@ struct NodeInput {
 }
 
 #[derive(Deserialize)]
+struct NodeEnrollmentInput {
+    enrollment_token: String,
+}
+
+#[derive(Deserialize)]
 struct DeploymentInput {
     organization_id: Uuid,
     node_id: Uuid,
@@ -320,6 +325,9 @@ async fn main() -> Result<()> {
     sqlx::raw_sql(include_str!("../migrations/0023_proxima_attestations.sql"))
         .execute(&db)
         .await?;
+    sqlx::raw_sql(include_str!("../migrations/0024_secure_node_enrollment.sql"))
+        .execute(&db)
+        .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
@@ -493,6 +501,7 @@ async fn main() -> Result<()> {
             post(set_webhook_enabled),
         )
         .route("/api/v1/nodes/{id}/enrollment", post(start_enrollment))
+        .route("/api/v1/node-enrollment", post(exchange_node_enrollment_token))
         .route("/verify-email", get(production::verify_email))
         .route("/reset-password", get(production::reset_password_page))
         .route("/accept-invite", get(production::accept_invite))
@@ -2832,8 +2841,8 @@ async fn create_node(
     let token = format!("{}-{}", Uuid::new_v4(), Uuid::new_v4());
     let token_hash_value = token_hash(&token);
     match sqlx::query(
-        "INSERT INTO nodes(id,organization_id,name,environment,region,status,enrollment_token_hash)
-         VALUES($1,$2,$3,$4,$5,'pending',$6)",
+        "INSERT INTO nodes(id,organization_id,name,environment,region,status,enrollment_token_hash,enrollment_token_expires_at,enrollment_token_consumed_at)
+         VALUES($1,$2,$3,$4,$5,'pending',$6,now()+interval '15 minutes',NULL)",
     )
     .bind(id)
     .bind(ctx.organization_id)
@@ -2858,7 +2867,8 @@ async fn create_node(
             Json(json!({
                 "id":id, "name":input.name, "status":"pending",
                 "enrollment_token":token,
-                "warning":"Store this token once. It is not returned again."
+                "enrollment_token_expires_in_seconds":900,
+                "warning":"Store this token once. It expires in 15 minutes and cannot be used again after enrollment."
             }))
             .into_response()
         }
@@ -2903,6 +2913,66 @@ async fn start_enrollment(
         }
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(e) => db_error(e),
+    }
+}
+
+async fn exchange_node_enrollment_token(
+    State(s): State<AppState>,
+    Json(input): Json<NodeEnrollmentInput>,
+) -> Response {
+    let token = input.enrollment_token.trim();
+    if token.len() < 32 || token.len() > 256 {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    // The enrollment token is a short-lived, single-use bootstrap credential.
+    // Its hash is consumed atomically so concurrent/replayed exchanges cannot
+    // enroll the same node twice.
+    match sqlx::query(
+        "UPDATE nodes
+         SET enrollment_token_hash=NULL,
+             enrollment_token_consumed_at=now(),
+             status='enrolling',
+             updated_at=now()
+         WHERE enrollment_token_hash=$1
+           AND enrollment_token_expires_at > now()
+           AND enrollment_token_consumed_at IS NULL
+           AND status IN ('pending','enrolling')
+         RETURNING id,organization_id,name,environment,region,status",
+    )
+    .bind(token_hash(token))
+    .fetch_optional(&s.db)
+    .await
+    {
+        Ok(Some(row)) => {
+            let node_id = row.get::<Uuid, _>("id");
+            let organization_id = row.get::<Uuid, _>("organization_id");
+            if let Err(error) = sqlx::query(
+                "INSERT INTO audit_events(organization_id,user_id,action,resource_type,resource_id,metadata)
+                 VALUES($1,NULL,'node.enrollment.token_consumed','node',$2,$3)",
+            )
+            .bind(organization_id)
+            .bind(node_id)
+            .bind(json!({"source":"node_enrollment_token"}))
+            .execute(&s.db)
+            .await
+            {
+                error!(%error, %node_id, "failed to record node enrollment audit event");
+            }
+
+            Json(json!({
+                "ok":true,
+                "node_id":node_id,
+                "organization_id":organization_id,
+                "name":row.get::<String,_>("name"),
+                "environment":row.get::<String,_>("environment"),
+                "region":row.get::<String,_>("region"),
+                "status":"enrolling",
+                "enrollment_token_consumed":true
+            })).into_response()
+        }
+        Ok(None) => StatusCode::UNAUTHORIZED.into_response(),
+        Err(error) => db_error(error),
     }
 }
 
