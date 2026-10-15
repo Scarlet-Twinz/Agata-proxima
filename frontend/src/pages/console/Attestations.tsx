@@ -136,7 +136,7 @@ export function Attestations() {
         ) : (
           <div className="resource-list">{attestations.map((item) => <article className="resource-list-item" key={item.id}>
             <div><strong>{item.node_id}</strong><p>{formatEpoch(item.epoch_timestamp_start)} — {formatEpoch(item.epoch_timestamp_end)}</p><small>Hash: {item.block_hash_signature}</small></div>
-            <span className={item.signature_valid ? "status-pill status-pill--healthy" : "status-pill status-pill--danger"}>{!item.signature_valid || item.chain_link_valid === false ? "Integrity issue" : item.chain_link_valid === null ? "Chain history unknown" : "Verified"}</span>
+            <span className={item.signature_valid && item.chain_link_valid === true ? "status-pill status-pill--healthy" : "status-pill status-pill--danger"}>{!item.signature_valid || item.chain_link_valid === false ? "Integrity issue" : item.chain_link_valid === null ? "Chain history unknown" : "Verified"}</span>
           </article>)}</div>
         )}
       </section>
