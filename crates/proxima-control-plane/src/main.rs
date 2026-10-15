@@ -429,7 +429,7 @@ async fn main() -> Result<()> {
             get(verifications).post(create_verification),
         )
         .route("/api/v1/audit", get(audit_events))
-        .route("/api/v1/attestations", get(security_attestations))
+        .route("/api/v1/attestations", get(security_attestations).post(ingest_security_attestation))
         .route("/api/v1/support", get(support).post(create_support))
         .route(
             "/api/v1/public/support-requests",
@@ -3055,6 +3055,107 @@ async fn audit_events(State(s): State<AppState>, headers: HeaderMap) -> Response
     }
 }
 
+
+
+#[derive(Deserialize)]
+struct AttestationIngestInput {
+    node_id: String,
+    epoch_timestamp_start: i64,
+    epoch_timestamp_end: i64,
+    total_processed_queries: i64,
+    authenticated_tenant_sessions: i64,
+    blocked_unauthorized_violations: i64,
+    p99_latency_overhead_ms: Option<f64>,
+    force_rls_active: Option<bool>,
+    tls_termination_enforced: Option<bool>,
+    circuit_breaker_tripped: Option<bool>,
+    previous_block_hash: String,
+    block_hash: String,
+    signature_hex: String,
+    signing_key_id: String,
+}
+
+async fn ingest_security_attestation(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<AttestationIngestInput>,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(value) => value,
+        Err(code) => return code.into_response(),
+    };
+    if !matches!(ctx.role.as_str(), "owner" | "admin") {
+        return (StatusCode::FORBIDDEN, "Only workspace owners and administrators can submit attestation evidence.").into_response();
+    }
+    if input.node_id.trim().is_empty() || input.node_id.len() > 200
+        || input.epoch_timestamp_start < 0 || input.epoch_timestamp_end < input.epoch_timestamp_start
+        || input.total_processed_queries < 0 || input.authenticated_tenant_sessions < 0
+        || input.blocked_unauthorized_violations < 0
+        || input.p99_latency_overhead_ms.is_some_and(|value| !value.is_finite() || value < 0.0)
+        || input.force_rls_active.is_none() || input.tls_termination_enforced.is_none()
+        || input.circuit_breaker_tripped.is_none()
+    {
+        return (StatusCode::BAD_REQUEST, "Attestation fields are invalid or incomplete.").into_response();
+    }
+    let key_id = env::var("PROXIMA_ATTESTATION_SIGNING_KEY_ID").unwrap_or_default();
+    let key = match env::var("PROXIMA_ATTESTATION_SIGNING_KEY") {
+        Ok(value) if value.len() >= 32 && !key_id.is_empty() && key_id == input.signing_key_id => value,
+        _ => return service_unavailable("Attestation signing key and key ID must be configured before evidence can be accepted."),
+    };
+    let previous = sqlx::query_scalar::<_, String>(
+        "SELECT block_hash FROM security_attestation_blocks WHERE organization_id=$1 AND node_id=$2 ORDER BY epoch_timestamp_start DESC LIMIT 1"
+    ).bind(ctx.organization_id).bind(input.node_id.trim()).fetch_optional(&s.db).await;
+    let expected_previous = match previous {
+        Ok(value) => value.unwrap_or_default(),
+        Err(error) => return db_error(error),
+    };
+    if input.previous_block_hash != expected_previous {
+        return (StatusCode::CONFLICT, "Attestation chain predecessor does not match the latest stored block.").into_response();
+    }
+    let canonical = format!(
+        "1\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\nagata-proxima-attestation-v1",
+        ctx.organization_id, input.node_id.trim(), input.epoch_timestamp_start,
+        input.epoch_timestamp_end, input.total_processed_queries,
+        input.authenticated_tenant_sessions, input.blocked_unauthorized_violations,
+        input.p99_latency_overhead_ms.unwrap_or(0.0),
+        input.force_rls_active.unwrap_or(false), input.tls_termination_enforced.unwrap_or(false),
+        input.circuit_breaker_tripped.unwrap_or(false), input.previous_block_hash, "v1"
+    );
+    let computed_hash = hex::encode(Sha256::digest(canonical.as_bytes()));
+    if computed_hash != input.block_hash {
+        return (StatusCode::UNPROCESSABLE_ENTITY, "Attestation block hash does not match canonical evidence.").into_response();
+    }
+    use hmac::{Hmac, Mac};
+    let supplied_signature = match hex::decode(&input.signature_hex) {
+        Ok(value) => value,
+        Err(_) => return (StatusCode::BAD_REQUEST, "signature_hex must be valid hexadecimal.").into_response(),
+    };
+    let mut mac = match Hmac::<Sha256>::new_from_slice(key.as_bytes()) {
+        Ok(value) => value,
+        Err(_) => return service_unavailable("Attestation signing configuration is invalid."),
+    };
+    mac.update(computed_hash.as_bytes());
+    if mac.verify_slice(&supplied_signature).is_err() {
+        return (StatusCode::UNAUTHORIZED, "Attestation signature verification failed.").into_response();
+    }
+    match sqlx::query(
+        "INSERT INTO security_attestation_blocks (
+            organization_id,node_id,epoch_timestamp_start,epoch_timestamp_end,
+            total_processed_queries,authenticated_tenant_sessions,blocked_unauthorized_violations,
+            p99_latency_overhead_ms,force_rls_active,tls_termination_enforced,circuit_breaker_tripped,
+            previous_block_hash,block_hash,signature_algorithm,signing_key_id,signature
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'HMAC-SHA256',$14,$15)"
+    )
+    .bind(ctx.organization_id).bind(input.node_id.trim()).bind(input.epoch_timestamp_start)
+    .bind(input.epoch_timestamp_end).bind(input.total_processed_queries)
+    .bind(input.authenticated_tenant_sessions).bind(input.blocked_unauthorized_violations)
+    .bind(input.p99_latency_overhead_ms).bind(input.force_rls_active).bind(input.tls_termination_enforced)
+    .bind(input.circuit_breaker_tripped).bind(input.previous_block_hash).bind(computed_hash)
+    .bind(input.signing_key_id).bind(supplied_signature).execute(&s.db).await {
+        Ok(_) => (StatusCode::CREATED, Json(json!({"accepted": true, "block_hash": computed_hash}))).into_response(),
+        Err(error) => db_error(error),
+    }
+}
 
 async fn security_attestations(State(s): State<AppState>, headers: HeaderMap) -> Response {
     let ctx = match authenticate(&s, &headers).await {
