@@ -397,18 +397,25 @@ where
             return Ok(total_bytes);
         }
         let mut queries_in_chunk = 0u64;
-        for byte in &buffer[..read] {
+        let mut offset = 0usize;
+        while offset < read {
             if payload_remaining > 0 {
-                payload_remaining -= 1;
+                let available = (read - offset) as u32;
+                let consumed = payload_remaining.min(available);
+                payload_remaining -= consumed;
+                offset += consumed as usize;
                 continue;
             }
             if frame_type.is_none() {
-                frame_type = Some(*byte);
+                frame_type = Some(buffer[offset]);
+                offset += 1;
                 length_read = 0;
                 continue;
             }
-            length_bytes[length_read] = *byte;
+
+            length_bytes[length_read] = buffer[offset];
             length_read += 1;
+            offset += 1;
             if length_read == 4 {
                 let length = u32::from_be_bytes(length_bytes);
                 if length < 4 || length > max_frame_bytes {
@@ -451,7 +458,6 @@ where
         }
     }
 }
-
 
 /// Forward backend messages while observing simple-query round-trip latency.
 /// Frames are streamed and validated without buffering their entire payloads.
