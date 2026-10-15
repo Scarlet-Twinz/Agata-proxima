@@ -3106,7 +3106,8 @@ async fn ingest_security_event(
         || input.event_type != "peer_breaker_opened"
         || input.severity != "critical"
         || input.source_peer.trim().is_empty() || input.source_peer.len() > 128
-        || !input.details.is_object()
+        || input.source_peer.parse::<std::net::IpAddr>().is_err()
+        || !input.details.is_object() || input.details.to_string().len() > 4096
     {
         return (StatusCode::BAD_REQUEST, "Security event fields are invalid.").into_response();
     }
