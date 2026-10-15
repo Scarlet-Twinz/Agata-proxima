@@ -480,44 +480,14 @@ where
             writer.shutdown().await?;
             return Ok(total_bytes);
         }
-        for byte in &buffer[..read] {
-            if let Some(remaining) = payload_remaining.as_mut() {
-                if *remaining > 0 {
-                    *remaining -= 1;
-                    if *remaining == 0 {
-                        if message_tag == Some(b'Z') {
-                            let response = pending_simple_queries
-                                .lock()
-                                .ok()
-                                .and_then(|mut pending| pending.pop_front());
-                            if let Some(PendingResponse::SimpleQuery(started_at)) = response {
-                                metrics.observe_simple_query_latency(started_at.elapsed());
-                            }
-                        }
-                        payload_remaining = None;
-                        message_tag = None;
-                    }
-                }
-                continue;
-            }
-            if message_tag.is_none() {
-                message_tag = Some(*byte);
-                length_read = 0;
-                continue;
-            }
-            length_bytes[length_read] = *byte;
-            length_read += 1;
-            if length_read == 4 {
-                let length = u32::from_be_bytes(length_bytes);
-                if length < 4 || length > max_frame_bytes {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("malformed or oversized PostgreSQL backend frame length: {length}"),
-                    ));
-                }
-                payload_remaining = Some(length - 4);
-                length_read = 0;
-                if length == 4 {
+        let mut offset = 0usize;
+        while offset < read {
+            if let Some(remaining) = payload_remaining {
+                let available = (read - offset) as u32;
+                let consumed = remaining.min(available);
+                let next_remaining = remaining - consumed;
+                offset += consumed as usize;
+                if next_remaining == 0 {
                     if message_tag == Some(b'Z') {
                         let response = pending_simple_queries
                             .lock()
@@ -529,6 +499,46 @@ where
                     }
                     payload_remaining = None;
                     message_tag = None;
+                } else {
+                    payload_remaining = Some(next_remaining);
+                }
+                continue;
+            }
+
+            if message_tag.is_none() {
+                message_tag = Some(buffer[offset]);
+                offset += 1;
+                length_read = 0;
+                continue;
+            }
+
+            length_bytes[length_read] = buffer[offset];
+            length_read += 1;
+            offset += 1;
+            if length_read == 4 {
+                let length = u32::from_be_bytes(length_bytes);
+                if length < 4 || length > max_frame_bytes {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!(
+                            "malformed or oversized PostgreSQL backend frame length: {length}"
+                        ),
+                    ));
+                }
+                length_read = 0;
+                if length == 4 {
+                    if message_tag == Some(b'Z') {
+                        let response = pending_simple_queries
+                            .lock()
+                            .ok()
+                            .and_then(|mut pending| pending.pop_front());
+                        if let Some(PendingResponse::SimpleQuery(started_at)) = response {
+                            metrics.observe_simple_query_latency(started_at.elapsed());
+                        }
+                    }
+                    message_tag = None;
+                } else {
+                    payload_remaining = Some(length - 4);
                 }
             }
         }
