@@ -30,7 +30,7 @@ The billing portal endpoint currently returns `501 Not Implemented` with a suppo
 
 ## Currency acceptance blocker
 
-The current verification code expects the provider transaction currency to be `USD`, while the React billing page copy currently says the hosted checkout charges a configured `NGN` plan. This discrepancy must be resolved against the actual Flutterwave live checkout response before paid checkout is enabled. Do not assume that the displayed price, provider charge currency, and settlement currency are interchangeable.
+The backend expects the provider transaction currency to be `USD` and verifies the exact configured amount. Confirm that the actual Flutterwave live checkout returns USD and the expected amount before paid checkout is enabled. If the account or hosted checkout returns NGN instead, stop and reconcile the provider configuration; do not assume displayed price, charge currency, and settlement currency are interchangeable.
 
 ## Acceptance checklist
 
