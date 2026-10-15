@@ -31,7 +31,11 @@ pub fn global() -> Arc<EngineMetrics> {
 impl EngineMetrics {
     pub fn connection_accepted(&self) { self.accepted_connections.fetch_add(1, Ordering::Relaxed); }
     pub fn connection_rejected(&self) { self.rejected_connections.fetch_add(1, Ordering::Relaxed); }
-    pub fn session_started(&self, authenticated_tenant: bool) { self.active_connections.fetch_add(1, Ordering::Relaxed); self.established_sessions.fetch_add(1, Ordering::Relaxed); if authenticated_tenant { self.authenticated_tenant_sessions.fetch_add(1, Ordering::Relaxed); } }
+    pub fn session_started(&self, authenticated_tenant: bool) {
+        self.active_connections.fetch_add(1, Ordering::Relaxed);
+        self.established_sessions.fetch_add(1, Ordering::Relaxed);
+        if authenticated_tenant { self.authenticated_tenant_sessions.fetch_add(1, Ordering::Relaxed); }
+    }
     pub fn query_processed(&self) { self.processed_queries.fetch_add(1, Ordering::Relaxed); }
     pub fn breaker_tripped(&self) { self.breaker_trips.fetch_add(1, Ordering::Relaxed); }
     pub fn processed_queries(&self) -> u64 { self.processed_queries.load(Ordering::Relaxed) }
@@ -51,11 +55,47 @@ impl EngineMetrics {
     pub fn render_prometheus(&self) -> String {
         let completed = self.completed_sessions.load(Ordering::Relaxed);
         let duration = self.session_duration_micros.load(Ordering::Relaxed);
-        format!(
-            "# HELP proxima_engine_processed_queries_total PostgreSQL simple and extended Execute query messages observed.\n# TYPE proxima_engine_processed_queries_total counter\nproxima_engine_processed_queries_total {}\n\\
-# HELP proxima_engine_authenticated_tenant_sessions_total Tenant-token authenticated sessions established.\n# TYPE proxima_engine_authenticated_tenant_sessions_total counter\nproxima_engine_authenticated_tenant_sessions_total {}\n\\
-# HELP proxima_engine_security_breaker_trips_total Number of peer-scoped security breaker trips.\n# TYPE proxima_engine_security_breaker_trips_total counter\nproxima_engine_security_breaker_trips_total {}\n\\
-# HELP proxima_engine_active_connections Active PostgreSQL sessions.\n# TYPE proxima_engine_active_connections gauge\nproxima_engine_active_connections {}\n# HELP proxima_engine_connections_accepted Total TCP connections accepted.\n# TYPE proxima_engine_connections_accepted counter\nproxima_engine_connections_accepted_total {}\n# HELP proxima_engine_connections_rejected Total connections rejected by capacity or breaker policy.\n# TYPE proxima_engine_connections_rejected counter\nproxima_engine_connections_rejected_total {}\n# HELP proxima_engine_sessions_established Total PostgreSQL sessions established.\n# TYPE proxima_engine_sessions_established counter\nproxima_engine_sessions_established_total {}\n# HELP proxima_engine_sessions_failed Total failed session handshakes.\n# TYPE proxima_engine_sessions_failed counter\nproxima_engine_sessions_failed_total {}\n# HELP proxima_engine_security_violations_blocked Total protocol or tenant-security violations blocked.\n# TYPE proxima_engine_security_violations_blocked counter\nproxima_engine_security_violations_blocked_total {}\n# HELP proxima_engine_client_bytes_total Bytes copied from clients to PostgreSQL.\n# TYPE proxima_engine_client_bytes_total counter\nproxima_engine_client_bytes_total {}\n# HELP proxima_engine_database_bytes_total Bytes copied from PostgreSQL to clients.\n# TYPE proxima_engine_database_bytes_total counter\nproxima_engine_database_bytes_total {}\n# HELP proxima_engine_session_duration_seconds_total Cumulative duration of completed sessions.\n# TYPE proxima_engine_session_duration_seconds_total counter\nproxima_engine_session_duration_seconds_total {:.6}\n# HELP proxima_engine_sessions_completed Total completed PostgreSQL sessions.\n# TYPE proxima_engine_sessions_completed counter\nproxima_engine_sessions_completed_total {}\n",
+        format!(concat!(
+            "# HELP proxima_engine_processed_queries_total PostgreSQL simple and extended Execute query messages observed.\n",
+            "# TYPE proxima_engine_processed_queries_total counter\n",
+            "proxima_engine_processed_queries_total {}\n",
+            "# HELP proxima_engine_authenticated_tenant_sessions_total Tenant-token authenticated sessions established.\n",
+            "# TYPE proxima_engine_authenticated_tenant_sessions_total counter\n",
+            "proxima_engine_authenticated_tenant_sessions_total {}\n",
+            "# HELP proxima_engine_security_breaker_trips_total Number of peer-scoped security breaker trips.\n",
+            "# TYPE proxima_engine_security_breaker_trips_total counter\n",
+            "proxima_engine_security_breaker_trips_total {}\n",
+            "# HELP proxima_engine_active_connections Active PostgreSQL sessions.\n",
+            "# TYPE proxima_engine_active_connections gauge\n",
+            "proxima_engine_active_connections {}\n",
+            "# HELP proxima_engine_connections_accepted Total TCP connections accepted.\n",
+            "# TYPE proxima_engine_connections_accepted counter\n",
+            "proxima_engine_connections_accepted_total {}\n",
+            "# HELP proxima_engine_connections_rejected Total connections rejected by capacity or breaker policy.\n",
+            "# TYPE proxima_engine_connections_rejected counter\n",
+            "proxima_engine_connections_rejected_total {}\n",
+            "# HELP proxima_engine_sessions_established Total PostgreSQL sessions established.\n",
+            "# TYPE proxima_engine_sessions_established counter\n",
+            "proxima_engine_sessions_established_total {}\n",
+            "# HELP proxima_engine_sessions_failed Total failed session handshakes.\n",
+            "# TYPE proxima_engine_sessions_failed counter\n",
+            "proxima_engine_sessions_failed_total {}\n",
+            "# HELP proxima_engine_security_violations_blocked Total protocol or tenant-security violations blocked.\n",
+            "# TYPE proxima_engine_security_violations_blocked counter\n",
+            "proxima_engine_security_violations_blocked_total {}\n",
+            "# HELP proxima_engine_client_bytes_total Bytes copied from clients to PostgreSQL.\n",
+            "# TYPE proxima_engine_client_bytes_total counter\n",
+            "proxima_engine_client_bytes_total {}\n",
+            "# HELP proxima_engine_database_bytes_total Bytes copied from PostgreSQL to clients.\n",
+            "# TYPE proxima_engine_database_bytes_total counter\n",
+            "proxima_engine_database_bytes_total {}\n",
+            "# HELP proxima_engine_session_duration_seconds_total Cumulative duration of completed sessions.\n",
+            "# TYPE proxima_engine_session_duration_seconds_total counter\n",
+            "proxima_engine_session_duration_seconds_total {:.6}\n",
+            "# HELP proxima_engine_sessions_completed Total completed PostgreSQL sessions.\n",
+            "# TYPE proxima_engine_sessions_completed counter\n",
+            "proxima_engine_sessions_completed_total {}\n"
+        ),
             self.processed_queries.load(Ordering::Relaxed),
             self.authenticated_tenant_sessions.load(Ordering::Relaxed),
             self.breaker_trips.load(Ordering::Relaxed),
@@ -105,13 +145,14 @@ mod tests {
     fn metrics_exposition_is_prometheus_compatible_and_tracks_sessions() {
         let metrics = EngineMetrics::default();
         metrics.connection_accepted();
-        metrics.session_started();
+        metrics.session_started(true);
         metrics.session_finished(100, 80, 2_500);
         let output = metrics.render_prometheus();
-        assert!(output.contains("proxima_engine_active_connections 0"));
-        assert!(output.contains("proxima_engine_connections_accepted_total 1"));
-        assert!(output.contains("proxima_engine_client_bytes_total 100"));
-        assert!(output.contains("proxima_engine_database_bytes_total 80"));
-        assert!(output.contains("proxima_engine_session_duration_seconds_total 0.002500"));
+        assert!(output.contains("proxima_engine_active_connections 0\n"));
+        assert!(output.contains("proxima_engine_connections_accepted_total 1\n"));
+        assert!(output.contains("proxima_engine_client_bytes_total 100\n"));
+        assert!(output.contains("proxima_engine_database_bytes_total 80\n"));
+        assert!(output.contains("proxima_engine_session_duration_seconds_total 0.002500\n"));
+        assert!(output.contains("proxima_engine_authenticated_tenant_sessions_total 1\n"));
     }
 }
