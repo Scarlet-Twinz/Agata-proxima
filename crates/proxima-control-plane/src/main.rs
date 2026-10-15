@@ -3038,10 +3038,32 @@ async fn attestations(State(s): State<AppState>, headers: HeaderMap) -> Response
         "SELECT id,node_id,attestation_version,epoch_timestamp_start,epoch_timestamp_end,
          telemetry_summary,security_state,previous_block_hash,canonical_payload,block_hash,
          block_hash_signature,created_at
-         FROM proxima_attestations WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 250"
+         FROM proxima_attestations WHERE organization_id=$1 ORDER BY node_id ASC, epoch_timestamp_end ASC, created_at ASC LIMIT 1000"
     ).bind(ctx.organization_id).fetch_all(&s.db).await {
         Ok(rows) => {
-            let records = rows.iter().map(|r| json!({
+            let signing_key = env::var("PROXIMA_ATTESTATION_SIGNING_KEY").ok().filter(|key| key.len() >= 32).map(String::into_bytes);
+            let mut previous_by_node = std::collections::HashMap::<String, String>::new();
+            let mut verified_by_id = std::collections::HashMap::<Uuid, bool>::new();
+            for row in &rows {
+                let id = row.get::<Uuid,_>("id");
+                let node_id = row.get::<String,_>("node_id");
+                let previous = row.get::<String,_>("previous_block_hash");
+                let payload = row.get::<String,_>("canonical_payload");
+                let hash = row.get::<String,_>("block_hash");
+                let signature = row.get::<String,_>("block_hash_signature");
+                let expected_previous = previous_by_node.entry(node_id).or_insert_with(|| "GENESIS".to_string());
+                let mut valid = previous == *expected_previous && format!("{:x}", Sha256::digest(payload.as_bytes())) == hash;
+                if let Some(key) = signing_key.as_deref() {
+                    if let Ok(mut mac) = hmac::Hmac::<Sha256>::new_from_slice(key) {
+                        mac.update(hash.as_bytes());
+                        valid &= hex::encode(mac.finalize().into_bytes()) == signature;
+                    } else { valid = false; }
+                } else { valid = false; }
+                verified_by_id.insert(id, valid);
+                *expected_previous = hash;
+            }
+            let chain_verified = !rows.is_empty() && verified_by_id.values().all(|valid| *valid);
+            let records = rows.iter().rev().map(|r| json!({
                 "id":r.get::<Uuid,_>("id"),
                 "node_id":r.get::<String,_>("node_id"),
                 "attestation_version":r.get::<i32,_>("attestation_version"),
@@ -3053,9 +3075,11 @@ async fn attestations(State(s): State<AppState>, headers: HeaderMap) -> Response
                 "canonical_payload":r.get::<String,_>("canonical_payload"),
                 "block_hash":r.get::<String,_>("block_hash"),
                 "block_hash_signature":r.get::<String,_>("block_hash_signature"),
+                "verified":verified_by_id.get(&r.get::<Uuid,_>("id")).copied().unwrap_or(false),
                 "created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at")
             })).collect::<Vec<_>>();
-            Json(json!({"attestations":records,"count":records.len()})).into_response()
+            let count = records.len();
+            Json(json!({"attestations":records,"count":count,"chain_verified":chain_verified})).into_response()
         }
         Err(e) => db_error(e),
     }
