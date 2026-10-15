@@ -13,6 +13,7 @@ type Attestation = {
   previous_block_hash: string;
   block_hash: string;
   block_hash_signature: string;
+  verified: boolean;
   created_at: string;
 };
 
@@ -86,13 +87,15 @@ export function Attestations() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [chainVerified, setChainVerified] = useState(false);
 
   async function load() {
     setRefreshing(true);
     setError("");
     try {
-      const result = await api.get<{ attestations: Attestation[] }>("/api/v1/attestations");
+      const result = await api.get<{ attestations: Attestation[]; chain_verified?: boolean }>("/api/v1/attestations");
       setRecords(result.attestations ?? []);
+      setChainVerified(result.chain_verified === true);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to load attestation evidence.");
     } finally {
@@ -125,7 +128,7 @@ export function Attestations() {
       <section className="overview-metrics" aria-label="Attestation summary">
         <div className="overview-metric"><span className="overview-metric-icon"><FileCheck2 size={18} /></span><span className="overview-metric-copy"><span className="overview-metric-label">Ledger records</span><strong>{loading ? "—" : records.length}</strong><small>Organization-scoped evidence</small></span></div>
         <div className="overview-metric"><span className="overview-metric-icon"><ShieldCheck size={18} /></span><span className="overview-metric-copy"><span className="overview-metric-label">Latest node</span><strong>{loading ? "—" : latest?.node_id ?? "No records"}</strong><small>Most recent attestation</small></span></div>
-        <div className="overview-metric"><span className="overview-metric-icon"><FileCheck2 size={18} /></span><span className="overview-metric-copy"><span className="overview-metric-label">Evidence format</span><strong>Signed JSONL</strong><small>SHA-256 chain + HMAC signature</small></span></div>
+        <div className="overview-metric"><span className="overview-metric-icon"><FileCheck2 size={18} /></span><span className="overview-metric-copy"><span className="overview-metric-label">Chain verification</span><strong>{loading ? "—" : records.length === 0 ? "No evidence" : chainVerified ? "Verified" : "Needs review"}</strong><small>SHA-256 chain + HMAC signature</small></span></div>
       </section>
 
       <section className="surface">
@@ -135,7 +138,7 @@ export function Attestations() {
           : <div className="attestation-list">{records.map((record) => (
             <article className="attestation-row" key={record.id}>
               <div className="attestation-row-main">
-                <span className="attestation-status"><ShieldCheck size={15} /> Signed record</span>
+                <span className={record.verified ? "attestation-status" : "attestation-status attestation-status--warning"}><ShieldCheck size={15} /> {record.verified ? "Signature verified" : "Verification failed"}</span>
                 <h3>{record.node_id}</h3>
                 <p>Window {record.epoch_timestamp_start}–{record.epoch_timestamp_end} · {new Date(record.created_at).toLocaleString()}</p>
                 <code>{record.block_hash}</code>
