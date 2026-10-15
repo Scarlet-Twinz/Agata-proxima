@@ -89,7 +89,7 @@ export function Attestations() {
     anchor.href = url;
     anchor.download = `agata-proxima-attestation-${new Date().toISOString().slice(0, 10)}.pdf`;
     anchor.click();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   return (
@@ -111,7 +111,7 @@ export function Attestations() {
         ) : (
           <div className="resource-list">{attestations.map((item) => <article className="resource-list-item" key={item.id}>
             <div><strong>{item.node_id}</strong><p>{item.epoch_timestamp_start} — {item.epoch_timestamp_end}</p><small>Hash: {item.block_hash_signature}</small></div>
-            <span className={item.signature_valid ? "status-pill status-pill--healthy" : "status-pill status-pill--danger"}>{item.signature_valid && item.chain_link_valid !== false ? "Verified" : "Integrity issue"}</span>
+            <span className={item.signature_valid ? "status-pill status-pill--healthy" : "status-pill status-pill--danger"}>{!item.signature_valid || item.chain_link_valid === false ? "Integrity issue" : item.chain_link_valid === null ? "Chain history unknown" : "Verified"}</span>
           </article>)}</div>
         )}
       </section>
