@@ -87,40 +87,24 @@ jobs:
 
       - name: Production environment contract
         run: |
-          grep -q "AGATA_PUBLIC_BASE_URL" .env.example
-          grep -q "PADDLE_STARTER_PRICE_ID" .env.example
-          grep -q "PADDLE_GROWTH_PRICE_ID" .env.example
-          grep -q "PADDLE_SCALE_PRICE_ID" .env.example
-          grep -q "PADDLE_API_KEY" .env.example
-          grep -q "PADDLE_CLIENT_TOKEN" .env.example
-          grep -q "PADDLE_WEBHOOK_SECRET" .env.example
-          grep -q "PADDLE_ENVIRONMENT=production" .env.example
-          ! grep -q "PADDLE_ENVIRONMENT=sandbox" .env.example
-          ! grep -q "PAYSTACK_" .env.example
-          ! grep -q "STRIPE_" .env.example
-          grep -q "RESEND_API_KEY" .env.example
-          grep -q "PROXIMA_OIDC_CLIENT_ID" .env.example
-          grep -q "PROXIMA_OIDC_CLIENT_SECRET" .env.example
-          grep -q "^RESEND_FROM_EMAIL=$" .env.example
-          grep -q "RESEND_FROM_NO_REPLY_EMAIL" .env.example
-          grep -q "RESEND_FROM_SUPPORT_EMAIL" .env.example
-          grep -q "RESEND_FROM_SECURITY_EMAIL" .env.example
-          grep -q "RESEND_FROM_BILLING_EMAIL" .env.example
-          grep -q "RESEND_FROM_NOTIFICATIONS_EMAIL" .env.example
-          grep -q "AGATA_SUPPORT_INBOX_EMAIL=" .env.example
-          grep -q "RESEND_TEMPLATE_VERIFY_EMAIL_ID" .env.example
-          grep -q "RESEND_TEMPLATE_PASSWORD_RESET_ID" .env.example
-          grep -q "RESEND_TEMPLATE_ORGANIZATION_INVITATION_ID" .env.example
-          grep -q "RESEND_TEMPLATE_NEW_LOGIN_ALERT_ID" .env.example
-          grep -q "RESEND_TEMPLATE_SUPPORT_REQUEST_RECEIVED_ID" .env.example
-          grep -q "RESEND_TEMPLATE_BILLING_UPDATE_ID" .env.example
-          ! grep -q "STRIPE_" .env.example
+          production="crates/proxima-control-plane/src/production.rs"
+          main="crates/proxima-control-plane/src/main.rs"
+          for key in AGATA_PUBLIC_BASE_URL FLUTTERWAVE_SECRET_KEY FLUTTERWAVE_WEBHOOK_SECRET_HASH FLUTTERWAVE_ENVIRONMENT FLUTTERWAVE_STARTER_PLAN_ID FLUTTERWAVE_GROWTH_PLAN_ID FLUTTERWAVE_SCALE_PLAN_ID FLUTTERWAVE_STARTER_AMOUNT_USD FLUTTERWAVE_GROWTH_AMOUNT_USD FLUTTERWAVE_SCALE_AMOUNT_USD RESEND_API_KEY PROXIMA_OIDC_CLIENT_ID PROXIMA_OIDC_CLIENT_SECRET RESEND_FROM_NO_REPLY_EMAIL RESEND_FROM_SUPPORT_EMAIL RESEND_FROM_SECURITY_EMAIL RESEND_FROM_BILLING_EMAIL RESEND_FROM_NOTIFICATIONS_EMAIL AGATA_SUPPORT_INBOX_EMAIL RESEND_TEMPLATE_VERIFY_EMAIL_ID RESEND_TEMPLATE_PASSWORD_RESET_ID RESEND_TEMPLATE_ORGANIZATION_INVITATION_ID RESEND_TEMPLATE_NEW_LOGIN_ALERT_ID RESEND_TEMPLATE_SUPPORT_REQUEST_RECEIVED_ID RESEND_TEMPLATE_BILLING_UPDATE_ID; do
+            grep -q "$key" "$production" "$main" || { echo "Missing runtime configuration contract: $key" >&2; exit 1; }
+          done
+          grep -q 'fn flutterwave_enabled()' "$production"
+          grep -q 'configured_flutterwave_plans_unique' "$production"
+          grep -q 'configured_flutterwave_amounts' "$production"
+          ! grep -Eq 'PADDLE_(API_KEY|CLIENT_TOKEN|WEBHOOK_SECRET|STARTER_PRICE_ID|GROWTH_PRICE_ID|SCALE_PRICE_ID)' "$production"
+          ! grep -Eq 'STRIPE_|PAYSTACK_|LEMON_SQUEEZY_' "$production"
+          test ! -e .env.example
+          test ! -e crates/proxima-control-plane/.env.example
 
       - name: Control plane operational scripts
         run: |
           bash -n tests/control-plane/api_smoke.sh
           python scripts/ops/check-doc-links.py
-          ! grep -R -n "agata-proxima\\.com" README.md .env.example crates/proxima-control-plane/.env.example docs frontend/vercel.json
+          ! grep -R -n "agata-proxima\\.com" README.md docs frontend/vercel.json
           bash -n scripts/proxima-platform.sh
           bash -n scripts/ops/check-control-plane.sh scripts/ops/backup-control-plane.sh
           test -f docs/usage.md
@@ -128,8 +112,8 @@ jobs:
           ! grep -qi 'Stripe webhooks' docs/developer-guide.md
           bash tests/launch/frontend_route_contract.sh
 
-      - name: Paddle Billing integration
-        run: bash tests/launch/paddle_billing_gate.sh
+      - name: Flutterwave billing integration
+        run: bash tests/launch/flutterwave_billing_gate.sh
 
       - name: Phase 3.23 transactional email
         run: bash tests/launch/phase3_23_resend_email_gate.sh

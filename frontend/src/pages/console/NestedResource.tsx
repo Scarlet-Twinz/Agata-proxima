@@ -447,7 +447,7 @@ function BillingPlans() {
 
   return <div className="resource-page billing-plans-page">
     <div className="page-heading">
-      <div><span className="eyebrow">BILLING · FLUTTERWAVE</span><h1>Plans and billing</h1><p>Choose a monthly plan. USD prices are displayed; Flutterwave checkout charges the configured NGN monthly plan and access is enabled only after server verification.</p></div>
+      <div><span className="eyebrow">BILLING · FLUTTERWAVE</span><h1>Plans and billing</h1><p>Choose a monthly plan. USD prices are displayed and the configured USD monthly amount is verified server-side before access is enabled.</p></div>
       {account?.subscription_id && <button type="button" className="console-refresh-button" onClick={() => void openPortal()} disabled={busyPlan !== ""}>{busyPlan === "portal" ? "Opening portal…" : "Manage subscription (support)"}</button>}
     </div>
     {account && <section className="surface billing-current-plan">
