@@ -5,8 +5,8 @@ import { api } from "../../api/client";
 type Attestation = {
   id: string;
   node_id: string;
-  epoch_timestamp_start: string;
-  epoch_timestamp_end: string;
+  epoch_timestamp_start: number;
+  epoch_timestamp_end: number;
   total_processed_queries: number;
   authenticated_tenant_sessions: number;
   blocked_unauthorized_violations: number;
@@ -20,13 +20,36 @@ type Attestation = {
   chain_link_valid: boolean | null;
 };
 
+function formatEpoch(value: number) {
+  if (!Number.isSafeInteger(value) || value < 0 || value > 8_640_000_000_000) {
+    return "INVALID EPOCH";
+  }
+  const date = new Date(value * 1000);
+  return Number.isNaN(date.getTime()) ? "INVALID EPOCH" : date.toISOString();
+}
+
 function pdfEscape(value: string) {
   return value.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)").replace(/[^\x20-\x7E]/g, "?");
 }
 
 function buildPdf(lines: string[]) {
+  const wrappedLines = lines.flatMap((line) => {
+    if (!line) return [""];
+    const chunks: string[] = [];
+    let remaining = line;
+    while (remaining.length > 96) {
+      let splitAt = remaining.lastIndexOf(" ", 96);
+      if (splitAt < 1) splitAt = 96;
+      chunks.push(remaining.slice(0, splitAt));
+      remaining = remaining.slice(splitAt).trimStart();
+    }
+    chunks.push(remaining);
+    return chunks;
+  });
   const pages: string[][] = [];
-  for (let index = 0; index < lines.length; index += 42) pages.push(lines.slice(index, index + 42));
+  for (let index = 0; index < wrappedLines.length; index += 42) {
+    pages.push(wrappedLines.slice(index, index + 42));
+  }
   if (!pages.length) pages.push(["No attestation evidence available."]);
   const objects: string[] = [];
   objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
@@ -73,16 +96,18 @@ export function Attestations() {
       "AGATA PROXIMA - SECURITY ATTESTATION REPORT",
       `Generated: ${new Date().toISOString()}`,
       `Workspace attestation records: ${attestations.length}`,
-      "Integrity note: a record is verified only when its signature_valid value is true.",
+      "Integrity note: a record is fully verified only when both its signature and available chain link validate.",
       "",
-      ...attestations.flatMap((item, index) => [
-        `${index + 1}. Node: ${item.node_id} | Period: ${item.epoch_timestamp_start} - ${item.epoch_timestamp_end}`,
-        `   Signature verified: ${item.signature_valid ? "YES" : "NO"} | Chain link: ${item.chain_link_valid === null ? "UNKNOWN (truncated history)" : item.chain_link_valid ? "VALID" : "INVALID"} | RLS: ${item.force_rls_active === null ? "UNKNOWN" : item.force_rls_active ? "ACTIVE" : "INACTIVE"} | TLS: ${item.tls_termination_enforced === null ? "UNKNOWN" : item.tls_termination_enforced ? "ENFORCED" : "NOT ENFORCED"}`,
-        `   Queries: ${item.total_processed_queries} | Tenant sessions: ${item.authenticated_tenant_sessions} | Blocked violations: ${item.blocked_unauthorized_violations} | P99 overhead ms: ${item.p99_latency_overhead_ms === null ? "UNKNOWN" : item.p99_latency_overhead_ms}`,
-        `   Previous hash: ${item.previous_block_hash || "GENESIS"}`,
-        `   Block hash: ${item.block_hash_signature}`,
-        "",
-      ]),
+      ...(attestations.length
+        ? attestations.flatMap((item, index) => [
+            `${index + 1}. Node: ${item.node_id} | Period: ${formatEpoch(item.epoch_timestamp_start)} - ${formatEpoch(item.epoch_timestamp_end)}`,
+            `   Signature verified: ${item.signature_valid ? "YES" : "NO"} | Chain link: ${item.chain_link_valid === null ? "UNKNOWN (truncated history)" : item.chain_link_valid ? "VALID" : "INVALID"} | RLS: ${item.force_rls_active === null ? "UNKNOWN" : item.force_rls_active ? "ACTIVE" : "INACTIVE"} | TLS: ${item.tls_termination_enforced === null ? "UNKNOWN" : item.tls_termination_enforced ? "ENFORCED" : "NOT ENFORCED"}`,
+            `   Query/Execute messages forwarded: ${item.total_processed_queries} | Tenant sessions: ${item.authenticated_tenant_sessions} | Blocked violations: ${item.blocked_unauthorized_violations} | P99 overhead ms: ${item.p99_latency_overhead_ms === null ? "UNKNOWN" : item.p99_latency_overhead_ms}`,
+            `   Previous hash: ${item.previous_block_hash || "GENESIS"}`,
+            `   Block hash: ${item.block_hash_signature}`,
+            "",
+          ])
+        : ["No attestation evidence has been submitted. This report contains no verified security evidence."]),
     ];
     const url = URL.createObjectURL(buildPdf(lines));
     const anchor = document.createElement("a");
@@ -102,7 +127,7 @@ export function Attestations() {
         </div>
         <div className="page-actions">
           <button className="secondary-button" type="button" onClick={() => void refetch()} disabled={isFetching}><RefreshCw size={16} /> Refresh</button>
-          <button className="primary-button" type="button" onClick={downloadPdf} disabled={!attestations.length}><Download size={16} /> Download PDF</button>
+          <button className="primary-button" type="button" onClick={downloadPdf} disabled={isLoading || isError}><Download size={16} /> Download PDF</button>
         </div>
       </div>
       <section className="resource-panel">
@@ -110,8 +135,8 @@ export function Attestations() {
           <div className="empty-state"><ShieldCheck size={28} /><h2>No attestation blocks yet</h2><p>Verified reports appear after an engine node has submitted a signed telemetry epoch. This page does not manufacture security evidence when telemetry is missing.</p></div>
         ) : (
           <div className="resource-list">{attestations.map((item) => <article className="resource-list-item" key={item.id}>
-            <div><strong>{item.node_id}</strong><p>{item.epoch_timestamp_start} — {item.epoch_timestamp_end}</p><small>Hash: {item.block_hash_signature}</small></div>
-            <span className={item.signature_valid ? "status-pill status-pill--healthy" : "status-pill status-pill--danger"}>{!item.signature_valid || item.chain_link_valid === false ? "Integrity issue" : item.chain_link_valid === null ? "Chain history unknown" : "Verified"}</span>
+            <div><strong>{item.node_id}</strong><p>{formatEpoch(item.epoch_timestamp_start)} — {formatEpoch(item.epoch_timestamp_end)}</p><small>Hash: {item.block_hash_signature}</small></div>
+            <span className={item.signature_valid && item.chain_link_valid === true ? "status-pill status-pill--healthy" : "status-pill status-pill--danger"}>{!item.signature_valid || item.chain_link_valid === false ? "Integrity issue" : item.chain_link_valid === null ? "Chain history unknown" : "Verified"}</span>
           </article>)}</div>
         )}
       </section>
