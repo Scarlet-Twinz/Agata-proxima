@@ -33,12 +33,13 @@ async fn main() -> io::Result<()> {
         .unwrap_or(false);
     let attestation_metrics = metrics.clone();
     let attestation_breaker = breaker.clone();
+    let attestation_tls_enforced = config.require_client_tls;
     tokio::spawn(async move {
         proxima_engine::attestation_reporter::run(
             attestation_metrics,
             attestation_breaker,
             force_rls_active,
-            config.require_client_tls,
+            attestation_tls_enforced,
         ).await;
     });
     let metrics_enabled = std::env::var("PROXIMA_METRICS_ENABLED")
