@@ -98,6 +98,10 @@ pub async fn run(
     let mut previous_queries = metrics.total_processed_queries();
     let mut previous_sessions = metrics.authenticated_tenant_sessions();
     let mut previous_violations = metrics.blocked_unauthorized_violations();
+    let reporter_started_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs() as i64)
+        .unwrap_or(0);
     loop {
         ticker.tick().await;
         let current_queries = metrics.total_processed_queries();
@@ -112,7 +116,7 @@ pub async fn run(
         previous_sessions = current_sessions;
         previous_violations = current_violations;
         if let Err(error) = submit_epoch(
-            &client, &config, summary.0, summary.1, summary.2,
+            &client, &config, summary.0, summary.1, summary.2, reporter_started_at,
             force_rls_active, tls_termination_enforced, breaker.any_peer_blocked(),
         ).await {
             warn!(%error, "security attestation epoch was not accepted; evidence will not be represented as verified");
@@ -126,6 +130,7 @@ async fn submit_epoch(
     queries: u64,
     sessions: u64,
     violations: u64,
+    reporter_started_at: i64,
     force_rls_active: bool,
     tls_termination_enforced: bool,
     breaker_tripped: bool,
@@ -139,11 +144,20 @@ async fn submit_epoch(
     let previous = records.iter()
         .filter(|record| record.get("node_id").and_then(Value::as_str) == Some(config.node_id.as_str()))
         .max_by_key(|record| record.get("epoch_timestamp_end").and_then(Value::as_i64).unwrap_or(0));
+    if let Some(previous_record) = previous {
+        if previous_record.get("signature_valid").and_then(Value::as_bool) != Some(true) {
+            return Err("latest stored attestation signature is invalid; refusing to extend the chain".into());
+        }
+        if previous_record.get("chain_link_valid").and_then(Value::as_bool) == Some(false) {
+            return Err("latest stored attestation predecessor link is invalid; refusing to extend the chain".into());
+        }
+    }
     let previous_hash = previous.and_then(|record| record.get("block_hash_signature"))
         .and_then(Value::as_str).unwrap_or("").to_string();
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
         .map_err(|error| format!("system clock before Unix epoch: {error}"))?.as_secs() as i64;
-    let start = previous.and_then(|record| record.get("epoch_timestamp_end").and_then(Value::as_i64))
+    let previous_end = previous.and_then(|record| record.get("epoch_timestamp_end").and_then(Value::as_i64));
+    let start = previous_end.map(|end| end.max(reporter_started_at))
         .unwrap_or_else(|| now.saturating_sub(3600));
     if start >= now {
         return Err("system clock has not advanced beyond the previous attestation epoch".into());
