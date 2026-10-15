@@ -253,9 +253,9 @@ pub async fn serve_listener(listener: TcpListener) -> io::Result<()> {
         let (mut stream, _) = listener.accept().await?;
         tokio::spawn(async move {
             let mut request = [0u8; 2048];
-            let size = match stream.read(&mut request).await {
-                Ok(size) => size,
-                Err(_) => return,
+            let size = match tokio::time::timeout(std::time::Duration::from_secs(5), stream.read(&mut request)).await {
+                Ok(Ok(size)) => size,
+                _ => return,
             };
             let first_line = String::from_utf8_lossy(&request[..size]);
             let path = first_line.split_whitespace().nth(1).unwrap_or("/");
