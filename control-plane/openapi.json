@@ -998,6 +998,102 @@
           }
         }
       }
+    },
+    "/api/v1/attestations": {
+      "get": {
+        "summary": "List organization-scoped signed Proxima attestations",
+        "description": "Returns the active organization's attestation ledger and reports payload, HMAC signature, and predecessor-chain verification status.",
+        "responses": {
+          "200": {
+            "description": "Attestation records and chain verification status"
+          },
+          "401": {
+            "description": "Authentication required"
+          }
+        }
+      },
+      "post": {
+        "summary": "Ingest a signed Proxima attestation",
+        "description": "Requires a valid authenticated session, write permission, a matching canonical payload, the configured HMAC signing key, and the expected predecessor hash for the node's chain.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "node_id",
+                  "attestation_version",
+                  "epoch_timestamp_start",
+                  "epoch_timestamp_end",
+                  "telemetry_summary",
+                  "security_state",
+                  "previous_block_hash",
+                  "canonical_payload",
+                  "block_hash",
+                  "block_hash_signature"
+                ],
+                "properties": {
+                  "node_id": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "attestation_version": {
+                    "type": "integer",
+                    "const": 1
+                  },
+                  "epoch_timestamp_start": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "epoch_timestamp_end": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "telemetry_summary": {
+                    "type": "object"
+                  },
+                  "security_state": {
+                    "type": "object"
+                  },
+                  "previous_block_hash": {
+                    "type": "string"
+                  },
+                  "canonical_payload": {
+                    "type": "string",
+                    "maxLength": 65536
+                  },
+                  "block_hash": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "block_hash_signature": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Signed attestation accepted"
+          },
+          "400": {
+            "description": "Invalid attestation fields"
+          },
+          "409": {
+            "description": "Predecessor hash does not match the stored chain"
+          },
+          "422": {
+            "description": "Canonical payload hash, fields, or HMAC signature is invalid"
+          },
+          "503": {
+            "description": "Attestation signing key is not configured"
+          }
+        }
+      }
     }
   },
   "components": {
