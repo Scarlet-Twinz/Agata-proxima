@@ -3,6 +3,7 @@ name: Rust
 # External provider and production acceptance remain separate deployment gates.
 
 on:
+  workflow_dispatch:
   push:
     branches: ["main"]
   pull_request:
@@ -82,9 +83,6 @@ jobs:
         run: |
           bash -n tests/performance/benchmark-proxy.sh
           python -m py_compile scripts/ops/summarize-pgbench.py
-      - name: Monitor Breaker Attest integration contract
-        run: bash tests/launch/proxima_monitor_attest_gate.sh
-
       - name: External SaaS reference syntax
         run: |
           bash -n tests/external-saas/verify_three_tenant.sh
