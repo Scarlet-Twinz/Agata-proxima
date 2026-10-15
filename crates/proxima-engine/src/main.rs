@@ -115,7 +115,7 @@ async fn main() -> io::Result<()> {
 
                 tokio::spawn(async move {
                     let _permit = permit;
-                    if let Err(err) = handle_connection(
+                    match handle_connection(
                         client,
                         peer,
                         &upstream,
@@ -130,13 +130,16 @@ async fn main() -> io::Result<()> {
                         upstream_tls_mode,
                         upstream_tls_server_name.as_deref(),
                     ).await {
-                        if err.kind() == io::ErrorKind::PermissionDenied {
-                            connection_metrics.unauthorized_violation();
+                        Ok((client_bytes, upstream_bytes)) => {
+                            connection_metrics.connection_finished(false, client_bytes, upstream_bytes);
                         }
-                        error!(peer = %peer, error = %err, "connection failed");
-                        connection_metrics.connection_finished(true, 0, 0);
-                    } else {
-                        connection_metrics.connection_finished(false, 0, 0);
+                        Err(err) => {
+                            if err.kind() == io::ErrorKind::PermissionDenied {
+                                connection_metrics.unauthorized_violation();
+                            }
+                            error!(peer = %peer, error = %err, "connection failed");
+                            connection_metrics.connection_finished(true, 0, 0);
+                        }
                     }
                 });
             }
@@ -165,7 +168,7 @@ async fn handle_connection(
     require_client_tls: bool,
     upstream_tls_mode: UpstreamTlsMode,
     upstream_tls_server_name: Option<&str>,
-) -> io::Result<()> {
+) -> io::Result<(u64, u64)> {
     info!(peer = %peer, "client connected");
 
     let client_is_tls = client_wants_tls(&client).await?;
@@ -237,7 +240,7 @@ async fn handle_connection(
         database_to_client = upstream_bytes,
         "connection closed"
     );
-    Ok(())
+    Ok((client_bytes, upstream_bytes))
 }
 
 async fn client_wants_tls(client: &TcpStream) -> io::Result<bool> {
