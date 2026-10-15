@@ -143,6 +143,12 @@ impl EngineMetrics {
             "proxima_active_connections {}\n",
             values[0].1
         ));
+        output.push_str("# HELP proxima_processed_queries_total PostgreSQL simple Query and extended Execute messages forwarded.\n");
+        output.push_str("# TYPE proxima_processed_queries_total counter\n");
+        output.push_str(&format!("proxima_processed_queries_total {}\n", self.total_processed_queries()));
+        output.push_str("# HELP proxima_authenticated_tenant_sessions_total Established sessions with verified tenant context.\n");
+        output.push_str("# TYPE proxima_authenticated_tenant_sessions_total counter\n");
+        output.push_str(&format!("proxima_authenticated_tenant_sessions_total {}\n", self.authenticated_tenant_sessions()));
         for (name, value) in values.iter().skip(1) {
             output.push_str(&format!("# TYPE {name} counter\n{name} {value}\n"));
         }
