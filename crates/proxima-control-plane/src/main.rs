@@ -2593,7 +2593,11 @@ async fn tenants(State(s): State<AppState>, headers: HeaderMap) -> Response {
         "SELECT t.id,t.name,t.slug,t.status,t.isolation_mode,p.name AS project
          FROM tenants t JOIN projects p ON p.id=t.project_id
          WHERE p.organization_id=$1 ORDER BY t.created_at DESC"
-    ).bind(ctx.organization_id).fetch_all(&s.db).await {
+    )
+    .bind(ctx.organization_id)
+    .fetch_all(&s.db)
+    .await
+    {
         Ok(rows) => Json(rows.iter().map(|r| json!({
             "id":r.get::<Uuid,_>("id"), "name":r.get::<String,_>("name"),
             "slug":r.get::<String,_>("slug"), "status":r.get::<String,_>("status"),
@@ -3100,16 +3104,24 @@ async fn ingest_security_event(
         Err(code) => return code.into_response(),
     };
     if !ctx.api_key && !matches!(ctx.role.as_str(), "owner" | "admin") {
-        return (StatusCode::FORBIDDEN, "Only workspace owners, administrators, or authorized API keys can submit security events.").into_response();
+        return (
+            StatusCode::FORBIDDEN,
+            "Only workspace owners, administrators, or authorized API keys can submit security events.",
+        )
+            .into_response();
     }
-    if input.node_id.trim().is_empty() || input.node_id.len() > 200
+    if input.node_id.trim().is_empty()
+        || input.node_id.len() > 200
         || input.event_type != "peer_breaker_opened"
         || input.severity != "critical"
-        || input.source_peer.trim().is_empty() || input.source_peer.len() > 128
+        || input.source_peer.trim().is_empty()
+        || input.source_peer.len() > 128
         || input.source_peer.parse::<std::net::IpAddr>().is_err()
-        || !input.details.is_object() || input.details.to_string().len() > 4096
+        || !input.details.is_object()
+        || input.details.to_string().len() > 4096
     {
-        return (StatusCode::BAD_REQUEST, "Security event fields are invalid.").into_response();
+        return (StatusCode::BAD_REQUEST, "Security event fields are invalid.")
+            .into_response();
     }
     match sqlx::query(
         "INSERT INTO security_events (organization_id,node_id,event_type,severity,source_peer,details,observed_at)
@@ -3162,22 +3174,44 @@ async fn ingest_security_attestation(
         Err(code) => return code.into_response(),
     };
     if !ctx.api_key && !matches!(ctx.role.as_str(), "owner" | "admin") {
-        return (StatusCode::FORBIDDEN, "Only workspace owners, administrators, or authorized API keys can submit attestation evidence.").into_response();
+        return (
+            StatusCode::FORBIDDEN,
+            "Only workspace owners, administrators, or authorized API keys can submit attestation evidence.",
+        )
+            .into_response();
     }
-    if input.node_id.trim().is_empty() || input.node_id.len() > 200
-        || input.epoch_timestamp_start < 0 || input.epoch_timestamp_end < input.epoch_timestamp_start
-        || input.total_processed_queries < 0 || input.authenticated_tenant_sessions < 0
+    if input.node_id.trim().is_empty()
+        || input.node_id.len() > 200
+        || input.epoch_timestamp_start < 0
+        || input.epoch_timestamp_end < input.epoch_timestamp_start
+        || input.total_processed_queries < 0
+        || input.authenticated_tenant_sessions < 0
         || input.blocked_unauthorized_violations < 0
-        || input.p99_latency_overhead_ms.is_some_and(|value| !value.is_finite() || value < 0.0)
-        || input.force_rls_active.is_none() || input.tls_termination_enforced.is_none()
+        || input
+            .p99_latency_overhead_ms
+            .is_some_and(|value| !value.is_finite() || value < 0.0)
+        || input.force_rls_active.is_none()
+        || input.tls_termination_enforced.is_none()
         || input.circuit_breaker_tripped.is_none()
     {
-        return (StatusCode::BAD_REQUEST, "Attestation fields are invalid or incomplete.").into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            "Attestation fields are invalid or incomplete.",
+        )
+            .into_response();
     }
     let key_id = env::var("PROXIMA_ATTESTATION_SIGNING_KEY_ID").unwrap_or_default();
     let key = match env::var("PROXIMA_ATTESTATION_SIGNING_KEY") {
-        Ok(value) if value.len() >= 32 && !key_id.is_empty() && key_id == input.signing_key_id => value,
-        _ => return service_unavailable("Attestation signing key and key ID must be configured before evidence can be accepted."),
+        Ok(value)
+            if value.len() >= 32 && !key_id.is_empty() && key_id == input.signing_key_id =>
+        {
+            value
+        }
+        _ => {
+            return service_unavailable(
+                "Attestation signing key and key ID must be configured before evidence can be accepted.",
+            )
+        }
     };
     let mut transaction = match s.db.begin().await {
         Ok(transaction) => transaction,
@@ -3185,34 +3219,58 @@ async fn ingest_security_attestation(
     };
     let lock_key = format!("{}:{}", ctx.organization_id, input.node_id.trim());
     if let Err(error) = sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
-        .bind(&lock_key).execute(&mut *transaction).await {
+        .bind(&lock_key)
+        .execute(&mut *transaction)
+        .await
+    {
         return db_error(error);
     }
     let previous = sqlx::query_scalar::<_, String>(
         "SELECT block_hash FROM security_attestation_blocks WHERE organization_id=$1 AND node_id=$2 ORDER BY epoch_timestamp_start DESC LIMIT 1"
-    ).bind(ctx.organization_id).bind(input.node_id.trim()).fetch_optional(&mut *transaction).await;
+    )
+    .bind(ctx.organization_id)
+    .bind(input.node_id.trim())
+    .fetch_optional(&mut *transaction)
+    .await;
     let expected_previous = match previous {
         Ok(value) => value.unwrap_or_default(),
         Err(error) => return db_error(error),
     };
     if input.previous_block_hash != expected_previous {
-        return (StatusCode::CONFLICT, "Attestation chain predecessor does not match the latest stored block.").into_response();
+        return (
+            StatusCode::CONFLICT,
+            "Attestation chain predecessor does not match the latest stored block.",
+        )
+            .into_response();
     }
     let computed_hash = calculate_attestation_hash(
-        ctx.organization_id, input.node_id.trim(), input.epoch_timestamp_start,
-        input.epoch_timestamp_end, input.total_processed_queries,
-        input.authenticated_tenant_sessions, input.blocked_unauthorized_violations,
-        input.p99_latency_overhead_ms, input.force_rls_active,
-        input.tls_termination_enforced, input.circuit_breaker_tripped,
+        ctx.organization_id,
+        input.node_id.trim(),
+        input.epoch_timestamp_start,
+        input.epoch_timestamp_end,
+        input.total_processed_queries,
+        input.authenticated_tenant_sessions,
+        input.blocked_unauthorized_violations,
+        input.p99_latency_overhead_ms,
+        input.force_rls_active,
+        input.tls_termination_enforced,
+        input.circuit_breaker_tripped,
         &input.previous_block_hash,
     );
     if computed_hash != input.block_hash {
-        return (StatusCode::UNPROCESSABLE_ENTITY, "Attestation block hash does not match canonical evidence.").into_response();
+        return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Attestation block hash does not match canonical evidence.",
+        )
+            .into_response();
     }
     use hmac::{Hmac, Mac};
     let supplied_signature = match hex::decode(&input.signature_hex) {
         Ok(value) => value,
-        Err(_) => return (StatusCode::BAD_REQUEST, "signature_hex must be valid hexadecimal.").into_response(),
+        Err(_) => {
+            return (StatusCode::BAD_REQUEST, "signature_hex must be valid hexadecimal.")
+                .into_response()
+        }
     };
     let mut mac = match Hmac::<Sha256>::new_from_slice(key.as_bytes()) {
         Ok(value) => value,
@@ -3220,7 +3278,11 @@ async fn ingest_security_attestation(
     };
     mac.update(computed_hash.as_bytes());
     if mac.verify_slice(&supplied_signature).is_err() {
-        return (StatusCode::UNAUTHORIZED, "Attestation signature verification failed.").into_response();
+        return (
+            StatusCode::UNAUTHORIZED,
+            "Attestation signature verification failed.",
+        )
+            .into_response();
     }
     match sqlx::query(
         "INSERT INTO security_attestation_blocks (
@@ -3230,14 +3292,30 @@ async fn ingest_security_attestation(
             previous_block_hash,block_hash,signature_algorithm,signing_key_id,signature
          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'HMAC-SHA256',$14,$15)"
     )
-    .bind(ctx.organization_id).bind(input.node_id.trim()).bind(input.epoch_timestamp_start)
-    .bind(input.epoch_timestamp_end).bind(input.total_processed_queries)
-    .bind(input.authenticated_tenant_sessions).bind(input.blocked_unauthorized_violations)
-    .bind(input.p99_latency_overhead_ms).bind(input.force_rls_active).bind(input.tls_termination_enforced)
-    .bind(input.circuit_breaker_tripped).bind(input.previous_block_hash).bind(computed_hash)
-    .bind(input.signing_key_id).bind(supplied_signature).execute(&mut *transaction).await {
+    .bind(ctx.organization_id)
+    .bind(input.node_id.trim())
+    .bind(input.epoch_timestamp_start)
+    .bind(input.epoch_timestamp_end)
+    .bind(input.total_processed_queries)
+    .bind(input.authenticated_tenant_sessions)
+    .bind(input.blocked_unauthorized_violations)
+    .bind(input.p99_latency_overhead_ms)
+    .bind(input.force_rls_active)
+    .bind(input.tls_termination_enforced)
+    .bind(input.circuit_breaker_tripped)
+    .bind(input.previous_block_hash)
+    .bind(computed_hash)
+    .bind(input.signing_key_id)
+    .bind(supplied_signature)
+    .execute(&mut *transaction)
+    .await
+    {
         Ok(_) => match transaction.commit().await {
-            Ok(()) => (StatusCode::CREATED, Json(json!({"accepted": true, "block_hash": computed_hash}))).into_response(),
+            Ok(()) => (
+                StatusCode::CREATED,
+                Json(json!({"accepted": true, "block_hash": computed_hash})),
+            )
+                .into_response(),
             Err(error) => db_error(error),
         },
         Err(error) => db_error(error),
@@ -3339,9 +3417,12 @@ fn calculate_attestation_hash(
     let canonical = format!(
         "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
         1, organization_id, node_id, start, end, queries, sessions, violations,
-        p99_latency_overhead_ms.unwrap_or(0.0), force_rls_active.unwrap_or(false),
-        tls_termination_enforced.unwrap_or(false), circuit_breaker_tripped.unwrap_or(false),
-        previous_block_hash, "agata-proxima-attestation-v1"
+        p99_latency_overhead_ms.unwrap_or(0.0),
+        force_rls_active.unwrap_or(false),
+        tls_termination_enforced.unwrap_or(false),
+        circuit_breaker_tripped.unwrap_or(false),
+        previous_block_hash,
+        "agata-proxima-attestation-v1"
     );
     hex::encode(Sha256::digest(canonical.as_bytes()))
 }
