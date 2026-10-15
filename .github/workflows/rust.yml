@@ -70,7 +70,9 @@ jobs:
       - name: Verification harness syntax
         run: bash -n tools/proxima-verify.sh tools/proxima-verify-3tenant.sh
       - name: Performance harness syntax
-        run: bash -n tests/performance/benchmark-proxy.sh
+        run: |
+          bash -n tests/performance/benchmark-proxy.sh
+          python -m py_compile scripts/ops/summarize-pgbench.py
       - name: Monitor Breaker Attest integration contract
         run: bash tests/launch/proxima_monitor_attest_gate.sh
 
