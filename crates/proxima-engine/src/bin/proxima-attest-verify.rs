@@ -38,10 +38,13 @@ fn verification_key(key_id: &str) -> Result<Vec<u8>, String> {
         }
     }
 
-    let active_key_id = env::var("PROXIMA_ATTESTATION_SIGNING_KEY_ID")
-        .map_err(|_| "set PROXIMA_ATTESTATION_SIGNING_KEYS_JSON or active key variables".to_string())?;
+    let active_key_id = env::var("PROXIMA_ATTESTATION_SIGNING_KEY_ID").map_err(|_| {
+        "set PROXIMA_ATTESTATION_SIGNING_KEYS_JSON or active key variables".to_string()
+    })?;
     if active_key_id != key_id {
-        return Err(format!("no retained verification key is configured for key ID {key_id}"));
+        return Err(format!(
+            "no retained verification key is configured for key ID {key_id}"
+        ));
     }
     let key = env::var("PROXIMA_ATTESTATION_SIGNING_KEY")
         .map_err(|_| "PROXIMA_ATTESTATION_SIGNING_KEY is not configured".to_string())?;
@@ -60,9 +63,7 @@ fn verify_record(value: &Value) -> Result<VerifiedRecord, String> {
         total_processed_queries: required_u64(value, "total_processed_queries")?,
         authenticated_tenant_sessions: required_u64(value, "authenticated_tenant_sessions")?,
         blocked_unauthorized_violations: required_u64(value, "blocked_unauthorized_violations")?,
-        p99_latency_overhead_ms: value
-            .get("p99_latency_overhead_ms")
-            .and_then(Value::as_f64),
+        p99_latency_overhead_ms: value.get("p99_latency_overhead_ms").and_then(Value::as_f64),
     };
     let security = SecurityState {
         force_rls_active: value
