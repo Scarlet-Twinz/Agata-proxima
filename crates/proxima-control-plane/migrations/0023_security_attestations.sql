@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS security_attestation_blocks (
     organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
     node_id text NOT NULL CHECK (length(trim(node_id)) BETWEEN 1 AND 200),
     epoch_timestamp_start bigint NOT NULL,
-    epoch_timestamp_end bigint NOT NULL CHECK (epoch_timestamp_end >= epoch_timestamp_start),
+    epoch_timestamp_end bigint NOT NULL CHECK (epoch_timestamp_end > epoch_timestamp_start),
     total_processed_queries bigint NOT NULL DEFAULT 0 CHECK (total_processed_queries >= 0),
     authenticated_tenant_sessions bigint NOT NULL DEFAULT 0 CHECK (authenticated_tenant_sessions >= 0),
     blocked_unauthorized_violations bigint NOT NULL DEFAULT 0 CHECK (blocked_unauthorized_violations >= 0),
