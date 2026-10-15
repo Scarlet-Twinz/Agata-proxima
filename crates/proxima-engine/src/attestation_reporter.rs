@@ -45,6 +45,11 @@ impl ReporterConfig {
         if node_id.trim().is_empty() || node_id.len() > 200 {
             return Err("PROXIMA_NODE_ID must contain 1-200 characters".into());
         }
+        let rls_attestation = env::var("PROXIMA_ATTEST_FORCE_RLS_ACTIVE")
+            .map_err(|_| "PROXIMA_ATTEST_FORCE_RLS_ACTIVE must explicitly state whether RLS is verified".to_string())?;
+        if !matches!(rls_attestation.trim().to_ascii_lowercase().as_str(), "1" | "0" | "true" | "false" | "yes" | "no" | "on" | "off") {
+            return Err("PROXIMA_ATTEST_FORCE_RLS_ACTIVE must be an explicit boolean".into());
+        }
         if signing_key.len() < 32 {
             return Err("PROXIMA_ATTESTATION_SIGNING_KEY must contain at least 32 bytes".into());
         }
@@ -54,7 +59,7 @@ impl ReporterConfig {
             return Err("attestation reporting requires HTTPS except for localhost development".into());
         }
         Ok(Some(Self { base_url: base_url.trim_end_matches('/').to_string(), api_key,
-            organization_id, node_id, signing_key: signing_key.into_bytes(), signing_key_id }))
+            organization_id: organization_id.to_ascii_lowercase(), node_id, signing_key: signing_key.into_bytes(), signing_key_id }))
     }
 }
 
