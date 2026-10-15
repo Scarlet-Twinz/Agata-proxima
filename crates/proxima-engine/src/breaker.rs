@@ -127,6 +127,17 @@ impl PeerCircuitBreaker {
 
     /// Record a malformed or unauthorized handshake. Returns true only on the
     /// transition that opens this peer's circuit, never for unrelated peers.
+    pub fn any_peer_blocked(&self) -> bool {
+        if matches!(self.mode, BreakerMode::Disabled) {
+            return false;
+        }
+        let now = Instant::now();
+        let Ok(peers) = self.peers.lock() else {
+            return true;
+        };
+        peers.values().any(|state| state.blocked_until.is_some_and(|until| now < until))
+    }
+
     pub fn record_failure(&self, peer: IpAddr) -> bool {
         if matches!(self.mode, BreakerMode::Disabled) {
             return false;
