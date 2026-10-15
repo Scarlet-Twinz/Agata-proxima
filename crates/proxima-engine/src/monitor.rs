@@ -11,6 +11,8 @@ use tokio::net::TcpListener;
 #[derive(Debug, Default)]
 pub struct EngineMetrics {
     active_connections: AtomicU64,
+    total_processed_queries: AtomicU64,
+    authenticated_tenant_sessions: AtomicU64,
     accepted_connections: AtomicU64,
     rejected_connections: AtomicU64,
     completed_connections: AtomicU64,
@@ -23,6 +25,26 @@ pub struct EngineMetrics {
 }
 
 impl EngineMetrics {
+    pub fn query_processed(&self) {
+        self.total_processed_queries.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn tenant_session_authenticated(&self) {
+        self.authenticated_tenant_sessions.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn total_processed_queries(&self) -> u64 {
+        self.total_processed_queries.load(Ordering::Relaxed)
+    }
+
+    pub fn authenticated_tenant_sessions(&self) -> u64 {
+        self.authenticated_tenant_sessions.load(Ordering::Relaxed)
+    }
+
+    pub fn blocked_unauthorized_violations(&self) -> u64 {
+        self.unauthorized_violations.load(Ordering::Relaxed)
+    }
+
     pub fn connection_started(&self) {
         self.accepted_connections.fetch_add(1, Ordering::Relaxed);
         self.active_connections.fetch_add(1, Ordering::Relaxed);
