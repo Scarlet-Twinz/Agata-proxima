@@ -52,6 +52,10 @@ impl AttestationLedger {
         state: SecurityState,
     ) -> io::Result<String> {
         let _guard = self.lock.lock().await;
+        let existing_chain = self.verify_chain_unlocked().await?;
+        if !existing_chain.valid {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "existing attestation ledger failed verification; refusing to append"));
+        }
         if self.config.signing_key.is_none() {
             return Err(io::Error::new(io::ErrorKind::PermissionDenied, "PROXIMA_ATTESTATION_SIGNING_KEY must be at least 32 bytes before signing attestations"));
         }
@@ -106,6 +110,10 @@ impl AttestationLedger {
 
     pub async fn verify_chain(&self) -> io::Result<ChainVerification> {
         let _guard = self.lock.lock().await;
+        self.verify_chain_unlocked().await
+    }
+
+    async fn verify_chain_unlocked(&self) -> io::Result<ChainVerification> {
         let content = match tokio::fs::read_to_string(&self.config.ledger_path).await {
             Ok(content) => content,
             Err(error) if error.kind() == io::ErrorKind::NotFound => {
@@ -222,11 +230,12 @@ pub struct ChainVerification {
 
 async fn previous_hash(path: &Path) -> io::Result<String> {
     match tokio::fs::read_to_string(path).await {
-        Ok(content) => Ok(content
-            .lines()
-            .last()
-            .and_then(|line| json_field(line, "block_hash"))
-            .unwrap_or_else(|| "GENESIS".into())),
+        Ok(content) => match content.lines().last() {
+            Some(line) => json_field(line, "block_hash").ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidData, "last attestation ledger record has no block hash")
+            }),
+            None => Ok("GENESIS".into()),
+        },
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok("GENESIS".into()),
         Err(error) => Err(error),
     }
