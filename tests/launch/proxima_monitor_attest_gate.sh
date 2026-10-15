@@ -16,4 +16,8 @@ grep -q 'prevent_security_event_mutation' crates/proxima-control-plane/migration
 grep -q 'path: "attestations"' frontend/src/app/router.tsx
 grep -q 'Download PDF' frontend/src/pages/console/Attestations.tsx
 bash -n tests/performance/benchmark-proxy.sh
+tmpdir="$(mktemp -d)"
+trap 'rm -rf "$tmpdir"' EXIT
+printf '1,1,1000,0,1700000000\n1,2,2000,0,1700000001\n1,3,3000,0,1700000002\n' >"$tmpdir/direct.123"
+python3 scripts/ops/summarize-pgbench.py "$tmpdir" direct 10 | grep -q 'p50_ms=2.000'
 echo "Monitor/Breaker/Attest repository contract checks passed."
