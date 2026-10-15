@@ -16,6 +16,10 @@ type Attestation = {
   circuit_breaker_tripped: boolean | null;
   previous_block_hash: string;
   block_hash_signature: string;
+  signature_algorithm: string;
+  signing_key_id: string;
+  signature_hex: string;
+  organization_id: string;
   signature_valid: boolean;
   chain_link_valid: boolean | null;
 };
@@ -91,6 +95,22 @@ export function Attestations() {
     retry: false,
   });
   const attestations = data?.attestations ?? [];
+  const downloadJson = () => {
+    const payload = {
+      status: data?.status ?? "unknown",
+      exported_at: new Date().toISOString(),
+      attestations,
+    };
+    const url = URL.createObjectURL(
+      new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `agata-proxima-attestations-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   const downloadPdf = () => {
     const lines = [
       "AGATA PROXIMA - SECURITY ATTESTATION REPORT",
@@ -105,6 +125,8 @@ export function Attestations() {
             `   Query/Execute messages forwarded: ${item.total_processed_queries} | Tenant sessions: ${item.authenticated_tenant_sessions} | Blocked violations: ${item.blocked_unauthorized_violations} | P99 overhead ms: ${item.p99_latency_overhead_ms === null ? "UNKNOWN" : item.p99_latency_overhead_ms}`,
             `   Previous hash: ${item.previous_block_hash || "GENESIS"}`,
             `   Block hash: ${item.block_hash_signature}`,
+            `   Signature: ${item.signature_algorithm} | Key ID: ${item.signing_key_id}`,
+            `   HMAC signature: ${item.signature_hex}`,
             "",
           ])
         : ["No attestation evidence has been submitted. This report contains no verified security evidence."]),
@@ -127,6 +149,7 @@ export function Attestations() {
         </div>
         <div className="page-actions">
           <button className="secondary-button" type="button" onClick={() => void refetch()} disabled={isFetching}><RefreshCw size={16} /> Refresh</button>
+          <button className="secondary-button" type="button" onClick={downloadJson} disabled={isLoading || isError}><Download size={16} /> Download JSON</button>
           <button className="primary-button" type="button" onClick={downloadPdf} disabled={isLoading || isError}><Download size={16} /> Download PDF</button>
         </div>
       </div>
