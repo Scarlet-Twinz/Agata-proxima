@@ -80,3 +80,33 @@ mod tests {
         assert!(!metrics.breaker_is_open());
     }
 }
+
+/// Serve the metrics endpoint on a dedicated listener. Keep this address private
+/// or protect it with the deployment's network policy.
+pub async fn serve(addr: std::net::SocketAddr, metrics: std::sync::Arc<EngineMetrics>) -> std::io::Result<()> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+    let listener = TcpListener::bind(addr).await?;
+    loop {
+        let (mut stream, _) = listener.accept().await?;
+        let metrics = metrics.clone();
+        tokio::spawn(async move {
+            let mut request = [0u8; 2048];
+            let n = match tokio::time::timeout(std::time::Duration::from_secs(2), stream.read(&mut request)).await {
+                Ok(Ok(n)) => n,
+                _ => return,
+            };
+            let first_line = std::str::from_utf8(&request[..n]).unwrap_or("").lines().next().unwrap_or("");
+            let (status, body, content_type) = if first_line.starts_with("GET /metrics ") {
+                ("200 OK", metrics.prometheus(), "text/plain; version=0.0.4; charset=utf-8")
+            } else if first_line.starts_with("GET /health ") {
+                ("200 OK", "ok\n".to_string(), "text/plain; charset=utf-8")
+            } else {
+                ("404 Not Found", "not found\n".to_string(), "text/plain; charset=utf-8")
+            };
+            let response = format!("HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\nX-Content-Type-Options: nosniff\r\n\r\n{body}", body.len());
+            let _ = stream.write_all(response.as_bytes()).await;
+            let _ = stream.shutdown().await;
+        });
+    }
+}
