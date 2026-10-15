@@ -43,8 +43,10 @@ impl EngineMetrics {
             1_000_000_000,
         ];
         let nanos = elapsed.as_nanos().min(u64::MAX as u128) as u64;
-        self.simple_query_latency_count.fetch_add(1, Ordering::Relaxed);
-        self.simple_query_latency_sum_nanos.fetch_add(nanos, Ordering::Relaxed);
+        self.simple_query_latency_count
+            .fetch_add(1, Ordering::Relaxed);
+        self.simple_query_latency_sum_nanos
+            .fetch_add(nanos, Ordering::Relaxed);
         for (index, bound) in BUCKETS_NANOS.iter().enumerate() {
             if nanos <= *bound {
                 self.simple_query_latency_buckets[index].fetch_add(1, Ordering::Relaxed);
@@ -57,7 +59,8 @@ impl EngineMetrics {
     }
 
     pub fn tenant_session_authenticated(&self) {
-        self.authenticated_tenant_sessions.fetch_add(1, Ordering::Relaxed);
+        self.authenticated_tenant_sessions
+            .fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn total_processed_queries(&self) -> u64 {
@@ -77,12 +80,7 @@ impl EngineMetrics {
         self.active_connections.fetch_add(1, Ordering::Relaxed);
     }
 
-    pub fn connection_finished(
-        &self,
-        failed: bool,
-        client_bytes: u64,
-        upstream_bytes: u64,
-    ) {
+    pub fn connection_finished(&self, failed: bool, client_bytes: u64, upstream_bytes: u64) {
         self.active_connections.fetch_sub(1, Ordering::Relaxed);
         self.completed_connections.fetch_add(1, Ordering::Relaxed);
         if failed {
@@ -99,8 +97,7 @@ impl EngineMetrics {
     }
 
     pub fn unauthorized_violation(&self) {
-        self.unauthorized_violations
-            .fetch_add(1, Ordering::Relaxed);
+        self.unauthorized_violations.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn trip_breaker(&self) -> bool {
@@ -170,10 +167,7 @@ impl EngineMetrics {
             "# HELP proxima_active_connections Current active PostgreSQL proxy connections.\n",
         );
         output.push_str("# TYPE proxima_active_connections gauge\n");
-        output.push_str(&format!(
-            "proxima_active_connections {}\n",
-            values[0].1
-        ));
+        output.push_str(&format!("proxima_active_connections {}\n", values[0].1));
         output.push_str("# HELP proxima_processed_queries_total PostgreSQL simple Query and extended Execute messages forwarded.\n");
         output.push_str("# TYPE proxima_processed_queries_total counter\n");
         output.push_str(&format!(
@@ -293,7 +287,9 @@ mod tests {
         assert!(!metrics.breaker_is_open());
         assert!(metrics.trip_breaker());
         assert!(!metrics.trip_breaker());
-        assert!(metrics.prometheus().contains("proxima_breaker_trips_total 1"));
+        assert!(metrics
+            .prometheus()
+            .contains("proxima_breaker_trips_total 1"));
         metrics.reset_breaker();
         assert!(!metrics.breaker_is_open());
     }
