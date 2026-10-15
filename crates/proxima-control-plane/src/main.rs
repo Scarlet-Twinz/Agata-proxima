@@ -3102,9 +3102,18 @@ async fn ingest_security_attestation(
         Ok(value) if value.len() >= 32 && !key_id.is_empty() && key_id == input.signing_key_id => value,
         _ => return service_unavailable("Attestation signing key and key ID must be configured before evidence can be accepted."),
     };
+    let mut transaction = match s.db.begin().await {
+        Ok(transaction) => transaction,
+        Err(error) => return db_error(error),
+    };
+    let lock_key = format!("{}:{}", ctx.organization_id, input.node_id.trim());
+    if let Err(error) = sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(&lock_key).execute(&mut *transaction).await {
+        return db_error(error);
+    }
     let previous = sqlx::query_scalar::<_, String>(
         "SELECT block_hash FROM security_attestation_blocks WHERE organization_id=$1 AND node_id=$2 ORDER BY epoch_timestamp_start DESC LIMIT 1"
-    ).bind(ctx.organization_id).bind(input.node_id.trim()).fetch_optional(&s.db).await;
+    ).bind(ctx.organization_id).bind(input.node_id.trim()).fetch_optional(&mut *transaction).await;
     let expected_previous = match previous {
         Ok(value) => value.unwrap_or_default(),
         Err(error) => return db_error(error),
