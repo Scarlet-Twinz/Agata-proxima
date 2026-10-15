@@ -14,13 +14,13 @@ if duration <= 0:
     raise SystemExit("duration must be positive")
 
 latencies_us = []
-for path in glob.glob(os.path.join(directory, target + "*.log")):
+for path in glob.glob(os.path.join(directory, target + ".*")):
     with open(path, newline="", encoding="utf-8") as handle:
         for row in csv.reader(handle):
             if len(row) < 4:
                 continue
             try:
-                value = float(row[3])
+                value = float(row[2])
             except (ValueError, TypeError):
                 continue
             if value >= 0:
