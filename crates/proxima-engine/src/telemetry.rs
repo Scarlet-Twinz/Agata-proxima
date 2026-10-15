@@ -106,14 +106,20 @@ impl SecurityBreaker {
         if !self.enabled { return BreakerDecision::Allow; }
         let Ok(mut peers) = self.peers.lock() else { warn!("breaker state lock poisoned; failing closed"); return BreakerDecision::RejectWhileTripped; };
         let now = Instant::now();
-        if let Some(state) = peers.get_mut(&peer) {
-            if let Some(until) = state.tripped_until {
-                if now < until { return BreakerDecision::RejectWhileTripped; }
-                state.tripped_until = None; state.failures = 0; state.window_started = now;
-                let any_tripped = peers.values().any(|peer| peer.tripped_until.is_some_and(|deadline| now < deadline));
-                self.metrics.set_breaker_tripped(any_tripped);
+        if let Some(state) = peers.get(&peer) {
+            if state.tripped_until.is_some_and(|until| now < until) {
+                return BreakerDecision::RejectWhileTripped;
             }
-            if now.duration_since(state.window_started) > self.window { state.failures = 0; state.window_started = now; }
+        }
+        let expired = peers.get(&peer).is_some_and(|state| state.tripped_until.is_some());
+        if expired {
+            if let Some(state) = peers.get_mut(&peer) {
+                state.tripped_until = None;
+                state.failures = 0;
+                state.window_started = now;
+            }
+            let any_tripped = peers.values().any(|state| state.tripped_until.is_some_and(|deadline| now < deadline));
+            self.metrics.set_breaker_tripped(any_tripped);
         }
         BreakerDecision::Allow
     }
