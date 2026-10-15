@@ -5,3 +5,6 @@ pub mod protocol;
 pub mod session;
 pub mod tenant;
 pub mod tls;
+pub mod attestation;
+pub mod breaker;
+pub mod monitor;
