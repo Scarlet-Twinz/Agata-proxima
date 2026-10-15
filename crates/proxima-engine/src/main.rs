@@ -168,7 +168,16 @@ async fn main() -> io::Result<()> {
                                             info!(block_hash = %hash, status = %response.status(), "signed attestation delivered to control plane");
                                         }
                                         Ok(response) => {
-                                            error!(block_hash = %hash, status = %response.status(), "control plane rejected signed attestation");
+                                            let status = response.status();
+                                            let body = response.text().await.unwrap_or_else(|error| {
+                                                format!("<could not read control-plane response body: {error}>")
+                                            });
+                                            error!(
+                                                block_hash = %hash,
+                                                %status,
+                                                response_body = %body,
+                                                "control plane rejected signed attestation"
+                                            );
                                         }
                                         Err(error) => {
                                             error!(block_hash = %hash, %error, "could not deliver signed attestation to control plane");
