@@ -71,6 +71,8 @@ jobs:
         run: bash -n tools/proxima-verify.sh tools/proxima-verify-3tenant.sh
       - name: Performance harness syntax
         run: bash -n tests/performance/benchmark-proxy.sh
+      - name: Monitor Breaker Attest integration contract
+        run: bash tests/launch/proxima_monitor_attest_gate.sh
 
       - name: External SaaS reference syntax
         run: |
