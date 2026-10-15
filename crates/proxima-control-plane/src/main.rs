@@ -4324,4 +4324,22 @@ mod tests {
             "&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;"
         );
     }
+
+    #[test]
+    fn attestation_hash_is_deterministic_and_binds_evidence() {
+        let organization_id = Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap();
+        let hash = calculate_attestation_hash(
+            organization_id, "node-a", 100, 200, 12, 3, 1, None,
+            Some(true), Some(true), Some(false), "previous-hash",
+        );
+        assert_eq!(hash.len(), 64);
+        assert_eq!(hash, calculate_attestation_hash(
+            organization_id, "node-a", 100, 200, 12, 3, 1, None,
+            Some(true), Some(true), Some(false), "previous-hash",
+        ));
+        assert_ne!(hash, calculate_attestation_hash(
+            organization_id, "node-a", 100, 200, 13, 3, 1, None,
+            Some(true), Some(true), Some(false), "previous-hash",
+        ));
+    }
 }
