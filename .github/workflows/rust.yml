@@ -88,6 +88,9 @@ jobs:
       - name: Proxima four-pillar contract
         run: bash tests/launch/proxima_four_pillars_gate.sh
 
+      - name: Benchmark harness syntax
+        run: bash -n scripts/bench/proxima-benchmark.sh
+
       - name: Frontend production build
         uses: actions/setup-node@v4
         with:
