@@ -292,6 +292,10 @@ async fn main() -> Result<()> {
     sqlx::raw_sql(include_str!("../migrations/0022_flutterwave_billing.sql"))
         .execute(&db)
         .await?;
+    sqlx::raw_sql(include_str!("../migrations/0023_security_attestations.sql"))
+        .execute(&db)
+        .await?;
+
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
@@ -425,6 +429,7 @@ async fn main() -> Result<()> {
             get(verifications).post(create_verification),
         )
         .route("/api/v1/audit", get(audit_events))
+        .route("/api/v1/attestations", get(security_attestations))
         .route("/api/v1/support", get(support).post(create_support))
         .route(
             "/api/v1/public/support-requests",
@@ -3048,6 +3053,69 @@ async fn audit_events(State(s): State<AppState>, headers: HeaderMap) -> Response
         })).collect::<Vec<_>>()).into_response(),
         Err(e) => db_error(e),
     }
+}
+
+
+async fn security_attestations(State(s): State<AppState>, headers: HeaderMap) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(value) => value,
+        Err(code) => return code.into_response(),
+    };
+    let rows = match sqlx::query(
+        "SELECT id, node_id, epoch_timestamp_start, epoch_timestamp_end,
+                total_processed_queries, authenticated_tenant_sessions,
+                blocked_unauthorized_violations, p99_latency_overhead_ms,
+                force_rls_active, tls_termination_enforced, circuit_breaker_tripped,
+                previous_block_hash, block_hash, signature_algorithm, signing_key_id,
+                encode(signature, 'hex') AS signature_hex
+         FROM security_attestation_blocks
+         WHERE organization_id=$1
+         ORDER BY epoch_timestamp_start DESC LIMIT 500"
+    ).bind(ctx.organization_id).fetch_all(&s.db).await {
+        Ok(rows) => rows,
+        Err(error) => return db_error(error),
+    };
+    let attestations = rows.iter().map(|row| {
+        let signature_hex: String = row.get("signature_hex");
+        let signature_valid = verify_attestation_signature(
+            row.get::<String, _>("block_hash").as_str(),
+            row.get::<String, _>("signature_algorithm").as_str(),
+            row.get::<String, _>("signing_key_id").as_str(),
+            &signature_hex,
+        );
+        json!({
+            "id": row.get::<Uuid, _>("id"),
+            "node_id": row.get::<String, _>("node_id"),
+            "epoch_timestamp_start": row.get::<i64, _>("epoch_timestamp_start"),
+            "epoch_timestamp_end": row.get::<i64, _>("epoch_timestamp_end"),
+            "total_processed_queries": row.get::<i64, _>("total_processed_queries"),
+            "authenticated_tenant_sessions": row.get::<i64, _>("authenticated_tenant_sessions"),
+            "blocked_unauthorized_violations": row.get::<i64, _>("blocked_unauthorized_violations"),
+            "p99_latency_overhead_ms": row.get::<Option<f64>, _>("p99_latency_overhead_ms"),
+            "force_rls_active": row.get::<Option<bool>, _>("force_rls_active"),
+            "tls_termination_enforced": row.get::<Option<bool>, _>("tls_termination_enforced"),
+            "circuit_breaker_tripped": row.get::<Option<bool>, _>("circuit_breaker_tripped"),
+            "previous_block_hash": row.get::<String, _>("previous_block_hash"),
+            "block_hash_signature": row.get::<String, _>("block_hash"),
+            "signature_valid": signature_valid
+        })
+    }).collect::<Vec<_>>();
+    Json(json!({"status": if attestations.is_empty() { "awaiting_node_evidence" } else { "available" }, "attestations": attestations})).into_response()
+}
+
+fn verify_attestation_signature(block_hash: &str, algorithm: &str, key_id: &str, signature_hex: &str) -> bool {
+    use hmac::{Hmac, Mac};
+    if algorithm != "HMAC-SHA256" { return false; }
+    let configured_key_id = env::var("PROXIMA_ATTESTATION_SIGNING_KEY_ID").unwrap_or_default();
+    if configured_key_id.is_empty() || configured_key_id != key_id { return false; }
+    let key = match env::var("PROXIMA_ATTESTATION_SIGNING_KEY") {
+        Ok(value) if value.len() >= 32 => value,
+        _ => return false,
+    };
+    let signature = match hex::decode(signature_hex) { Ok(value) => value, Err(_) => return false };
+    let mut mac = match Hmac::<Sha256>::new_from_slice(key.as_bytes()) { Ok(value) => value, Err(_) => return false };
+    mac.update(block_hash.as_bytes());
+    mac.verify_slice(&signature).is_ok()
 }
 
 fn valid_public_support_email(email: &str) -> bool {
