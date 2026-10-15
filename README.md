@@ -32,7 +32,10 @@ The first implementation targets PostgreSQL and is written in Rust with Tokio.
 
 - **Proxima Engine** — the self-hosted data-plane component.
 - **Proxima Verify** — isolation verification and adversarial security testing.
-- **Proxima Cloud** — the hosted control plane for policies, deployments, audit, monitoring, and fleet management.
+- **Proxima Monitor** — a separate, internal Prometheus endpoint for engine telemetry.
+- **Proxima Breaker** — peer-scoped fail-closed defense against repeated protocol and tenant-authentication violations.
+- **Proxima Attest** — signed, hash-chained security evidence with a control-plane verification API and downloadable PDF reports.
+- **Proxima Cloud** — the hosted control plane for policies, deployments, audit, monitoring, attestations, and fleet management.
 
 Security guarantees will be documented against an explicit threat model. Proxima will not claim protection that it cannot demonstrate with tests.
 
@@ -54,6 +57,7 @@ The 25–40 platform layer adds an authenticated, durable control plane with org
 - [Security verification](docs/verification.md) — RLS, protocol tests and adversarial verification.
 - [Failure engineering](docs/failure-engineering.md) — expected behavior when the Control Plane, PostgreSQL, policies, nodes or TLS fail.
 - [Performance engineering](docs/performance.md) — reproducible benchmark dimensions; no unmeasured SLA claims.
+- [Proxima four-pillar runbook](docs/production/proxima-four-pillars.md) — Monitor, Breaker, Attest, signed ingestion, PDF evidence, and benchmark operation.
 - [Phase 3.22 entitlement contract](docs/billing/phase3-22-entitlement-contract.md) — pricing, quotas and A–H acceptance map.
 - [Microsoft Entra SSO runbook](docs/identity/microsoft-entra-oidc.md) — OIDC configuration and remaining activation gates.
 - [Paddle Live billing runbook](docs/production/flutterwave-billing.md) — Live credentials, price IDs, signed webhooks and activation gates.

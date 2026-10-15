@@ -16,6 +16,7 @@ use axum::{
     routing::{delete, get, post},
     Json, Router,
 };
+use hmac::Mac;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -129,6 +130,30 @@ struct SupportInput {
     subject: String,
     message: String,
     priority: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct AttestationInput {
+    node_id: String,
+    attestation_version: i32,
+    epoch_timestamp_start: i64,
+    epoch_timestamp_end: i64,
+    telemetry_summary: Value,
+    security_state: Value,
+    previous_block_hash: String,
+    canonical_payload: String,
+    block_hash: String,
+    block_hash_signature: String,
+}
+
+#[derive(Deserialize)]
+struct SecurityEventInput {
+    node_id: String,
+    event_type: String,
+    severity: String,
+    peer_fingerprint: String,
+    reason: String,
+    observed_at: i64,
 }
 
 #[derive(Deserialize)]
@@ -292,6 +317,9 @@ async fn main() -> Result<()> {
     sqlx::raw_sql(include_str!("../migrations/0022_flutterwave_billing.sql"))
         .execute(&db)
         .await?;
+    sqlx::raw_sql(include_str!("../migrations/0023_proxima_attestations.sql"))
+        .execute(&db)
+        .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
@@ -425,6 +453,11 @@ async fn main() -> Result<()> {
             get(verifications).post(create_verification),
         )
         .route("/api/v1/audit", get(audit_events))
+        .route(
+            "/api/v1/attestations",
+            get(attestations).post(create_attestation),
+        )
+        .route("/api/v1/security/events", post(ingest_security_event))
         .route("/api/v1/support", get(support).post(create_support))
         .route(
             "/api/v1/public/support-requests",
@@ -3011,6 +3044,298 @@ async fn create_verification(
     }
 }
 
+async fn ingest_security_event(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<SecurityEventInput>,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
+    if input.event_type != "security.breaker.tripped"
+        || input.severity != "critical"
+        || input.node_id.is_empty()
+        || input.node_id.len() > 128
+        || safe_attestation_identifier(&input.node_id) != input.node_id
+        || input.peer_fingerprint.len() != 64
+        || !input
+            .peer_fingerprint
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit())
+        || input.reason.len() > 256
+        || input.observed_at <= 0
+    {
+        return bad("Invalid security event envelope.");
+    }
+    audit(
+        &s.db,
+        ctx.organization_id,
+        ctx.user_id,
+        "security.breaker.tripped",
+        "security_event",
+        None,
+        json!({
+            "node_id":input.node_id,
+            "event_type":input.event_type,
+            "severity":input.severity,
+            "peer_fingerprint":input.peer_fingerprint,
+            "reason":input.reason,
+            "observed_at":input.observed_at,
+            "source":"proxima_engine"
+        }),
+    )
+    .await;
+    Json(json!({"ok":true,"recorded":true})).into_response()
+}
+
+async fn attestations(State(s): State<AppState>, headers: HeaderMap) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    match sqlx::query(
+        "SELECT id,node_id,attestation_version,epoch_timestamp_start,epoch_timestamp_end,
+         telemetry_summary,security_state,previous_block_hash,canonical_payload,block_hash,
+         block_hash_signature,created_at
+         FROM proxima_attestations WHERE organization_id=$1 ORDER BY node_id ASC, epoch_timestamp_end ASC, created_at ASC LIMIT 1000"
+    ).bind(ctx.organization_id).fetch_all(&s.db).await {
+        Ok(rows) => {
+            let signing_key = env::var("PROXIMA_ATTESTATION_SIGNING_KEY").ok().filter(|key| key.len() >= 32).map(String::into_bytes);
+            let mut previous_by_node = std::collections::HashMap::<String, String>::new();
+            let mut chain_valid_by_node = std::collections::HashMap::<String, bool>::new();
+            let mut verified_by_id = std::collections::HashMap::<Uuid, bool>::new();
+            for row in &rows {
+                let id = row.get::<Uuid,_>("id");
+                let node_id = row.get::<String,_>("node_id");
+                let previous = row.get::<String,_>("previous_block_hash");
+                let payload = row.get::<String,_>("canonical_payload");
+                let hash = row.get::<String,_>("block_hash");
+                let signature = row.get::<String,_>("block_hash_signature");
+                let telemetry = row.get::<Value,_>("telemetry_summary");
+                let security_state = row.get::<Value,_>("security_state");
+                let start = row.get::<i64,_>("epoch_timestamp_start");
+                let end = row.get::<i64,_>("epoch_timestamp_end");
+                let expected_payload = canonical_attestation_payload(ctx.organization_id, &node_id, start, end, &telemetry, &security_state, &previous);
+                let expected_previous = previous_by_node.entry(node_id.clone()).or_insert_with(|| "GENESIS".to_string());
+                let previous_chain_valid = *chain_valid_by_node.entry(node_id.clone()).or_insert(true);
+                let mut valid = previous_chain_valid
+                    && previous == *expected_previous
+                    && expected_payload.as_deref() == Some(payload.as_str())
+                    && format!("{:x}", Sha256::digest(payload.as_bytes())) == hash;
+                if let Some(key) = signing_key.as_deref() {
+                    if let Ok(mut mac) = hmac::Hmac::<Sha256>::new_from_slice(key) {
+                        mac.update(hash.as_bytes());
+                        valid &= hex::encode(mac.finalize().into_bytes()) == signature;
+                    } else { valid = false; }
+                } else { valid = false; }
+                verified_by_id.insert(id, valid);
+                chain_valid_by_node.insert(node_id, valid);
+                *expected_previous = hash;
+            }
+            let chain_verified = !rows.is_empty() && verified_by_id.values().all(|valid| *valid);
+            let mut records = rows.iter().rev().map(|r| json!({
+                "id":r.get::<Uuid,_>("id"),
+                "node_id":r.get::<String,_>("node_id"),
+                "attestation_version":r.get::<i32,_>("attestation_version"),
+                "epoch_timestamp_start":r.get::<i64,_>("epoch_timestamp_start"),
+                "epoch_timestamp_end":r.get::<i64,_>("epoch_timestamp_end"),
+                "telemetry_summary":r.get::<Value,_>("telemetry_summary"),
+                "security_state":r.get::<Value,_>("security_state"),
+                "previous_block_hash":r.get::<String,_>("previous_block_hash"),
+                "canonical_payload":r.get::<String,_>("canonical_payload"),
+                "block_hash":r.get::<String,_>("block_hash"),
+                "block_hash_signature":r.get::<String,_>("block_hash_signature"),
+                "verified":verified_by_id.get(&r.get::<Uuid,_>("id")).copied().unwrap_or(false),
+                "created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at")
+            })).collect::<Vec<_>>();
+            records.sort_by(|left, right| {
+                right["created_at"].as_str().cmp(&left["created_at"].as_str())
+            });
+            let count = records.len();
+            Json(json!({"attestations":records,"count":count,"chain_verified":chain_verified})).into_response()
+        }
+        Err(e) => db_error(e),
+    }
+}
+
+async fn create_attestation(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<AttestationInput>,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
+    if input.attestation_version != 1
+        || input.node_id.trim().is_empty()
+        || input.node_id.len() > 128
+        || safe_attestation_identifier(&input.node_id) != input.node_id
+        || input
+            .telemetry_summary
+            .as_object()
+            .map(|object| object.len())
+            != Some(4)
+        || input.security_state.as_object().map(|object| object.len()) != Some(3)
+        || input.epoch_timestamp_start < 0
+        || input.epoch_timestamp_end < input.epoch_timestamp_start
+        || input.canonical_payload.len() > 64 * 1024
+        || input.block_hash.len() != 64
+        || input.block_hash_signature.len() != 64
+    {
+        return bad("Invalid attestation envelope.");
+    }
+    let signing_key = match env::var("PROXIMA_ATTESTATION_SIGNING_KEY") {
+        Ok(value) if value.len() >= 32 => value.into_bytes(),
+        _ => return service_unavailable("Attestation ingestion is disabled until PROXIMA_ATTESTATION_SIGNING_KEY is configured with at least 32 bytes."),
+    };
+    let Some(total_processed_queries) = input
+        .telemetry_summary
+        .get("total_processed_queries")
+        .and_then(Value::as_u64)
+    else {
+        return bad("Attestation telemetry is missing total_processed_queries.");
+    };
+    let Some(authenticated_tenant_sessions) = input
+        .telemetry_summary
+        .get("authenticated_tenant_sessions")
+        .and_then(Value::as_u64)
+    else {
+        return bad("Attestation telemetry is missing authenticated_tenant_sessions.");
+    };
+    let Some(blocked_unauthorized_violations) = input
+        .telemetry_summary
+        .get("blocked_unauthorized_violations")
+        .and_then(Value::as_u64)
+    else {
+        return bad("Attestation telemetry is missing blocked_unauthorized_violations.");
+    };
+    let Some(p99_latency_overhead_ms) = input
+        .telemetry_summary
+        .get("p99_latency_overhead_ms")
+        .and_then(Value::as_f64)
+        .filter(|value| value.is_finite() && *value >= 0.0)
+    else {
+        return bad("Attestation telemetry has an invalid p99_latency_overhead_ms.");
+    };
+    let Some(force_rls_active) = input
+        .security_state
+        .get("force_rls_active")
+        .and_then(Value::as_bool)
+    else {
+        return bad("Attestation security_state is missing force_rls_active.");
+    };
+    let Some(tls_termination_enforced) = input
+        .security_state
+        .get("tls_termination_enforced")
+        .and_then(Value::as_bool)
+    else {
+        return bad("Attestation security_state is missing tls_termination_enforced.");
+    };
+    let Some(circuit_breaker_tripped) = input
+        .security_state
+        .get("circuit_breaker_tripped")
+        .and_then(Value::as_bool)
+    else {
+        return bad("Attestation security_state is missing circuit_breaker_tripped.");
+    };
+    let canonical_expected = format!(
+        "attestation_version=1\norganization_id={}\nnode_id={}\nepoch_timestamp_start={}\nepoch_timestamp_end={}\ntotal_processed_queries={}\nauthenticated_tenant_sessions={}\nblocked_unauthorized_violations={}\np99_latency_overhead_ms={}\nforce_rls_active={}\ntls_termination_enforced={}\ncircuit_breaker_tripped={}\nprevious_block_hash={}\n",
+        ctx.organization_id,
+        safe_attestation_identifier(&input.node_id),
+        input.epoch_timestamp_start,
+        input.epoch_timestamp_end,
+        total_processed_queries,
+        authenticated_tenant_sessions,
+        blocked_unauthorized_violations,
+        p99_latency_overhead_ms,
+        force_rls_active,
+        tls_termination_enforced,
+        circuit_breaker_tripped,
+        input.previous_block_hash
+    );
+    if canonical_expected != input.canonical_payload {
+        return (StatusCode::UNPROCESSABLE_ENTITY, Json(json!({"ok":false,"message":"Attestation fields do not match the signed canonical payload or active organization."}))).into_response();
+    }
+    let calculated_hash = format!("{:x}", Sha256::digest(input.canonical_payload.as_bytes()));
+    if calculated_hash != input.block_hash {
+        return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(json!({"ok":false,"message":"Attestation payload hash mismatch."})),
+        )
+            .into_response();
+    }
+    let mut mac = match hmac::Hmac::<Sha256>::new_from_slice(&signing_key) {
+        Ok(mac) => mac,
+        Err(_) => return internal("Unable to initialize attestation signature verification."),
+    };
+    mac.update(input.block_hash.as_bytes());
+    let expected_signature = hex::encode(mac.finalize().into_bytes());
+    if expected_signature != input.block_hash_signature {
+        return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(json!({"ok":false,"message":"Attestation signature is invalid."})),
+        )
+            .into_response();
+    }
+
+    let mut tx = match s.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => return db_error(e),
+    };
+    if let Err(e) = sqlx::query("SELECT pg_advisory_xact_lock(hashtext($1))")
+        .bind(format!("{}:{}", ctx.organization_id, input.node_id))
+        .execute(&mut *tx)
+        .await
+    {
+        return db_error(e);
+    }
+    let previous = match sqlx::query_scalar::<_, String>(
+        "SELECT block_hash FROM proxima_attestations WHERE organization_id=$1 AND node_id=$2 ORDER BY epoch_timestamp_end DESC, created_at DESC LIMIT 1"
+    ).bind(ctx.organization_id).bind(&input.node_id).fetch_optional(&mut *tx).await {
+        Ok(value) => value.unwrap_or_else(|| "GENESIS".into()),
+        Err(e) => return db_error(e),
+    };
+    if previous != input.previous_block_hash {
+        return (StatusCode::CONFLICT, Json(json!({"ok":false,"message":"Attestation chain predecessor does not match the latest stored block.","expected_previous_block_hash":previous}))).into_response();
+    }
+    let id = Uuid::new_v4();
+    let inserted = sqlx::query(
+        "INSERT INTO proxima_attestations
+         (id,organization_id,node_id,attestation_version,epoch_timestamp_start,epoch_timestamp_end,
+          telemetry_summary,security_state,previous_block_hash,canonical_payload,block_hash,block_hash_signature)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)"
+    ).bind(id).bind(ctx.organization_id).bind(&input.node_id).bind(input.attestation_version)
+      .bind(input.epoch_timestamp_start).bind(input.epoch_timestamp_end)
+      .bind(&input.telemetry_summary).bind(&input.security_state).bind(&input.previous_block_hash)
+      .bind(&input.canonical_payload).bind(&input.block_hash).bind(&input.block_hash_signature)
+      .execute(&mut *tx).await;
+    if let Err(e) = inserted {
+        return db_error(e);
+    }
+    if let Err(e) = tx.commit().await {
+        return db_error(e);
+    }
+    audit(
+        &s.db,
+        ctx.organization_id,
+        ctx.user_id,
+        "attestation.ingested",
+        "attestation",
+        Some(id),
+        json!({"node_id":input.node_id,"block_hash":input.block_hash}),
+    )
+    .await;
+    Json(json!({"ok":true,"id":id,"block_hash":input.block_hash,"verified":true})).into_response()
+}
+
 async fn audit_events(State(s): State<AppState>, headers: HeaderMap) -> Response {
     let ctx = match authenticate(&s, &headers).await {
         Ok(v) => v,
@@ -3048,6 +3373,48 @@ async fn audit_events(State(s): State<AppState>, headers: HeaderMap) -> Response
         })).collect::<Vec<_>>()).into_response(),
         Err(e) => db_error(e),
     }
+}
+
+fn canonical_attestation_payload(
+    organization_id: Uuid,
+    node_id: &str,
+    start: i64,
+    end: i64,
+    telemetry: &Value,
+    security: &Value,
+    previous_hash: &str,
+) -> Option<String> {
+    if telemetry.as_object()?.len() != 4
+        || security.as_object()?.len() != 3
+        || safe_attestation_identifier(node_id) != node_id
+    {
+        return None;
+    }
+    let total_queries = telemetry.get("total_processed_queries")?.as_u64()?;
+    let tenant_sessions = telemetry.get("authenticated_tenant_sessions")?.as_u64()?;
+    let blocked = telemetry.get("blocked_unauthorized_violations")?.as_u64()?;
+    let p99 = telemetry.get("p99_latency_overhead_ms")?.as_f64()?;
+    if !p99.is_finite() || p99 < 0.0 {
+        return None;
+    }
+    let force_rls = security.get("force_rls_active")?.as_bool()?;
+    let tls = security.get("tls_termination_enforced")?.as_bool()?;
+    let breaker = security.get("circuit_breaker_tripped")?.as_bool()?;
+    Some(format!(
+        "attestation_version=1\norganization_id={}\nnode_id={}\nepoch_timestamp_start={}\nepoch_timestamp_end={}\ntotal_processed_queries={}\nauthenticated_tenant_sessions={}\nblocked_unauthorized_violations={}\np99_latency_overhead_ms={}\nforce_rls_active={}\ntls_termination_enforced={}\ncircuit_breaker_tripped={}\nprevious_block_hash={}\n",
+        organization_id, safe_attestation_identifier(node_id), start, end, total_queries,
+        tenant_sessions, blocked, p99, force_rls, tls, breaker, previous_hash
+    ))
+}
+
+fn safe_attestation_identifier(value: &str) -> String {
+    value
+        .chars()
+        .filter(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.')
+        })
+        .take(128)
+        .collect()
 }
 
 fn valid_public_support_email(email: &str) -> bool {

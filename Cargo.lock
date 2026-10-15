@@ -1543,6 +1543,7 @@ dependencies = [
  "bytes",
  "hmac 0.12.1",
  "proptest",
+ "reqwest",
  "rustls",
  "rustls-pemfile",
  "serial_test",
