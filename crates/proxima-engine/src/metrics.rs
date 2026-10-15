@@ -33,23 +33,45 @@ pub struct EngineMetrics {
     query_latency_le_1s: AtomicU64,
 }
 
+struct QueryStart {
+    started: Instant,
+    simple_query: bool,
+}
+
 #[derive(Default)]
 pub struct QueryLatencyTracker {
-    starts: Mutex<VecDeque<Instant>>,
+    starts: Mutex<VecDeque<QueryStart>>,
 }
 
 impl QueryLatencyTracker {
-    pub fn start(&self) {
+    pub fn start(&self, simple_query: bool) {
         if let Ok(mut starts) = self.starts.lock() {
             if starts.len() >= 1024 {
                 starts.pop_front();
             }
-            starts.push_back(Instant::now());
+            starts.push_back(QueryStart {
+                started: Instant::now(),
+                simple_query,
+            });
         }
     }
 
-    pub fn finish(&self) {
-        let started = self.starts.lock().ok().and_then(|mut starts| starts.pop_front());
+    pub fn finish_extended(&self) {
+        self.finish_if(|query| !query.simple_query);
+    }
+
+    pub fn finish_simple(&self) {
+        self.finish_if(|query| query.simple_query);
+    }
+
+    fn finish_if(&self, should_finish: impl FnOnce(&QueryStart) -> bool) {
+        let started = self.starts.lock().ok().and_then(|mut starts| {
+            if starts.front().is_some_and(should_finish) {
+                starts.pop_front().map(|query| query.started)
+            } else {
+                None
+            }
+        });
         if let Some(started) = started {
             let elapsed = started.elapsed().as_micros().min(u64::MAX as u128) as u64;
             global().observe_query_latency(elapsed);
