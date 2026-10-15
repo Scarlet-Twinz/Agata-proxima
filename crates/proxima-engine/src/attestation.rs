@@ -34,28 +34,52 @@ pub struct AttestationBlock {
 
 impl AttestationBlock {
     pub fn new(
-        organization_id: String, node_id: String, start: u64, end: u64,
-        telemetry_summary: TelemetrySummary, security_state: SecurityState,
+        organization_id: String,
+        node_id: String,
+        start: u64,
+        end: u64,
+        telemetry_summary: TelemetrySummary,
+        security_state: SecurityState,
         previous_block_hash: String,
     ) -> Result<Self, &'static str> {
-        if organization_id.trim().is_empty() || node_id.trim().is_empty() { return Err("organization_id and node_id are required"); }
-        if end < start { return Err("epoch_timestamp_end must be >= epoch_timestamp_start"); }
-        let mut block = Self { attestation_version: 1, organization_id, node_id,
-            epoch_timestamp_start: start, epoch_timestamp_end: end, telemetry_summary,
-            security_state, previous_block_hash, block_hash_signature: String::new() };
+        if organization_id.trim().is_empty() || node_id.trim().is_empty() {
+            return Err("organization_id and node_id are required");
+        }
+        if end < start {
+            return Err("epoch_timestamp_end must be >= epoch_timestamp_start");
+        }
+        let mut block = Self {
+            attestation_version: 1,
+            organization_id,
+            node_id,
+            epoch_timestamp_start: start,
+            epoch_timestamp_end: end,
+            telemetry_summary,
+            security_state,
+            previous_block_hash,
+            block_hash_signature: String::new(),
+        };
         block.block_hash_signature = block.calculate_hash();
         Ok(block)
     }
     pub fn calculate_hash(&self) -> String {
-        let canonical = format!("{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
-            self.attestation_version, self.organization_id, self.node_id,
-            self.epoch_timestamp_start, self.epoch_timestamp_end,
+        let canonical = format!(
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            self.attestation_version,
+            self.organization_id,
+            self.node_id,
+            self.epoch_timestamp_start,
+            self.epoch_timestamp_end,
             self.telemetry_summary.total_processed_queries,
             self.telemetry_summary.authenticated_tenant_sessions,
             self.telemetry_summary.blocked_unauthorized_violations,
             self.telemetry_summary.p99_latency_overhead_ms.unwrap_or(0.0),
-            self.security_state.force_rls_active, self.security_state.tls_termination_enforced,
-            self.security_state.circuit_breaker_tripped, self.previous_block_hash, "agata-proxima-attestation-v1");
+            self.security_state.force_rls_active,
+            self.security_state.tls_termination_enforced,
+            self.security_state.circuit_breaker_tripped,
+            self.previous_block_hash,
+            "agata-proxima-attestation-v1"
+        );
         hex_lower(&Sha256::digest(canonical.as_bytes()))
     }
     pub fn verify(&self) -> bool {
@@ -69,33 +93,51 @@ impl AttestationBlock {
 /// is provisioned to the node and verifier; use asymmetric signatures when
 /// verifiers must not possess a signing-capable secret.
 pub fn sign_hash_hmac(block_hash: &str, key: &[u8]) -> Result<String, &'static str> {
-    if key.len() < 32 { return Err("attestation HMAC key must be at least 32 bytes"); }
-    let mut mac = Hmac::<Sha256>::new_from_slice(key).map_err(|_| "invalid attestation HMAC key")?;
+    if key.len() < 32 {
+        return Err("attestation HMAC key must be at least 32 bytes");
+    }
+    let mut mac =
+        Hmac::<Sha256>::new_from_slice(key).map_err(|_| "invalid attestation HMAC key")?;
     mac.update(block_hash.as_bytes());
     Ok(hex_lower(&mac.finalize().into_bytes()))
 }
 
 pub fn verify_hash_hmac(block_hash: &str, signature_hex: &str, key: &[u8]) -> bool {
-    if key.len() < 32 { return false; }
-    let Ok(signature) = decode_hex(signature_hex) else { return false; };
-    let Ok(mut mac) = Hmac::<Sha256>::new_from_slice(key) else { return false; };
+    if key.len() < 32 {
+        return false;
+    }
+    let Ok(signature) = decode_hex(signature_hex) else {
+        return false;
+    };
+    let Ok(mut mac) = Hmac::<Sha256>::new_from_slice(key) else {
+        return false;
+    };
     mac.update(block_hash.as_bytes());
     mac.verify_slice(&signature).is_ok()
 }
 
 fn decode_hex(value: &str) -> Result<Vec<u8>, ()> {
-    if value.len() % 2 != 0 { return Err(()); }
-    value.as_bytes().chunks_exact(2).map(|pair| {
-        let high = (pair[0] as char).to_digit(16).ok_or(())?;
-        let low = (pair[1] as char).to_digit(16).ok_or(())?;
-        Ok(((high << 4) | low) as u8)
-    }).collect()
+    if value.len() % 2 != 0 {
+        return Err(());
+    }
+    value
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|pair| {
+            let high = (pair[0] as char).to_digit(16).ok_or(())?;
+            let low = (pair[1] as char).to_digit(16).ok_or(())?;
+            Ok(((high << 4) | low) as u8)
+        })
+        .collect()
 }
 
 fn hex_lower(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut out = String::with_capacity(bytes.len() * 2);
-    for byte in bytes { out.push(HEX[(byte >> 4) as usize] as char); out.push(HEX[(byte & 15) as usize] as char); }
+    for byte in bytes {
+        out.push(HEX[(byte >> 4) as usize] as char);
+        out.push(HEX[(byte & 15) as usize] as char);
+    }
     out
 }
 
