@@ -4,6 +4,8 @@ use std::sync::Arc;
 use proxima_engine::{
     config::{Config, UpstreamTlsMode},
     dashboard,
+    metrics,
+    security_breaker::{BreakerConfig, SecurityBreaker},
     protocol::SSL_REQUEST_CODE,
     session::{establish, BoxedPgStream},
     tenant::TenantTokenVerifier,
@@ -13,6 +15,7 @@ use tokio::io::{copy_bidirectional, AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Semaphore;
 use tokio::time::timeout;
+use std::time::Instant;
 use tracing::{error, info};
 
 #[tokio::main]
@@ -44,6 +47,17 @@ async fn main() -> io::Result<()> {
     }
 
     let listener = TcpListener::bind(config.listen_addr).await?;
+    let metrics_addr = std::env::var("PROXIMA_METRICS_LISTEN_ADDR")
+        .unwrap_or_else(|_| "127.0.0.1:9090".to_string())
+        .parse()
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, format!("invalid PROXIMA_METRICS_LISTEN_ADDR: {error}")))?;
+    let metrics_addr_for_task = metrics_addr;
+    tokio::spawn(async move {
+        if let Err(error) = metrics::serve(metrics_addr_for_task).await {
+            error!(%error, "Prometheus metrics listener stopped");
+        }
+    });
+    let breaker = SecurityBreaker::new(BreakerConfig::from_env());
     let connection_limit = Arc::new(Semaphore::new(config.max_connections));
 
     if config.dashboard_enabled {
@@ -63,6 +77,8 @@ async fn main() -> io::Result<()> {
         require_client_tls = config.require_client_tls,
         upstream_tls = config.upstream_tls_mode != UpstreamTlsMode::Disable,
         dashboard = config.dashboard_enabled,
+        metrics = %metrics_addr,
+        security_breaker = breaker_config_enabled(),
         max_connections = config.max_connections,
         "Agata Proxima engine listening"
     );
@@ -71,15 +87,24 @@ async fn main() -> io::Result<()> {
         tokio::select! {
             accept = listener.accept() => {
                 let (client, peer) = accept?;
+                metrics::global().connection_accepted();
+                if breaker.is_blocked(peer.ip()) {
+                    metrics::global().connection_rejected();
+                    error!(peer = %peer, "connection rejected by security breaker");
+                    drop(client);
+                    continue;
+                }
                 let permit = match connection_limit.clone().try_acquire_owned() {
                     Ok(permit) => permit,
                     Err(_) => {
+                        metrics::global().connection_rejected();
                         error!(peer = %peer, "connection limit reached");
                         drop(client);
                         continue;
                     }
                 };
 
+                let breaker = breaker.clone();
                 let upstream = config.upstream_addr.clone();
                 let verifier = verifier.clone();
                 let tenant_role_prefix = config_tenant_role_prefix.clone();
@@ -109,6 +134,14 @@ async fn main() -> io::Result<()> {
                         upstream_tls_mode,
                         upstream_tls_server_name.as_deref(),
                     ).await {
+                        metrics::global().session_failed();
+                        let security_failure = matches!(err.kind(), io::ErrorKind::PermissionDenied | io::ErrorKind::InvalidData);
+                        if security_failure {
+                            metrics::global().violation_blocked();
+                            if breaker.record_violation(peer.ip()) {
+                                error!(peer = %peer, "security breaker tripped for peer; cooldown enforced");
+                            }
+                        }
                         error!(peer = %peer, error = %err, "connection failed");
                     }
                 });
@@ -190,6 +223,8 @@ async fn handle_connection(
     let (mut client, mut upstream, session) =
         establish(client, upstream, verifier, tenant_role_prefix).await?;
 
+    let session_started_at = Instant::now();
+    metrics::global().session_started();
     info!(
         peer = %peer,
         tenant = session
@@ -202,15 +237,24 @@ async fn handle_connection(
         "PostgreSQL session established"
     );
 
-    let (client_bytes, upstream_bytes) = copy_bidirectional(&mut client, &mut upstream).await?;
-
-    info!(
+    let copy_result = copy_bidirectional(&mut client, &mut upstream).await;
+    let duration_micros = session_started_at.elapsed().as_micros().min(u64::MAX as u128) as u64;
+    match copy_result {
+        Ok((client_bytes, upstream_bytes)) => {
+            metrics::global().session_finished(client_bytes, upstream_bytes, duration_micros);
+            info!(
         peer = %peer,
         client_to_database = client_bytes,
         database_to_client = upstream_bytes,
         "connection closed"
     );
-    Ok(())
+            Ok(())
+        }
+        Err(error) => {
+            metrics::global().session_finished(0, 0, duration_micros);
+            Err(error)
+        }
+    }
 }
 
 async fn client_wants_tls(client: &TcpStream) -> io::Result<bool> {
@@ -239,4 +283,12 @@ async fn client_wants_tls(client: &TcpStream) -> io::Result<bool> {
     let length = i32::from_be_bytes(probe[..4].try_into().unwrap());
     let code = i32::from_be_bytes(probe[4..8].try_into().unwrap());
     Ok(length == 8 && code == SSL_REQUEST_CODE)
+}
+
+
+fn breaker_config_enabled() -> bool {
+    let mode = std::env::var("PROXIMA_SECURITY_BREAKER")
+        .or_else(|_| std::env::var("PROXIMA_SECURITY_CIRCUIT_BREAKER"))
+        .unwrap_or_else(|_| "fail-closed".to_string());
+    !matches!(mode.trim().to_ascii_lowercase().as_str(), "off" | "disabled" | "false" | "0")
 }
