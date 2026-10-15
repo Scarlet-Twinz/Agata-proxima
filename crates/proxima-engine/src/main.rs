@@ -29,14 +29,27 @@ async fn main() -> io::Result<()> {
     let max_frontend_frame_bytes = std::env::var("PROXIMA_MAX_FRONTEND_FRAME_BYTES")
         .unwrap_or_else(|_| (64 * 1024 * 1024_u32).to_string())
         .parse::<u32>()
-        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, format!("invalid PROXIMA_MAX_FRONTEND_FRAME_BYTES: {error}")))?;
+        .map_err(|error| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("invalid PROXIMA_MAX_FRONTEND_FRAME_BYTES: {error}"),
+            )
+        })?;
     if !(4..=1024 * 1024 * 1024_u32).contains(&max_frontend_frame_bytes) {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "PROXIMA_MAX_FRONTEND_FRAME_BYTES must be between 4 and 1073741824"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "PROXIMA_MAX_FRONTEND_FRAME_BYTES must be between 4 and 1073741824",
+        ));
     }
     let metrics = Arc::new(EngineMetrics::default());
     let breaker = Arc::new(PeerCircuitBreaker::from_env()?);
     let force_rls_active = std::env::var("PROXIMA_ATTEST_FORCE_RLS_ACTIVE")
-        .map(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .map(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
         .unwrap_or(false);
     let attestation_metrics = metrics.clone();
     let attestation_breaker = breaker.clone();
@@ -175,19 +188,34 @@ async fn main() -> io::Result<()> {
                         connection_metrics.clone(),
                     ).await {
                         Ok((client_bytes, upstream_bytes)) => {
-                            connection_metrics.connection_finished(false, client_bytes, upstream_bytes);
+                            connection_metrics
+                                .connection_finished(false, client_bytes, upstream_bytes);
                         }
                         Err(err) => {
-                            if matches!(err.kind(), io::ErrorKind::PermissionDenied | io::ErrorKind::InvalidData) {
+                            if matches!(
+                                err.kind(),
+                                io::ErrorKind::PermissionDenied | io::ErrorKind::InvalidData
+                            ) {
                                 connection_metrics.unauthorized_violation();
                                 if connection_breaker.record_failure(peer.ip()) {
                                     connection_metrics.breaker_trip_event();
-                                    connection_metrics.set_breaker_open(connection_breaker.any_peer_blocked());
-                                    error!(peer = %peer, "security breaker opened for peer after repeated malformed or unauthorized handshakes");
+                                    connection_metrics.set_breaker_open(
+                                        connection_breaker.any_peer_blocked(),
+                                    );
+                                    error!(
+                                        peer = %peer,
+                                        "security breaker opened for peer after repeated malformed or unauthorized handshakes"
+                                    );
                                     let event_peer = peer.ip().to_string();
                                     tokio::spawn(async move {
-                                        if let Err(error) = proxima_engine::attestation_reporter::report_breaker_event(event_peer.clone()).await {
-                                            error!(%error, peer = %event_peer, "critical security event could not be delivered to the control plane");
+                                        if let Err(error) =
+                                            proxima_engine::attestation_reporter::report_breaker_event(event_peer.clone()).await
+                                        {
+                                            error!(
+                                                %error,
+                                                peer = %event_peer,
+                                                "critical security event could not be delivered to the control plane"
+                                            );
                                         }
                                     });
                                 }
@@ -358,7 +386,9 @@ where
                 if length < 4 || length > max_frame_bytes {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
-                        format!("malformed or oversized PostgreSQL frontend frame length: {length}"),
+                        format!(
+                            "malformed or oversized PostgreSQL frontend frame length: {length}"
+                        ),
                     ));
                 }
                 if matches!(frame_type, Some(b'Q' | b'E')) {
