@@ -132,6 +132,20 @@ struct SupportInput {
 }
 
 #[derive(Deserialize)]
+struct AttestationInput {
+    node_id: String,
+    attestation_version: i32,
+    epoch_timestamp_start: i64,
+    epoch_timestamp_end: i64,
+    telemetry_summary: Value,
+    security_state: Value,
+    previous_block_hash: String,
+    canonical_payload: String,
+    block_hash: String,
+    block_hash_signature: String,
+}
+
+#[derive(Deserialize)]
 struct PublicSupportInput {
     name: Option<String>,
     email: String,
@@ -292,6 +306,9 @@ async fn main() -> Result<()> {
     sqlx::raw_sql(include_str!("../migrations/0022_flutterwave_billing.sql"))
         .execute(&db)
         .await?;
+    sqlx::raw_sql(include_str!("../migrations/0023_proxima_attestations.sql"))
+        .execute(&db)
+        .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
@@ -425,6 +442,7 @@ async fn main() -> Result<()> {
             get(verifications).post(create_verification),
         )
         .route("/api/v1/audit", get(audit_events))
+        .route("/api/v1/attestations", get(attestations).post(create_attestation))
         .route("/api/v1/support", get(support).post(create_support))
         .route(
             "/api/v1/public/support-requests",
@@ -3009,6 +3027,114 @@ async fn create_verification(
         }
         Err(e) => db_error(e),
     }
+}
+
+async fn attestations(State(s): State<AppState>, headers: HeaderMap) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    match sqlx::query(
+        "SELECT id,node_id,attestation_version,epoch_timestamp_start,epoch_timestamp_end,
+         telemetry_summary,security_state,previous_block_hash,canonical_payload,block_hash,
+         block_hash_signature,created_at
+         FROM proxima_attestations WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 250"
+    ).bind(ctx.organization_id).fetch_all(&s.db).await {
+        Ok(rows) => {
+            let records = rows.iter().map(|r| json!({
+                "id":r.get::<Uuid,_>("id"),
+                "node_id":r.get::<String,_>("node_id"),
+                "attestation_version":r.get::<i32,_>("attestation_version"),
+                "epoch_timestamp_start":r.get::<i64,_>("epoch_timestamp_start"),
+                "epoch_timestamp_end":r.get::<i64,_>("epoch_timestamp_end"),
+                "telemetry_summary":r.get::<Value,_>("telemetry_summary"),
+                "security_state":r.get::<Value,_>("security_state"),
+                "previous_block_hash":r.get::<String,_>("previous_block_hash"),
+                "canonical_payload":r.get::<String,_>("canonical_payload"),
+                "block_hash":r.get::<String,_>("block_hash"),
+                "block_hash_signature":r.get::<String,_>("block_hash_signature"),
+                "created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at")
+            })).collect::<Vec<_>>();
+            Json(json!({"attestations":records,"count":records.len()})).into_response()
+        }
+        Err(e) => db_error(e),
+    }
+}
+
+async fn create_attestation(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<AttestationInput>,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
+    if input.attestation_version != 1
+        || input.node_id.trim().is_empty()
+        || input.node_id.len() > 128
+        || input.epoch_timestamp_start < 0
+        || input.epoch_timestamp_end < input.epoch_timestamp_start
+        || input.canonical_payload.len() > 64 * 1024
+        || input.block_hash.len() != 64
+        || input.block_hash_signature.len() != 64
+    {
+        return bad("Invalid attestation envelope.");
+    }
+    let signing_key = match env::var("PROXIMA_ATTESTATION_SIGNING_KEY") {
+        Ok(value) if value.len() >= 32 => value.into_bytes(),
+        _ => return service_unavailable("Attestation ingestion is disabled until PROXIMA_ATTESTATION_SIGNING_KEY is configured with at least 32 bytes."),
+    };
+    let calculated_hash = format!("{:x}", Sha256::digest(input.canonical_payload.as_bytes()));
+    if calculated_hash != input.block_hash {
+        return (StatusCode::UNPROCESSABLE_ENTITY, Json(json!({"ok":false,"message":"Attestation payload hash mismatch."}))).into_response();
+    }
+    let mut mac = match hmac::Hmac::<Sha256>::new_from_slice(&signing_key) {
+        Ok(mac) => mac,
+        Err(_) => return internal("Unable to initialize attestation signature verification."),
+    };
+    mac.update(input.block_hash.as_bytes());
+    let expected_signature = hex::encode(mac.finalize().into_bytes());
+    if expected_signature != input.block_hash_signature {
+        return (StatusCode::UNPROCESSABLE_ENTITY, Json(json!({"ok":false,"message":"Attestation signature is invalid."}))).into_response();
+    }
+
+    let mut tx = match s.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => return db_error(e),
+    };
+    if let Err(e) = sqlx::query("SELECT pg_advisory_xact_lock(hashtext($1))")
+        .bind(format!("{}:{}", ctx.organization_id, input.node_id))
+        .execute(&mut *tx).await {
+        return db_error(e);
+    }
+    let previous = match sqlx::query_scalar::<_, String>(
+        "SELECT block_hash FROM proxima_attestations WHERE organization_id=$1 AND node_id=$2 ORDER BY epoch_timestamp_end DESC, created_at DESC LIMIT 1"
+    ).bind(ctx.organization_id).bind(&input.node_id).fetch_optional(&mut *tx).await {
+        Ok(value) => value.unwrap_or_else(|| "GENESIS".into()),
+        Err(e) => return db_error(e),
+    };
+    if previous != input.previous_block_hash {
+        return (StatusCode::CONFLICT, Json(json!({"ok":false,"message":"Attestation chain predecessor does not match the latest stored block.","expected_previous_block_hash":previous}))).into_response();
+    }
+    let id = Uuid::new_v4();
+    let inserted = sqlx::query(
+        "INSERT INTO proxima_attestations
+         (id,organization_id,node_id,attestation_version,epoch_timestamp_start,epoch_timestamp_end,
+          telemetry_summary,security_state,previous_block_hash,canonical_payload,block_hash,block_hash_signature)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)"
+    ).bind(id).bind(ctx.organization_id).bind(&input.node_id).bind(input.attestation_version)
+      .bind(input.epoch_timestamp_start).bind(input.epoch_timestamp_end)
+      .bind(&input.telemetry_summary).bind(&input.security_state).bind(&input.previous_block_hash)
+      .bind(&input.canonical_payload).bind(&input.block_hash).bind(&input.block_hash_signature)
+      .execute(&mut *tx).await;
+    if let Err(e) = inserted { return db_error(e); }
+    if let Err(e) = tx.commit().await { return db_error(e); }
+    audit(&s.db, ctx.organization_id, ctx.user_id, "attestation.ingested", "attestation", Some(id), json!({"node_id":input.node_id,"block_hash":input.block_hash})).await;
+    Json(json!({"ok":true,"id":id,"block_hash":input.block_hash,"verified":true})).into_response()
 }
 
 async fn audit_events(State(s): State<AppState>, headers: HeaderMap) -> Response {
