@@ -3370,15 +3370,29 @@ async fn security_attestations(State(s): State<AppState>, headers: HeaderMap) ->
         Err(code) => return code.into_response(),
     };
     let rows = match sqlx::query(
-        "SELECT id, node_id, epoch_timestamp_start, epoch_timestamp_end,
+        "WITH recent AS (
+             SELECT id FROM security_attestation_blocks
+             WHERE organization_id=$1
+             ORDER BY epoch_timestamp_start DESC LIMIT 500
+         ), latest_per_node AS (
+             SELECT DISTINCT ON (node_id) id
+             FROM security_attestation_blocks
+             WHERE organization_id=$1
+             ORDER BY node_id, epoch_timestamp_start DESC
+         ), selected AS (
+             SELECT id FROM recent
+             UNION
+             SELECT id FROM latest_per_node
+         )
+         SELECT id, node_id, epoch_timestamp_start, epoch_timestamp_end,
                 total_processed_queries, authenticated_tenant_sessions,
                 blocked_unauthorized_violations, p99_latency_overhead_ms,
                 force_rls_active, tls_termination_enforced, circuit_breaker_tripped,
                 previous_block_hash, block_hash, signature_algorithm, signing_key_id,
                 encode(signature, 'hex') AS signature_hex
          FROM security_attestation_blocks
-         WHERE organization_id=$1
-         ORDER BY epoch_timestamp_start DESC LIMIT 500",
+         WHERE organization_id=$1 AND id IN (SELECT id FROM selected)
+         ORDER BY epoch_timestamp_start DESC",
     )
     .bind(ctx.organization_id)
     .fetch_all(&s.db)
