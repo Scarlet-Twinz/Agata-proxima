@@ -333,7 +333,7 @@ async fn handle_connection(
         Box::new(upstream_tcp)
     };
 
-    let (mut client, mut upstream, session) =
+    let (client, upstream, session) =
         establish(client, upstream, verifier, tenant_role_prefix).await?;
 
     let authenticated_tenant = session.tenant_context.is_some();
