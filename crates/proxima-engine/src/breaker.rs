@@ -35,6 +35,8 @@ impl BreakerMode {
     }
 }
 
+const MAX_TRACKED_PEERS: usize = 10_000;
+
 #[derive(Debug)]
 struct PeerState {
     failures: u32,
@@ -135,7 +137,9 @@ impl PeerCircuitBreaker {
         let Ok(peers) = self.peers.lock() else {
             return true;
         };
-        peers.values().any(|state| state.blocked_until.is_some_and(|until| now < until))
+        peers
+            .values()
+            .any(|state| state.blocked_until.is_some_and(|until| now < until))
     }
 
     pub fn record_failure(&self, peer: IpAddr) -> bool {
@@ -146,6 +150,20 @@ impl PeerCircuitBreaker {
         let Ok(mut peers) = self.peers.lock() else {
             return false;
         };
+        peers.retain(|_, state| {
+            let window_live = now.duration_since(state.window_started) <= self.failure_window;
+            let block_live = state.blocked_until.is_some_and(|until| now < until);
+            window_live || block_live
+        });
+        if !peers.contains_key(&peer) && peers.len() >= MAX_TRACKED_PEERS {
+            if let Some(oldest_peer) = peers
+                .iter()
+                .min_by_key(|(_, state)| state.window_started)
+                .map(|(address, _)| *address)
+            {
+                peers.remove(&oldest_peer);
+            }
+        }
         let state = peers.entry(peer).or_insert(PeerState {
             failures: 0,
             window_started: now,
