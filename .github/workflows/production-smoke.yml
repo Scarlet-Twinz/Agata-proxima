@@ -22,7 +22,7 @@ jobs:
       AGATA_PUBLIC_BASE_URL: ${{ inputs.base_url || secrets.AGATA_PUBLIC_BASE_URL }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Skip scheduled probe until a public URL is configured
         if: ${{ github.event_name == 'schedule' && env.AGATA_PUBLIC_BASE_URL == '' }}
