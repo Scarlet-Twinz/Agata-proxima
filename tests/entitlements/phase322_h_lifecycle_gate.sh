@@ -208,7 +208,7 @@ type_count=$(psql -v ON_ERROR_STOP=1 -d "${test_db}" -Atc "SELECT count(*) FROM 
 [[ "$type_count" == "2" ]] || fail "different event types with the same provider object ID collided"
 pass "webhook idempotency, in-progress claims, and stale retry behavior are enforced"
 
-grep -Fq 'checkout_price.as_deref() != price_id.as_deref()' crates/proxima-control-plane/src/production.rs || fail "subscription price must match the local checkout plan"
+grep -Fq 'let plan_id=match flutterwave_plan_id(plan)' crates/proxima-control-plane/src/production.rs || fail "checkout must use the configured Flutterwave plan ID for the selected paid plan"
 grep -Fq 'expected_plan_amount' crates/proxima-control-plane/src/production.rs || fail "configured Flutterwave checkout amount must match the catalog"
 grep -Fq 'Some("USD")' crates/proxima-control-plane/src/production.rs || fail "Flutterwave transaction verification must enforce the configured currency contract"
 grep -Fq 'Payment status, reference, USD currency, or exact amount did not match' crates/proxima-control-plane/src/production.rs || fail "Flutterwave transaction verification must enforce the configured currency contract"
