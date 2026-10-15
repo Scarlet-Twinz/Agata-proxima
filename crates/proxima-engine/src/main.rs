@@ -5,7 +5,8 @@ use std::sync::Arc;
 use proxima_engine::{
     attestation::{AttestationConfig, AttestationLedger, SecurityState, TelemetrySummary},
     config::{Config, UpstreamTlsMode},
-    dashboard, metrics,
+    dashboard,
+    metrics::{self, QueryLatencyTracker},
     protocol::SSL_REQUEST_CODE,
     security_breaker::{BreakerConfig, SecurityBreaker},
     session::{establish, BoxedPgStream},
@@ -379,9 +380,10 @@ async fn handle_connection(
 
     let (mut client_reader, mut client_writer) = tokio::io::split(client);
     let (mut upstream_reader, mut upstream_writer) = tokio::io::split(upstream);
+    let query_latency = Arc::new(QueryLatencyTracker::default());
     let copy_result = tokio::try_join!(
-        copy_frontend_messages(&mut client_reader, &mut upstream_writer),
-        copy_stream(&mut upstream_reader, &mut client_writer),
+        copy_frontend_messages(&mut client_reader, &mut upstream_writer, query_latency.clone()),
+        copy_backend_messages(&mut upstream_reader, &mut client_writer, query_latency),
     );
     let duration_micros = session_started_at
         .elapsed()
@@ -449,12 +451,17 @@ async fn send_security_event(
     }
 }
 
-async fn copy_stream<R, W>(reader: &mut R, writer: &mut W) -> io::Result<u64>
+async fn copy_backend_messages<R, W>(
+    reader: &mut R,
+    writer: &mut W,
+    query_latency: Arc<QueryLatencyTracker>,
+) -> io::Result<u64>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
     let mut buffer = [0u8; 16 * 1024];
+    let mut pending = BytesMut::with_capacity(8 * 1024);
     let mut total = 0u64;
     loop {
         let size = reader.read(&mut buffer).await?;
@@ -464,10 +471,33 @@ where
         }
         writer.write_all(&buffer[..size]).await?;
         total = total.saturating_add(size as u64);
+        pending.extend_from_slice(&buffer[..size]);
+        loop {
+            if pending.len() < 5 { break; }
+            let frame_length = i32::from_be_bytes(pending[1..5].try_into().unwrap());
+            if frame_length < 4 || frame_length as usize > 16 * 1024 * 1024 {
+                pending.clear();
+                break;
+            }
+            let Some(total_length) = (frame_length as usize).checked_add(1) else {
+                pending.clear();
+                break;
+            };
+            if pending.len() < total_length { break; }
+            if matches!(pending[0], b'C' | b'I' | b's' | b'E') {
+                query_latency.finish();
+            }
+            pending.advance(total_length);
+        }
+        if pending.len() > 16 * 1024 * 1024 + 5 { pending.clear(); }
     }
 }
 
-async fn copy_frontend_messages<R, W>(reader: &mut R, writer: &mut W) -> io::Result<u64>
+async fn copy_frontend_messages<R, W>(
+    reader: &mut R,
+    writer: &mut W,
+    query_latency: Arc<QueryLatencyTracker>,
+) -> io::Result<u64>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
@@ -503,6 +533,7 @@ where
             }
             if matches!(pending[0], b'Q' | b'E') {
                 metrics::global().query_processed();
+                query_latency.start();
             }
             pending.advance(total_length);
         }
