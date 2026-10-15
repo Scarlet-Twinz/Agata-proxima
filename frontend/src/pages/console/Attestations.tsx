@@ -92,7 +92,8 @@ export function Attestations() {
             `   Block hash: ${item.block_hash_signature}`,
             "",
           ])
-        : ["No attestation evidence has been submitted. This report contains no verified security evidence."]),    ];
+        : ["No attestation evidence has been submitted. This report contains no verified security evidence."]),
+    ];
     const url = URL.createObjectURL(buildPdf(lines));
     const anchor = document.createElement("a");
     anchor.href = url;
