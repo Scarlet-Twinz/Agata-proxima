@@ -85,6 +85,20 @@ jobs:
       - name: Control plane OpenAPI JSON
         run: python -m json.tool control-plane/openapi.json >/dev/null
 
+      - name: Proxima four-pillar contract
+        run: bash tests/launch/proxima_four_pillars_gate.sh
+
+      - name: Frontend production build
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm ci && npm run build
+
       - name: Production environment contract
         run: |
           grep -q "AGATA_PUBLIC_BASE_URL" .env.example
