@@ -2,7 +2,6 @@ use std::io;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -188,8 +187,8 @@ impl EngineMetrics {
             duration as f64 / 1_000_000.0,
             completed
         );
-        output.push_str("# HELP proxima_engine_query_roundtrip_latency_seconds PostgreSQL request-to-completion latency observed by the proxy.\\n");
-        output.push_str("# TYPE proxima_engine_query_roundtrip_latency_seconds histogram\\n");
+        output.push_str("# HELP proxima_engine_query_roundtrip_latency_seconds PostgreSQL request-to-completion latency observed by the proxy.\n");
+        output.push_str("# TYPE proxima_engine_query_roundtrip_latency_seconds histogram\n");
         let buckets = [
             ("0.001", self.query_latency_le_1ms.load(Ordering::Relaxed)),
             ("0.005", self.query_latency_le_5ms.load(Ordering::Relaxed)),
@@ -202,12 +201,21 @@ impl EngineMetrics {
         let mut cumulative = 0u64;
         for (bound, count) in buckets {
             cumulative = cumulative.saturating_add(count);
-            output.push_str(&format!("proxima_engine_query_roundtrip_latency_seconds_bucket{{le=\\\"{bound}\\\"}} {cumulative}\\n"));
+            output.push_str(&format!(
+                "proxima_engine_query_roundtrip_latency_seconds_bucket{{le=\"{bound}\"}} {cumulative}\n"
+            ));
         }
         let count = self.query_latency_count.load(Ordering::Relaxed);
-        output.push_str(&format!("proxima_engine_query_roundtrip_latency_seconds_bucket{{le=\\\"+Inf\\\"}} {count}\\n"));
-        output.push_str(&format!("proxima_engine_query_roundtrip_latency_seconds_sum {:.9}\\n", self.query_latency_sum_micros.load(Ordering::Relaxed) as f64 / 1_000_000.0));
-        output.push_str(&format!("proxima_engine_query_roundtrip_latency_seconds_count {count}\\n"));
+        output.push_str(&format!(
+            "proxima_engine_query_roundtrip_latency_seconds_bucket{{le=\"+Inf\"}} {count}\n"
+        ));
+        output.push_str(&format!(
+            "proxima_engine_query_roundtrip_latency_seconds_sum {:.9}\n",
+            self.query_latency_sum_micros.load(Ordering::Relaxed) as f64 / 1_000_000.0
+        ));
+        output.push_str(&format!(
+            "proxima_engine_query_roundtrip_latency_seconds_count {count}\n"
+        ));
         output
     }
 }
