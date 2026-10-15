@@ -1820,3 +1820,41 @@ a {
   .webhook-delivery-row { grid-template-columns: minmax(0,1fr); }
   .webhook-delivery-row time { white-space: normal; }
 }
+
+
+.attestation-list {
+  display: grid;
+  gap: 0;
+}
+.attestation-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--console-border);
+}
+.attestation-row:last-child { border-bottom: 0; }
+.attestation-row-main { min-width: 0; }
+.attestation-row-main h3 { margin: 8px 0 5px; font-size: 16px; color: var(--agata-midnight); }
+.attestation-row-main p { margin: 0 0 8px; color: var(--muted); font-size: 12px; }
+.attestation-row-main code {
+  display: block;
+  max-width: min(720px, 65vw);
+  overflow-wrap: anywhere;
+  color: #475467;
+  font-size: 11px;
+}
+.attestation-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #087443;
+  font-size: 11px;
+  font-weight: 700;
+}
+.attestation-status--warning { color: var(--danger); }
+@media (max-width: 700px) {
+  .attestation-row { align-items: flex-start; flex-direction: column; }
+  .attestation-row-main code { max-width: 100%; }
+}
