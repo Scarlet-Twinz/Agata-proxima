@@ -100,10 +100,14 @@ impl SecurityBreaker {
         if !peers.contains_key(&peer) && peers.len() >= MAX_TRACKED_PEERS {
             peers.retain(|_, state| {
                 state.blocked_until.is_some_and(|until| until > now)
-                    || state.violations.back().is_some_and(|at| now.duration_since(*at) <= self.config.observation_window)
+                    || state
+                        .violations
+                        .back()
+                        .is_some_and(|at| now.duration_since(*at) <= self.config.observation_window)
             });
             if peers.len() >= MAX_TRACKED_PEERS {
-                if let Some(oldest) = peers.iter()
+                if let Some(oldest) = peers
+                    .iter()
                     .min_by_key(|(_, state)| state.last_seen.unwrap_or(now))
                     .map(|(ip, _)| *ip)
                 {

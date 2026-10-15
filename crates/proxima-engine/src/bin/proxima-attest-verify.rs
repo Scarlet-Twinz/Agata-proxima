@@ -16,7 +16,10 @@ async fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Ok(result) if result.valid => {
-            eprintln!("NO RECORDS: there is no signed attestation evidence to verify in {}", path.display());
+            eprintln!(
+                "NO RECORDS: there is no signed attestation evidence to verify in {}",
+                path.display()
+            );
             ExitCode::from(2)
         }
         Ok(result) => {
@@ -24,7 +27,9 @@ async fn main() -> ExitCode {
                 "INVALID: {} record(s) verified before failure in {}: {}",
                 result.records,
                 path.display(),
-                result.error.unwrap_or_else(|| "unknown chain failure".into())
+                result
+                    .error
+                    .unwrap_or_else(|| "unknown chain failure".into())
             );
             ExitCode::from(2)
         }

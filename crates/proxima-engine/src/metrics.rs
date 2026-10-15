@@ -1,7 +1,7 @@
+use std::collections::VecDeque;
 use std::io;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
-use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -131,14 +131,23 @@ impl EngineMetrics {
     }
     pub fn observe_query_latency(&self, elapsed_micros: u64) {
         self.query_latency_count.fetch_add(1, Ordering::Relaxed);
-        self.query_latency_sum_micros.fetch_add(elapsed_micros, Ordering::Relaxed);
-        if elapsed_micros <= 1_000 { self.query_latency_le_1ms.fetch_add(1, Ordering::Relaxed); }
-        else if elapsed_micros <= 5_000 { self.query_latency_le_5ms.fetch_add(1, Ordering::Relaxed); }
-        else if elapsed_micros <= 10_000 { self.query_latency_le_10ms.fetch_add(1, Ordering::Relaxed); }
-        else if elapsed_micros <= 50_000 { self.query_latency_le_50ms.fetch_add(1, Ordering::Relaxed); }
-        else if elapsed_micros <= 100_000 { self.query_latency_le_100ms.fetch_add(1, Ordering::Relaxed); }
-        else if elapsed_micros <= 500_000 { self.query_latency_le_500ms.fetch_add(1, Ordering::Relaxed); }
-        else if elapsed_micros <= 1_000_000 { self.query_latency_le_1s.fetch_add(1, Ordering::Relaxed); }
+        self.query_latency_sum_micros
+            .fetch_add(elapsed_micros, Ordering::Relaxed);
+        if elapsed_micros <= 1_000 {
+            self.query_latency_le_1ms.fetch_add(1, Ordering::Relaxed);
+        } else if elapsed_micros <= 5_000 {
+            self.query_latency_le_5ms.fetch_add(1, Ordering::Relaxed);
+        } else if elapsed_micros <= 10_000 {
+            self.query_latency_le_10ms.fetch_add(1, Ordering::Relaxed);
+        } else if elapsed_micros <= 50_000 {
+            self.query_latency_le_50ms.fetch_add(1, Ordering::Relaxed);
+        } else if elapsed_micros <= 100_000 {
+            self.query_latency_le_100ms.fetch_add(1, Ordering::Relaxed);
+        } else if elapsed_micros <= 500_000 {
+            self.query_latency_le_500ms.fetch_add(1, Ordering::Relaxed);
+        } else if elapsed_micros <= 1_000_000 {
+            self.query_latency_le_1s.fetch_add(1, Ordering::Relaxed);
+        }
     }
 
     pub fn session_finished(&self, client_bytes: u64, database_bytes: u64, duration_micros: u64) {
@@ -253,7 +262,12 @@ pub async fn serve_listener(listener: TcpListener) -> io::Result<()> {
         let (mut stream, _) = listener.accept().await?;
         tokio::spawn(async move {
             let mut request = [0u8; 2048];
-            let size = match tokio::time::timeout(std::time::Duration::from_secs(5), stream.read(&mut request)).await {
+            let size = match tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                stream.read(&mut request),
+            )
+            .await
+            {
                 Ok(Ok(size)) => size,
                 _ => return,
             };
@@ -300,8 +314,10 @@ mod tests {
         assert!(output.contains("proxima_engine_database_bytes_total 80\n"));
         assert!(output.contains("proxima_engine_session_duration_seconds_total 0.002500\n"));
         assert!(output.contains("proxima_engine_authenticated_tenant_sessions_total 1\n"));
-        assert!(output.contains("proxima_engine_query_roundtrip_latency_seconds_bucket{le=\"0.001\"} 1\n"));
-        assert!(output.contains("proxima_engine_query_roundtrip_latency_seconds_bucket{le=\"0.05\"} 2\n"));
+        assert!(output
+            .contains("proxima_engine_query_roundtrip_latency_seconds_bucket{le=\"0.001\"} 1\n"));
+        assert!(output
+            .contains("proxima_engine_query_roundtrip_latency_seconds_bucket{le=\"0.05\"} 2\n"));
         assert!(output.contains("proxima_engine_query_roundtrip_latency_seconds_count 2\n"));
     }
 }

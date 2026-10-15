@@ -353,7 +353,10 @@ mod tests {
         );
         tokio::fs::write(&path, "{\"previous_block_hash\":\"GENESIS\",\"block_hash\":\"forged\",\"block_hash_signature\":\"bad\"}\n").await.unwrap();
         assert!(!ledger.verify_chain().await.unwrap().valid);
-        assert!(ledger.append_hourly(TelemetrySummary::default(), SecurityState::default()).await.is_err());
+        assert!(ledger
+            .append_hourly(TelemetrySummary::default(), SecurityState::default())
+            .await
+            .is_err());
         let _ = tokio::fs::remove_file(path).await;
     }
 }
