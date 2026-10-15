@@ -45,6 +45,18 @@ async fn main() -> io::Result<()> {
     }
     let metrics = Arc::new(EngineMetrics::default());
     let breaker = Arc::new(PeerCircuitBreaker::from_env()?);
+    {
+        let metrics_for_breaker = metrics.clone();
+        let breaker_for_metrics = breaker.clone();
+        tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(std::time::Duration::from_secs(5));
+            ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                ticker.tick().await;
+                metrics_for_breaker.set_breaker_open(breaker_for_metrics.any_peer_blocked());
+            }
+        });
+    }
     let force_rls_active = std::env::var("PROXIMA_ATTEST_FORCE_RLS_ACTIVE")
         .map(|value| {
             matches!(
