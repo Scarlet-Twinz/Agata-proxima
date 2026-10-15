@@ -493,7 +493,9 @@ where
             };
             if pending.len() < total_length { break; }
             if matches!(pending[0], b'C' | b'I' | b's' | b'E') {
-                query_latency.finish();
+                query_latency.finish_extended();
+            } else if pending[0] == b'Z' {
+                query_latency.finish_simple();
             }
             pending.advance(total_length);
         }
@@ -541,7 +543,7 @@ where
             }
             if matches!(pending[0], b'Q' | b'E') {
                 metrics::global().query_processed();
-                query_latency.start();
+                query_latency.start(pending[0] == b'Q');
             }
             pending.advance(total_length);
         }
