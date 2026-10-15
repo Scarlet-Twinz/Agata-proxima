@@ -4,6 +4,7 @@ set -euo pipefail
 test -f crates/proxima-engine/src/metrics.rs
 test -f crates/proxima-engine/src/security_breaker.rs
 test -f crates/proxima-engine/src/attestation.rs
+test -f crates/proxima-engine/src/bin/proxima-attest-verify.rs
 test -f crates/proxima-control-plane/migrations/0023_proxima_attestations.sql
 grep -q 'PROXIMA_METRICS_LISTEN_ADDR' crates/proxima-engine/src/main.rs
 grep -q 'PROXIMA_SECURITY_BREAKER' crates/proxima-engine/src/security_breaker.rs
