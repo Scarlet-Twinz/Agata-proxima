@@ -352,13 +352,18 @@ async fn handle_connection(
 }
 
 
+enum PendingResponse {
+    SimpleQuery(Instant),
+    Other,
+}
+
 /// Count PostgreSQL simple-query (Q) and extended Execute (E) frontend
 /// messages while rejecting malformed or oversized frames before forwarding.
 async fn copy_client_messages<R, W>(
     reader: &mut R,
     writer: &mut W,
     metrics: Arc<EngineMetrics>,
-    pending_simple_queries: Arc<Mutex<VecDeque<Instant>>>,
+    pending_simple_queries: Arc<Mutex<VecDeque<PendingResponse>>>,
     max_frame_bytes: u32,
 ) -> io::Result<u64>
 where
@@ -405,10 +410,15 @@ where
                 if matches!(frame_type, Some(b'Q' | b'E')) {
                     queries_in_chunk = queries_in_chunk.saturating_add(1);
                 }
-                if frame_type == Some(b'Q') {
+                if matches!(frame_type, Some(b'Q' | b'S')) {
                     if let Ok(mut pending) = pending_simple_queries.lock() {
                         if pending.len() < 10_000 {
-                            pending.push_back(Instant::now());
+                            let marker = if frame_type == Some(b'Q') {
+                                PendingResponse::SimpleQuery(Instant::now())
+                            } else {
+                                PendingResponse::Other
+                            };
+                            pending.push_back(marker);
                         }
                     }
                 }
@@ -432,7 +442,7 @@ async fn copy_backend_messages<R, W>(
     reader: &mut R,
     writer: &mut W,
     metrics: Arc<EngineMetrics>,
-    pending_simple_queries: Arc<Mutex<VecDeque<Instant>>>,
+    pending_simple_queries: Arc<Mutex<VecDeque<PendingResponse>>>,
     max_frame_bytes: u32,
 ) -> io::Result<u64>
 where
@@ -459,11 +469,11 @@ where
                     *remaining -= 1;
                     if *remaining == 0 {
                         if message_tag == Some(b'Z') {
-                            let started_at = pending_simple_queries
+                            let response = pending_simple_queries
                                 .lock()
                                 .ok()
                                 .and_then(|mut pending| pending.pop_front());
-                            if let Some(started_at) = started_at {
+                            if let Some(PendingResponse::SimpleQuery(started_at)) = response {
                                 metrics.observe_simple_query_latency(started_at.elapsed());
                             }
                         }
@@ -492,11 +502,11 @@ where
                 length_read = 0;
                 if length == 4 {
                     if message_tag == Some(b'Z') {
-                        let started_at = pending_simple_queries
+                        let response = pending_simple_queries
                             .lock()
                             .ok()
                             .and_then(|mut pending| pending.pop_front());
-                        if let Some(started_at) = started_at {
+                        if let Some(PendingResponse::SimpleQuery(started_at)) = response {
                             metrics.observe_simple_query_latency(started_at.elapsed());
                         }
                     }
