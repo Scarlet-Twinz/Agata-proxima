@@ -3435,7 +3435,14 @@ fn calculate_attestation_hash(
 ) -> String {
     let canonical = format!(
         "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
-        1, organization_id, node_id, start, end, queries, sessions, violations,
+        1,
+        organization_id,
+        node_id,
+        start,
+        end,
+        queries,
+        sessions,
+        violations,
         p99_latency_overhead_ms.unwrap_or(0.0),
         force_rls_active.unwrap_or(false),
         tls_termination_enforced.unwrap_or(false),
