@@ -3113,13 +3113,14 @@ async fn ingest_security_attestation(
         return (StatusCode::CONFLICT, "Attestation chain predecessor does not match the latest stored block.").into_response();
     }
     let canonical = format!(
-        "1\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\nagata-proxima-attestation-v1",
-        ctx.organization_id, input.node_id.trim(), input.epoch_timestamp_start,
+        "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
+        1, ctx.organization_id, input.node_id.trim(), input.epoch_timestamp_start,
         input.epoch_timestamp_end, input.total_processed_queries,
         input.authenticated_tenant_sessions, input.blocked_unauthorized_violations,
         input.p99_latency_overhead_ms.unwrap_or(0.0),
         input.force_rls_active.unwrap_or(false), input.tls_termination_enforced.unwrap_or(false),
-        input.circuit_breaker_tripped.unwrap_or(false), input.previous_block_hash, "v1"
+        input.circuit_breaker_tripped.unwrap_or(false), input.previous_block_hash,
+        "agata-proxima-attestation-v1"
     );
     let computed_hash = hex::encode(Sha256::digest(canonical.as_bytes()));
     if computed_hash != input.block_hash {
