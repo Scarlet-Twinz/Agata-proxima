@@ -70,6 +70,7 @@ const consoleResourceRoutes = [
   { path: "deployments", element: <Deployments /> },
   { path: "verification", element: <Verification /> },
   { path: "audit", element: <Audit /> },
+  { path: "attestations", element: <Attestations /> },
   { path: "security", element: <ConsoleSecurity /> },
   { path: "team", element: <TeamManagement /> },
   { path: "notifications", element: <Notifications /> },
