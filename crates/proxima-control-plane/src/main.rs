@@ -3180,10 +3180,13 @@ async fn ingest_security_attestation(
         )
             .into_response();
     }
+    let now = chrono::Utc::now().timestamp();
     if input.node_id.trim().is_empty()
         || input.node_id.len() > 200
         || input.epoch_timestamp_start < 0
-        || input.epoch_timestamp_end < input.epoch_timestamp_start
+        || input.epoch_timestamp_end <= input.epoch_timestamp_start
+        || input.epoch_timestamp_end > now.saturating_add(300)
+        || input.epoch_timestamp_end - input.epoch_timestamp_start > 86_400
         || input.total_processed_queries < 0
         || input.authenticated_tenant_sessions < 0
         || input.blocked_unauthorized_violations < 0
