@@ -3127,9 +3127,16 @@ async fn ingest_security_event(
         "INSERT INTO security_events (organization_id,node_id,event_type,severity,source_peer,details,observed_at)
          VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, created_at"
     )
-    .bind(ctx.organization_id).bind(input.node_id.trim()).bind(input.event_type)
-    .bind(input.severity).bind(input.source_peer.trim()).bind(input.details)
-    .bind(input.observed_at).fetch_one(&s.db).await {
+    .bind(ctx.organization_id)
+    .bind(input.node_id.trim())
+    .bind(input.event_type)
+    .bind(input.severity)
+    .bind(input.source_peer.trim())
+    .bind(input.details)
+    .bind(input.observed_at)
+    .fetch_one(&s.db)
+    .await
+    {
         Ok(row) => (StatusCode::CREATED, Json(json!({
             "accepted": true,
             "id": row.get::<Uuid, _>("id"),
@@ -3146,21 +3153,30 @@ async fn list_security_events(State(s): State<AppState>, headers: HeaderMap) -> 
     };
     let rows = match sqlx::query(
         "SELECT id,node_id,event_type,severity,source_peer,details,observed_at,created_at
-         FROM security_events WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 200"
-    ).bind(ctx.organization_id).fetch_all(&s.db).await {
+         FROM security_events WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 200",
+    )
+    .bind(ctx.organization_id)
+    .fetch_all(&s.db)
+    .await
+    {
         Ok(rows) => rows,
         Err(error) => return db_error(error),
     };
-    let events = rows.iter().map(|row| json!({
-        "id": row.get::<Uuid, _>("id"),
-        "node_id": row.get::<String, _>("node_id"),
-        "event_type": row.get::<String, _>("event_type"),
-        "severity": row.get::<String, _>("severity"),
-        "source_peer": row.get::<String, _>("source_peer"),
-        "details": row.get::<serde_json::Value, _>("details"),
-        "observed_at": row.get::<chrono::DateTime<chrono::Utc>, _>("observed_at"),
-        "created_at": row.get::<chrono::DateTime<chrono::Utc>, _>("created_at")
-    })).collect::<Vec<_>>();
+    let events = rows
+        .iter()
+        .map(|row| {
+            json!({
+                "id": row.get::<Uuid, _>("id"),
+                "node_id": row.get::<String, _>("node_id"),
+                "event_type": row.get::<String, _>("event_type"),
+                "severity": row.get::<String, _>("severity"),
+                "source_peer": row.get::<String, _>("source_peer"),
+                "details": row.get::<serde_json::Value, _>("details"),
+                "observed_at": row.get::<chrono::DateTime<chrono::Utc>, _>("observed_at"),
+                "created_at": row.get::<chrono::DateTime<chrono::Utc>, _>("created_at")
+            })
+        })
+        .collect::<Vec<_>>();
     Json(json!({"events": events})).into_response()
 }
 
