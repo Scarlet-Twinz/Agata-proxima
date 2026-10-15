@@ -124,7 +124,7 @@ Billing endpoints:
 - `GET /api/v1/billing/plans` — plan catalogue and checkout availability.
 - `GET /api/v1/billing/entitlements` — limits and usage.
 - `POST /api/v1/billing/checkout` — starts paid checkout for Starter, Growth or Scale.
-- `POST /api/v1/billing/portal` — obtains a subscription-management URL after subscription exists.
+- `POST /api/v1/billing/portal` — currently returns `501 Not Implemented`; use support for subscription-management requests until a provider portal is implemented and accepted.
 - `GET /api/v1/billing/verify?reference=...` — verifies a stored transaction as an organization admin.
 
 Flutterwave is the active billing provider in the current implementation. Configure `FLUTTERWAVE_SECRET_KEY`, `FLUTTERWAVE_WEBHOOK_SECRET_HASH`, `FLUTTERWAVE_ENVIRONMENT=production`, the three `FLUTTERWAVE_*_PLAN_ID` values, and the three `FLUTTERWAVE_*_AMOUNT_USD` values in the deployment secret store. Never commit live values or paste them into chat. The server validates the transaction status, local reference, configured amount, and expected currency before applying entitlements. The webhook validates Flutterwave's `verif-hash` header and deduplicates provider events.
