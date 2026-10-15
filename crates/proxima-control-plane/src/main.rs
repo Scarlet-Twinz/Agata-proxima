@@ -3346,7 +3346,7 @@ async fn ingest_security_attestation(
     .bind(input.tls_termination_enforced)
     .bind(input.circuit_breaker_tripped)
     .bind(input.previous_block_hash)
-    .bind(computed_hash)
+    .bind(&computed_hash)
     .bind(input.signing_key_id)
     .bind(supplied_signature)
     .execute(&mut *transaction)
