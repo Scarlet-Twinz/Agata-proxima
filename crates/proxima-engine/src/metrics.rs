@@ -42,6 +42,7 @@ impl EngineMetrics {
     pub fn authenticated_tenant_sessions(&self) -> u64 { self.authenticated_tenant_sessions.load(Ordering::Relaxed) }
     pub fn blocked_violations(&self) -> u64 { self.blocked_violations.load(Ordering::Relaxed) }
     pub fn breaker_has_tripped(&self) -> bool { self.breaker_trips.load(Ordering::Relaxed) > 0 }
+    pub fn breaker_trips(&self) -> u64 { self.breaker_trips.load(Ordering::Relaxed) }
     pub fn session_failed(&self) { self.failed_sessions.fetch_add(1, Ordering::Relaxed); }
     pub fn violation_blocked(&self) { self.blocked_violations.fetch_add(1, Ordering::Relaxed); }
     pub fn session_finished(&self, client_bytes: u64, database_bytes: u64, duration_micros: u64) {
