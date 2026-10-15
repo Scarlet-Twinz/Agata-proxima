@@ -3051,8 +3051,15 @@ async fn attestations(State(s): State<AppState>, headers: HeaderMap) -> Response
                 let payload = row.get::<String,_>("canonical_payload");
                 let hash = row.get::<String,_>("block_hash");
                 let signature = row.get::<String,_>("block_hash_signature");
-                let expected_previous = previous_by_node.entry(node_id).or_insert_with(|| "GENESIS".to_string());
-                let mut valid = previous == *expected_previous && format!("{:x}", Sha256::digest(payload.as_bytes())) == hash;
+                let telemetry = row.get::<Value,_>("telemetry_summary");
+                let security_state = row.get::<Value,_>("security_state");
+                let start = row.get::<i64,_>("epoch_timestamp_start");
+                let end = row.get::<i64,_>("epoch_timestamp_end");
+                let expected_payload = canonical_attestation_payload(ctx.organization_id, &node_id, start, end, &telemetry, &security_state, &previous);
+                let expected_previous = previous_by_node.entry(node_id.clone()).or_insert_with(|| "GENESIS".to_string());
+                let mut valid = previous == *expected_previous
+                    && expected_payload.as_deref() == Some(payload.as_str())
+                    && format!("{:x}", Sha256::digest(payload.as_bytes())) == hash;
                 if let Some(key) = signing_key.as_deref() {
                     if let Ok(mut mac) = hmac::Hmac::<Sha256>::new_from_slice(key) {
                         mac.update(hash.as_bytes());
@@ -3237,6 +3244,30 @@ async fn audit_events(State(s): State<AppState>, headers: HeaderMap) -> Response
         })).collect::<Vec<_>>()).into_response(),
         Err(e) => db_error(e),
     }
+}
+
+fn canonical_attestation_payload(
+    organization_id: Uuid,
+    node_id: &str,
+    start: i64,
+    end: i64,
+    telemetry: &Value,
+    security: &Value,
+    previous_hash: &str,
+) -> Option<String> {
+    let total_queries = telemetry.get("total_processed_queries")?.as_u64()?;
+    let tenant_sessions = telemetry.get("authenticated_tenant_sessions")?.as_u64()?;
+    let blocked = telemetry.get("blocked_unauthorized_violations")?.as_u64()?;
+    let p99 = telemetry.get("p99_latency_overhead_ms")?.as_f64()?;
+    if !p99.is_finite() || p99 < 0.0 { return None; }
+    let force_rls = security.get("force_rls_active")?.as_bool()?;
+    let tls = security.get("tls_termination_enforced")?.as_bool()?;
+    let breaker = security.get("circuit_breaker_tripped")?.as_bool()?;
+    Some(format!(
+        "attestation_version=1\norganization_id={}\nnode_id={}\nepoch_timestamp_start={}\nepoch_timestamp_end={}\ntotal_processed_queries={}\nauthenticated_tenant_sessions={}\nblocked_unauthorized_violations={}\np99_latency_overhead_ms={}\nforce_rls_active={}\ntls_termination_enforced={}\ncircuit_breaker_tripped={}\nprevious_block_hash={}\n",
+        organization_id, safe_attestation_identifier(node_id), start, end, total_queries,
+        tenant_sessions, blocked, p99, force_rls, tls, breaker, previous_hash
+    ))
 }
 
 fn safe_attestation_identifier(value: &str) -> String {
