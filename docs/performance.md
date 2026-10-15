@@ -20,7 +20,7 @@ Every result records hardware, Rust version, PostgreSQL version, connection coun
 
 ## Repeatable direct-versus-proxy run
 
-Use `tests/performance/benchmark-proxy.sh` against a pre-initialized pgbench database. The direct and proxied URLs must address the same PostgreSQL database, credentials/roles, dataset and server configuration. The script deliberately does not initialize, mutate or vacuum the database; it records environment metadata and saves separate warm-up and measured runs.
+Use `tests/performance/benchmark-proxy.sh` against a pre-initialized pgbench database. The direct and proxied URLs must address the same PostgreSQL database, credentials/roles, dataset and server configuration. The script deliberately does not initialize, mutate or vacuum the database; it records environment metadata, saves separate warm-up and measured runs, and derives p50/p95/p99 transaction latency from pgbench raw logs.
 
 Example:
 
