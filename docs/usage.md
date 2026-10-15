@@ -129,7 +129,7 @@ Billing endpoints:
 
 Flutterwave is the active billing provider in the current implementation. Configure `FLUTTERWAVE_SECRET_KEY`, `FLUTTERWAVE_WEBHOOK_SECRET_HASH`, `FLUTTERWAVE_ENVIRONMENT=production`, the three `FLUTTERWAVE_*_PLAN_ID` values, and the three `FLUTTERWAVE_*_AMOUNT_USD` values in the deployment secret store. Never commit live values or paste them into chat. The server validates the transaction status, local reference, configured amount, and expected currency before applying entitlements. The webhook validates Flutterwave's `verif-hash` header and deduplicates provider events.
 
-Do not enable live checkout until the Flutterwave account is approved, the live secret and webhook hash are configured, all three plan IDs are distinct, all configured amounts are verified, and a real payment/webhook round trip passes. The UI currently describes NGN checkout while the verification path expects USD; reconcile the provider's actual transaction currency and the UI copy during live acceptance before enabling paid checkout. See `docs/production/flutterwave-billing.md` for the current provider contract.
+Do not enable live checkout until the Flutterwave account is approved, the live secret and webhook hash are configured, all three plan IDs are distinct, all configured amounts are verified, and a real payment/webhook round trip passes. The backend expects the provider transaction to return USD and the exact configured amount. If the live Flutterwave checkout displays or charges NGN instead, do not enable paid checkout until the provider configuration and currency contract are reconciled. See `docs/production/flutterwave-billing.md` for the current provider contract.
 
 ## 9. Where to get SSO
 
