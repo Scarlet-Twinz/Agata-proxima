@@ -18,6 +18,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Semaphore;
 use tokio::time::timeout;
 use std::time::Instant;
+use sha2::{Digest, Sha256};
 use tracing::{error, info};
 
 #[tokio::main]
@@ -60,6 +61,13 @@ async fn main() -> io::Result<()> {
         }
     });
     let breaker = SecurityBreaker::new(BreakerConfig::from_env());
+    let security_event_url = std::env::var("PROXIMA_SECURITY_EVENT_INGEST_URL").ok()
+        .filter(|url| url.starts_with("https://") || url.starts_with("http://127.0.0.1:") || url.starts_with("http://localhost:"));
+    let security_event_token = std::env::var("PROXIMA_SECURITY_EVENT_INGEST_TOKEN")
+        .or_else(|_| std::env::var("PROXIMA_ATTESTATION_INGEST_TOKEN"))
+        .ok().filter(|token| token.starts_with("aga_"));
+    let security_event_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5)).build().ok();
     let attestation_config = AttestationConfig::from_env();
     let attestation_signing_ready = attestation_config.signing_key.is_some();
     let attestation_p99 = std::env::var("PROXIMA_ATTESTATION_P99_OVERHEAD_MS")
@@ -192,6 +200,9 @@ async fn main() -> io::Result<()> {
                 };
 
                 let breaker = breaker.clone();
+                let security_event_url = security_event_url.clone();
+                let security_event_token = security_event_token.clone();
+                let security_event_client = security_event_client.clone();
                 let upstream = config.upstream_addr.clone();
                 let verifier = verifier.clone();
                 let tenant_role_prefix = config_tenant_role_prefix.clone();
@@ -228,6 +239,19 @@ async fn main() -> io::Result<()> {
                             if breaker.record_violation(peer.ip()) {
                                 metrics::global().breaker_tripped();
                                 error!(peer = %peer, "security breaker tripped for peer; cooldown enforced");
+                                if let (Some(url), Some(token), Some(client)) = (
+                                    security_event_url.clone(),
+                                    security_event_token.clone(),
+                                    security_event_client.clone(),
+                                ) {
+                                    let node_id = std::env::var("PROXIMA_NODE_ID").unwrap_or_else(|_| "local-node".to_string());
+                                    let fingerprint = peer_fingerprint(peer.ip());
+                                    tokio::spawn(async move {
+                                        send_security_event(client, url, token, node_id, fingerprint).await;
+                                    });
+                                } else {
+                                    error!("security breaker tripped but control-plane event delivery is not configured with an HTTPS endpoint and API token");
+                                }
                             }
                         }
                         error!(peer = %peer, error = %err, "connection failed");
@@ -347,6 +371,37 @@ async fn handle_connection(
             metrics::global().session_finished(0, 0, duration_micros);
             Err(error)
         }
+    }
+}
+
+fn peer_fingerprint(peer: std::net::IpAddr) -> String {
+    format!("{:x}", Sha256::digest(peer.to_string().as_bytes()))
+}
+
+async fn send_security_event(
+    client: reqwest::Client,
+    url: String,
+    token: String,
+    node_id: String,
+    peer_fingerprint: String,
+) {
+    let node_id: String = node_id.chars()
+        .filter(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.'))
+        .take(128).collect();
+    let observed_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs() as i64)
+        .unwrap_or_default();
+    let body = format!(
+        "{{\"node_id\":\"{}\",\"event_type\":\"security.breaker.tripped\",\"severity\":\"critical\",\"peer_fingerprint\":\"{}\",\"reason\":\"Repeated PostgreSQL protocol or tenant-authentication violations\",\"observed_at\":{}}}",
+        node_id, peer_fingerprint, observed_at
+    );
+    match client.post(url).bearer_auth(token).header("content-type", "application/json").body(body).send().await {
+        Ok(response) if response.status().is_success() => {
+            info!(status = %response.status(), "security breaker event recorded by control plane");
+        }
+        Ok(response) => error!(status = %response.status(), "control plane rejected security breaker event"),
+        Err(error) => error!(%error, "security breaker event delivery failed"),
     }
 }
 
