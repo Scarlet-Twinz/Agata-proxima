@@ -50,16 +50,28 @@ async fn main() -> io::Result<()> {
         ).await;
     });
     let metrics_enabled = std::env::var("PROXIMA_METRICS_ENABLED")
-        .map(|value| !matches!(value.trim().to_ascii_lowercase().as_str(), "0" | "false" | "no" | "off"))
+        .map(|value| {
+            !matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "0" | "false" | "no" | "off"
+            )
+        })
         .unwrap_or(true);
     if metrics_enabled {
         let metrics_addr = std::env::var("PROXIMA_METRICS_LISTEN_ADDR")
             .unwrap_or_else(|_| "127.0.0.1:9090".to_string())
             .parse()
-            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, format!("invalid PROXIMA_METRICS_LISTEN_ADDR: {error}")))?;
+            .map_err(|error| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("invalid PROXIMA_METRICS_LISTEN_ADDR: {error}"),
+                )
+            })?;
         let metrics_for_server = metrics.clone();
         tokio::spawn(async move {
-            if let Err(error) = proxima_engine::monitor::serve(metrics_addr, metrics_for_server).await {
+            if let Err(error) =
+                proxima_engine::monitor::serve(metrics_addr, metrics_for_server).await
+            {
                 error!(%error, "Prometheus metrics server stopped");
             }
         });
