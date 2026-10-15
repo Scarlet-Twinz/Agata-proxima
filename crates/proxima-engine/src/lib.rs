@@ -1,5 +1,7 @@
+pub mod attestation;
 pub mod config;
 pub mod dashboard;
+pub mod observability;
 pub mod policy;
 pub mod protocol;
 pub mod session;
