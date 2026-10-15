@@ -76,7 +76,9 @@ impl ReporterConfig {
         if url.scheme() != "https"
             && !matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "::1"))
         {
-            return Err("attestation reporting requires HTTPS except for localhost development".into());
+            return Err(
+                "attestation reporting requires HTTPS except for localhost development".into(),
+            );
         }
         Ok(Some(Self {
             base_url: base_url.trim_end_matches('/').to_string(),
@@ -109,7 +111,8 @@ pub async fn run(
     let client = match reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(5))
         .timeout(Duration::from_secs(15))
-        .build() {
+        .build()
+    {
         Ok(client) => client,
         Err(error) => {
             error!(%error, "cannot initialize attestation HTTP client");
@@ -159,9 +162,9 @@ pub async fn run(
             }
             Err(error) => {
                 warn!(
-                %error,
-                "security attestation epoch was not accepted; evidence will not be represented as verified"
-            );
+                    %error,
+                    "security attestation epoch was not accepted; evidence will not be represented as verified"
+                );
             }
         }
     }
@@ -237,8 +240,8 @@ async fn submit_epoch(
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|error| format!("system clock before Unix epoch: {error}"))?
         .as_secs() as i64;
-    let previous_end = previous
-        .and_then(|record| record.get("epoch_timestamp_end").and_then(Value::as_i64));
+    let previous_end =
+        previous.and_then(|record| record.get("epoch_timestamp_end").and_then(Value::as_i64));
     let start = previous_end
         .map(|end| end.max(last_successful_end))
         .unwrap_or(last_successful_end);
@@ -265,8 +268,8 @@ async fn submit_epoch(
     )
     .map_err(|error| error.to_string())?;
     let block_hash = block.calculate_hash();
-    let signature_hex = sign_hash_hmac(&block_hash, &config.signing_key)
-        .map_err(|error| error.to_string())?;
+    let signature_hex =
+        sign_hash_hmac(&block_hash, &config.signing_key).map_err(|error| error.to_string())?;
     let payload = json!({
         "node_id": config.node_id,
         "epoch_timestamp_start": start,
@@ -309,17 +312,18 @@ pub async fn report_breaker_event(source_peer: String) -> Result<(), String> {
         .map_err(|_| "PROXIMA_CONTROL_PLANE_URL is not configured".to_string())?;
     let api_key = env::var("PROXIMA_CONTROL_PLANE_API_KEY")
         .map_err(|_| "PROXIMA_CONTROL_PLANE_API_KEY is not configured".to_string())?;
-    let node_id = env::var("PROXIMA_NODE_ID")
-        .map_err(|_| "PROXIMA_NODE_ID is not configured".to_string())?;
+    let node_id =
+        env::var("PROXIMA_NODE_ID").map_err(|_| "PROXIMA_NODE_ID is not configured".to_string())?;
     if api_key.trim().is_empty() || node_id.trim().is_empty() {
         return Err("control-plane API key and node ID must be configured".into());
     }
     let url = reqwest::Url::parse(&base_url)
         .map_err(|error| format!("invalid control-plane URL: {error}"))?;
-    if url.scheme() != "https"
-        && !matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "::1"))
+    if url.scheme() != "https" && !matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "::1"))
     {
-        return Err("security event delivery requires HTTPS except for localhost development".into());
+        return Err(
+            "security event delivery requires HTTPS except for localhost development".into(),
+        );
     }
     let client = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(5))
@@ -366,4 +370,3 @@ fn is_canonical_uuid(value: &str) -> bool {
             }
         })
 }
-
