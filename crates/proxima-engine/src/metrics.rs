@@ -244,7 +244,11 @@ impl EngineMetrics {
 
 pub async fn serve(addr: SocketAddr) -> io::Result<()> {
     let listener = TcpListener::bind(addr).await?;
-    tracing::info!(%addr, "Proxima Prometheus metrics listener started");
+    serve_listener(listener).await
+}
+
+pub async fn serve_listener(listener: TcpListener) -> io::Result<()> {
+    tracing::info!(addr = %listener.local_addr()?, "Proxima Prometheus metrics listener started");
     loop {
         let (mut stream, _) = listener.accept().await?;
         tokio::spawn(async move {
