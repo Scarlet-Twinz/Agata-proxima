@@ -196,6 +196,49 @@ async fn submit_epoch(
     Ok(())
 }
 
+
+/// Send a critical, append-only control-plane event when the peer breaker opens.
+pub async fn report_breaker_event(source_peer: String) -> Result<(), String> {
+    let base_url = env::var("PROXIMA_CONTROL_PLANE_URL")
+        .map_err(|_| "PROXIMA_CONTROL_PLANE_URL is not configured".to_string())?;
+    let api_key = env::var("PROXIMA_CONTROL_PLANE_API_KEY")
+        .map_err(|_| "PROXIMA_CONTROL_PLANE_API_KEY is not configured".to_string())?;
+    let node_id = env::var("PROXIMA_NODE_ID")
+        .map_err(|_| "PROXIMA_NODE_ID is not configured".to_string())?;
+    if api_key.trim().is_empty() || node_id.trim().is_empty() {
+        return Err("control-plane API key and node ID must be configured".into());
+    }
+    let url = reqwest::Url::parse(&base_url)
+        .map_err(|error| format!("invalid control-plane URL: {error}"))?;
+    if url.scheme() != "https" && !matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "::1")) {
+        return Err("security event delivery requires HTTPS except for localhost development".into());
+    }
+    let client = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(5))
+        .timeout(Duration::from_secs(10))
+        .build().map_err(|error| format!("create security event client: {error}"))?;
+    let observed_at = chrono::Utc::now().to_rfc3339();
+    let payload = json!({
+        "node_id": node_id,
+        "event_type": "peer_breaker_opened",
+        "severity": "critical",
+        "source_peer": source_peer,
+        "details": {
+            "reason": "repeated_malformed_or_unauthorized_handshake",
+            "threshold": env::var("PROXIMA_SECURITY_BREAKER_THRESHOLD").unwrap_or_else(|_| "5".into()),
+            "window_seconds": env::var("PROXIMA_SECURITY_BREAKER_WINDOW_SECS").unwrap_or_else(|_| "60".into()),
+            "block_seconds": env::var("PROXIMA_SECURITY_BREAKER_BLOCK_SECS").unwrap_or_else(|_| "60".into())
+        },
+        "observed_at": observed_at
+    });
+    client.post(format!("{}/api/v1/security/events", base_url.trim_end_matches('/')))
+        .bearer_auth(api_key).json(&payload).send().await
+        .map_err(|error| format!("submit security event: {error}"))?
+        .error_for_status().map_err(|error| format!("security event rejected: {error}"))?;
+    info!(node_id = %node_id, "critical peer-breaker event accepted by control plane");
+    Ok(())
+}
+
 fn is_canonical_uuid(value: &str) -> bool {
     value.len() == 36
         && value.chars().enumerate().all(|(index, character)| {
