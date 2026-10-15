@@ -3105,6 +3105,7 @@ async fn attestations(State(s): State<AppState>, headers: HeaderMap) -> Response
         Ok(rows) => {
             let signing_key = env::var("PROXIMA_ATTESTATION_SIGNING_KEY").ok().filter(|key| key.len() >= 32).map(String::into_bytes);
             let mut previous_by_node = std::collections::HashMap::<String, String>::new();
+            let mut chain_valid_by_node = std::collections::HashMap::<String, bool>::new();
             let mut verified_by_id = std::collections::HashMap::<Uuid, bool>::new();
             for row in &rows {
                 let id = row.get::<Uuid,_>("id");
@@ -3129,6 +3130,7 @@ async fn attestations(State(s): State<AppState>, headers: HeaderMap) -> Response
                     } else { valid = false; }
                 } else { valid = false; }
                 verified_by_id.insert(id, valid);
+                chain_valid_by_node.insert(node_id, valid);
                 *expected_previous = hash;
             }
             let chain_verified = !rows.is_empty() && verified_by_id.values().all(|valid| *valid);
