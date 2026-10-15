@@ -8,6 +8,9 @@ use tokio::net::TcpListener;
 #[derive(Default)]
 pub struct EngineMetrics {
     active_connections: AtomicI64,
+    processed_queries: AtomicU64,
+    authenticated_tenant_sessions: AtomicU64,
+    breaker_trips: AtomicU64,
     accepted_connections: AtomicU64,
     rejected_connections: AtomicU64,
     established_sessions: AtomicU64,
@@ -28,7 +31,13 @@ pub fn global() -> Arc<EngineMetrics> {
 impl EngineMetrics {
     pub fn connection_accepted(&self) { self.accepted_connections.fetch_add(1, Ordering::Relaxed); }
     pub fn connection_rejected(&self) { self.rejected_connections.fetch_add(1, Ordering::Relaxed); }
-    pub fn session_started(&self) { self.active_connections.fetch_add(1, Ordering::Relaxed); self.established_sessions.fetch_add(1, Ordering::Relaxed); }
+    pub fn session_started(&self, authenticated_tenant: bool) { self.active_connections.fetch_add(1, Ordering::Relaxed); self.established_sessions.fetch_add(1, Ordering::Relaxed); if authenticated_tenant { self.authenticated_tenant_sessions.fetch_add(1, Ordering::Relaxed); } }
+    pub fn query_processed(&self) { self.processed_queries.fetch_add(1, Ordering::Relaxed); }
+    pub fn breaker_tripped(&self) { self.breaker_trips.fetch_add(1, Ordering::Relaxed); }
+    pub fn processed_queries(&self) -> u64 { self.processed_queries.load(Ordering::Relaxed) }
+    pub fn authenticated_tenant_sessions(&self) -> u64 { self.authenticated_tenant_sessions.load(Ordering::Relaxed) }
+    pub fn blocked_violations(&self) -> u64 { self.blocked_violations.load(Ordering::Relaxed) }
+    pub fn breaker_has_tripped(&self) -> bool { self.breaker_trips.load(Ordering::Relaxed) > 0 }
     pub fn session_failed(&self) { self.failed_sessions.fetch_add(1, Ordering::Relaxed); }
     pub fn violation_blocked(&self) { self.blocked_violations.fetch_add(1, Ordering::Relaxed); }
     pub fn session_finished(&self, client_bytes: u64, database_bytes: u64, duration_micros: u64) {
@@ -43,7 +52,13 @@ impl EngineMetrics {
         let completed = self.completed_sessions.load(Ordering::Relaxed);
         let duration = self.session_duration_micros.load(Ordering::Relaxed);
         format!(
-            "# HELP proxima_engine_active_connections Active PostgreSQL sessions.\n# TYPE proxima_engine_active_connections gauge\nproxima_engine_active_connections {}\n# HELP proxima_engine_connections_accepted Total TCP connections accepted.\n# TYPE proxima_engine_connections_accepted counter\nproxima_engine_connections_accepted_total {}\n# HELP proxima_engine_connections_rejected Total connections rejected by capacity or breaker policy.\n# TYPE proxima_engine_connections_rejected counter\nproxima_engine_connections_rejected_total {}\n# HELP proxima_engine_sessions_established Total PostgreSQL sessions established.\n# TYPE proxima_engine_sessions_established counter\nproxima_engine_sessions_established_total {}\n# HELP proxima_engine_sessions_failed Total failed session handshakes.\n# TYPE proxima_engine_sessions_failed counter\nproxima_engine_sessions_failed_total {}\n# HELP proxima_engine_security_violations_blocked Total protocol or tenant-security violations blocked.\n# TYPE proxima_engine_security_violations_blocked counter\nproxima_engine_security_violations_blocked_total {}\n# HELP proxima_engine_client_bytes_total Bytes copied from clients to PostgreSQL.\n# TYPE proxima_engine_client_bytes_total counter\nproxima_engine_client_bytes_total {}\n# HELP proxima_engine_database_bytes_total Bytes copied from PostgreSQL to clients.\n# TYPE proxima_engine_database_bytes_total counter\nproxima_engine_database_bytes_total {}\n# HELP proxima_engine_session_duration_seconds_total Cumulative duration of completed sessions.\n# TYPE proxima_engine_session_duration_seconds_total counter\nproxima_engine_session_duration_seconds_total {:.6}\n# HELP proxima_engine_sessions_completed Total completed PostgreSQL sessions.\n# TYPE proxima_engine_sessions_completed counter\nproxima_engine_sessions_completed_total {}\n",
+            "# HELP proxima_engine_processed_queries_total PostgreSQL simple and extended Execute query messages observed.\\n# TYPE proxima_engine_processed_queries_total counter\\nproxima_engine_processed_queries_total {}\\n\\
+# HELP proxima_engine_authenticated_tenant_sessions_total Tenant-token authenticated sessions established.\\n# TYPE proxima_engine_authenticated_tenant_sessions_total counter\\nproxima_engine_authenticated_tenant_sessions_total {}\\n\\
+# HELP proxima_engine_security_breaker_trips_total Number of peer-scoped security breaker trips.\\n# TYPE proxima_engine_security_breaker_trips_total counter\\nproxima_engine_security_breaker_trips_total {}\\n\\
+# HELP proxima_engine_active_connections Active PostgreSQL sessions.\n# TYPE proxima_engine_active_connections gauge\nproxima_engine_active_connections {}\n# HELP proxima_engine_connections_accepted Total TCP connections accepted.\n# TYPE proxima_engine_connections_accepted counter\nproxima_engine_connections_accepted_total {}\n# HELP proxima_engine_connections_rejected Total connections rejected by capacity or breaker policy.\n# TYPE proxima_engine_connections_rejected counter\nproxima_engine_connections_rejected_total {}\n# HELP proxima_engine_sessions_established Total PostgreSQL sessions established.\n# TYPE proxima_engine_sessions_established counter\nproxima_engine_sessions_established_total {}\n# HELP proxima_engine_sessions_failed Total failed session handshakes.\n# TYPE proxima_engine_sessions_failed counter\nproxima_engine_sessions_failed_total {}\n# HELP proxima_engine_security_violations_blocked Total protocol or tenant-security violations blocked.\n# TYPE proxima_engine_security_violations_blocked counter\nproxima_engine_security_violations_blocked_total {}\n# HELP proxima_engine_client_bytes_total Bytes copied from clients to PostgreSQL.\n# TYPE proxima_engine_client_bytes_total counter\nproxima_engine_client_bytes_total {}\n# HELP proxima_engine_database_bytes_total Bytes copied from PostgreSQL to clients.\n# TYPE proxima_engine_database_bytes_total counter\nproxima_engine_database_bytes_total {}\n# HELP proxima_engine_session_duration_seconds_total Cumulative duration of completed sessions.\n# TYPE proxima_engine_session_duration_seconds_total counter\nproxima_engine_session_duration_seconds_total {:.6}\n# HELP proxima_engine_sessions_completed Total completed PostgreSQL sessions.\n# TYPE proxima_engine_sessions_completed counter\nproxima_engine_sessions_completed_total {}\n",
+            self.processed_queries.load(Ordering::Relaxed),
+            self.authenticated_tenant_sessions.load(Ordering::Relaxed),
+            self.breaker_trips.load(Ordering::Relaxed),
             self.active_connections.load(Ordering::Relaxed),
             self.accepted_connections.load(Ordering::Relaxed),
             self.rejected_connections.load(Ordering::Relaxed),
