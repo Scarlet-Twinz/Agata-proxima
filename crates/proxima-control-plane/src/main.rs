@@ -3136,7 +3136,7 @@ async fn attestations(State(s): State<AppState>, headers: HeaderMap) -> Response
                 *expected_previous = hash;
             }
             let chain_verified = !rows.is_empty() && verified_by_id.values().all(|valid| *valid);
-            let records = rows.iter().rev().map(|r| json!({
+            let mut records = rows.iter().rev().map(|r| json!({
                 "id":r.get::<Uuid,_>("id"),
                 "node_id":r.get::<String,_>("node_id"),
                 "attestation_version":r.get::<i32,_>("attestation_version"),
@@ -3151,6 +3151,9 @@ async fn attestations(State(s): State<AppState>, headers: HeaderMap) -> Response
                 "verified":verified_by_id.get(&r.get::<Uuid,_>("id")).copied().unwrap_or(false),
                 "created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at")
             })).collect::<Vec<_>>();
+            records.sort_by(|left, right| {
+                right["created_at"].as_str().cmp(&left["created_at"].as_str())
+            });
             let count = records.len();
             Json(json!({"attestations":records,"count":count,"chain_verified":chain_verified})).into_response()
         }
