@@ -105,7 +105,7 @@ async fn main() -> io::Result<()> {
         tokio::select! {
             accept = listener.accept() => {
                 let (client, peer) = accept?;
-                if breaker.is_blocked(peer.ip()) {
+                metrics.set_breaker_open(breaker.any_peer_blocked());\n                if breaker.is_blocked(peer.ip()) {
                     metrics.connection_rejected();
                     drop(client);
                     continue;
