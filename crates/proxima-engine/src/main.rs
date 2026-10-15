@@ -67,6 +67,15 @@ async fn main() -> io::Result<()> {
     if attestation_signing_ready && attestation_p99.is_some() {
         let ledger = Arc::new(AttestationLedger::new(attestation_config.clone()));
         let engine_config = config.clone();
+        let ingest_url = std::env::var("PROXIMA_ATTESTATION_INGEST_URL").ok().filter(|value| !value.trim().is_empty());
+        let ingest_token = std::env::var("PROXIMA_ATTESTATION_INGEST_TOKEN").ok().filter(|value| value.starts_with("aga_"));
+        let http_client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .ok();
+        if ingest_url.is_some() && (ingest_token.is_none() || http_client.is_none()) {
+            error!("attestation ingestion URL is configured but a valid API token or HTTPS client is unavailable");
+        }
         tokio::spawn(async move {
             let mut interval = tokio::time::interval_at(
                 tokio::time::Instant::now() + std::time::Duration::from_secs(3600),
@@ -86,8 +95,37 @@ async fn main() -> io::Result<()> {
                     tls_termination_enforced: engine_config.require_client_tls && engine_config.tls_cert_file.is_some(),
                     circuit_breaker_tripped: snapshot.breaker_has_tripped(),
                 };
-                if let Err(error) = ledger.append_hourly(telemetry, state).await {
-                    error!(%error, "hourly security attestation could not be written");
+                match ledger.append_hourly(telemetry, state).await {
+                    Ok(hash) => {
+                        if let (Some(url), Some(token), Some(client)) =
+                            (ingest_url.as_deref(), ingest_token.as_deref(), http_client.as_ref())
+                        {
+                            match ledger.latest_record().await {
+                                Ok(Some(record)) => {
+                                    match client.post(url)
+                                        .bearer_auth(token)
+                                        .header("content-type", "application/json")
+                                        .body(record)
+                                        .send()
+                                        .await
+                                    {
+                                        Ok(response) if response.status().is_success() => {
+                                            info!(block_hash = %hash, status = %response.status(), "signed attestation delivered to control plane");
+                                        }
+                                        Ok(response) => {
+                                            error!(block_hash = %hash, status = %response.status(), "control plane rejected signed attestation");
+                                        }
+                                        Err(error) => {
+                                            error!(block_hash = %hash, %error, "could not deliver signed attestation to control plane");
+                                        }
+                                    }
+                                }
+                                Ok(None) => error!("attestation ledger append succeeded but latest record was not found"),
+                                Err(error) => error!(%error, "could not read latest attestation for delivery"),
+                            }
+                        }
+                    }
+                    Err(error) => error!(%error, "hourly security attestation could not be written"),
                 }
             }
         });
