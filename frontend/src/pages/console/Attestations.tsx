@@ -5,8 +5,8 @@ import { api } from "../../api/client";
 type Attestation = {
   id: string;
   node_id: string;
-  epoch_timestamp_start: string;
-  epoch_timestamp_end: string;
+  epoch_timestamp_start: number;
+  epoch_timestamp_end: number;
   total_processed_queries: number;
   authenticated_tenant_sessions: number;
   blocked_unauthorized_violations: number;
@@ -19,6 +19,10 @@ type Attestation = {
   signature_valid: boolean;
   chain_link_valid: boolean | null;
 };
+
+function formatEpoch(value: number) {
+  return new Date(value * 1000).toISOString();
+}
 
 function pdfEscape(value: string) {
   return value.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)").replace(/[^\x20-\x7E]/g, "?");
@@ -76,7 +80,7 @@ export function Attestations() {
       "Integrity note: a record is verified only when its signature_valid value is true.",
       "",
       ...attestations.flatMap((item, index) => [
-        `${index + 1}. Node: ${item.node_id} | Period: ${item.epoch_timestamp_start} - ${item.epoch_timestamp_end}`,
+        `${index + 1}. Node: ${item.node_id} | Period: ${formatEpoch(item.epoch_timestamp_start)} - ${formatEpoch(item.epoch_timestamp_end)}`,
         `   Signature verified: ${item.signature_valid ? "YES" : "NO"} | Chain link: ${item.chain_link_valid === null ? "UNKNOWN (truncated history)" : item.chain_link_valid ? "VALID" : "INVALID"} | RLS: ${item.force_rls_active === null ? "UNKNOWN" : item.force_rls_active ? "ACTIVE" : "INACTIVE"} | TLS: ${item.tls_termination_enforced === null ? "UNKNOWN" : item.tls_termination_enforced ? "ENFORCED" : "NOT ENFORCED"}`,
         `   Queries: ${item.total_processed_queries} | Tenant sessions: ${item.authenticated_tenant_sessions} | Blocked violations: ${item.blocked_unauthorized_violations} | P99 overhead ms: ${item.p99_latency_overhead_ms === null ? "UNKNOWN" : item.p99_latency_overhead_ms}`,
         `   Previous hash: ${item.previous_block_hash || "GENESIS"}`,
@@ -110,7 +114,7 @@ export function Attestations() {
           <div className="empty-state"><ShieldCheck size={28} /><h2>No attestation blocks yet</h2><p>Verified reports appear after an engine node has submitted a signed telemetry epoch. This page does not manufacture security evidence when telemetry is missing.</p></div>
         ) : (
           <div className="resource-list">{attestations.map((item) => <article className="resource-list-item" key={item.id}>
-            <div><strong>{item.node_id}</strong><p>{item.epoch_timestamp_start} — {item.epoch_timestamp_end}</p><small>Hash: {item.block_hash_signature}</small></div>
+            <div><strong>{item.node_id}</strong><p>{formatEpoch(item.epoch_timestamp_start)} — {formatEpoch(item.epoch_timestamp_end)}</p><small>Hash: {item.block_hash_signature}</small></div>
             <span className={item.signature_valid ? "status-pill status-pill--healthy" : "status-pill status-pill--danger"}>{!item.signature_valid || item.chain_link_valid === false ? "Integrity issue" : item.chain_link_valid === null ? "Chain history unknown" : "Verified"}</span>
           </article>)}</div>
         )}
