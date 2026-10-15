@@ -84,7 +84,7 @@ impl EngineMetrics {
         changed
     }
 
-    pub fn breaker_trip_event(&self) {
+    pub fn set_breaker_open(&self, open: bool) {\n        self.breaker_open.store(open, Ordering::Release);\n    }\n\n    pub fn breaker_trip_event(&self) {
         self.breaker_trips.fetch_add(1, Ordering::Relaxed);
     }
 
