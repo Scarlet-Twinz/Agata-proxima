@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Check, Copy, Cpu, Plus, RefreshCw, ShieldCheck } from "lucide-react";
 import { api } from "../../api/client";
 
@@ -57,7 +57,7 @@ export function Nodes() {
 
   useEffect(() => { void loadNodes(); }, []);
 
-  async function createNode(event: React.FormEvent<HTMLFormElement>) {
+  async function createNode(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const cleanName = name.trim();
     if (!cleanName) {
