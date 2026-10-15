@@ -81,20 +81,32 @@ async fn main() -> io::Result<()> {
                 tokio::time::Instant::now() + std::time::Duration::from_secs(3600),
                 std::time::Duration::from_secs(3600),
             );
+            let mut previous_queries = 0u64;
+            let mut previous_tenant_sessions = 0u64;
+            let mut previous_violations = 0u64;
+            let mut previous_breaker_trips = 0u64;
             loop {
                 interval.tick().await;
                 let snapshot = metrics::global();
+                let current_queries = snapshot.processed_queries();
+                let current_tenant_sessions = snapshot.authenticated_tenant_sessions();
+                let current_violations = snapshot.blocked_violations();
+                let current_breaker_trips = snapshot.breaker_trips();
                 let telemetry = TelemetrySummary {
-                    total_processed_queries: snapshot.processed_queries(),
-                    authenticated_tenant_sessions: snapshot.authenticated_tenant_sessions(),
-                    blocked_unauthorized_violations: snapshot.blocked_violations(),
+                    total_processed_queries: current_queries.saturating_sub(previous_queries),
+                    authenticated_tenant_sessions: current_tenant_sessions.saturating_sub(previous_tenant_sessions),
+                    blocked_unauthorized_violations: current_violations.saturating_sub(previous_violations),
                     p99_latency_overhead_ms: attestation_p99.unwrap_or(0.0),
                 };
                 let state = SecurityState {
                     force_rls_active: std::env::var("PROXIMA_ATTESTATION_FORCE_RLS_ACTIVE").ok().as_deref() == Some("true"),
                     tls_termination_enforced: engine_config.require_client_tls && engine_config.tls_cert_file.is_some(),
-                    circuit_breaker_tripped: snapshot.breaker_has_tripped(),
+                    circuit_breaker_tripped: current_breaker_trips > previous_breaker_trips,
                 };
+                previous_queries = current_queries;
+                previous_tenant_sessions = current_tenant_sessions;
+                previous_violations = current_violations;
+                previous_breaker_trips = current_breaker_trips;
                 match ledger.append_hourly(telemetry, state).await {
                     Ok(hash) => {
                         if let (Some(url), Some(token), Some(client)) =
