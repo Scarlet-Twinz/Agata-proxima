@@ -11,7 +11,7 @@ use proxima_engine::{
     tenant::TenantTokenVerifier,
     tls::{accept_client_tls, client_acceptor, connect_upstream_tls, upstream_connector},
 };
-use tokio::io::{copy_bidirectional, AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Semaphore;
 use tokio::time::timeout;
@@ -28,6 +28,19 @@ async fn main() -> io::Result<()> {
     let config = Config::from_env()?;
     let metrics = Arc::new(EngineMetrics::default());
     let breaker = Arc::new(PeerCircuitBreaker::from_env()?);
+    let force_rls_active = std::env::var("PROXIMA_ATTEST_FORCE_RLS_ACTIVE")
+        .map(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false);
+    let attestation_metrics = metrics.clone();
+    let attestation_breaker = breaker.clone();
+    tokio::spawn(async move {
+        proxima_engine::attestation_reporter::run(
+            attestation_metrics,
+            attestation_breaker,
+            force_rls_active,
+            config.require_client_tls,
+        ).await;
+    });
     let metrics_enabled = std::env::var("PROXIMA_METRICS_ENABLED")
         .map(|value| !matches!(value.trim().to_ascii_lowercase().as_str(), "0" | "false" | "no" | "off"))
         .unwrap_or(true);
