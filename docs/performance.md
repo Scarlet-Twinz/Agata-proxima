@@ -17,3 +17,21 @@ Required benchmark dimensions:
 Run the same workload through direct PostgreSQL, Proxima without TLS, Proxima with client TLS, Proxima with client and upstream TLS, and Proxima with tenant verification plus RLS.
 
 Every result records hardware, Rust version, PostgreSQL version, connection count, payload shape and duration. No benchmark becomes a public SLA until it is reproducible.
+
+## Repeatable direct-versus-proxy run
+
+Use `tests/performance/benchmark-proxy.sh` against a pre-initialized pgbench database. The direct and proxied URLs must address the same PostgreSQL database, credentials/roles, dataset and server configuration. The script deliberately does not initialize, mutate or vacuum the database; it records environment metadata and saves separate warm-up and measured runs.
+
+Example:
+
+```bash
+export DIRECT_DATABASE_URL='postgresql://bench_user:...@db-host:5432/bench'
+export PROXIMA_DATABASE_URL='postgresql://bench_user:...@proxy-host:5432/bench'
+export PG_BENCH_CLIENTS=32
+export PG_BENCH_JOBS=8
+export PG_BENCH_WARMUP_SECONDS=10
+export PG_BENCH_DURATION_SECONDS=60
+bash tests/performance/benchmark-proxy.sh
+```
+
+Run multiple repetitions at several concurrency levels (for example 1, 8, 32, 64 and 128 clients) and retain raw artifacts. Include TLS and tenant-token/RLS configurations as separate test cases. Do not compare runs made with different database versions, datasets, machine sizes or server settings. A single run is not an SLA and this harness does not claim to generate production performance numbers automatically.
