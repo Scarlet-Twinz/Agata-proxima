@@ -130,3 +130,14 @@ Then open:
 - Proxima Command Center: `http://127.0.0.1:8080` by default (`PROXIMA_CONTROL_BIND` can change it).
 
 On Windows, use `scripts/proxima-platform.ps1` after Docker Desktop and the Rust MSVC toolchain are available.
+
+
+## Proxima Monitor, Breaker, and Attest
+
+The engine exposes Prometheus text metrics on a separate listener. By default it binds to `127.0.0.1:9090`; set `PROXIMA_METRICS_LISTEN_ADDR` only when the deployment network policy protects that listener. Metrics include active/rejected/completed connections, forwarded client/upstream bytes, PostgreSQL Query/Execute messages, verified tenant sessions, authorization/protocol violations, and peer-breaker trips.
+
+The security breaker defaults to `PROXIMA_SECURITY_BREAKER=fail-closed`. Repeated malformed or unauthorized handshakes are isolated by peer IP using `PROXIMA_SECURITY_BREAKER_THRESHOLD`, `PROXIMA_SECURITY_BREAKER_WINDOW_SECS`, and `PROXIMA_SECURITY_BREAKER_BLOCK_SECS`. This is per-peer protection; it does not intentionally shut down unrelated tenants. Put a trusted proxy/load balancer in the design carefully: source-IP sharing can make peer-scoped isolation affect multiple clients behind one address.
+
+Hourly signed attestation reporting is opt-in and requires the complete configuration: `PROXIMA_CONTROL_PLANE_URL`, `PROXIMA_CONTROL_PLANE_API_KEY`, `PROXIMA_ORGANIZATION_ID`, `PROXIMA_NODE_ID`, `PROXIMA_ATTESTATION_SIGNING_KEY_ID`, `PROXIMA_ATTESTATION_SIGNING_KEY`, and explicit `PROXIMA_ATTEST_FORCE_RLS_ACTIVE`. Use HTTPS except for local development, a dedicated high-entropy secret of at least 32 bytes, and the same signing key/key ID in the trusted control-plane verifier. Never commit production secrets. Configure RLS state only from deployment verification evidence; the engine cannot infer database FORCE RLS state from a proxy connection alone. P99 overhead is recorded as unknown until a defensible measurement is available.
+
+The workspace console's **Attestations** page displays organization-scoped records and exports the displayed evidence as a PDF. The report labels invalid signatures and unknown latency rather than inventing values. Hash chaining and HMAC provide tamper evidence within the configured trust boundary; they do not by themselves establish SOC 2, HIPAA, FedRAMP, or other compliance certification.
