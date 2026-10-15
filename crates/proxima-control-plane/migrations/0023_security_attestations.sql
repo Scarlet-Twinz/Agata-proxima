@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS security_attestation_blocks (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
     node_id text NOT NULL CHECK (length(trim(node_id)) BETWEEN 1 AND 200),
     epoch_timestamp_start bigint NOT NULL,
     epoch_timestamp_end bigint NOT NULL CHECK (epoch_timestamp_end >= epoch_timestamp_start),
