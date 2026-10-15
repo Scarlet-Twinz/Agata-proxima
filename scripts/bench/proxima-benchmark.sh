@@ -88,6 +88,9 @@ for label in ("direct", "proxima"):
         },
         "raw_output": f"{label}.txt",
     }
+direct_p99 = result["direct"]["latency_ms"]["p99"]
+proxima_p99 = result["proxima"]["latency_ms"]["p99"]
+result["p99_overhead_ms"] = round(proxima_p99 - direct_p99, 3) if direct_p99 is not None and proxima_p99 is not None else None
 result["note"] = "Values are observed measurements for this run, not an SLA. Review raw pgbench output and metadata."
 with open(os.path.join(root, "summary.json"), "w", encoding="utf-8") as stream:
     json.dump(result, stream, indent=2)
