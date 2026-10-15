@@ -477,8 +477,6 @@ where
             writer.shutdown().await?;
             return Ok(total);
         }
-        writer.write_all(&buffer[..size]).await?;
-        total = total.saturating_add(size as u64);
         pending.extend_from_slice(&buffer[..size]);
         loop {
             if pending.len() < 5 { break; }
@@ -550,6 +548,8 @@ where
         if pending.len() > 16 * 1024 * 1024 + 5 {
             pending.clear();
         }
+        writer.write_all(&buffer[..size]).await?;
+        total = total.saturating_add(size as u64);
     }
 }
 
