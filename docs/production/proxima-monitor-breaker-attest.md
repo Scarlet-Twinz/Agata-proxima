@@ -20,6 +20,7 @@ Metrics currently include active/accepted/rejected/completed/failed connections,
 - `PROXIMA_SECURITY_BREAKER_WINDOW_SECS=60`
 - `PROXIMA_SECURITY_BREAKER_BLOCK_SECS=60`
 - `PROXIMA_MAX_FRONTEND_FRAME_BYTES=67108864` (64 MiB default)
+- `PROXIMA_MAX_BACKEND_FRAME_BYTES=67108864` (64 MiB default; independently bounds backend response frames)
 
 The breaker temporarily blocks the source IP after repeated malformed/oversized PostgreSQL frontend frames or unauthorized handshakes. It is scoped to that peer rather than globally disabling unrelated tenants. State is in-memory and bounded; a process restart clears temporary blocks. Put upstream rate limiting and network-level DDoS controls in front of the engine for distributed attacks. Malformed traffic is rejected before the offending frame is forwarded.
 
