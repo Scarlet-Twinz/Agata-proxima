@@ -27,15 +27,29 @@ impl ReporterConfig {
         let signing_key_id = env::var("PROXIMA_ATTESTATION_SIGNING_KEY_ID").unwrap_or_default();
         let signing_key = env::var("PROXIMA_ATTESTATION_SIGNING_KEY").unwrap_or_default();
         let any_configured = [
-            !base_url.is_empty(), !api_key.is_empty(), !organization_id.is_empty(),
-            !node_id.is_empty(), !signing_key_id.is_empty(), !signing_key.is_empty(),
-        ].into_iter().any(|value| value);
+            !base_url.is_empty(),
+            !api_key.is_empty(),
+            !organization_id.is_empty(),
+            !node_id.is_empty(),
+            !signing_key_id.is_empty(),
+            !signing_key.is_empty(),
+        ]
+        .into_iter()
+        .any(|value| value);
         if !any_configured {
             return Ok(None);
         }
-        if [base_url.as_str(), api_key.as_str(), organization_id.as_str(),
-            node_id.as_str(), signing_key_id.as_str(), signing_key.as_str()]
-            .iter().any(|value| value.trim().is_empty()) {
+        if [
+            base_url.as_str(),
+            api_key.as_str(),
+            organization_id.as_str(),
+            node_id.as_str(),
+            signing_key_id.as_str(),
+            signing_key.as_str(),
+        ]
+        .iter()
+        .any(|value| value.trim().is_empty())
+        {
             return Err("attestation reporting requires PROXIMA_CONTROL_PLANE_URL, PROXIMA_CONTROL_PLANE_API_KEY, PROXIMA_ORGANIZATION_ID, PROXIMA_NODE_ID, PROXIMA_ATTESTATION_SIGNING_KEY_ID and PROXIMA_ATTESTATION_SIGNING_KEY together".into());
         }
         if !is_canonical_uuid(&organization_id) {
@@ -44,9 +58,14 @@ impl ReporterConfig {
         if node_id.trim().is_empty() || node_id.len() > 200 {
             return Err("PROXIMA_NODE_ID must contain 1-200 characters".into());
         }
-        let rls_attestation = env::var("PROXIMA_ATTEST_FORCE_RLS_ACTIVE")
-            .map_err(|_| "PROXIMA_ATTEST_FORCE_RLS_ACTIVE must explicitly state whether RLS is verified".to_string())?;
-        if !matches!(rls_attestation.trim().to_ascii_lowercase().as_str(), "1" | "0" | "true" | "false" | "yes" | "no" | "on" | "off") {
+        let rls_attestation = env::var("PROXIMA_ATTEST_FORCE_RLS_ACTIVE").map_err(|_| {
+            "PROXIMA_ATTEST_FORCE_RLS_ACTIVE must explicitly state whether RLS is verified"
+                .to_string()
+        })?;
+        if !matches!(
+            rls_attestation.trim().to_ascii_lowercase().as_str(),
+            "1" | "0" | "true" | "false" | "yes" | "no" | "on" | "off"
+        ) {
             return Err("PROXIMA_ATTEST_FORCE_RLS_ACTIVE must be an explicit boolean".into());
         }
         if signing_key.len() < 32 {
@@ -54,11 +73,19 @@ impl ReporterConfig {
         }
         let url = reqwest::Url::parse(&base_url)
             .map_err(|error| format!("invalid PROXIMA_CONTROL_PLANE_URL: {error}"))?;
-        if url.scheme() != "https" && !matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "::1")) {
+        if url.scheme() != "https"
+            && !matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "::1"))
+        {
             return Err("attestation reporting requires HTTPS except for localhost development".into());
         }
-        Ok(Some(Self { base_url: base_url.trim_end_matches('/').to_string(), api_key,
-            organization_id: organization_id.to_ascii_lowercase(), node_id, signing_key: signing_key.into_bytes(), signing_key_id }))
+        Ok(Some(Self {
+            base_url: base_url.trim_end_matches('/').to_string(),
+            api_key,
+            organization_id: organization_id.to_ascii_lowercase(),
+            node_id,
+            signing_key: signing_key.into_bytes(),
+            signing_key_id,
+        }))
     }
 }
 
@@ -94,10 +121,10 @@ pub async fn run(
     ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
     // Do not emit an immediate partial-hour block at startup.
     ticker.tick().await;
-    let mut previous_queries = metrics.total_processed_queries();
-    let mut previous_sessions = metrics.authenticated_tenant_sessions();
-    let mut previous_violations = metrics.blocked_unauthorized_violations();
-    let reporter_started_at = std::time::SystemTime::now()
+    let mut reported_queries = metrics.total_processed_queries();
+    let mut reported_sessions = metrics.authenticated_tenant_sessions();
+    let mut reported_violations = metrics.blocked_unauthorized_violations();
+    let mut last_successful_end = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_secs() as i64)
         .unwrap_or(0);
@@ -107,18 +134,35 @@ pub async fn run(
         let current_sessions = metrics.authenticated_tenant_sessions();
         let current_violations = metrics.blocked_unauthorized_violations();
         let summary = (
-            current_queries.saturating_sub(previous_queries),
-            current_sessions.saturating_sub(previous_sessions),
-            current_violations.saturating_sub(previous_violations),
+            current_queries.saturating_sub(reported_queries),
+            current_sessions.saturating_sub(reported_sessions),
+            current_violations.saturating_sub(reported_violations),
         );
-        previous_queries = current_queries;
-        previous_sessions = current_sessions;
-        previous_violations = current_violations;
-        if let Err(error) = submit_epoch(
-            &client, &config, summary.0, summary.1, summary.2, reporter_started_at,
-            force_rls_active, tls_termination_enforced, breaker.any_peer_blocked(),
-        ).await {
-            warn!(%error, "security attestation epoch was not accepted; evidence will not be represented as verified");
+        match submit_epoch(
+            &client,
+            &config,
+            summary.0,
+            summary.1,
+            summary.2,
+            last_successful_end,
+            force_rls_active,
+            tls_termination_enforced,
+            breaker.any_peer_blocked(),
+        )
+        .await
+        {
+            Ok(epoch_end) => {
+                reported_queries = current_queries;
+                reported_sessions = current_sessions;
+                reported_violations = current_violations;
+                last_successful_end = epoch_end;
+            }
+            Err(error) => {
+                warn!(
+                %error,
+                "security attestation epoch was not accepted; evidence will not be represented as verified"
+            );
+            }
         }
     }
 }
@@ -129,35 +173,74 @@ async fn submit_epoch(
     queries: u64,
     sessions: u64,
     violations: u64,
-    reporter_started_at: i64,
+    last_successful_end: i64,
     force_rls_active: bool,
     tls_termination_enforced: bool,
     breaker_tripped: bool,
-) -> Result<(), String> {
+) -> Result<i64, String> {
     let endpoint = format!("{}/api/v1/attestations", config.base_url);
-    let latest: Value = client.get(&endpoint).bearer_auth(&config.api_key).send().await
+    let latest: Value = client
+        .get(&endpoint)
+        .bearer_auth(&config.api_key)
+        .send()
+        .await
         .map_err(|error| format!("fetch previous attestation: {error}"))?
-        .error_for_status().map_err(|error| format!("attestation read rejected: {error}"))?
-        .json().await.map_err(|error| format!("decode previous attestation: {error}"))?;
-    let records = latest.get("attestations").and_then(Value::as_array).ok_or("control plane response omitted attestations array")?;
-    let previous = records.iter()
-        .filter(|record| record.get("node_id").and_then(Value::as_str) == Some(config.node_id.as_str()))
-        .max_by_key(|record| record.get("epoch_timestamp_end").and_then(Value::as_i64).unwrap_or(0));
+        .error_for_status()
+        .map_err(|error| format!("attestation read rejected: {error}"))?
+        .json()
+        .await
+        .map_err(|error| format!("decode previous attestation: {error}"))?;
+    let records = latest
+        .get("attestations")
+        .and_then(Value::as_array)
+        .ok_or("control plane response omitted attestations array")?;
+    let previous = records
+        .iter()
+        .filter(|record| {
+            record.get("node_id").and_then(Value::as_str) == Some(config.node_id.as_str())
+        })
+        .max_by_key(|record| {
+            record
+                .get("epoch_timestamp_end")
+                .and_then(Value::as_i64)
+                .unwrap_or(0)
+        });
     if let Some(previous_record) = previous {
-        if previous_record.get("signature_valid").and_then(Value::as_bool) != Some(true) {
-            return Err("latest stored attestation signature is invalid; refusing to extend the chain".into());
+        if previous_record
+            .get("signature_valid")
+            .and_then(Value::as_bool)
+            != Some(true)
+        {
+            return Err(
+                "latest stored attestation signature is invalid; refusing to extend the chain"
+                    .into(),
+            );
         }
-        if previous_record.get("chain_link_valid").and_then(Value::as_bool) == Some(false) {
-            return Err("latest stored attestation predecessor link is invalid; refusing to extend the chain".into());
+        if previous_record
+            .get("chain_link_valid")
+            .and_then(Value::as_bool)
+            == Some(false)
+        {
+            return Err(
+                "latest stored attestation predecessor link is invalid; refusing to extend the chain"
+                    .into(),
+            );
         }
     }
-    let previous_hash = previous.and_then(|record| record.get("block_hash_signature"))
-        .and_then(Value::as_str).unwrap_or("").to_string();
-    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-        .map_err(|error| format!("system clock before Unix epoch: {error}"))?.as_secs() as i64;
-    let previous_end = previous.and_then(|record| record.get("epoch_timestamp_end").and_then(Value::as_i64));
-    let start = previous_end.map(|end| end.max(reporter_started_at))
-        .unwrap_or_else(|| now.saturating_sub(3600));
+    let previous_hash = previous
+        .and_then(|record| record.get("block_hash_signature"))
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|error| format!("system clock before Unix epoch: {error}"))?
+        .as_secs() as i64;
+    let previous_end = previous
+        .and_then(|record| record.get("epoch_timestamp_end").and_then(Value::as_i64));
+    let start = previous_end
+        .map(|end| end.max(last_successful_end))
+        .unwrap_or(last_successful_end);
     if start >= now {
         return Err("system clock has not advanced beyond the previous attestation epoch".into());
     }
@@ -178,7 +261,8 @@ async fn submit_epoch(
             circuit_breaker_tripped: breaker_tripped,
         },
         previous_hash.clone(),
-    ).map_err(|error| error.to_string())?;
+    )
+    .map_err(|error| error.to_string())?;
     let block_hash = block.calculate_hash();
     let signature_hex = sign_hash_hmac(&block_hash, &config.signing_key)
         .map_err(|error| error.to_string())?;
@@ -198,11 +282,23 @@ async fn submit_epoch(
         "signature_hex": signature_hex,
         "signing_key_id": config.signing_key_id,
     });
-    client.post(&endpoint).bearer_auth(&config.api_key).json(&payload).send().await
+    client
+        .post(&endpoint)
+        .bearer_auth(&config.api_key)
+        .json(&payload)
+        .send()
+        .await
         .map_err(|error| format!("submit attestation: {error}"))?
-        .error_for_status().map_err(|error| format!("attestation submission rejected: {error}"))?;
-    info!(node_id = %config.node_id, epoch_start = start, epoch_end = now, %block_hash, "signed security attestation accepted");
-    Ok(())
+        .error_for_status()
+        .map_err(|error| format!("attestation submission rejected: {error}"))?;
+    info!(
+        node_id = %config.node_id,
+        epoch_start = start,
+        epoch_end = now,
+        %block_hash,
+        "signed security attestation accepted"
+    );
+    Ok(now)
 }
 
 
@@ -219,13 +315,16 @@ pub async fn report_breaker_event(source_peer: String) -> Result<(), String> {
     }
     let url = reqwest::Url::parse(&base_url)
         .map_err(|error| format!("invalid control-plane URL: {error}"))?;
-    if url.scheme() != "https" && !matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "::1")) {
+    if url.scheme() != "https"
+        && !matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "::1"))
+    {
         return Err("security event delivery requires HTTPS except for localhost development".into());
     }
     let client = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(5))
         .timeout(Duration::from_secs(10))
-        .build().map_err(|error| format!("create security event client: {error}"))?;
+        .build()
+        .map_err(|error| format!("create security event client: {error}"))?;
     let observed_at = chrono::Utc::now().to_rfc3339();
     let payload = json!({
         "node_id": node_id,
@@ -240,10 +339,18 @@ pub async fn report_breaker_event(source_peer: String) -> Result<(), String> {
         },
         "observed_at": observed_at
     });
-    client.post(format!("{}/api/v1/security/events", base_url.trim_end_matches('/')))
-        .bearer_auth(api_key).json(&payload).send().await
+    client
+        .post(format!(
+            "{}/api/v1/security/events",
+            base_url.trim_end_matches('/')
+        ))
+        .bearer_auth(api_key)
+        .json(&payload)
+        .send()
+        .await
         .map_err(|error| format!("submit security event: {error}"))?
-        .error_for_status().map_err(|error| format!("security event rejected: {error}"))?;
+        .error_for_status()
+        .map_err(|error| format!("security event rejected: {error}"))?;
     info!(node_id = %node_id, "critical peer-breaker event accepted by control plane");
     Ok(())
 }
