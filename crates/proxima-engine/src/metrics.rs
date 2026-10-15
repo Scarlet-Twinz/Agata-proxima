@@ -1,0 +1,102 @@
+use std::io;
+use std::net::SocketAddr;
+use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
+use std::sync::{Arc, OnceLock};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpListener;
+
+#[derive(Default)]
+pub struct EngineMetrics {
+    active_connections: AtomicI64,
+    accepted_connections: AtomicU64,
+    rejected_connections: AtomicU64,
+    established_sessions: AtomicU64,
+    failed_sessions: AtomicU64,
+    blocked_violations: AtomicU64,
+    client_bytes: AtomicU64,
+    database_bytes: AtomicU64,
+    session_duration_micros: AtomicU64,
+    completed_sessions: AtomicU64,
+}
+
+static METRICS: OnceLock<Arc<EngineMetrics>> = OnceLock::new();
+
+pub fn global() -> Arc<EngineMetrics> {
+    METRICS.get_or_init(|| Arc::new(EngineMetrics::default())).clone()
+}
+
+impl EngineMetrics {
+    pub fn connection_accepted(&self) { self.accepted_connections.fetch_add(1, Ordering::Relaxed); }
+    pub fn connection_rejected(&self) { self.rejected_connections.fetch_add(1, Ordering::Relaxed); }
+    pub fn session_started(&self) { self.active_connections.fetch_add(1, Ordering::Relaxed); self.established_sessions.fetch_add(1, Ordering::Relaxed); }
+    pub fn session_failed(&self) { self.failed_sessions.fetch_add(1, Ordering::Relaxed); }
+    pub fn violation_blocked(&self) { self.blocked_violations.fetch_add(1, Ordering::Relaxed); }
+    pub fn session_finished(&self, client_bytes: u64, database_bytes: u64, duration_micros: u64) {
+        self.active_connections.fetch_sub(1, Ordering::Relaxed);
+        self.client_bytes.fetch_add(client_bytes, Ordering::Relaxed);
+        self.database_bytes.fetch_add(database_bytes, Ordering::Relaxed);
+        self.session_duration_micros.fetch_add(duration_micros, Ordering::Relaxed);
+        self.completed_sessions.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn render_prometheus(&self) -> String {
+        let completed = self.completed_sessions.load(Ordering::Relaxed);
+        let duration = self.session_duration_micros.load(Ordering::Relaxed);
+        format!(
+            "# HELP proxima_engine_active_connections Active PostgreSQL sessions.\n# TYPE proxima_engine_active_connections gauge\nproxima_engine_active_connections {}\n# HELP proxima_engine_connections_accepted Total TCP connections accepted.\n# TYPE proxima_engine_connections_accepted counter\nproxima_engine_connections_accepted_total {}\n# HELP proxima_engine_connections_rejected Total connections rejected by capacity or breaker policy.\n# TYPE proxima_engine_connections_rejected counter\nproxima_engine_connections_rejected_total {}\n# HELP proxima_engine_sessions_established Total PostgreSQL sessions established.\n# TYPE proxima_engine_sessions_established counter\nproxima_engine_sessions_established_total {}\n# HELP proxima_engine_sessions_failed Total failed session handshakes.\n# TYPE proxima_engine_sessions_failed counter\nproxima_engine_sessions_failed_total {}\n# HELP proxima_engine_security_violations_blocked Total protocol or tenant-security violations blocked.\n# TYPE proxima_engine_security_violations_blocked counter\nproxima_engine_security_violations_blocked_total {}\n# HELP proxima_engine_client_bytes_total Bytes copied from clients to PostgreSQL.\n# TYPE proxima_engine_client_bytes_total counter\nproxima_engine_client_bytes_total {}\n# HELP proxima_engine_database_bytes_total Bytes copied from PostgreSQL to clients.\n# TYPE proxima_engine_database_bytes_total counter\nproxima_engine_database_bytes_total {}\n# HELP proxima_engine_session_duration_seconds_total Cumulative duration of completed sessions.\n# TYPE proxima_engine_session_duration_seconds_total counter\nproxima_engine_session_duration_seconds_total {:.6}\n# HELP proxima_engine_sessions_completed Total completed PostgreSQL sessions.\n# TYPE proxima_engine_sessions_completed counter\nproxima_engine_sessions_completed_total {}\n",
+            self.active_connections.load(Ordering::Relaxed),
+            self.accepted_connections.load(Ordering::Relaxed),
+            self.rejected_connections.load(Ordering::Relaxed),
+            self.established_sessions.load(Ordering::Relaxed),
+            self.failed_sessions.load(Ordering::Relaxed),
+            self.blocked_violations.load(Ordering::Relaxed),
+            self.client_bytes.load(Ordering::Relaxed),
+            self.database_bytes.load(Ordering::Relaxed),
+            duration as f64 / 1_000_000.0,
+            completed
+        )
+    }
+}
+
+pub async fn serve(addr: SocketAddr) -> io::Result<()> {
+    let listener = TcpListener::bind(addr).await?;
+    tracing::info!(%addr, "Proxima Prometheus metrics listener started");
+    loop {
+        let (mut stream, _) = listener.accept().await?;
+        tokio::spawn(async move {
+            let mut request = [0u8; 2048];
+            let size = match stream.read(&mut request).await { Ok(size) => size, Err(_) => return };
+            let first_line = String::from_utf8_lossy(&request[..size]);
+            let path = first_line.split_whitespace().nth(1).unwrap_or("/");
+            let (status, content_type, body) = if path == "/metrics" {
+                ("200 OK", "text/plain; version=0.0.4; charset=utf-8", global().render_prometheus())
+            } else if path == "/health" || path == "/healthz" {
+                ("200 OK", "text/plain; charset=utf-8", "ok\n".to_string())
+            } else {
+                ("404 Not Found", "text/plain; charset=utf-8", "not found\n".to_string())
+            };
+            let headers = format!("HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\nX-Content-Type-Options: nosniff\r\n\r\n", body.len());
+            let _ = stream.write_all(headers.as_bytes()).await;
+            let _ = stream.write_all(body.as_bytes()).await;
+            let _ = stream.shutdown().await;
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn metrics_exposition_is_prometheus_compatible_and_tracks_sessions() {
+        let metrics = EngineMetrics::default();
+        metrics.connection_accepted();
+        metrics.session_started();
+        metrics.session_finished(100, 80, 2_500);
+        let output = metrics.render_prometheus();
+        assert!(output.contains("proxima_engine_active_connections 0"));
+        assert!(output.contains("proxima_engine_connections_accepted_total 1"));
+        assert!(output.contains("proxima_engine_client_bytes_total 100"));
+        assert!(output.contains("proxima_engine_database_bytes_total 80"));
+        assert!(output.contains("proxima_engine_session_duration_seconds_total 0.002500"));
+    }
+}
