@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "\${PGHOST_DIRECT:?Set PGHOST_DIRECT to the direct PostgreSQL host}"
-: "\${PGPORT_DIRECT:?Set PGPORT_DIRECT to the direct PostgreSQL port}"
-: "\${PGUSER:?Set PGUSER to the benchmark database user}"
-: "\${PGDATABASE:?Set PGDATABASE to a dedicated benchmark database}"
+: "${PGHOST_DIRECT:?Set PGHOST_DIRECT to the direct PostgreSQL host}"
+: "${PGPORT_DIRECT:?Set PGPORT_DIRECT to the direct PostgreSQL port}"
+: "${PGUSER:?Set PGUSER to the benchmark database user}"
+: "${PGDATABASE:?Set PGDATABASE to a dedicated benchmark database}"
 
-PGHOST_PROXIMA="\${PGHOST_PROXIMA:-127.0.0.1}"
-PGPORT_PROXIMA="\${PGPORT_PROXIMA:-6432}"
-CLIENTS="\${CLIENTS:-32}"
-JOBS="\${JOBS:-4}"
-DURATION_SECONDS="\${DURATION_SECONDS:-60}"
-OUTPUT_DIR="\${OUTPUT_DIR:-bench-results/$(date -u +%Y%m%dT%H%M%SZ)}"
+PGHOST_PROXIMA="${PGHOST_PROXIMA:-127.0.0.1}"
+PGPORT_PROXIMA="${PGPORT_PROXIMA:-6432}"
+CLIENTS="${CLIENTS:-32}"
+JOBS="${JOBS:-4}"
+DURATION_SECONDS="${DURATION_SECONDS:-60}"
+OUTPUT_DIR="${OUTPUT_DIR:-bench-results/$(date -u +%Y%m%dT%H%M%SZ)}"
 mkdir -p "$OUTPUT_DIR"
 
 command -v pgbench >/dev/null || { echo "pgbench is required (install PostgreSQL client tools)." >&2; exit 2; }
@@ -28,7 +28,7 @@ database=$PGDATABASE
 clients=$CLIENTS
 jobs=$JOBS
 duration_seconds=$DURATION_SECONDS
-tls_mode=\${PROXIMA_BENCH_TLS_MODE:-record-in-notes}
+tls_mode=${PROXIMA_BENCH_TLS_MODE:-record-in-notes}
 workload=pgbench built-in select-only (-S)
 EOF
 
@@ -39,10 +39,10 @@ run_case() {
   local -a cmd=(pgbench -h "$host" -p "$port" -U "$PGUSER" -d "$PGDATABASE"
     -S -c "$CLIENTS" -j "$JOBS" -T "$DURATION_SECONDS" -P 5 -r -l
     --log-prefix="$log_prefix")
-  if [[ "$label" == "proxima" && -n "\${PROXIMA_BENCH_PGOPTIONS:-}" ]]; then
-    PGOPTIONS="$PROXIMA_BENCH_PGOPTIONS" "\${cmd[@]}" 2>&1 | tee "$OUTPUT_DIR/$label.txt"
+  if [[ "$label" == "proxima" && -n "${PROXIMA_BENCH_PGOPTIONS:-}" ]]; then
+    PGOPTIONS="$PROXIMA_BENCH_PGOPTIONS" "${cmd[@]}" 2>&1 | tee "$OUTPUT_DIR/$label.txt"
   else
-    "\${cmd[@]}" 2>&1 | tee "$OUTPUT_DIR/$label.txt"
+    "${cmd[@]}" 2>&1 | tee "$OUTPUT_DIR/$label.txt"
   fi
 }
 
