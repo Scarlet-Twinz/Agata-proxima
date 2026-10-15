@@ -270,6 +270,8 @@ pub async fn serve(addr: SocketAddr, metrics: Arc<EngineMetrics>) -> io::Result<
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use super::EngineMetrics;
 
     #[test]
