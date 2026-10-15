@@ -17,10 +17,29 @@ impl BreakerConfig {
             .or_else(|_| std::env::var("PROXIMA_SECURITY_CIRCUIT_BREAKER"))
             .unwrap_or_else(|_| "fail-closed".to_string());
         Self {
-            enabled: !matches!(mode.trim().to_ascii_lowercase().as_str(), "off" | "disabled" | "false" | "0"),
-            failure_threshold: std::env::var("PROXIMA_BREAKER_FAILURE_THRESHOLD").ok().and_then(|v| v.parse().ok()).filter(|v| *v > 0).unwrap_or(5),
-            observation_window: Duration::from_secs(std::env::var("PROXIMA_BREAKER_WINDOW_SECONDS").ok().and_then(|v| v.parse().ok()).filter(|v| *v > 0).unwrap_or(60)),
-            cooldown: Duration::from_secs(std::env::var("PROXIMA_BREAKER_COOLDOWN_SECONDS").ok().and_then(|v| v.parse().ok()).filter(|v| *v > 0).unwrap_or(300)),
+            enabled: !matches!(
+                mode.trim().to_ascii_lowercase().as_str(),
+                "off" | "disabled" | "false" | "0"
+            ),
+            failure_threshold: std::env::var("PROXIMA_BREAKER_FAILURE_THRESHOLD")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .filter(|v| *v > 0)
+                .unwrap_or(5),
+            observation_window: Duration::from_secs(
+                std::env::var("PROXIMA_BREAKER_WINDOW_SECONDS")
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+                    .filter(|v| *v > 0)
+                    .unwrap_or(60),
+            ),
+            cooldown: Duration::from_secs(
+                std::env::var("PROXIMA_BREAKER_COOLDOWN_SECONDS")
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+                    .filter(|v| *v > 0)
+                    .unwrap_or(300),
+            ),
         }
     }
 }
@@ -39,26 +58,47 @@ pub struct SecurityBreaker {
 
 impl SecurityBreaker {
     pub fn new(config: BreakerConfig) -> Self {
-        Self { config, peers: Arc::new(Mutex::new(HashMap::new())) }
+        Self {
+            config,
+            peers: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 
     pub fn is_blocked(&self, peer: IpAddr) -> bool {
-        if !self.config.enabled { return false; }
-        let Ok(mut peers) = self.peers.lock() else { return true; };
-        let Some(state) = peers.get_mut(&peer) else { return false; };
+        if !self.config.enabled {
+            return false;
+        }
+        let Ok(mut peers) = self.peers.lock() else {
+            return true;
+        };
+        let Some(state) = peers.get_mut(&peer) else {
+            return false;
+        };
         match state.blocked_until {
             Some(until) if until > Instant::now() => true,
-            Some(_) => { state.blocked_until = None; state.violations.clear(); false }
+            Some(_) => {
+                state.blocked_until = None;
+                state.violations.clear();
+                false
+            }
             None => false,
         }
     }
 
     pub fn record_violation(&self, peer: IpAddr) -> bool {
-        if !self.config.enabled { return false; }
-        let Ok(mut peers) = self.peers.lock() else { return true; };
+        if !self.config.enabled {
+            return false;
+        }
+        let Ok(mut peers) = self.peers.lock() else {
+            return true;
+        };
         let state = peers.entry(peer).or_default();
         let now = Instant::now();
-        while state.violations.front().is_some_and(|at| now.duration_since(*at) > self.config.observation_window) {
+        while state
+            .violations
+            .front()
+            .is_some_and(|at| now.duration_since(*at) > self.config.observation_window)
+        {
             state.violations.pop_front();
         }
         state.violations.push_back(now);
@@ -94,8 +134,10 @@ mod tests {
     #[test]
     fn disabled_breaker_never_blocks() {
         let breaker = SecurityBreaker::new(BreakerConfig {
-            enabled: false, failure_threshold: 1,
-            observation_window: Duration::from_secs(1), cooldown: Duration::from_secs(1),
+            enabled: false,
+            failure_threshold: 1,
+            observation_window: Duration::from_secs(1),
+            cooldown: Duration::from_secs(1),
         });
         let peer = IpAddr::V4(Ipv4Addr::LOCALHOST);
         assert!(!breaker.record_violation(peer));

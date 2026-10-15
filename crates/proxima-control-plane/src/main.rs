@@ -452,7 +452,10 @@ async fn main() -> Result<()> {
             get(verifications).post(create_verification),
         )
         .route("/api/v1/audit", get(audit_events))
-        .route("/api/v1/attestations", get(attestations).post(create_attestation))
+        .route(
+            "/api/v1/attestations",
+            get(attestations).post(create_attestation),
+        )
         .route("/api/v1/security/events", post(ingest_security_event))
         .route("/api/v1/support", get(support).post(create_support))
         .route(
@@ -3058,7 +3061,10 @@ async fn ingest_security_event(
         || input.node_id.len() > 128
         || safe_attestation_identifier(&input.node_id) != input.node_id
         || input.peer_fingerprint.len() != 64
-        || !input.peer_fingerprint.bytes().all(|byte| byte.is_ascii_hexdigit())
+        || !input
+            .peer_fingerprint
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit())
         || input.reason.len() > 256
         || input.observed_at <= 0
     {
@@ -3080,7 +3086,8 @@ async fn ingest_security_event(
             "observed_at":input.observed_at,
             "source":"proxima_engine"
         }),
-    ).await;
+    )
+    .await;
     Json(json!({"ok":true,"recorded":true})).into_response()
 }
 
@@ -3163,7 +3170,11 @@ async fn create_attestation(
         || input.node_id.trim().is_empty()
         || input.node_id.len() > 128
         || safe_attestation_identifier(&input.node_id) != input.node_id
-        || input.telemetry_summary.as_object().map(|object| object.len()) != Some(4)
+        || input
+            .telemetry_summary
+            .as_object()
+            .map(|object| object.len())
+            != Some(4)
         || input.security_state.as_object().map(|object| object.len()) != Some(3)
         || input.epoch_timestamp_start < 0
         || input.epoch_timestamp_end < input.epoch_timestamp_start
@@ -3177,25 +3188,54 @@ async fn create_attestation(
         Ok(value) if value.len() >= 32 => value.into_bytes(),
         _ => return service_unavailable("Attestation ingestion is disabled until PROXIMA_ATTESTATION_SIGNING_KEY is configured with at least 32 bytes."),
     };
-    let Some(total_processed_queries) = input.telemetry_summary.get("total_processed_queries").and_then(Value::as_u64) else {
+    let Some(total_processed_queries) = input
+        .telemetry_summary
+        .get("total_processed_queries")
+        .and_then(Value::as_u64)
+    else {
         return bad("Attestation telemetry is missing total_processed_queries.");
     };
-    let Some(authenticated_tenant_sessions) = input.telemetry_summary.get("authenticated_tenant_sessions").and_then(Value::as_u64) else {
+    let Some(authenticated_tenant_sessions) = input
+        .telemetry_summary
+        .get("authenticated_tenant_sessions")
+        .and_then(Value::as_u64)
+    else {
         return bad("Attestation telemetry is missing authenticated_tenant_sessions.");
     };
-    let Some(blocked_unauthorized_violations) = input.telemetry_summary.get("blocked_unauthorized_violations").and_then(Value::as_u64) else {
+    let Some(blocked_unauthorized_violations) = input
+        .telemetry_summary
+        .get("blocked_unauthorized_violations")
+        .and_then(Value::as_u64)
+    else {
         return bad("Attestation telemetry is missing blocked_unauthorized_violations.");
     };
-    let Some(p99_latency_overhead_ms) = input.telemetry_summary.get("p99_latency_overhead_ms").and_then(Value::as_f64).filter(|value| value.is_finite() && *value >= 0.0) else {
+    let Some(p99_latency_overhead_ms) = input
+        .telemetry_summary
+        .get("p99_latency_overhead_ms")
+        .and_then(Value::as_f64)
+        .filter(|value| value.is_finite() && *value >= 0.0)
+    else {
         return bad("Attestation telemetry has an invalid p99_latency_overhead_ms.");
     };
-    let Some(force_rls_active) = input.security_state.get("force_rls_active").and_then(Value::as_bool) else {
+    let Some(force_rls_active) = input
+        .security_state
+        .get("force_rls_active")
+        .and_then(Value::as_bool)
+    else {
         return bad("Attestation security_state is missing force_rls_active.");
     };
-    let Some(tls_termination_enforced) = input.security_state.get("tls_termination_enforced").and_then(Value::as_bool) else {
+    let Some(tls_termination_enforced) = input
+        .security_state
+        .get("tls_termination_enforced")
+        .and_then(Value::as_bool)
+    else {
         return bad("Attestation security_state is missing tls_termination_enforced.");
     };
-    let Some(circuit_breaker_tripped) = input.security_state.get("circuit_breaker_tripped").and_then(Value::as_bool) else {
+    let Some(circuit_breaker_tripped) = input
+        .security_state
+        .get("circuit_breaker_tripped")
+        .and_then(Value::as_bool)
+    else {
         return bad("Attestation security_state is missing circuit_breaker_tripped.");
     };
     let canonical_expected = format!(
@@ -3218,7 +3258,11 @@ async fn create_attestation(
     }
     let calculated_hash = format!("{:x}", Sha256::digest(input.canonical_payload.as_bytes()));
     if calculated_hash != input.block_hash {
-        return (StatusCode::UNPROCESSABLE_ENTITY, Json(json!({"ok":false,"message":"Attestation payload hash mismatch."}))).into_response();
+        return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(json!({"ok":false,"message":"Attestation payload hash mismatch."})),
+        )
+            .into_response();
     }
     let mut mac = match hmac::Hmac::<Sha256>::new_from_slice(&signing_key) {
         Ok(mac) => mac,
@@ -3227,7 +3271,11 @@ async fn create_attestation(
     mac.update(input.block_hash.as_bytes());
     let expected_signature = hex::encode(mac.finalize().into_bytes());
     if expected_signature != input.block_hash_signature {
-        return (StatusCode::UNPROCESSABLE_ENTITY, Json(json!({"ok":false,"message":"Attestation signature is invalid."}))).into_response();
+        return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(json!({"ok":false,"message":"Attestation signature is invalid."})),
+        )
+            .into_response();
     }
 
     let mut tx = match s.db.begin().await {
@@ -3236,7 +3284,9 @@ async fn create_attestation(
     };
     if let Err(e) = sqlx::query("SELECT pg_advisory_xact_lock(hashtext($1))")
         .bind(format!("{}:{}", ctx.organization_id, input.node_id))
-        .execute(&mut *tx).await {
+        .execute(&mut *tx)
+        .await
+    {
         return db_error(e);
     }
     let previous = match sqlx::query_scalar::<_, String>(
@@ -3259,9 +3309,22 @@ async fn create_attestation(
       .bind(&input.telemetry_summary).bind(&input.security_state).bind(&input.previous_block_hash)
       .bind(&input.canonical_payload).bind(&input.block_hash).bind(&input.block_hash_signature)
       .execute(&mut *tx).await;
-    if let Err(e) = inserted { return db_error(e); }
-    if let Err(e) = tx.commit().await { return db_error(e); }
-    audit(&s.db, ctx.organization_id, ctx.user_id, "attestation.ingested", "attestation", Some(id), json!({"node_id":input.node_id,"block_hash":input.block_hash})).await;
+    if let Err(e) = inserted {
+        return db_error(e);
+    }
+    if let Err(e) = tx.commit().await {
+        return db_error(e);
+    }
+    audit(
+        &s.db,
+        ctx.organization_id,
+        ctx.user_id,
+        "attestation.ingested",
+        "attestation",
+        Some(id),
+        json!({"node_id":input.node_id,"block_hash":input.block_hash}),
+    )
+    .await;
     Json(json!({"ok":true,"id":id,"block_hash":input.block_hash,"verified":true})).into_response()
 }
 
@@ -3313,12 +3376,19 @@ fn canonical_attestation_payload(
     security: &Value,
     previous_hash: &str,
 ) -> Option<String> {
-    if telemetry.as_object()?.len() != 4 || security.as_object()?.len() != 3 || safe_attestation_identifier(node_id) != node_id { return None; }
+    if telemetry.as_object()?.len() != 4
+        || security.as_object()?.len() != 3
+        || safe_attestation_identifier(node_id) != node_id
+    {
+        return None;
+    }
     let total_queries = telemetry.get("total_processed_queries")?.as_u64()?;
     let tenant_sessions = telemetry.get("authenticated_tenant_sessions")?.as_u64()?;
     let blocked = telemetry.get("blocked_unauthorized_violations")?.as_u64()?;
     let p99 = telemetry.get("p99_latency_overhead_ms")?.as_f64()?;
-    if !p99.is_finite() || p99 < 0.0 { return None; }
+    if !p99.is_finite() || p99 < 0.0 {
+        return None;
+    }
     let force_rls = security.get("force_rls_active")?.as_bool()?;
     let tls = security.get("tls_termination_enforced")?.as_bool()?;
     let breaker = security.get("circuit_breaker_tripped")?.as_bool()?;
@@ -3330,8 +3400,11 @@ fn canonical_attestation_payload(
 }
 
 fn safe_attestation_identifier(value: &str) -> String {
-    value.chars()
-        .filter(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.'))
+    value
+        .chars()
+        .filter(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.')
+        })
         .take(128)
         .collect()
 }

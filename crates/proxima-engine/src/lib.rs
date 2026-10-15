@@ -1,10 +1,10 @@
+pub mod attestation;
 pub mod config;
 pub mod dashboard;
 pub mod metrics;
-pub mod security_breaker;
-pub mod attestation;
 pub mod policy;
 pub mod protocol;
+pub mod security_breaker;
 pub mod session;
 pub mod tenant;
 pub mod tls;

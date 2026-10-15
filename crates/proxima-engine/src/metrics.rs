@@ -25,31 +25,60 @@ pub struct EngineMetrics {
 static METRICS: OnceLock<Arc<EngineMetrics>> = OnceLock::new();
 
 pub fn global() -> Arc<EngineMetrics> {
-    METRICS.get_or_init(|| Arc::new(EngineMetrics::default())).clone()
+    METRICS
+        .get_or_init(|| Arc::new(EngineMetrics::default()))
+        .clone()
 }
 
 impl EngineMetrics {
-    pub fn connection_accepted(&self) { self.accepted_connections.fetch_add(1, Ordering::Relaxed); }
-    pub fn connection_rejected(&self) { self.rejected_connections.fetch_add(1, Ordering::Relaxed); }
+    pub fn connection_accepted(&self) {
+        self.accepted_connections.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn connection_rejected(&self) {
+        self.rejected_connections.fetch_add(1, Ordering::Relaxed);
+    }
     pub fn session_started(&self, authenticated_tenant: bool) {
         self.active_connections.fetch_add(1, Ordering::Relaxed);
         self.established_sessions.fetch_add(1, Ordering::Relaxed);
-        if authenticated_tenant { self.authenticated_tenant_sessions.fetch_add(1, Ordering::Relaxed); }
+        if authenticated_tenant {
+            self.authenticated_tenant_sessions
+                .fetch_add(1, Ordering::Relaxed);
+        }
     }
-    pub fn query_processed(&self) { self.processed_queries.fetch_add(1, Ordering::Relaxed); }
-    pub fn breaker_tripped(&self) { self.breaker_trips.fetch_add(1, Ordering::Relaxed); }
-    pub fn processed_queries(&self) -> u64 { self.processed_queries.load(Ordering::Relaxed) }
-    pub fn authenticated_tenant_sessions(&self) -> u64 { self.authenticated_tenant_sessions.load(Ordering::Relaxed) }
-    pub fn blocked_violations(&self) -> u64 { self.blocked_violations.load(Ordering::Relaxed) }
-    pub fn breaker_has_tripped(&self) -> bool { self.breaker_trips.load(Ordering::Relaxed) > 0 }
-    pub fn breaker_trips(&self) -> u64 { self.breaker_trips.load(Ordering::Relaxed) }
-    pub fn session_failed(&self) { self.failed_sessions.fetch_add(1, Ordering::Relaxed); }
-    pub fn violation_blocked(&self) { self.blocked_violations.fetch_add(1, Ordering::Relaxed); }
+    pub fn query_processed(&self) {
+        self.processed_queries.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn breaker_tripped(&self) {
+        self.breaker_trips.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn processed_queries(&self) -> u64 {
+        self.processed_queries.load(Ordering::Relaxed)
+    }
+    pub fn authenticated_tenant_sessions(&self) -> u64 {
+        self.authenticated_tenant_sessions.load(Ordering::Relaxed)
+    }
+    pub fn blocked_violations(&self) -> u64 {
+        self.blocked_violations.load(Ordering::Relaxed)
+    }
+    pub fn breaker_has_tripped(&self) -> bool {
+        self.breaker_trips.load(Ordering::Relaxed) > 0
+    }
+    pub fn breaker_trips(&self) -> u64 {
+        self.breaker_trips.load(Ordering::Relaxed)
+    }
+    pub fn session_failed(&self) {
+        self.failed_sessions.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn violation_blocked(&self) {
+        self.blocked_violations.fetch_add(1, Ordering::Relaxed);
+    }
     pub fn session_finished(&self, client_bytes: u64, database_bytes: u64, duration_micros: u64) {
         self.active_connections.fetch_sub(1, Ordering::Relaxed);
         self.client_bytes.fetch_add(client_bytes, Ordering::Relaxed);
-        self.database_bytes.fetch_add(database_bytes, Ordering::Relaxed);
-        self.session_duration_micros.fetch_add(duration_micros, Ordering::Relaxed);
+        self.database_bytes
+            .fetch_add(database_bytes, Ordering::Relaxed);
+        self.session_duration_micros
+            .fetch_add(duration_micros, Ordering::Relaxed);
         self.completed_sessions.fetch_add(1, Ordering::Relaxed);
     }
 
@@ -121,15 +150,26 @@ pub async fn serve(addr: SocketAddr) -> io::Result<()> {
         let (mut stream, _) = listener.accept().await?;
         tokio::spawn(async move {
             let mut request = [0u8; 2048];
-            let size = match stream.read(&mut request).await { Ok(size) => size, Err(_) => return };
+            let size = match stream.read(&mut request).await {
+                Ok(size) => size,
+                Err(_) => return,
+            };
             let first_line = String::from_utf8_lossy(&request[..size]);
             let path = first_line.split_whitespace().nth(1).unwrap_or("/");
             let (status, content_type, body) = if path == "/metrics" {
-                ("200 OK", "text/plain; version=0.0.4; charset=utf-8", global().render_prometheus())
+                (
+                    "200 OK",
+                    "text/plain; version=0.0.4; charset=utf-8",
+                    global().render_prometheus(),
+                )
             } else if path == "/health" || path == "/healthz" {
                 ("200 OK", "text/plain; charset=utf-8", "ok\n".to_string())
             } else {
-                ("404 Not Found", "text/plain; charset=utf-8", "not found\n".to_string())
+                (
+                    "404 Not Found",
+                    "text/plain; charset=utf-8",
+                    "not found\n".to_string(),
+                )
             };
             let headers = format!("HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\nX-Content-Type-Options: nosniff\r\n\r\n", body.len());
             let _ = stream.write_all(headers.as_bytes()).await;

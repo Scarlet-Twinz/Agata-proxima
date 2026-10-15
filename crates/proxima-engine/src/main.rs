@@ -1,24 +1,23 @@
-use std::io;
 use bytes::{Buf, BytesMut};
+use std::io;
 use std::sync::Arc;
 
 use proxima_engine::{
-    config::{Config, UpstreamTlsMode},
-    dashboard,
-    metrics,
     attestation::{AttestationConfig, AttestationLedger, SecurityState, TelemetrySummary},
-    security_breaker::{BreakerConfig, SecurityBreaker},
+    config::{Config, UpstreamTlsMode},
+    dashboard, metrics,
     protocol::SSL_REQUEST_CODE,
+    security_breaker::{BreakerConfig, SecurityBreaker},
     session::{establish, BoxedPgStream},
     tenant::TenantTokenVerifier,
     tls::{accept_client_tls, client_acceptor, connect_upstream_tls, upstream_connector},
 };
+use sha2::{Digest, Sha256};
+use std::time::Instant;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Semaphore;
 use tokio::time::timeout;
-use std::time::Instant;
-use sha2::{Digest, Sha256};
 use tracing::{error, info};
 
 #[tokio::main]
@@ -53,7 +52,12 @@ async fn main() -> io::Result<()> {
     let metrics_addr = std::env::var("PROXIMA_METRICS_LISTEN_ADDR")
         .unwrap_or_else(|_| "127.0.0.1:9090".to_string())
         .parse()
-        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, format!("invalid PROXIMA_METRICS_LISTEN_ADDR: {error}")))?;
+        .map_err(|error| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("invalid PROXIMA_METRICS_LISTEN_ADDR: {error}"),
+            )
+        })?;
     let metrics_addr_for_task = metrics_addr;
     tokio::spawn(async move {
         if let Err(error) = metrics::serve(metrics_addr_for_task).await {
@@ -61,22 +65,36 @@ async fn main() -> io::Result<()> {
         }
     });
     let breaker = SecurityBreaker::new(BreakerConfig::from_env());
-    let security_event_url = std::env::var("PROXIMA_SECURITY_EVENT_INGEST_URL").ok()
-        .filter(|url| url.starts_with("https://") || url.starts_with("http://127.0.0.1:") || url.starts_with("http://localhost:"));
+    let security_event_url = std::env::var("PROXIMA_SECURITY_EVENT_INGEST_URL")
+        .ok()
+        .filter(|url| {
+            url.starts_with("https://")
+                || url.starts_with("http://127.0.0.1:")
+                || url.starts_with("http://localhost:")
+        });
     let security_event_token = std::env::var("PROXIMA_SECURITY_EVENT_INGEST_TOKEN")
         .or_else(|_| std::env::var("PROXIMA_ATTESTATION_INGEST_TOKEN"))
-        .ok().filter(|token| token.starts_with("aga_"));
+        .ok()
+        .filter(|token| token.starts_with("aga_"));
     let security_event_client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(5)).build().ok();
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .ok();
     let attestation_config = AttestationConfig::from_env();
     let attestation_signing_ready = attestation_config.signing_key.is_some();
     let attestation_p99 = std::env::var("PROXIMA_ATTESTATION_P99_OVERHEAD_MS")
-        .ok().and_then(|value| value.parse::<f64>().ok()).filter(|value| value.is_finite() && *value >= 0.0);
+        .ok()
+        .and_then(|value| value.parse::<f64>().ok())
+        .filter(|value| value.is_finite() && *value >= 0.0);
     if attestation_signing_ready && attestation_p99.is_some() {
         let ledger = Arc::new(AttestationLedger::new(attestation_config.clone()));
         let engine_config = config.clone();
-        let ingest_url = std::env::var("PROXIMA_ATTESTATION_INGEST_URL").ok().filter(|value| !value.trim().is_empty());
-        let ingest_token = std::env::var("PROXIMA_ATTESTATION_INGEST_TOKEN").ok().filter(|value| value.starts_with("aga_"));
+        let ingest_url = std::env::var("PROXIMA_ATTESTATION_INGEST_URL")
+            .ok()
+            .filter(|value| !value.trim().is_empty());
+        let ingest_token = std::env::var("PROXIMA_ATTESTATION_INGEST_TOKEN")
+            .ok()
+            .filter(|value| value.starts_with("aga_"));
         let http_client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .build()
@@ -102,13 +120,19 @@ async fn main() -> io::Result<()> {
                 let current_breaker_trips = snapshot.breaker_trips();
                 let telemetry = TelemetrySummary {
                     total_processed_queries: current_queries.saturating_sub(previous_queries),
-                    authenticated_tenant_sessions: current_tenant_sessions.saturating_sub(previous_tenant_sessions),
-                    blocked_unauthorized_violations: current_violations.saturating_sub(previous_violations),
+                    authenticated_tenant_sessions: current_tenant_sessions
+                        .saturating_sub(previous_tenant_sessions),
+                    blocked_unauthorized_violations: current_violations
+                        .saturating_sub(previous_violations),
                     p99_latency_overhead_ms: attestation_p99.unwrap_or(0.0),
                 };
                 let state = SecurityState {
-                    force_rls_active: std::env::var("PROXIMA_ATTESTATION_FORCE_RLS_ACTIVE").ok().as_deref() == Some("true"),
-                    tls_termination_enforced: engine_config.require_client_tls && engine_config.tls_cert_file.is_some(),
+                    force_rls_active: std::env::var("PROXIMA_ATTESTATION_FORCE_RLS_ACTIVE")
+                        .ok()
+                        .as_deref()
+                        == Some("true"),
+                    tls_termination_enforced: engine_config.require_client_tls
+                        && engine_config.tls_cert_file.is_some(),
                     circuit_breaker_tripped: current_breaker_trips > previous_breaker_trips,
                 };
                 previous_queries = current_queries;
@@ -117,9 +141,11 @@ async fn main() -> io::Result<()> {
                 previous_breaker_trips = current_breaker_trips;
                 match ledger.append_hourly(telemetry, state).await {
                     Ok(hash) => {
-                        if let (Some(url), Some(token), Some(client)) =
-                            (ingest_url.as_deref(), ingest_token.as_deref(), http_client.as_ref())
-                        {
+                        if let (Some(url), Some(token), Some(client)) = (
+                            ingest_url.as_deref(),
+                            ingest_token.as_deref(),
+                            http_client.as_ref(),
+                        ) {
                             match ledger.latest_record().await {
                                 Ok(Some(record)) => {
                                     match client.post(url)
@@ -145,7 +171,9 @@ async fn main() -> io::Result<()> {
                             }
                         }
                     }
-                    Err(error) => error!(%error, "hourly security attestation could not be written"),
+                    Err(error) => {
+                        error!(%error, "hourly security attestation could not be written")
+                    }
                 }
             }
         });
@@ -355,16 +383,19 @@ async fn handle_connection(
         copy_frontend_messages(&mut client_reader, &mut upstream_writer),
         copy_stream(&mut upstream_reader, &mut client_writer),
     );
-    let duration_micros = session_started_at.elapsed().as_micros().min(u64::MAX as u128) as u64;
+    let duration_micros = session_started_at
+        .elapsed()
+        .as_micros()
+        .min(u64::MAX as u128) as u64;
     match copy_result {
         Ok((client_bytes, upstream_bytes)) => {
             metrics::global().session_finished(client_bytes, upstream_bytes, duration_micros);
             info!(
-        peer = %peer,
-        client_to_database = client_bytes,
-        database_to_client = upstream_bytes,
-        "connection closed"
-    );
+                peer = %peer,
+                client_to_database = client_bytes,
+                database_to_client = upstream_bytes,
+                "connection closed"
+            );
             Ok(())
         }
         Err(error) => {
@@ -385,9 +416,13 @@ async fn send_security_event(
     node_id: String,
     peer_fingerprint: String,
 ) {
-    let node_id: String = node_id.chars()
-        .filter(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.'))
-        .take(128).collect();
+    let node_id: String = node_id
+        .chars()
+        .filter(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.')
+        })
+        .take(128)
+        .collect();
     let observed_at = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_secs() as i64)
@@ -396,11 +431,20 @@ async fn send_security_event(
         "{{\"node_id\":\"{}\",\"event_type\":\"security.breaker.tripped\",\"severity\":\"critical\",\"peer_fingerprint\":\"{}\",\"reason\":\"Repeated PostgreSQL protocol or tenant-authentication violations\",\"observed_at\":{}}}",
         node_id, peer_fingerprint, observed_at
     );
-    match client.post(url).bearer_auth(token).header("content-type", "application/json").body(body).send().await {
+    match client
+        .post(url)
+        .bearer_auth(token)
+        .header("content-type", "application/json")
+        .body(body)
+        .send()
+        .await
+    {
         Ok(response) if response.status().is_success() => {
             info!(status = %response.status(), "security breaker event recorded by control plane");
         }
-        Ok(response) => error!(status = %response.status(), "control plane rejected security breaker event"),
+        Ok(response) => {
+            error!(status = %response.status(), "control plane rejected security breaker event")
+        }
         Err(error) => error!(%error, "security breaker event delivery failed"),
     }
 }
@@ -496,10 +540,12 @@ async fn client_wants_tls(client: &TcpStream) -> io::Result<bool> {
     Ok(length == 8 && code == SSL_REQUEST_CODE)
 }
 
-
 fn breaker_config_enabled() -> bool {
     let mode = std::env::var("PROXIMA_SECURITY_BREAKER")
         .or_else(|_| std::env::var("PROXIMA_SECURITY_CIRCUIT_BREAKER"))
         .unwrap_or_else(|_| "fail-closed".to_string());
-    !matches!(mode.trim().to_ascii_lowercase().as_str(), "off" | "disabled" | "false" | "0")
+    !matches!(
+        mode.trim().to_ascii_lowercase().as_str(),
+        "off" | "disabled" | "false" | "0"
+    )
 }
