@@ -3476,6 +3476,27 @@ fn calculate_attestation_hash(
     hex::encode(Sha256::digest(canonical.as_bytes()))
 }
 
+
+fn attestation_verification_key(key_id: &str) -> Option<String> {
+    if let Ok(keys_json) = env::var("PROXIMA_ATTESTATION_SIGNING_KEYS_JSON") {
+        if let Ok(keys) =
+            serde_json::from_str::<std::collections::HashMap<String, String>>(&keys_json)
+        {
+            if let Some(key) = keys.get(key_id).filter(|key| key.len() >= 32) {
+                return Some(key.clone());
+            }
+        }
+    }
+
+    let active_key_id = env::var("PROXIMA_ATTESTATION_SIGNING_KEY_ID").ok()?;
+    if active_key_id != key_id {
+        return None;
+    }
+    env::var("PROXIMA_ATTESTATION_SIGNING_KEY")
+        .ok()
+        .filter(|key| key.len() >= 32)
+}
+
 fn verify_attestation_signature(
     block_hash: &str,
     algorithm: &str,
@@ -3486,13 +3507,8 @@ fn verify_attestation_signature(
     if algorithm != "HMAC-SHA256" {
         return false;
     }
-    let configured_key_id = env::var("PROXIMA_ATTESTATION_SIGNING_KEY_ID").unwrap_or_default();
-    if configured_key_id.is_empty() || configured_key_id != key_id {
+    let Some(key) = attestation_verification_key(key_id) else {
         return false;
-    }
-    let key = match env::var("PROXIMA_ATTESTATION_SIGNING_KEY") {
-        Ok(value) if value.len() >= 32 => value,
-        _ => return false,
     };
     let signature = match hex::decode(signature_hex) {
         Ok(value) => value,
