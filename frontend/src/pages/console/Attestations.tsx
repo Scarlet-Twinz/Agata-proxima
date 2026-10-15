@@ -110,7 +110,7 @@ export function Attestations() {
         </div>
         <div className="page-actions">
           <button className="secondary-button" type="button" onClick={() => void refetch()} disabled={isFetching}><RefreshCw size={16} /> Refresh</button>
-          <button className="primary-button" type="button" onClick={downloadPdf} disabled={!attestations.length}><Download size={16} /> Download PDF</button>
+          <button className="primary-button" type="button" onClick={downloadPdf} disabled={isLoading || isError}><Download size={16} /> Download PDF</button>
         </div>
       </div>
       <section className="resource-panel">
