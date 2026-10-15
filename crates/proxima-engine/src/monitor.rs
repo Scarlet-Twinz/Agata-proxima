@@ -282,7 +282,7 @@ mod tests {
         assert!(text.contains("proxima_active_connections 0"));
         assert!(text.contains("proxima_client_bytes_total 12"));
         assert!(text.contains("proxima_upstream_bytes_total 20"));
-        assert!(text.contains("proxima_simple_query_latency_seconds_bucket{le=\\"10\\"} 1"));
+        assert!(text.contains("proxima_simple_query_latency_seconds_bucket{le=\"10\"} 1"));
     }
 
     #[test]
