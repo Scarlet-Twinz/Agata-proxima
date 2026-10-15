@@ -8,6 +8,7 @@ use proxima_engine::{
     session::{establish, BoxedPgStream},
     tenant::TenantTokenVerifier,
     tls::{accept_client_tls, client_acceptor, connect_upstream_tls, upstream_connector},
+    telemetry::{self, BreakerDecision, EngineMetrics, SecurityBreaker},
 };
 use tokio::io::{copy_bidirectional, AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -45,6 +46,16 @@ async fn main() -> io::Result<()> {
 
     let listener = TcpListener::bind(config.listen_addr).await?;
     let connection_limit = Arc::new(Semaphore::new(config.max_connections));
+    let metrics = EngineMetrics::shared();
+    metrics.set_tenant_enforcement(verifier.is_some());
+    metrics.set_tls_termination(client_acceptor.is_some());
+    let breaker = Arc::new(SecurityBreaker::from_env(Arc::clone(&metrics))?);
+    let metrics_server = Arc::clone(&metrics);
+    tokio::spawn(async move {
+        if let Err(error) = telemetry::serve_metrics(metrics_server).await {
+            error!(%error, "Prometheus metrics endpoint stopped");
+        }
+    });
 
     if config.dashboard_enabled {
         let dashboard_addr = config.dashboard_listen_addr;
@@ -71,9 +82,16 @@ async fn main() -> io::Result<()> {
         tokio::select! {
             accept = listener.accept() => {
                 let (client, peer) = accept?;
+                if breaker.allow(peer.ip()) != BreakerDecision::Allow {
+                    metrics.connection_rejected();
+                    warn!(peer = %peer, "connection rejected by security breaker");
+                    drop(client);
+                    continue;
+                }
                 let permit = match connection_limit.clone().try_acquire_owned() {
                     Ok(permit) => permit,
                     Err(_) => {
+                        metrics.connection_rejected();
                         error!(peer = %peer, "connection limit reached");
                         drop(client);
                         continue;
@@ -91,10 +109,13 @@ async fn main() -> io::Result<()> {
                 let require_client_tls = config.require_client_tls;
                 let upstream_tls_mode = config.upstream_tls_mode;
                 let upstream_tls_server_name = config.upstream_tls_server_name.clone();
+                let connection_metrics = Arc::clone(&metrics);
+                let connection_breaker = Arc::clone(&breaker);
+                connection_metrics.connection_opened();
 
                 tokio::spawn(async move {
                     let _permit = permit;
-                    if let Err(err) = handle_connection(
+                    let result = handle_connection(
                         client,
                         peer,
                         &upstream,
@@ -108,9 +129,18 @@ async fn main() -> io::Result<()> {
                         require_client_tls,
                         upstream_tls_mode,
                         upstream_tls_server_name.as_deref(),
-                    ).await {
+                        &connection_metrics,
+                    ).await;
+                    if let Err(err) = result {
+                        if err.kind() == io::ErrorKind::InvalidData || err.kind() == io::ErrorKind::PermissionDenied {
+                            connection_metrics.protocol_error();
+                            let _ = connection_breaker.record_malformed(peer.ip());
+                        } else if err.kind() == io::ErrorKind::ConnectionRefused || err.kind() == io::ErrorKind::TimedOut {
+                            connection_metrics.upstream_error();
+                        }
                         error!(peer = %peer, error = %err, "connection failed");
                     }
+                    connection_metrics.connection_closed();
                 });
             }
             _ = tokio::signal::ctrl_c() => {
@@ -138,6 +168,7 @@ async fn handle_connection(
     require_client_tls: bool,
     upstream_tls_mode: UpstreamTlsMode,
     upstream_tls_server_name: Option<&str>,
+    metrics: &telemetry::SharedMetrics,
 ) -> io::Result<()> {
     info!(peer = %peer, "client connected");
 
@@ -167,6 +198,8 @@ async fn handle_connection(
         .await
         .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "upstream connection timed out"))??;
 
+    if client_is_tls { metrics.tls_session(); }
+
     let upstream: BoxedPgStream = if upstream_tls_mode != UpstreamTlsMode::Disable {
         let connector = upstream_connector.ok_or_else(|| {
             io::Error::new(
@@ -189,6 +222,8 @@ async fn handle_connection(
 
     let (mut client, mut upstream, session) =
         establish(client, upstream, verifier, tenant_role_prefix).await?;
+
+    if session.tenant_context.is_some() { metrics.tenant_authenticated(); }
 
     info!(
         peer = %peer,
