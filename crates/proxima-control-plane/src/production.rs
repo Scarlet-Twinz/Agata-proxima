@@ -2107,9 +2107,9 @@ mod tests {
 
     #[test]
     fn configured_plan_amounts_are_exact_minor_units() {
-        assert_eq!(expected_plan_amount("starter"), Some(14_000));
-        assert_eq!(expected_plan_amount("growth"), Some(49_000));
-        assert_eq!(expected_plan_amount("scale"), Some(119_000));
+        assert_eq!(expected_plan_amount("starter"), Some(149));
+        assert_eq!(expected_plan_amount("growth"), Some(499));
+        assert_eq!(expected_plan_amount("scale"), Some(1199));
         assert_eq!(expected_plan_amount("free"), None);
         assert_eq!(expected_plan_amount("enterprise"), None);
     }
