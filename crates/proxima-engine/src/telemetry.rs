@@ -90,7 +90,12 @@ pub struct SecurityBreaker {
 }
 impl SecurityBreaker {
     pub fn from_env(metrics: SharedMetrics) -> io::Result<Self> {
-        let enabled = std::env::var("PROXIMA_SECURITY_BREAKER").unwrap_or_else(|_| "fail-closed".into()) != "disabled";
+        let mode = std::env::var("PROXIMA_SECURITY_BREAKER").unwrap_or_else(|_| "fail-closed".into());
+        let enabled = match mode.as_str() {
+            "fail-closed" => true,
+            "disabled" => false,
+            _ => return Err(io::Error::new(io::ErrorKind::InvalidInput, "PROXIMA_SECURITY_BREAKER must be fail-closed or disabled")),
+        };
         let threshold = std::env::var("PROXIMA_SECURITY_BREAKER_THRESHOLD").unwrap_or_else(|_| "8".into()).parse::<u32>().map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, format!("invalid PROXIMA_SECURITY_BREAKER_THRESHOLD: {e}")))?;
         let window_seconds = std::env::var("PROXIMA_SECURITY_BREAKER_WINDOW_SECONDS").unwrap_or_else(|_| "60".into()).parse::<u64>().map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, format!("invalid PROXIMA_SECURITY_BREAKER_WINDOW_SECONDS: {e}")))?;
         let cooldown_seconds = std::env::var("PROXIMA_SECURITY_BREAKER_COOLDOWN_SECONDS").unwrap_or_else(|_| "60".into()).parse::<u64>().map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, format!("invalid PROXIMA_SECURITY_BREAKER_COOLDOWN_SECONDS: {e}")))?;
@@ -105,6 +110,8 @@ impl SecurityBreaker {
             if let Some(until) = state.tripped_until {
                 if now < until { return BreakerDecision::RejectWhileTripped; }
                 state.tripped_until = None; state.failures = 0; state.window_started = now;
+                let any_tripped = peers.values().any(|peer| peer.tripped_until.is_some_and(|deadline| now < deadline));
+                self.metrics.set_breaker_tripped(any_tripped);
             }
             if now.duration_since(state.window_started) > self.window { state.failures = 0; state.window_started = now; }
         }
