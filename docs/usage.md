@@ -2,7 +2,7 @@
 
 This is the practical operating guide for the repository-backed product. It covers local development, organizations and tenants, verification, team access, billing, SSO, and the boundary between local development and production.
 
-> **Honest status:** Phase 3.22-A–H repository gates have passed. Live Paddle, Microsoft Entra SSO, production email, hosted database operations and runtime external-SaaS acceptance remain external acceptance tasks.
+> **Honest status:** Phase 3.22-A–H repository gates have passed. Live Flutterwave payments, Microsoft Entra SSO, production email, hosted database operations and runtime external-SaaS acceptance remain external acceptance tasks.
 
 ## 1. Know which database you are using
 
@@ -129,7 +129,7 @@ Billing endpoints:
 
 Paddle is the active billing provider in the current implementation. Configure `PADDLE_API_KEY`, `PADDLE_CLIENT_TOKEN`, `PADDLE_WEBHOOK_SECRET`, `PADDLE_STARTER_PRICE_ID`, `PADDLE_GROWTH_PRICE_ID`, `PADDLE_SCALE_PRICE_ID`, and `PADDLE_ENVIRONMENT=sandbox` for initial testing. Paddle price IDs use the `pri_...` format; they are not product IDs. The server verifies that each selected price is active, monthly, USD, unique, and matches the canonical amounts ($149 = 14900 cents, $499 = 49900 cents, $1,199 = 119900 cents). The webhook validates Paddle's timestamped `Paddle-Signature`, maps events to a local checkout or known subscription, and applies entitlements only after verification.
 
-Do not enable live checkout until Paddle approves the business and checkout domain, the live API key/client token/webhook secret and all three price IDs are configured for the production environment, and a real payment/webhook round trip passes. Never commit a secret or paste it into chat. See `docs/production/paddle-billing.md` for the current provider contract.
+Do not enable live checkout until the Flutterwave account is approved, the live secret and webhook hash are configured, all three plan IDs are distinct, all configured amounts are verified, and a real payment/webhook round trip passes. Never commit a secret or paste it into chat. See `docs/production/paddle-billing.md` for the current provider contract.
 
 ## 9. Where to get SSO
 
@@ -159,7 +159,7 @@ The Entra feature is available on Growth and above; the backend checks entitleme
 - **Control Plane 503:** check service logs, database connectivity and `/api/v1/production/readiness`.
 - **CSRF failure:** refresh `GET /api/v1/session` and send the current `x-csrf-token`.
 - **Email not delivered:** check Resend credentials, verified sending domain and sender address.
-- **Checkout unavailable:** check the Paddle API key, client token, notification secret and three price-ID variables; verify the Paddle prices are active USD monthly prices at the canonical amounts.
+- **Checkout unavailable:** check the Flutterwave live secret, webhook hash, three plan IDs and configured amounts; verify the provider-returned currency and amount match the checkout contract.
 - **SSO failure:** verify client ID/secret, tenant ID, public URL and exact redirect URI. Never log authorization codes, client secrets or ID tokens.
 - **Quota reached:** inspect `GET /api/v1/billing/entitlements`; remove unused resources or upgrade. Downgrades preserve existing resources rather than deleting them.
 
