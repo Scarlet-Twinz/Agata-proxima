@@ -1,5 +1,7 @@
+use std::collections::VecDeque;
 use std::io;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use proxima_engine::{
     config::{Config, UpstreamTlsMode},
@@ -323,13 +325,21 @@ async fn handle_connection(
 
     let (mut client_read, mut client_write) = tokio::io::split(client);
     let (mut upstream_read, mut upstream_write) = tokio::io::split(upstream);
+    let pending_simple_queries = Arc::new(Mutex::new(VecDeque::new()));
     let client_to_upstream = copy_client_messages(
         &mut client_read,
         &mut upstream_write,
         metrics.clone(),
+        pending_simple_queries.clone(),
         max_frontend_frame_bytes,
     );
-    let upstream_to_client = tokio::io::copy(&mut upstream_read, &mut client_write);
+    let upstream_to_client = copy_backend_messages(
+        &mut upstream_read,
+        &mut client_write,
+        metrics.clone(),
+        pending_simple_queries,
+        max_frontend_frame_bytes,
+    );
     let (client_bytes, upstream_bytes) = tokio::try_join!(client_to_upstream, upstream_to_client)?;
 
     info!(
@@ -348,6 +358,7 @@ async fn copy_client_messages<R, W>(
     reader: &mut R,
     writer: &mut W,
     metrics: Arc<EngineMetrics>,
+    pending_simple_queries: Arc<Mutex<VecDeque<Instant>>>,
     max_frame_bytes: u32,
 ) -> io::Result<u64>
 where
@@ -394,6 +405,13 @@ where
                 if matches!(frame_type, Some(b'Q' | b'E')) {
                     queries_in_chunk = queries_in_chunk.saturating_add(1);
                 }
+                if frame_type == Some(b'Q') {
+                    if let Ok(mut pending) = pending_simple_queries.lock() {
+                        if pending.len() < 10_000 {
+                            pending.push_back(Instant::now());
+                        }
+                    }
+                }
                 payload_remaining = length - 4;
                 frame_type = None;
                 length_read = 0;
@@ -404,6 +422,91 @@ where
         for _ in 0..queries_in_chunk {
             metrics.query_processed();
         }
+    }
+}
+
+
+/// Forward backend messages while observing simple-query round-trip latency.
+/// Frames are streamed and validated without buffering their entire payloads.
+async fn copy_backend_messages<R, W>(
+    reader: &mut R,
+    writer: &mut W,
+    metrics: Arc<EngineMetrics>,
+    pending_simple_queries: Arc<Mutex<VecDeque<Instant>>>,
+    max_frame_bytes: u32,
+) -> io::Result<u64>
+where
+    R: tokio::io::AsyncRead + Unpin,
+    W: tokio::io::AsyncWrite + Unpin,
+{
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut buffer = [0u8; 16 * 1024];
+    let mut message_tag: Option<u8> = None;
+    let mut length_bytes = [0u8; 4];
+    let mut length_read = 0usize;
+    let mut payload_remaining: Option<u32> = None;
+    let mut total_bytes = 0u64;
+
+    loop {
+        let read = reader.read(&mut buffer).await?;
+        if read == 0 {
+            writer.shutdown().await?;
+            return Ok(total_bytes);
+        }
+        for byte in &buffer[..read] {
+            if let Some(remaining) = payload_remaining.as_mut() {
+                if *remaining > 0 {
+                    *remaining -= 1;
+                    if *remaining == 0 {
+                        if message_tag == Some(b'Z') {
+                            let started_at = pending_simple_queries
+                                .lock()
+                                .ok()
+                                .and_then(|mut pending| pending.pop_front());
+                            if let Some(started_at) = started_at {
+                                metrics.observe_simple_query_latency(started_at.elapsed());
+                            }
+                        }
+                        payload_remaining = None;
+                        message_tag = None;
+                    }
+                }
+                continue;
+            }
+            if message_tag.is_none() {
+                message_tag = Some(*byte);
+                length_read = 0;
+                continue;
+            }
+            length_bytes[length_read] = *byte;
+            length_read += 1;
+            if length_read == 4 {
+                let length = u32::from_be_bytes(length_bytes);
+                if length < 4 || length > max_frame_bytes {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("malformed or oversized PostgreSQL backend frame length: {length}"),
+                    ));
+                }
+                payload_remaining = Some(length - 4);
+                length_read = 0;
+                if length == 4 {
+                    if message_tag == Some(b'Z') {
+                        let started_at = pending_simple_queries
+                            .lock()
+                            .ok()
+                            .and_then(|mut pending| pending.pop_front());
+                        if let Some(started_at) = started_at {
+                            metrics.observe_simple_query_latency(started_at.elapsed());
+                        }
+                    }
+                    payload_remaining = None;
+                    message_tag = None;
+                }
+            }
+        }
+        writer.write_all(&buffer[..read]).await?;
+        total_bytes = total_bytes.saturating_add(read as u64);
     }
 }
 
