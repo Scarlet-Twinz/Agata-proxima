@@ -89,7 +89,8 @@ async fn main() -> io::Result<()> {
             attestation_breaker,
             force_rls_active,
             attestation_tls_enforced,
-        ).await;
+        )
+        .await;
     });
     let metrics_enabled = std::env::var("PROXIMA_METRICS_ENABLED")
         .map(|value| {
@@ -457,9 +458,9 @@ where
                     queries_in_chunk = queries_in_chunk.saturating_add(1);
                 }
                 if matches!(frame_type, Some(b'Q' | b'S')) {
-                    let mut pending = pending_simple_queries.lock().map_err(|_| {
-                        io::Error::other("query-latency queue lock was poisoned")
-                    })?;
+                    let mut pending = pending_simple_queries
+                        .lock()
+                        .map_err(|_| io::Error::other("query-latency queue lock was poisoned"))?;
                     if pending.len() >= 10_000 {
                         return Err(io::Error::new(
                             io::ErrorKind::InvalidData,
@@ -553,9 +554,7 @@ where
                 if length < 4 || length > max_frame_bytes {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
-                        format!(
-                            "malformed or oversized PostgreSQL backend frame length: {length}"
-                        ),
+                        format!("malformed or oversized PostgreSQL backend frame length: {length}"),
                     ));
                 }
                 length_read = 0;
@@ -618,9 +617,9 @@ mod tests {
         let (mut proxy_client, mut client_peer) = tokio::io::duplex(64);
         let (mut upstream, mut upstream_peer) = tokio::io::duplex(64);
         let metrics = Arc::new(EngineMetrics::default());
-        let pending = Arc::new(Mutex::new(VecDeque::from([
-            PendingResponse::SimpleQuery(Instant::now()),
-        ])));
+        let pending = Arc::new(Mutex::new(VecDeque::from([PendingResponse::SimpleQuery(
+            Instant::now(),
+        )])));
         let task_metrics = metrics.clone();
         let task_pending = pending.clone();
 
@@ -655,14 +654,7 @@ mod tests {
         let metrics = Arc::new(EngineMetrics::default());
         let pending = Arc::new(Mutex::new(VecDeque::new()));
         let task = tokio::spawn(async move {
-            copy_client_messages(
-                &mut reader,
-                &mut upstream_writer,
-                metrics,
-                pending,
-                1024,
-            )
-            .await
+            copy_client_messages(&mut reader, &mut upstream_writer, metrics, pending, 1024).await
         });
 
         client_peer.write_all(&[b'Q', 0, 0, 0, 3]).await.unwrap();
