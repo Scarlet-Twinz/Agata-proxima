@@ -7,13 +7,17 @@ async fn main() -> ExitCode {
     let path = config.ledger_path.clone();
     let ledger = AttestationLedger::new(config);
     match ledger.verify_chain().await {
-        Ok(result) if result.valid => {
+        Ok(result) if result.valid && result.records > 0 => {
             println!(
                 "VALID: {} attestation record(s) verified in {}",
                 result.records,
                 path.display()
             );
             ExitCode::SUCCESS
+        }
+        Ok(result) if result.valid => {
+            eprintln!("NO RECORDS: there is no signed attestation evidence to verify in {}", path.display());
+            ExitCode::from(2)
         }
         Ok(result) => {
             eprintln!(
