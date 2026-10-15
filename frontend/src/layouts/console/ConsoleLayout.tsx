@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   ChevronDown,
   CircleHelp,
@@ -19,6 +19,7 @@ import {
   Users,
   X,
   Bell,
+  BookOpen,
 } from "lucide-react";
 import { getSession, logout, type Session } from "../../api/auth";
 import { api } from "../../api/client";
@@ -58,6 +59,10 @@ const searchNavigation = [
   { label: "Settings authentication", href: "/app/settings/authentication", icon: Settings },
   { label: "Settings identity", href: "/app/settings/identity", icon: Settings },
   { label: "Settings security", href: "/app/settings/security", icon: Settings },
+  { label: "Settings API access", href: "/app/settings/api", icon: KeyRound },
+  { label: "Sensitive workspace actions", href: "/app/settings/danger", icon: ShieldCheck },
+  { label: "Team roles", href: "/app/team/roles", icon: Users },
+  { label: "Team invitations", href: "/app/team/invitations", icon: Users },
 ];
 
 export function ConsoleLayout() {
@@ -231,7 +236,7 @@ export function ConsoleLayout() {
 
           {!collapsed && (
             <div className="console-brand-copy">
-              <strong>AGATA PROXIMA</strong>
+              <strong>{organizationName}</strong>
               <span>Control Plane</span>
             </div>
           )}
@@ -434,6 +439,10 @@ export function ConsoleLayout() {
               )}
             </div>
 
+            <Link className="console-help-link" to="/docs" target="_blank" rel="noreferrer" aria-label="Open Agata Proxima documentation in a new tab">
+              <BookOpen size={16} />
+              <span>Docs</span>
+            </Link>
             <button
               className="command-button"
               type="button"

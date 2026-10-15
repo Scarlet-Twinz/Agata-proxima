@@ -3,3 +3,9 @@
 .env.*
 !.env.example
 .DS_Store
+
+# Ignore all environment files and variants throughout the project
+.env
+.env.*
+**/.env
+**/.env.*

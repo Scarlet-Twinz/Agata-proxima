@@ -35,8 +35,25 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     throw error;
   }
 
-  if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
+  const method = (options.method ?? "GET").toUpperCase();
+  const isMutation = method !== "GET" && method !== "HEAD";
+
+  if (response.status === 204) {
+    if (isMutation) {
+      window.dispatchEvent(new CustomEvent("agata:data-changed", {
+        detail: { method, path },
+      }));
+    }
+    return undefined as T;
+  }
+
+  const data = await response.json() as T;
+  if (isMutation) {
+    window.dispatchEvent(new CustomEvent("agata:data-changed", {
+      detail: { method, path },
+    }));
+  }
+  return data;
 }
 
 export const api = {

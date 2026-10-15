@@ -1,5 +1,5 @@
 import { Bell, Check, CheckCheck, ChevronRight } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../api/client";
 
@@ -15,8 +15,8 @@ export function Notifications(){
   function publishUnreadCount(unread:number){
     window.dispatchEvent(new CustomEvent("agata:notifications-unread-change",{detail:{unread}}));
   }
-  async function load(){
-    setLoading(true); setError("");
+  const load=useCallback(async (showLoading=true)=>{
+    if(showLoading){setLoading(true);setError("");}
     try{
       const result=await api.get<{notifications:Notification[]}>("/api/v1/notifications");
       const notifications=result.notifications;
@@ -26,8 +26,8 @@ export function Notifications(){
       publishUnreadCount(notifications.filter(n=>!n.read).length);
     }catch(err){setError(err instanceof Error?err.message:"Unable to load notifications.");}
     finally{setLoading(false);}
-  }
-  useEffect(()=>{void load();},[]);
+  },[]);
+  useEffect(()=>{void load(false);},[load]);
   async function mark(id:string){
     try{
       await api.post("/api/v1/notifications/"+id+"/read",{});

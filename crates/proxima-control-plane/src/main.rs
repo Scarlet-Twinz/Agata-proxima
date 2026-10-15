@@ -1,5 +1,6 @@
 #[rustfmt::skip]
 mod production;
+mod webhooks;
 
 use crate::production::service_unavailable;
 
@@ -21,7 +22,7 @@ use sha2::{Digest, Sha256};
 use sqlx::{postgres::PgPoolOptions, PgPool, Row};
 use std::{env, net::SocketAddr, path::Path as FsPath};
 use tower_http::trace::TraceLayer;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -152,6 +153,11 @@ struct WebhookInput {
     events: Vec<String>,
 }
 
+#[derive(Deserialize)]
+struct WebhookEnabledInput {
+    enabled: bool,
+}
+
 #[derive(Serialize)]
 struct Message {
     ok: bool,
@@ -278,9 +284,29 @@ async fn main() -> Result<()> {
     sqlx::raw_sql(include_str!("../migrations/0020_paddle_billing.sql"))
         .execute(&db)
         .await?;
+    sqlx::raw_sql(include_str!(
+        "../migrations/0021_webhook_delivery_pipeline.sql"
+    ))
+    .execute(&db)
+    .await?;
+    sqlx::raw_sql(include_str!("../migrations/0022_flutterwave_billing.sql"))
+        .execute(&db)
+        .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
+
+    if !webhooks::encryption_key_configured() {
+        warn!("Webhook delivery is paused until AGATA_WEBHOOK_ENCRYPTION_KEY is configured");
+    }
+    let webhook_db = db.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(2));
+        loop {
+            interval.tick().await;
+            webhooks::worker_tick(&webhook_db).await;
+        }
+    });
 
     let retention_db = db.clone();
     tokio::spawn(async move {
@@ -421,6 +447,18 @@ async fn main() -> Result<()> {
             "/api/v1/developer/webhooks/{id}/deliveries",
             get(webhook_deliveries),
         )
+        .route(
+            "/api/v1/developer/webhooks/{id}/deliveries/{delivery_id}/retry",
+            post(retry_webhook_delivery),
+        )
+        .route(
+            "/api/v1/developer/webhooks/{id}/rotate-secret",
+            post(rotate_webhook_secret),
+        )
+        .route(
+            "/api/v1/developer/webhooks/{id}/enabled",
+            post(set_webhook_enabled),
+        )
         .route("/api/v1/nodes/{id}/enrollment", post(start_enrollment))
         .route("/verify-email", get(production::verify_email))
         .route("/reset-password", get(production::reset_password_page))
@@ -442,7 +480,10 @@ async fn main() -> Result<()> {
         .route("/api/v1/billing/checkout", post(production::checkout))
         .route("/api/v1/billing/portal", post(production::portal))
         .route("/api/v1/billing/verify", get(production::billing_verify))
-        .route("/api/v1/webhooks/paddle", post(production::paddle_webhook))
+        .route(
+            "/api/v1/webhooks/flutterwave",
+            post(production::flutterwave_webhook),
+        )
         .route(
             "/api/v1/organization/oidc/entra",
             get(production::entra_status).post(production::configure_entra),
@@ -943,7 +984,7 @@ async fn webhooks(State(s): State<AppState>, headers: HeaderMap) -> Response {
     };
 
     match sqlx::query(
-        "SELECT id,name,endpoint_url,events,enabled,created_at,updated_at
+        "SELECT id,name,endpoint_url,events,enabled,signing_secret_hint,created_at,updated_at
          FROM webhooks WHERE organization_id=$1 ORDER BY created_at DESC",
     )
     .bind(ctx.organization_id)
@@ -959,6 +1000,7 @@ async fn webhooks(State(s): State<AppState>, headers: HeaderMap) -> Response {
                         "endpoint_url": r.get::<String,_>("endpoint_url"),
                         "events": r.get::<Value,_>("events"),
                         "enabled": r.get::<bool,_>("enabled"),
+                        "signing_secret_hint": r.get::<String,_>("signing_secret_hint"),
                         "created_at": r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),
                         "updated_at": r.get::<chrono::DateTime<chrono::Utc>,_>("updated_at")
                     })
@@ -989,11 +1031,24 @@ async fn create_webhook(
         return bad("Webhook name and endpoint URL are required.");
     }
 
-    if !(endpoint.starts_with("https://")
-        || endpoint.starts_with("http://127.0.0.1")
-        || endpoint.starts_with("http://localhost"))
-    {
-        return bad("Webhook endpoint must use HTTPS outside local development.");
+    if !webhooks::encryption_key_configured() {
+        return service_unavailable("Webhook signing is not configured. Set AGATA_WEBHOOK_ENCRYPTION_KEY before creating endpoints.");
+    }
+    if input.events.is_empty() || input.events.len() > 100 {
+        return bad("Select between 1 and 100 webhook event types.");
+    }
+    if input.events.iter().any(|event| {
+        event.trim().is_empty()
+            || event.len() > 120
+            || (event != "*"
+                && !event
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-')))
+    }) {
+        return bad("Webhook event types may contain only letters, numbers, dots, underscores, and hyphens; '*' subscribes to all audit events.");
+    }
+    if let Err(err) = webhooks::validate_endpoint(endpoint).await {
+        return bad(&format!("Webhook endpoint is not allowed: {err}"));
     }
 
     if let Err(response) =
@@ -1004,18 +1059,18 @@ async fn create_webhook(
 
     let id = Uuid::new_v4();
     let secret = format!("whsec_{}_{}", id.simple(), Uuid::new_v4().simple());
-    let hint = secret
-        .chars()
-        .rev()
-        .take(6)
-        .collect::<String>()
-        .chars()
-        .rev()
-        .collect::<String>();
+    let hint = webhooks::signing_secret_hint(&secret);
+    let encrypted_secret = match webhooks::encrypt_secret(&secret) {
+        Ok(value) => value,
+        Err(err) => {
+            error!(%err, "could not encrypt webhook signing secret");
+            return service_unavailable("Webhook signing secret could not be stored securely.");
+        }
+    };
 
     if let Err(e) = sqlx::query(
         "INSERT INTO webhooks(id,organization_id,name,endpoint_url,signing_secret_hash,
-         signing_secret_hint,events) VALUES($1,$2,$3,$4,$5,$6,$7)",
+         signing_secret_hint,signing_secret_ciphertext,events) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
     )
     .bind(id)
     .bind(ctx.organization_id)
@@ -1023,6 +1078,7 @@ async fn create_webhook(
     .bind(endpoint)
     .bind(token_hash(&secret))
     .bind(&hint)
+    .bind(&encrypted_secret)
     .bind(json!(input.events))
     .execute(&s.db)
     .await
@@ -1156,7 +1212,8 @@ async fn webhook_deliveries(
     }
 
     match sqlx::query(
-        "SELECT id,event_type,event_id,status,status_code,response_ms,created_at
+        "SELECT id,event_type,event_id,status,status_code,response_ms,attempt_count,max_attempts,
+                next_attempt_at,last_attempt_at,delivered_at,last_error,response_excerpt,created_at
          FROM webhook_deliveries WHERE webhook_id=$1 ORDER BY created_at DESC LIMIT 100",
     )
     .bind(id)
@@ -1173,12 +1230,159 @@ async fn webhook_deliveries(
                         "status":r.get::<String,_>("status"),
                         "status_code":r.get::<Option<i32>,_>("status_code"),
                         "response_ms":r.get::<Option<i32>,_>("response_ms"),
+                        "attempt_count":r.get::<i32,_>("attempt_count"),
+                        "max_attempts":r.get::<i32,_>("max_attempts"),
+                        "next_attempt_at":r.get::<chrono::DateTime<chrono::Utc>,_>("next_attempt_at"),
+                        "last_attempt_at":r.get::<Option<chrono::DateTime<chrono::Utc>>,_>("last_attempt_at"),
+                        "delivered_at":r.get::<Option<chrono::DateTime<chrono::Utc>>,_>("delivered_at"),
+                        "last_error":r.get::<Option<String>,_>("last_error"),
+                        "response_excerpt":r.get::<Option<String>,_>("response_excerpt"),
                         "created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at")
                     })
                 })
                 .collect::<Vec<_>>(),
         )
         .into_response(),
+        Err(e) => db_error(e),
+    }
+}
+
+async fn retry_webhook_delivery(
+    State(s): State<AppState>,
+    Path((webhook_id, delivery_id)): Path<(Uuid, Uuid)>,
+    headers: HeaderMap,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
+    let result = sqlx::query(
+        "UPDATE webhook_deliveries d SET status='queued',attempt_count=0,next_attempt_at=now(),
+          last_error=NULL,status_code=NULL,response_ms=NULL,response_excerpt=NULL,delivered_at=NULL
+         FROM webhooks w
+         WHERE d.id=$1 AND d.webhook_id=$2 AND w.id=d.webhook_id
+           AND w.organization_id=$3 AND w.enabled IS TRUE
+           AND d.status IN ('failed','dead_letter','delivered')",
+    )
+    .bind(delivery_id)
+    .bind(webhook_id)
+    .bind(ctx.organization_id)
+    .execute(&s.db)
+    .await;
+    match result {
+        Ok(r) if r.rows_affected() == 1 => {
+            audit(
+                &s.db,
+                ctx.organization_id,
+                ctx.user_id,
+                "developer.webhook.delivery.retried",
+                "webhook_delivery",
+                Some(delivery_id),
+                json!({"webhook_id":webhook_id}),
+            )
+            .await;
+            Json(json!({"ok":true,"delivery_id":delivery_id,"status":"queued"})).into_response()
+        }
+        Ok(_) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"message":"Retryable delivery not found for this organization."})),
+        )
+            .into_response(),
+        Err(e) => db_error(e),
+    }
+}
+
+async fn rotate_webhook_secret(
+    State(s): State<AppState>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if let Err(c) = require_admin(&ctx, &headers) {
+        return c.into_response();
+    }
+    if !webhooks::encryption_key_configured() {
+        return service_unavailable(
+            "Set AGATA_WEBHOOK_ENCRYPTION_KEY before rotating webhook secrets.",
+        );
+    }
+    let secret = format!("whsec_{}_{}", id.simple(), Uuid::new_v4().simple());
+    let encrypted = match webhooks::encrypt_secret(&secret) {
+        Ok(v) => v,
+        Err(err) => {
+            error!(%err, "webhook secret rotation encryption failed");
+            return service_unavailable("Webhook secret could not be stored securely.");
+        }
+    };
+    let hint = webhooks::signing_secret_hint(&secret);
+    match sqlx::query("UPDATE webhooks SET signing_secret_hash=$3,signing_secret_hint=$4,signing_secret_ciphertext=$5,updated_at=now() WHERE id=$1 AND organization_id=$2")
+        .bind(id).bind(ctx.organization_id).bind(token_hash(&secret)).bind(&hint).bind(encrypted).execute(&s.db).await {
+        Ok(r) if r.rows_affected()==1 => {
+            audit(&s.db, ctx.organization_id, ctx.user_id, "developer.webhook.secret.rotated", "webhook", Some(id), json!({})).await;
+            Json(json!({"ok":true,"id":id,"signing_secret":secret,"message":"Store this secret now; it will not be shown again."})).into_response()
+        }
+        Ok(_) => (StatusCode::NOT_FOUND, Json(json!({"message":"Webhook not found."}))).into_response(),
+        Err(e) => db_error(e),
+    }
+}
+
+async fn set_webhook_enabled(
+    State(s): State<AppState>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+    Json(input): Json<WebhookEnabledInput>,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
+    if input.enabled {
+        if let Err(response) =
+            production::enforce_integration_capacity(&s.db, ctx.organization_id).await
+        {
+            return response;
+        }
+    }
+    match sqlx::query(
+        "UPDATE webhooks SET enabled=$3,updated_at=now() WHERE id=$1 AND organization_id=$2",
+    )
+    .bind(id)
+    .bind(ctx.organization_id)
+    .bind(input.enabled)
+    .execute(&s.db)
+    .await
+    {
+        Ok(r) if r.rows_affected() == 1 => {
+            audit(
+                &s.db,
+                ctx.organization_id,
+                ctx.user_id,
+                if input.enabled {
+                    "developer.webhook.enabled"
+                } else {
+                    "developer.webhook.disabled"
+                },
+                "webhook",
+                Some(id),
+                json!({}),
+            )
+            .await;
+            Json(json!({"ok":true,"id":id,"enabled":input.enabled})).into_response()
+        }
+        Ok(_) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"message":"Webhook not found."})),
+        )
+            .into_response(),
         Err(e) => db_error(e),
     }
 }
@@ -2364,7 +2568,7 @@ async fn create_organization(
         Some(id),
         "workspace",
         "Organization created",
-        &format!("“{}” is ready with its own Production project.", name),
+        &format!("â€œ{}â€ is ready with its own Production project.", name),
         Some("/app"),
     )
     .await;
@@ -3130,7 +3334,7 @@ async fn create_public_support_request(
         "support-request-received",
         json!({
             "DISPLAY_NAME": escape_template_value(stored_name),
-            "ORGANIZATION": escape_template_value(&format!("Public inquiry · {topic}")),
+            "ORGANIZATION": escape_template_value(&format!("Public inquiry Â· {topic}")),
             "SUBJECT": escape_template_value(&subject),
             "REQUEST_ID": request_id.to_string()
         }),
@@ -3637,10 +3841,32 @@ async fn audit(
     resource_id: Option<Uuid>,
     metadata: Value,
 ) {
-    let _ = sqlx::query(
+    let result = sqlx::query(
         "INSERT INTO audit_events(organization_id,user_id,action,resource_type,resource_id,metadata)
-         VALUES($1,$2,$3,$4,$5,$6)"
-    ).bind(org).bind(user).bind(action).bind(resource_type).bind(resource_id).bind(metadata).execute(db).await;
+         VALUES($1,$2,$3,$4,$5,$6) RETURNING id,created_at"
+    ).bind(org).bind(user).bind(action).bind(resource_type).bind(resource_id).bind(metadata.clone())
+      .fetch_one(db).await;
+    match result {
+        Ok(row) => {
+            let event_id: Uuid = row.get("id");
+            let created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
+            webhooks::enqueue_audit_event(
+                db,
+                org,
+                user,
+                action,
+                resource_type,
+                resource_id,
+                metadata,
+                event_id,
+                created_at,
+            )
+            .await;
+        }
+        Err(err) => {
+            error!(%err, action, "audit event could not be persisted; webhook event was not enqueued")
+        }
+    }
 }
 
 fn bad(message: &str) -> Response {

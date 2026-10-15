@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { MailPlus, RefreshCw, ShieldCheck, UserPlus } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api, type ApiError } from "../../api/client";
@@ -21,8 +21,8 @@ export function TeamManagement() {
   const [entitlements,setEntitlements]=useState<TeamEntitlements|null>(null);
   const [upgradeRequired,setUpgradeRequired]=useState(false);
 
-  async function load() {
-    setLoading(true); setError("");
+  const load = useCallback(async (showLoading = true) => {
+    if (showLoading) { setLoading(true); setError(""); }
     try {
       const [session, memberResult, invitationResult] = await Promise.all([
         api.get<Session>("/api/v1/session"),
@@ -40,9 +40,9 @@ export function TeamManagement() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load organization access.");
     } finally { setLoading(false); }
-  }
+  }, []);
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(false); }, [load]);
 
   async function invite(event: React.FormEvent) {
     event.preventDefault(); setBusy(true); setError(""); setMessage(""); setUpgradeRequired(false);

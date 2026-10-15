@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Bell, Building2, Check, LogOut, Mail, Monitor, Moon, Plus, Save,
   ShieldCheck, Sun, Trash2, UserRound
@@ -40,8 +40,8 @@ export function SettingsHub(){
   const [orgName,setOrgName]=useState("");
   const [orgBusy,setOrgBusy]=useState(false);
 
-  async function load(){
-    setBusy(true); setError("");
+  const load=useCallback(async (showLoading=true)=>{
+    if(showLoading){setBusy(true);setError("");}
     try{
       const result=await api.get<SettingsData>("/api/v1/settings");
       setData(result); setName(result.user.display_name); setOrganizationName(result.organization.name);
@@ -50,8 +50,8 @@ export function SettingsHub(){
       setEmailPending(Boolean(result.user.pending_email));
     }catch(err){setError(err instanceof Error?err.message:"Unable to load workspace settings.");}
     finally{setBusy(false);}
-  }
-  useEffect(()=>{void load();},[]);
+  },[]);
+  useEffect(()=>{void load(false);},[load]);
 
   function applyTheme(next:"light"|"dark"){
     setTheme(next);

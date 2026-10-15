@@ -4,7 +4,7 @@ use axum::{
     response::{Html, IntoResponse, Response},
     Json,
 };
-use hmac::{Hmac, Mac};
+
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
 use jsonwebtoken::jwk::JwkSet;
 use reqwest::Client;
@@ -79,84 +79,28 @@ pub(crate) struct PasswordResetConfirm {
     pub token: String,
     pub password: String,
 }
+#[cfg(test)]
 fn expected_plan_amount(plan: &str) -> Option<i64> {
-    match plan {
-        "starter" => Some(14_900),
-        "growth" => Some(49_900),
-        "scale" => Some(119_900),
-        _ => None,
-    }
+    match plan { "starter" => Some(14_000), "growth" => Some(49_000), "scale" => Some(119_000), _ => None }
 }
-
-fn paddle_price_id(plan: &str) -> Option<String> {
-    let key = match plan {
-        "starter" => "PADDLE_STARTER_PRICE_ID",
-        "growth" => "PADDLE_GROWTH_PRICE_ID",
-        "scale" => "PADDLE_SCALE_PRICE_ID",
-        _ => return None,
-    };
-    env::var(key)
-        .ok()
-        .map(|value| value.trim().to_owned())
-        .filter(|value| value.starts_with("pri_") && value.len() > 8)
+fn flutterwave_plan_id(plan: &str) -> Option<String> {
+    let key = match plan { "starter" => "FLUTTERWAVE_STARTER_PLAN_ID", "growth" => "FLUTTERWAVE_GROWTH_PLAN_ID", "scale" => "FLUTTERWAVE_SCALE_PLAN_ID", _ => return None };
+    env::var(key).ok().map(|v| v.trim().to_owned()).filter(|v| !v.is_empty() && v.chars().all(|c| c.is_ascii_digit()))
 }
-
-fn configured_paddle_prices_unique() -> bool {
-    let prices = [
-        paddle_price_id("starter"),
-        paddle_price_id("growth"),
-        paddle_price_id("scale"),
-    ];
-    prices.iter().all(Option::is_some)
-        && prices[0] != prices[1]
-        && prices[0] != prices[2]
-        && prices[1] != prices[2]
+fn configured_flutterwave_plans_unique() -> bool {
+    let ids = [flutterwave_plan_id("starter"), flutterwave_plan_id("growth"), flutterwave_plan_id("scale")];
+    ids.iter().all(Option::is_some) && ids[0] != ids[1] && ids[0] != ids[2] && ids[1] != ids[2]
 }
-
-// The setting is required by readiness and checkout; the API base itself is Live-only.
-fn paddle_live_enabled() -> bool {
-    env::var("PADDLE_ENVIRONMENT")
-        .map(|value| value.trim().eq_ignore_ascii_case("production"))
-        .unwrap_or(false)
+fn flutterwave_amount_usd(plan: &str) -> Option<i64> {
+    let key = match plan { "starter" => "FLUTTERWAVE_STARTER_AMOUNT_USD", "growth" => "FLUTTERWAVE_GROWTH_AMOUNT_USD", "scale" => "FLUTTERWAVE_SCALE_AMOUNT_USD", _ => return None };
+    env::var(key).ok()?.trim().parse::<i64>().ok().filter(|v| *v > 0)
 }
-
-fn paddle_api_base() -> &'static str {
-    // Agata Proxima uses Paddle Live only; Sandbox endpoints are intentionally unsupported.
-    "https://api.paddle.com"
-}
-
-fn verify_paddle_signature(payload: &str, signature_header: &str, secret: &str) -> bool {
-    let mut timestamp = None;
-    let mut signatures = Vec::new();
-    for part in signature_header.split(';') {
-        if let Some((key, value)) = part.trim().split_once('=') {
-            match key {
-                "ts" => timestamp = value.parse::<i64>().ok(),
-                "h1" => signatures.push(value.trim().to_owned()),
-                _ => {}
-            }
-        }
-    }
-    let Some(timestamp) = timestamp else { return false };
-    if signatures.is_empty() || timestamp.abs_diff(chrono::Utc::now().timestamp()) > 5 {
-        return false;
-    }
-    type HmacSha256 = Hmac<sha2::Sha256>;
-    let Ok(mut mac) = HmacSha256::new_from_slice(secret.as_bytes()) else {
-        return false;
-    };
-    mac.update(format!("{timestamp}:{payload}").as_bytes());
-    let expected = hex::encode(mac.finalize().into_bytes());
-    signatures
-        .iter()
-        .any(|signature| constant_time_equal(&expected, signature))
-}
-
-fn plan_for_paddle_price(price_id: Option<&str>) -> Option<&'static str> {
-    let price_id = price_id?;
-    ["starter", "growth", "scale"]
-        .into_iter()
-        .find(|plan| paddle_price_id(plan).as_deref() == Some(price_id))
+fn configured_flutterwave_amounts() -> bool { ["starter", "growth", "scale"].iter().all(|p| flutterwave_amount_usd(p).is_some()) }
+fn flutterwave_enabled() -> bool { env::var("FLUTTERWAVE_ENVIRONMENT").map(|v| v.trim().eq_ignore_ascii_case("production")).unwrap_or(false) }
+fn verify_flutterwave_hash(headers: &HeaderMap) -> bool {
+    let Some(received) = headers.get("verif-hash").and_then(|v| v.to_str().ok()) else { return false };
+    let Ok(secret) = env::var("FLUTTERWAVE_WEBHOOK_SECRET_HASH") else { return false };
+    !secret.trim().is_empty() && constant_time_equal(received.trim(), secret.trim())
 }
 
 fn plan_limits(plan: &str) -> (i32, i32, i32, i32, bool, bool, bool, bool, bool) {
@@ -643,9 +587,9 @@ pub(crate) async fn require_feature(
 }
 
 pub(crate) async fn plans() -> Response {
-    let catalog=[("free","Free",0_i32,"Evaluation and small proofs of concept"),("starter","Starter",149_i32,"First production SaaS deployments"),("growth","Growth",499_i32,"Multi-tenant production workloads"),("scale","Scale",1199_i32,"Larger fleets and security operations"),("enterprise","Enterprise",0_i32,"Contracted enterprise deployments")];
+    let catalog=[("free","Free",0_i32,"Evaluation and small proofs of concept"),("starter","Starter",140_i32,"First production SaaS deployments"),("growth","Growth",490_i32,"Multi-tenant production workloads"),("scale","Scale",1190_i32,"Larger fleets and security operations"),("enterprise","Enterprise",0_i32,"Contracted enterprise deployments")];
     let plans=catalog.iter().map(|(key,name,monthly_usd,description)|{
-        let plan_code=paddle_price_id(key);
+        let plan_code=flutterwave_plan_id(key);
         let (nodes,tenants,environments,retention,advanced,fleet,priority,entra,private_deployment)=plan_limits(key);
         let integrations = plan_integration_limit(key);
         let verifications = plan_verification_limit(key);
@@ -653,9 +597,9 @@ pub(crate) async fn plans() -> Response {
         let api_keys = plan_api_key_limit(key);
         let api_requests = plan_api_requests_per_minute(key);
         let support = plan_support_level(key);
-        json!({"key":key,"name":name,"monthly_usd":monthly_usd,"description":description,"provider":"paddle","price_id":plan_code,"checkout_available":key!=&"free"&&key!=&"enterprise"&&paddle_price_id(key).is_some()&&configured_paddle_prices_unique(),"limits":{"nodes":nodes,"tenants":tenants,"environments":environments,"integrations":integrations,"verifications_per_month":verifications,"team_seats":team_seats,"api_keys":api_keys,"api_requests_per_minute":api_requests,"audit_retention_days":retention},"support_level":support,"features":{"advanced_verification":advanced,"fleet_controls":fleet,"priority_support":priority,"entra_oidc":entra,"private_deployment":private_deployment,"policy_management":key!=&"free"}})
+        json!({"key":key,"name":name,"monthly_usd":monthly_usd,"description":description,"provider":"flutterwave","price_id":plan_code,"checkout_available":key!=&"free"&&key!=&"enterprise"&&flutterwave_plan_id(key).is_some()&&configured_flutterwave_plans_unique()&&configured_flutterwave_amounts(),"limits":{"nodes":nodes,"tenants":tenants,"environments":environments,"integrations":integrations,"verifications_per_month":verifications,"team_seats":team_seats,"api_keys":api_keys,"api_requests_per_minute":api_requests,"audit_retention_days":retention},"support_level":support,"features":{"advanced_verification":advanced,"fleet_controls":fleet,"priority_support":priority,"entra_oidc":entra,"private_deployment":private_deployment,"policy_management":key!=&"free"}})
     }).collect::<Vec<_>>();
-    Json(json!({"currency":"usd","billing_interval":"month","provider":"paddle","plans":plans})).into_response()
+    Json(json!({"currency":"usd","billing_interval":"month","provider":"flutterwave","plans":plans})).into_response()
 }
 
 pub(crate) async fn entitlements(State(s): State<AppState>, headers: HeaderMap) -> Response {
@@ -1156,7 +1100,7 @@ pub(crate) async fn entra_callback(
                     return (StatusCode::FORBIDDEN, Json(json!({
                         "ok":false,
                         "error":"sso_identity_not_linked",
-                        "message":"This Microsoft Entra identity is not linked to the organization. Sign in with your existing account and link it under Settings → Enterprise identity."
+                        "message":"This Microsoft Entra identity is not linked to the organization. Sign in with your existing account and link it under Settings ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Enterprise identity."
                     }))).into_response();
                 }
                 let email_exists = match sqlx::query("SELECT 1 FROM users WHERE lower(email)=lower($1)")
@@ -1168,7 +1112,7 @@ pub(crate) async fn entra_callback(
                     return (StatusCode::CONFLICT, Json(json!({
                         "ok":false,
                         "error":"sso_identity_requires_link",
-                        "message":"An Agata account already uses this email. Sign in to that account and link Microsoft Entra from Settings → Enterprise identity."
+                        "message":"An Agata account already uses this email. Sign in to that account and link Microsoft Entra from Settings ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Enterprise identity."
                     }))).into_response();
                 }
                 let uid = Uuid::new_v4();
@@ -1207,7 +1151,7 @@ pub(crate) async fn entra_callback(
     match create_session(&s.db, user_id, organization_id).await {
         Ok((token, _csrf)) => {
             let mut response = Html(
-                "<html><head><meta http-equiv=\"refresh\" content=\"0;url=/app\"></head><body style=\"background:#05090d;color:#eef7f7;font-family:Arial;padding:60px\">Signing you in…</body></html>"
+                "<html><head><meta http-equiv=\"refresh\" content=\"0;url=/app\"></head><body style=\"background:#05090d;color:#eef7f7;font-family:Arial;padding:60px\">Signing you inÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦</body></html>"
             ).into_response();
             let cookie_value = if s.secure_cookie {
                 format!("proxima_session={token}; Path=/; HttpOnly; SameSite=Strict; Secure")
@@ -1230,669 +1174,148 @@ fn oidc_redirect_uri() -> String {
 }
 
 pub(crate) async fn billing_status(State(s): State<AppState>, headers: HeaderMap) -> Response {
-    let ctx = match authenticate(&s, &headers).await {
-        Ok(value) => value,
-        Err(code) => return code.into_response(),
-    };
-    match sqlx::query(
-        "SELECT paddle_customer_id,paddle_subscription_id,paddle_price_id,plan_key,status,current_period_end,cancel_at_period_end
-         FROM billing_accounts WHERE organization_id=$1 AND provider='paddle'",
-    )
-    .bind(ctx.organization_id)
-    .fetch_optional(&s.db)
-    .await
-    {
-        Ok(Some(row)) => Json(json!({
-            "configured": true,
-            "provider": "paddle",
-            "customer_id": row.get::<Option<String>,_>("paddle_customer_id"),
-            "subscription_id": row.get::<Option<String>,_>("paddle_subscription_id"),
-            "price_id": row.get::<Option<String>,_>("paddle_price_id"),
-            "plan": row.get::<String,_>("plan_key"),
-            "status": row.get::<String,_>("status"),
-            "current_period_end": row.get::<Option<chrono::DateTime<chrono::Utc>>,_>("current_period_end"),
-            "cancel_at_period_end": row.get::<bool,_>("cancel_at_period_end")
-        })).into_response(),
-        Ok(None) => Json(json!({"configured": false, "provider": "paddle", "plan": "free", "status": "active"})).into_response(),
-        Err(error) => db_error(error),
+    let ctx = match authenticate(&s, &headers).await { Ok(v) => v, Err(c) => return c.into_response() };
+    match sqlx::query("SELECT flutterwave_customer_id,flutterwave_subscription_id,flutterwave_plan_id,plan_key,status,current_period_end,cancel_at_period_end FROM billing_accounts WHERE organization_id=$1 AND provider='flutterwave'").bind(ctx.organization_id).fetch_optional(&s.db).await {
+        Ok(Some(row)) => Json(json!({"configured":true,"provider":"flutterwave","customer_id":row.get::<Option<String>,_>("flutterwave_customer_id"),"subscription_id":row.get::<Option<String>,_>("flutterwave_subscription_id"),"price_id":row.get::<Option<String>,_>("flutterwave_plan_id"),"plan":row.get::<String,_>("plan_key"),"status":row.get::<String,_>("status"),"current_period_end":row.get::<Option<chrono::DateTime<chrono::Utc>>,_>("current_period_end"),"cancel_at_period_end":row.get::<bool,_>("cancel_at_period_end")})).into_response(),
+        Ok(None) => Json(json!({"configured":false,"provider":"flutterwave","plan":"free","status":"active"})).into_response(), Err(e) => db_error(e)
     }
 }
-
-pub(crate) async fn checkout(
-    State(s): State<AppState>,
-    headers: HeaderMap,
-    Json(input): Json<CheckoutInput>,
-) -> Response {
-    let ctx = match authenticate(&s, &headers).await {
+pub(crate) async fn checkout(State(s): State<AppState>, headers: HeaderMap, Json(input): Json<CheckoutInput>) -> Response {
+    let ctx = match authenticate(&s, &headers).await { Ok(v)=>v, Err(c)=>return c.into_response() };
+    if let Err(c)=require_admin(&ctx,&headers) { return c.into_response(); }
+    if !flutterwave_enabled() { return service_unavailable("Flutterwave Live billing is not enabled; set FLUTTERWAVE_ENVIRONMENT=production."); }
+    let key=match env::var("FLUTTERWAVE_SECRET_KEY") { Ok(v) if !v.trim().is_empty()=>v.trim().to_owned(), _=>return service_unavailable("Flutterwave secret key is not configured.") };
+    if !configured_flutterwave_plans_unique() || !configured_flutterwave_amounts() { return service_unavailable("Configure three unique Flutterwave monthly payment plan IDs and matching positive USD amounts."); }
+    let plan=match input.price_id.as_deref() { Some(p) if ["starter","growth","scale"].contains(&p.trim())=>p.trim(), _=>return bad("Select a valid Agata Proxima monthly plan.") };
+    let plan_id=match flutterwave_plan_id(plan) { Some(v)=>v, None=>return service_unavailable("Flutterwave payment plan ID is missing.") };
+    let payment_plan_id = match plan_id.parse::<i64>() {
+        Ok(v) if v > 0 => v,
+        _ => return service_unavailable("Flutterwave payment plan ID must be a positive numeric ID."),
+    };
+    let amount=match flutterwave_amount_usd(plan) { Some(v)=>v, None=>return service_unavailable("Flutterwave USD amount is missing.") };
+    let base=env::var("AGATA_PUBLIC_FRONTEND_URL").or_else(|_|env::var("AGATA_PUBLIC_BASE_URL")).unwrap_or_else(|_|"http://127.0.0.1:8080".into());
+    let reference=Uuid::new_v4().to_string();
+    let email=match sqlx::query_scalar::<_,String>("SELECT email FROM users WHERE id=$1").bind(ctx.user_id).fetch_one(&s.db).await { Ok(v)=>v, Err(e)=>return db_error(e) };
+    let payload=json!({"tx_ref":reference,"amount":amount,"currency":"USD","redirect_url":format!("{}/app/billing/plans?billing=return",base.trim_end_matches('/')),"payment_options":"card,banktransfer,ussd","customer":{"email":email},"payment_plan":payment_plan_id,"meta":{"organization_id":ctx.organization_id.to_string(),"plan_key":plan,"checkout_reference":reference}});
+    let client = match Client::builder().timeout(std::time::Duration::from_secs(20)).build() {
+        Ok(client) => client,
+        Err(e) => {
+            tracing::error!(error = %e, "Flutterwave HTTP client construction failed");
+            return service_unavailable("Could not initialize the Flutterwave connection.");
+        }
+    };
+    let auth_header = match reqwest::header::HeaderValue::from_str(&format!("Bearer {}", key)) {
         Ok(value) => value,
-        Err(code) => return code.into_response(),
+        Err(e) => {
+            tracing::error!(
+                error = %e,
+                key_length = key.len(),
+                key_has_control_characters = key.chars().any(char::is_control),
+                "Flutterwave authorization header validation failed"
+            );
+            return service_unavailable("Flutterwave secret key contains invalid characters. Re-enter the key in the backend environment.");
+        }
     };
-    if let Err(code) = require_admin(&ctx, &headers) {
-        return code.into_response();
-    }
-    if !paddle_live_enabled() {
-        return service_unavailable("Paddle Live billing is not enabled; set PADDLE_ENVIRONMENT=production.");
-    }
-    let key = match env::var("PADDLE_API_KEY") {
-        Ok(value) if !value.trim().is_empty() => value.trim().to_owned(),
-        _ => return service_unavailable("Paddle API key is not configured."),
+
+    let request = client
+        .post("https://api.flutterwave.com/v3/payments")
+        .header(reqwest::header::AUTHORIZATION, auth_header)
+        .json(&payload);
+
+    let request = match request.build() {
+        Ok(request) => request,
+        Err(e) => {
+            tracing::error!(
+                error = %e,
+                is_builder = e.is_builder(),
+                "Flutterwave checkout request construction failed"
+            );
+            return service_unavailable("Could not construct the Flutterwave checkout request.");
+        }
     };
-    let client_token = match env::var("PADDLE_CLIENT_TOKEN") {
-        Ok(value) if !value.trim().is_empty() => value.trim().to_owned(),
-        _ => return service_unavailable("Paddle client-side token is not configured."),
-    };
-    if !configured_paddle_prices_unique() {
-        return service_unavailable("Paddle Starter, Growth, and Scale monthly price IDs must be configured and unique.");
-    }
-    let plan = match input.price_id.as_deref() {
-        Some(value) if ["starter", "growth", "scale"].contains(&value.trim()) => value.trim(),
-        Some(value) => match plan_for_paddle_price(Some(value.trim())) {
-            Some(plan) => plan,
-            None => return bad("Select a valid Agata Proxima plan."),
-        },
-        None => return bad("Select a plan before checkout."),
-    };
-    let price_id = match paddle_price_id(plan) {
-        Some(value) => value,
-        None => return service_unavailable("The Paddle price ID for this plan is not configured."),
-    };
-    let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(12))
-        .build()
-        .unwrap_or_else(|_| Client::new());
-    let price_response = match client
-        .get(format!("{}/prices/{price_id}", paddle_api_base()))
-        .bearer_auth(&key)
-        .header("Paddle-Version", "1")
-        .send()
-        .await
-    {
+
+    let response = match client.execute(request).await {
         Ok(response) => response,
-        Err(error) => return external_error(error),
-    };
-    if !price_response.status().is_success() {
-        return service_unavailable("Paddle price validation failed. Check the API key, environment, and configured price ID.");
-    }
-    let price_body: Value = match price_response.json().await {
-        Ok(body) => body,
-        Err(error) => return external_error(error),
-    };
-    let price = price_body.get("data").cloned().unwrap_or(Value::Null);
-    let amount = price.pointer("/unit_price/amount")
-        .and_then(Value::as_str)
-        .and_then(|value| value.parse::<i64>().ok());
-    let currency = price.pointer("/unit_price/currency_code").and_then(Value::as_str);
-    let interval = price.pointer("/billing_cycle/interval").and_then(Value::as_str);
-    let frequency = price.pointer("/billing_cycle/frequency").and_then(Value::as_i64);
-    let status = price.get("status").and_then(Value::as_str);
-    if amount != expected_plan_amount(plan)
-        || currency != Some("USD")
-        || interval != Some("month")
-        || frequency != Some(1)
-        || status != Some("active")
-    {
-        return service_unavailable("Paddle price must be active, monthly, USD, and match the approved Agata Proxima plan price.");
-    }
-
-    let reference = Uuid::new_v4().to_string();
-    let payload = json!({
-        "items": [{"price_id": price_id, "quantity": 1}],
-        "collection_mode": "automatic",
-        "enable_checkout": true,
-        "custom_data": {
-            "organization_id": ctx.organization_id.to_string(),
-            "plan_key": plan,
-            "checkout_reference": reference
+        Err(e) => {
+            tracing::error!(
+                error = %e,
+                is_builder = e.is_builder(),
+                is_connect = e.is_connect(),
+                is_timeout = e.is_timeout(),
+                "Flutterwave checkout HTTP request failed"
+            );
+            return service_unavailable("Could not send the checkout request to Flutterwave.");
         }
-    });
-    let response = match client
-        .post(format!("{}/transactions", paddle_api_base()))
-        .bearer_auth(&key)
-        .header("Paddle-Version", "1")
-        .json(&payload)
-        .send()
-        .await
-    {
-        Ok(response) => response,
-        Err(error) => return external_error(error),
     };
-    if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-        tracing::error!(%status, response = %body.chars().take(500).collect::<String>(), "Paddle transaction creation failed");
-        return service_unavailable("Paddle could not create the checkout transaction. Verify the checkout domain and Paddle account status.");
-    }
-    let body: Value = match response.json().await {
-        Ok(body) => body,
-        Err(error) => return external_error(error),
-    };
-    let data = body.get("data").cloned().unwrap_or(Value::Null);
-    let transaction_id = data.get("id").and_then(Value::as_str).unwrap_or_default();
-    if transaction_id.is_empty() {
-        return service_unavailable("Paddle returned no transaction ID for checkout.");
-    }
-    if let Err(error) = sqlx::query(
-        "INSERT INTO billing_transactions
-         (organization_id,provider,reference,provider_checkout_id,plan_key,plan_code,currency,status,metadata,payload,created_at,updated_at)
-         VALUES($1,'paddle',$2,$3,$4,$5,'USD','initialized',$6,$7,now(),now())
-         ON CONFLICT(provider,reference) DO NOTHING",
-    )
-    .bind(ctx.organization_id)
-    .bind(&reference)
-    .bind(transaction_id)
-    .bind(plan)
-    .bind(&price_id)
-    .bind(&payload)
-    .bind(&body)
-    .execute(&s.db)
-    .await
-    {
-        return db_error(error);
-    }
-    audit(
-        &s.db,
-        ctx.organization_id,
-        ctx.user_id,
-        "billing.checkout.created",
-        "billing_transaction",
-        None,
-        json!({"provider":"paddle","transaction_id":transaction_id,"plan":plan,"reference":reference}),
-    ).await;
-    Json(json!({
-        "ok": true,
-        "provider": "paddle",
-        "transaction_id": transaction_id,
-        "client_token": client_token,
-        "environment": "production",
-        "reference": reference
-    })).into_response()
+    if !response.status().is_success() { let st=response.status(); let body=response.text().await.unwrap_or_default(); tracing::error!(%st,response=%body.chars().take(300).collect::<String>(),"Flutterwave checkout creation failed"); return service_unavailable("Flutterwave could not create checkout. Check the live key and monthly payment plan."); }
+    let body:Value=match response.json().await { Ok(v)=>v, Err(e)=>return external_error(e) };
+    let url=match body.pointer("/data/link").and_then(Value::as_str).filter(|v|v.starts_with("https://")) { Some(v)=>v, None=>return service_unavailable("Flutterwave did not return a secure checkout URL.") };
+    if let Err(e)=sqlx::query("INSERT INTO billing_transactions(organization_id,provider,reference,provider_checkout_id,plan_key,plan_code,amount,currency,status,metadata,payload,created_at,updated_at) VALUES($1,'flutterwave',$2,$2,$3,$4,$5,'USD','initialized',$6,$7,now(),now()) ON CONFLICT(provider,reference) DO NOTHING").bind(ctx.organization_id).bind(&reference).bind(plan).bind(&plan_id).bind(amount).bind(&payload).bind(&body).execute(&s.db).await { return db_error(e); }
+    audit(&s.db,ctx.organization_id,ctx.user_id,"billing.checkout.created","billing_transaction",None,json!({"provider":"flutterwave","plan":plan,"reference":reference,"amount_usd":amount})).await;
+    Json(json!({"ok":true,"provider":"flutterwave","checkout_url":url,"reference":reference,"amount":amount,"currency":"USD"})).into_response()
 }
-
-pub(crate) async fn billing_verify(
-    State(s): State<AppState>,
-    headers: HeaderMap,
-    Query(query): Query<std::collections::HashMap<String, String>>,
-) -> Response {
-    let ctx = match authenticate(&s, &headers).await {
-        Ok(value) => value,
-        Err(code) => return code.into_response(),
-    };
-    if let Err(code) = require_admin(&ctx, &headers) {
-        return code.into_response();
+async fn verify_flutterwave_transaction(transaction_id: &str, reference: &str, plan: &str) -> Result<Value,String> {
+    let key=env::var("FLUTTERWAVE_SECRET_KEY").map_err(|_|"Flutterwave secret key is not configured".to_string())?;
+    let response=Client::new().get(format!("https://api.flutterwave.com/v3/transactions/{}/verify",transaction_id)).bearer_auth(key.trim()).send().await.map_err(|e|e.to_string())?;
+    if !response.status().is_success() { return Err("Flutterwave transaction verification failed".into()); }
+    let body:Value=response.json().await.map_err(|e|e.to_string())?;
+    let data=body.get("data").cloned().unwrap_or(Value::Null);
+    let returned_id=data.get("id")
+        .map(|v| v.as_str().map(str::to_owned).unwrap_or_else(||v.to_string()))
+        .ok_or("Flutterwave did not return a transaction ID")?;
+    if returned_id != transaction_id {
+        return Err("Flutterwave transaction ID did not match".into());
     }
-    let reference = match query.get("reference") {
-        Some(value) if !value.trim().is_empty() => value.trim(),
-        _ => return bad("Paddle checkout reference is required."),
-    };
-    match sqlx::query(
-        "SELECT status,plan_key FROM billing_transactions WHERE provider='paddle' AND reference=$1 AND organization_id=$2",
-    )
-    .bind(reference)
-    .bind(ctx.organization_id)
-    .fetch_optional(&s.db)
-    .await
-    {
-        Ok(Some(row)) => Json(json!({
-            "ok": true,
-            "provider": "paddle",
-            "reference": reference,
-            "status": row.get::<String,_>("status"),
-            "plan": row.get::<String,_>("plan_key"),
-            "verified": row.get::<String,_>("status") == "success"
-        })).into_response(),
-        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({"ok":false,"error":"unknown_local_transaction"}))).into_response(),
-        Err(error) => db_error(error),
-    }
+    let amount=data.get("amount").and_then(Value::as_f64).ok_or("No amount returned by Flutterwave")?;
+    let expected=flutterwave_amount_usd(plan).ok_or("NGN plan amount is not configured")? as f64;
+    if data.get("status").and_then(Value::as_str)!=Some("successful") || data.get("tx_ref").and_then(Value::as_str)!=Some(reference) || data.get("currency").and_then(Value::as_str)!=Some("USD") || (amount-expected).abs()>0.000001 { return Err("Payment status, reference, USD currency, or exact amount did not match".into()); }
+    Ok(body)
 }
-
-pub(crate) async fn portal(State(s): State<AppState>, headers: HeaderMap) -> Response {
-    let ctx = match authenticate(&s, &headers).await {
-        Ok(value) => value,
-        Err(code) => return code.into_response(),
-    };
-    if let Err(code) = require_admin(&ctx, &headers) {
-        return code.into_response();
-    }
-    if !paddle_live_enabled() {
-        return service_unavailable("Paddle Live billing is not enabled; set PADDLE_ENVIRONMENT=production.");
-    }
-    let account = match sqlx::query(
-        "SELECT paddle_customer_id,paddle_subscription_id FROM billing_accounts WHERE organization_id=$1 AND provider='paddle'",
-    )
-    .bind(ctx.organization_id)
-    .fetch_optional(&s.db)
-    .await
-    {
-        Ok(Some(row)) => row,
-        Ok(None) => return bad("No Paddle subscription exists for this organization yet."),
-        Err(error) => return db_error(error),
-    };
-    let customer_id = match account.get::<Option<String>,_>("paddle_customer_id") {
-        Some(value) if value.starts_with("ctm_") => value,
-        _ => return bad("The Paddle customer record is not available yet."),
-    };
-    let subscription_id = account.get::<Option<String>,_>("paddle_subscription_id");
-    let key = match env::var("PADDLE_API_KEY") {
-        Ok(value) if !value.trim().is_empty() => value.trim().to_owned(),
-        _ => return service_unavailable("Paddle API key is not configured."),
-    };
-    let payload = subscription_id.map(|id| json!({"subscription_ids":[id]})).unwrap_or_else(|| json!({}));
-    let response = match Client::new()
-        .post(format!("{}/customers/{customer_id}/portal-sessions", paddle_api_base()))
-        .bearer_auth(&key)
-        .header("Paddle-Version", "1")
-        .json(&payload)
-        .send()
-        .await
-    {
-        Ok(response) => response,
-        Err(error) => return external_error(error),
-    };
-    if !response.status().is_success() {
-        return service_unavailable("Paddle customer portal could not be opened.");
-    }
-    let body: Value = match response.json().await {
-        Ok(body) => body,
-        Err(error) => return external_error(error),
-    };
-    let url = match body.pointer("/data/urls/general/overview").and_then(Value::as_str)
-        .filter(|value| value.starts_with("https://"))
-    {
-        Some(value) => value,
-        None => return service_unavailable("Paddle did not return a secure customer portal URL."),
-    };
-    // Paddle portal-session URLs contain temporary authentication tokens; return
-    // the freshly generated URL but never persist it in the billing database.
-    Json(json!({"ok":true,"provider":"paddle","portal_url":url})).into_response()
+pub(crate) async fn billing_verify(State(s): State<AppState>,headers: HeaderMap,Query(q): Query<std::collections::HashMap<String,String>>) -> Response {
+    let ctx=match authenticate(&s,&headers).await {Ok(v)=>v,Err(c)=>return c.into_response()}; if let Err(c)=require_admin(&ctx,&headers){return c.into_response();}
+    let reference=match q.get("reference").filter(|v|!v.trim().is_empty()){Some(v)=>v.trim(),None=>return bad("Flutterwave transaction reference is required.")};
+    let transaction_id=match q.get("transaction_id").filter(|v|!v.trim().is_empty()){Some(v)=>v.trim(),None=>return bad("Flutterwave transaction ID is required.")};
+    let row=match sqlx::query("SELECT organization_id,plan_key,plan_code FROM billing_transactions WHERE provider='flutterwave' AND reference=$1 AND organization_id=$2").bind(reference).bind(ctx.organization_id).fetch_optional(&s.db).await {Ok(Some(v))=>v,Ok(None)=>return (StatusCode::NOT_FOUND,Json(json!({"ok":false,"error":"unknown_local_transaction"}))).into_response(),Err(e)=>return db_error(e)};
+    let plan:String=row.get("plan_key"); let plan_id:String=row.get::<Option<String>,_>("plan_code").unwrap_or_default(); let org:Uuid=row.get("organization_id");
+    let verified=match verify_flutterwave_transaction(transaction_id,reference,&plan).await {Ok(v)=>v,Err(e)=>return (StatusCode::PAYMENT_REQUIRED,Json(json!({"ok":false,"verified":false,"message":e}))).into_response()};
+    if let Err(e)=sqlx::query("UPDATE billing_transactions SET status='success',provider_checkout_id=$1,payload=$2,updated_at=now() WHERE provider='flutterwave' AND reference=$3 AND organization_id=$4").bind(transaction_id).bind(&verified).bind(reference).bind(org).execute(&s.db).await{return db_error(e);}
+    if let Err(e)=sqlx::query("INSERT INTO billing_accounts(organization_id,provider,flutterwave_customer_id,flutterwave_plan_id,plan_key,status,cancel_at_period_end,updated_at) VALUES($1,'flutterwave',$2,$3,$4,'active',false,now()) ON CONFLICT(organization_id) DO UPDATE SET provider='flutterwave',flutterwave_customer_id=COALESCE(EXCLUDED.flutterwave_customer_id,billing_accounts.flutterwave_customer_id),flutterwave_plan_id=EXCLUDED.flutterwave_plan_id,plan_key=EXCLUDED.plan_key,status='active',cancel_at_period_end=false,updated_at=now()").bind(org).bind(verified.pointer("/data/customer/id").map(|v| v.to_string().trim_matches('"').to_owned())).bind(plan_id).bind(&plan).execute(&s.db).await{return db_error(e);}
+    if let Err(e)=apply_entitlements(&s.db,org,&plan).await{ tracing::error!(error=%e,"Payment verified but entitlement update failed"); return internal("Payment verified but entitlement update failed."); }
+    Json(json!({"ok":true,"provider":"flutterwave","reference":reference,"status":"success","plan":plan,"verified":true})).into_response()
 }
-
-
-pub(crate) async fn paddle_webhook(
-    State(s): State<AppState>,
-    headers: HeaderMap,
-    body: String,
-) -> Response {
-    let signature = match headers.get("Paddle-Signature").and_then(|value| value.to_str().ok()) {
-        Some(value) => value,
-        None => return StatusCode::BAD_REQUEST.into_response(),
-    };
-    let secret = match env::var("PADDLE_WEBHOOK_SECRET") {
-        Ok(value) if !value.trim().is_empty() => value.trim().to_owned(),
-        _ => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
-    };
-    if !verify_paddle_signature(&body, signature, &secret) {
-        return StatusCode::UNAUTHORIZED.into_response();
-    }
-    let event: Value = match serde_json::from_str(&body) {
-        Ok(value) => value,
-        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
-    };
-    let event_id = event.get("event_id").and_then(Value::as_str).unwrap_or_default();
-    let event_type = event.get("event_type").and_then(Value::as_str).unwrap_or_default();
-    let data = event.get("data").cloned().unwrap_or(Value::Null);
-    let object_id = data.get("id").and_then(Value::as_str).unwrap_or_default();
-    if event_id.is_empty() || event_type.is_empty() || object_id.is_empty() {
-        return StatusCode::BAD_REQUEST.into_response();
-    }
-
-    let event_claimed = match sqlx::query(
-        "INSERT INTO billing_events(provider,provider_event_id,event_type,payload,status,processing_started_at,attempt_count)
-         VALUES('paddle',$1,$2,$3,'processing',now(),1)
-         ON CONFLICT(provider,provider_event_id) DO UPDATE
-           SET status='processing',processing_started_at=now(),attempt_count=billing_events.attempt_count+1,
-               payload=EXCLUDED.payload,event_type=EXCLUDED.event_type
-         WHERE billing_events.status NOT IN ('processed','ignored')
-           AND (billing_events.processing_started_at IS NULL OR billing_events.processing_started_at < now()-interval '1 minute')
-         RETURNING id",
-    )
-    .bind(event_id)
-    .bind(event_type)
-    .bind(&event)
-    .fetch_optional(&s.db)
-    .await
-    {
-        Ok(row) => row.is_some(),
-        Err(error) => return db_error(error),
-    };
-    if !event_claimed {
-        let previous = match sqlx::query("SELECT status FROM billing_events WHERE provider='paddle' AND provider_event_id=$1")
-            .bind(event_id)
-            .fetch_optional(&s.db)
-            .await
-        {
-            Ok(row) => row,
-            Err(error) => return db_error(error),
-        };
-        return match previous.map(|row| row.get::<String,_>("status")).as_deref() {
-            Some("processed") | Some("ignored") => Json(json!({"received":true,"duplicate":true})).into_response(),
-            _ => StatusCode::SERVICE_UNAVAILABLE.into_response(),
-        };
-    }
-
-    let custom = data.get("custom_data").cloned().unwrap_or(Value::Null);
-    let custom_org = custom.get("organization_id").and_then(Value::as_str)
-        .and_then(|value| Uuid::parse_str(value).ok());
-    let checkout_reference = custom.get("checkout_reference").and_then(Value::as_str);
-    let customer_id = data.get("customer_id").and_then(Value::as_str).map(str::to_owned);
-    let subscription_id = if event_type.starts_with("subscription.") {
-        Some(object_id.to_owned())
-    } else {
-        data.get("subscription_id").and_then(Value::as_str).map(str::to_owned)
-    };
-    let price_id = data.pointer("/items/0/price/id").and_then(Value::as_str)
-        .or_else(|| data.pointer("/items/0/price_id").and_then(Value::as_str))
-        .map(str::to_owned);
-    let plan = plan_for_paddle_price(price_id.as_deref());
-    let is_transaction = event_type.starts_with("transaction.");
-    let is_subscription = event_type.starts_with("subscription.");
-
-    let local_checkout = if let Some(reference) = checkout_reference {
-        match sqlx::query(
-            "SELECT organization_id,plan_key,plan_code,status FROM billing_transactions
-             WHERE provider='paddle' AND reference=$1",
-        )
-        .bind(reference)
-        .fetch_optional(&s.db)
-        .await
-        {
-            Ok(row) => row,
-            Err(error) => return db_error(error),
-        }
-    } else {
-        None
-    };
-
-    let mut organization_id = custom_org;
-    if let Some(row) = &local_checkout {
-        let checkout_org: Uuid = row.get("organization_id");
-        let checkout_price: Option<String> = row.get("plan_code");
-        if organization_id.is_some_and(|value| value != checkout_org)
-            || (price_id.is_some() && checkout_price.as_deref() != price_id.as_deref())
-        {
-            let _ = sqlx::query("UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='paddle' AND provider_event_id=$1")
-                .bind(event_id).execute(&s.db).await;
-            return (StatusCode::FORBIDDEN, Json(json!({"received":false,"error":"checkout_mismatch"}))).into_response();
-        }
-        organization_id = Some(checkout_org);
-    }
-
-    if organization_id.is_none() {
-        if let Some(subscription) = subscription_id.as_deref() {
-            organization_id = match sqlx::query_scalar::<_, Uuid>(
-                "SELECT organization_id FROM billing_accounts WHERE paddle_subscription_id=$1",
-            )
-            .bind(subscription)
-            .fetch_optional(&s.db)
-            .await
-            {
-                Ok(value) => value,
-                Err(error) => return db_error(error),
-            };
-        }
-    }
-    if organization_id.is_none() {
-        if let Some(customer) = customer_id.as_deref() {
-            organization_id = match sqlx::query_scalar::<_, Uuid>(
-                "SELECT organization_id FROM billing_accounts WHERE paddle_customer_id=$1",
-            )
-            .bind(customer)
-            .fetch_optional(&s.db)
-            .await
-            {
-                Ok(value) => value,
-                Err(error) => return db_error(error),
-            };
-        }
-    }
-    let Some(organization_id) = organization_id else {
-        let _ = sqlx::query("UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='paddle' AND provider_event_id=$1")
-            .bind(event_id).execute(&s.db).await;
-        return Json(json!({"received":true,"ignored":"organization_not_resolved"})).into_response();
-    };
-
-    if is_transaction && event_type == "transaction.completed" {
-        let Some(plan) = plan else {
-            let _ = sqlx::query("UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='paddle' AND provider_event_id=$1")
-                .bind(event_id).execute(&s.db).await;
-            return Json(json!({"received":true,"ignored":"unrecognized_price"})).into_response();
-        };
-        if let Some(reference) = checkout_reference {
-            if local_checkout.is_none() {
-                return (StatusCode::FORBIDDEN, Json(json!({"received":false,"error":"unknown_checkout_reference"}))).into_response();
-            }
-            if let Err(error) = sqlx::query(
-                "UPDATE billing_transactions SET status='success',provider_checkout_id=$1,payload=$2,updated_at=now()
-                 WHERE provider='paddle' AND reference=$3 AND organization_id=$4 AND plan_key=$5 AND plan_code=$6",
-            )
-            .bind(object_id)
-            .bind(&event)
-            .bind(reference)
-            .bind(organization_id)
-            .bind(plan)
-            .bind(price_id.as_deref().unwrap_or_default())
-            .execute(&s.db)
-            .await
-            {
-                return db_error(error);
-            }
-        } else if let Some(subscription) = subscription_id.as_deref() {
-            let known = match sqlx::query_scalar::<_, bool>(
-                "SELECT EXISTS(SELECT 1 FROM billing_accounts WHERE organization_id=$1 AND paddle_subscription_id=$2 AND paddle_price_id=$3)",
-            )
-            .bind(organization_id)
-            .bind(subscription)
-            .bind(price_id.as_deref().unwrap_or_default())
-            .fetch_one(&s.db)
-            .await
-            {
-                Ok(value) => value,
-                Err(error) => return db_error(error),
-            };
-            if !known {
-                return (StatusCode::FORBIDDEN, Json(json!({"received":false,"error":"unmatched_recurring_transaction"}))).into_response();
-            }
-            if let Err(error) = sqlx::query(
-                "INSERT INTO billing_transactions(organization_id,provider,reference,provider_checkout_id,plan_key,plan_code,amount,currency,status,metadata,payload,created_at,updated_at)
-                 VALUES($1,'paddle',$2,$3,$4,$5,$6,'USD','success',$7,$8,now(),now())
-                 ON CONFLICT(provider,reference) DO UPDATE SET status='success',payload=EXCLUDED.payload,updated_at=now()",
-            )
-            .bind(organization_id)
-            .bind(format!("transaction:{object_id}"))
-            .bind(object_id)
-            .bind(plan)
-            .bind(price_id.as_deref().unwrap_or_default())
-            .bind(data.pointer("/details/totals/grand_total").and_then(Value::as_str).and_then(|value| value.parse::<i64>().ok()))
-            .bind(&custom)
-            .bind(&event)
-            .execute(&s.db)
-            .await
-            {
-                return db_error(error);
-            }
-        } else {
-            return (StatusCode::FORBIDDEN, Json(json!({"received":false,"error":"subscription_missing"}))).into_response();
-        }
-        let Some(subscription) = subscription_id.as_deref() else {
-            return (StatusCode::FORBIDDEN, Json(json!({"received":false,"error":"subscription_missing"}))).into_response();
-        };
-        if let Err(error) = sqlx::query(
-            "INSERT INTO billing_accounts(organization_id,provider,paddle_customer_id,paddle_subscription_id,paddle_price_id,plan_key,status,current_period_end,cancel_at_period_end,updated_at)
-             VALUES($1,'paddle',$2,$3,$4,$5,'active',NULL,false,now())
-             ON CONFLICT(organization_id) DO UPDATE SET provider='paddle',
-               paddle_customer_id=COALESCE(EXCLUDED.paddle_customer_id,billing_accounts.paddle_customer_id),
-               paddle_subscription_id=EXCLUDED.paddle_subscription_id,
-               paddle_price_id=EXCLUDED.paddle_price_id,plan_key=EXCLUDED.plan_key,status='active',
-               cancel_at_period_end=false,updated_at=now()",
-        )
-        .bind(organization_id)
-        .bind(customer_id.as_deref())
-        .bind(subscription)
-        .bind(price_id.as_deref())
-        .bind(plan)
-        .execute(&s.db)
-        .await
-        {
-            return db_error(error);
-        }
-        if let Err(error) = apply_entitlements(&s.db, organization_id, plan).await {
-            return db_error(error);
-        }
-        let details = format!("Your Agata Proxima {plan} subscription payment was confirmed by Paddle.");
-        send_billing_notice(&s.db, organization_id, event_id, "Paddle payment received", &details).await;
-    } else if is_transaction && event_type == "transaction.payment_failed" {
-        if let Some(subscription) = subscription_id.as_deref() {
-            if let Err(error) = sqlx::query(
-                "UPDATE organization_entitlements
-                    SET billing_status='past_due',
-                        billing_grace_until=COALESCE(billing_grace_until,now()+interval '7 days'),
-                        updated_at=now()
-                  WHERE organization_id=$1
-                    AND EXISTS(
-                        SELECT 1 FROM billing_accounts
-                         WHERE organization_id=$1 AND paddle_subscription_id=$2
-                    )",
-            )
-            .bind(organization_id)
-            .bind(subscription)
-            .execute(&s.db)
-            .await
-            {
-                return db_error(error);
-            }
-            if let Err(error) = sqlx::query(
-                "UPDATE billing_accounts
-                    SET status='attention',updated_at=now()
-                  WHERE organization_id=$1 AND provider='paddle' AND paddle_subscription_id=$2",
-            )
-            .bind(organization_id)
-            .bind(subscription)
-            .execute(&s.db)
-            .await
-            {
-                return db_error(error);
-            }
-            let details = "Paddle reported a failed subscription payment. Review your billing details to avoid interruption.";
-            send_billing_notice(&s.db, organization_id, event_id, "Paddle payment failed", details).await;
-        }
-    } else if is_transaction && event_type == "transaction.refunded" {
-        if let Err(error) = sqlx::query(
-            "UPDATE billing_transactions SET status='refunded',refund_status='refunded',payload=$1,updated_at=now()
-             WHERE provider='paddle' AND provider_checkout_id=$2 AND organization_id=$3",
-        )
-        .bind(&event)
-        .bind(object_id)
-        .bind(organization_id)
-        .execute(&s.db)
-        .await
-        {
-            return db_error(error);
-        }
-    }
-
-    if is_subscription {
-        let Some(plan) = plan else {
-            let _ = sqlx::query("UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='paddle' AND provider_event_id=$1")
-                .bind(event_id).execute(&s.db).await;
-            return Json(json!({"received":true,"ignored":"unrecognized_subscription_price"})).into_response();
-        };
-        if local_checkout.is_none() {
-            let existing = match sqlx::query_scalar::<_, bool>(
-                "SELECT EXISTS(SELECT 1 FROM billing_accounts WHERE organization_id=$1 AND paddle_subscription_id=$2)",
-            )
-            .bind(organization_id)
-            .bind(subscription_id.as_deref().unwrap_or_default())
-            .fetch_one(&s.db)
-            .await
-            {
-                Ok(value) => value,
-                Err(error) => return db_error(error),
-            };
-            if !existing {
-                return (StatusCode::FORBIDDEN, Json(json!({"received":false,"error":"subscription_not_linked_to_checkout"}))).into_response();
-            }
-        }
-        let provider_status = data.get("status").and_then(Value::as_str).unwrap_or_default();
-        let scheduled_cancel = data.pointer("/scheduled_change/action").and_then(Value::as_str) == Some("cancel");
-        let canceled = event_type == "subscription.canceled" || provider_status == "canceled";
-        let active = matches!(provider_status, "active" | "trialing");
-        let mapped = if canceled { "canceled" } else if scheduled_cancel && active { "non-renewing" } else if provider_status == "past_due" { "attention" } else if provider_status == "paused" { "paused" } else if active { "active" } else { "pending" };
-        let period = data.pointer("/current_billing_period/ends_at")
-            .and_then(Value::as_str)
-            .or_else(|| data.get("next_billed_at").and_then(Value::as_str))
-            .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
-            .map(|value| value.with_timezone(&chrono::Utc));
-        let subscription = subscription_id.as_deref().unwrap_or_default();
-        if subscription.is_empty() {
-            return StatusCode::BAD_REQUEST.into_response();
-        }
-        if active && !scheduled_cancel {
-            if let Err(error) = apply_entitlements(&s.db, organization_id, plan).await {
-                return db_error(error);
-            }
-        }
-        if canceled {
-            if let Err(error) = apply_entitlements(&s.db, organization_id, "free").await {
-                return db_error(error);
-            }
-            if let Err(error) = sqlx::query(
-                "UPDATE organization_entitlements SET billing_status='canceled',billing_grace_until=NULL,updated_at=now() WHERE organization_id=$1",
-            )
-            .bind(organization_id)
-            .execute(&s.db)
-            .await
-            {
-                return db_error(error);
-            }
-        }
-        let account_plan = if canceled { "free" } else { plan };
-        if let Err(error) = sqlx::query(
-            "INSERT INTO billing_accounts(organization_id,provider,paddle_customer_id,paddle_subscription_id,paddle_price_id,plan_key,status,current_period_end,cancel_at_period_end,updated_at)
-             VALUES($1,'paddle',$2,$3,$4,$5,$6,$7,$8,now())
-             ON CONFLICT(organization_id) DO UPDATE SET provider='paddle',
-               paddle_customer_id=COALESCE(EXCLUDED.paddle_customer_id,billing_accounts.paddle_customer_id),
-               paddle_subscription_id=COALESCE(EXCLUDED.paddle_subscription_id,billing_accounts.paddle_subscription_id),
-               paddle_price_id=COALESCE(EXCLUDED.paddle_price_id,billing_accounts.paddle_price_id),
-               plan_key=EXCLUDED.plan_key,status=EXCLUDED.status,
-               current_period_end=COALESCE(EXCLUDED.current_period_end,billing_accounts.current_period_end),
-               cancel_at_period_end=EXCLUDED.cancel_at_period_end,updated_at=now()",
-        )
-        .bind(organization_id)
-        .bind(customer_id)
-        .bind(subscription)
-        .bind(price_id.as_deref())
-        .bind(account_plan)
-        .bind(mapped)
-        .bind(period)
-        .bind(scheduled_cancel)
-        .execute(&s.db)
-        .await
-        {
-            return db_error(error);
-        }
-        if canceled {
-            let details = "Your Paddle subscription was canceled. Your organization has returned to the Free plan.";
-            send_billing_notice(&s.db, organization_id, event_id, "Paddle subscription canceled", details).await;
-        }
-        if provider_status == "past_due" {
+pub(crate) async fn portal(State(s):State<AppState>,headers:HeaderMap)->Response { let ctx=match authenticate(&s,&headers).await{Ok(v)=>v,Err(c)=>return c.into_response()}; if let Err(c)=require_admin(&ctx,&headers){return c.into_response();} (StatusCode::NOT_IMPLEMENTED,Json(json!({"ok":false,"provider":"flutterwave","error":"subscription_portal_unavailable","message":"Contact Agata Proxima support to manage or cancel this subscription."}))).into_response() }
+pub(crate) async fn flutterwave_webhook(State(s):State<AppState>,headers:HeaderMap,body:String)->Response {
+    if !verify_flutterwave_hash(&headers){return StatusCode::UNAUTHORIZED.into_response();} let event:Value=match serde_json::from_str(&body){Ok(v)=>v,Err(_)=>return StatusCode::BAD_REQUEST.into_response()}; let data=event.get("data").cloned().unwrap_or(Value::Null);
+    let txid=data.get("id").and_then(Value::as_i64).map(|v|v.to_string()).or_else(||data.get("id").and_then(Value::as_str).map(str::to_owned)).unwrap_or_default(); let reference=data.get("tx_ref").and_then(Value::as_str).unwrap_or_default(); if txid.is_empty()||reference.is_empty(){return StatusCode::BAD_REQUEST.into_response();}
+    let event_id=event.get("id").and_then(Value::as_str).map(str::to_owned).unwrap_or_else(||format!("{txid}:{reference}")); let event_type=event.get("event").and_then(Value::as_str).unwrap_or("charge.completed");
+    let claimed=match sqlx::query("INSERT INTO billing_events(provider,provider_event_id,event_type,payload,status,processing_started_at,attempt_count) VALUES('flutterwave',$1,$2,$3,'processing',now(),1) ON CONFLICT(provider,provider_event_id) DO UPDATE SET status='processing',processing_started_at=now(),attempt_count=billing_events.attempt_count+1,payload=EXCLUDED.payload,event_type=EXCLUDED.event_type WHERE billing_events.status NOT IN ('processed','ignored') AND (billing_events.processing_started_at IS NULL OR billing_events.processing_started_at<now()-interval '1 minute') RETURNING id").bind(&event_id).bind(event_type).bind(&event).fetch_optional(&s.db).await{Ok(v)=>v.is_some(),Err(e)=>return db_error(e)}; if !claimed{return Json(json!({"received":true,"duplicate":true})).into_response();}
+    let row=match sqlx::query("SELECT organization_id,plan_key,plan_code FROM billing_transactions WHERE provider='flutterwave' AND reference=$1").bind(reference).fetch_optional(&s.db).await {
+      Ok(Some(v))=>v,
+      Ok(None) => {
             let _ = sqlx::query(
-                "UPDATE organization_entitlements SET billing_status='past_due',billing_grace_until=COALESCE(billing_grace_until,now()+interval '7 days'),updated_at=now() WHERE organization_id=$1",
+                "UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='flutterwave' AND provider_event_id=$1"
             )
-            .bind(organization_id)
+            .bind(&event_id)
             .execute(&s.db)
             .await;
-        }
-    }
 
-    if let Err(error) = sqlx::query(
-        "UPDATE billing_events SET status='processed',processed_at=now(),processing_started_at=NULL WHERE provider='paddle' AND provider_event_id=$1",
-    )
-    .bind(event_id)
-    .execute(&s.db)
-    .await
-    {
-        return db_error(error);
-    }
-    Json(json!({"received":true,"processed":true,"event_type":event_type})).into_response()
+            return Json(json!({
+                "received": true,
+                "ignored": "unknown_reference"
+            })).into_response();
+        },
+        Err(e) => return db_error(e)
+    };
+    let org:Uuid=row.get("organization_id");let plan:String=row.get("plan_key");let plan_id:String=row.get::<Option<String>,_>("plan_code").unwrap_or_default(); let verified=match verify_flutterwave_transaction(&txid,reference,&plan).await{Ok(v)=>v,Err(_)=>return StatusCode::PAYMENT_REQUIRED.into_response()};
+    if let Err(e)=sqlx::query("INSERT INTO billing_transactions(organization_id,provider,reference,provider_checkout_id,plan_key,plan_code,amount,currency,status,metadata,payload,created_at,updated_at) VALUES($4,'flutterwave',$3,$1,$5,$6,$7,'USD','success',$8,$2,now(),now()) ON CONFLICT(provider,reference) DO UPDATE SET status='success',provider_checkout_id=EXCLUDED.provider_checkout_id,payload=EXCLUDED.payload,updated_at=now()").bind(&txid).bind(&verified).bind(reference).bind(org).bind(&plan).bind(&plan_id).bind({
+        match flutterwave_amount_usd(&plan) {
+            Some(amount) => amount,
+            None => return service_unavailable("Flutterwave USD amount is missing."),
+        }
+    }).bind(&event).execute(&s.db).await{return db_error(e);}
+    if let Err(e)=sqlx::query("INSERT INTO billing_accounts(organization_id,provider,flutterwave_customer_id,flutterwave_plan_id,plan_key,status,cancel_at_period_end,updated_at) VALUES($1,'flutterwave',$2,$3,$4,'active',false,now()) ON CONFLICT(organization_id) DO UPDATE SET provider='flutterwave',flutterwave_customer_id=COALESCE(EXCLUDED.flutterwave_customer_id,billing_accounts.flutterwave_customer_id),flutterwave_plan_id=EXCLUDED.flutterwave_plan_id,plan_key=EXCLUDED.plan_key,status='active',cancel_at_period_end=false,updated_at=now()").bind(org).bind(verified.pointer("/data/customer/id").map(|v| v.to_string().trim_matches('"').to_owned())).bind(plan_id).bind(&plan).execute(&s.db).await{return db_error(e);}
+    if let Err(e)=apply_entitlements(&s.db,org,&plan).await{ tracing::error!(error=%e,"Payment verified but entitlement update failed"); return internal("Payment verified but entitlement update failed."); }
+    if let Err(e)=sqlx::query("UPDATE billing_events SET status='processed',processed_at=now(),processing_started_at=NULL WHERE provider='flutterwave' AND provider_event_id=$1").bind(&event_id).execute(&s.db).await{return db_error(e);} Json(json!({"received":true,"verified":true})).into_response()
 }
 
 pub(crate) async fn send_verification_email(
@@ -2369,12 +1792,9 @@ pub(crate) async fn purge_expired_audit_events(db: &sqlx::PgPool) -> Result<i64,
 
 pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
     let db_ok = sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
-    let paddle_live_environment = paddle_live_enabled();
-    let paddle_configured = paddle_live_environment
-        && env::var("PADDLE_API_KEY").map(|value| !value.trim().is_empty()).unwrap_or(false)
-        && env::var("PADDLE_CLIENT_TOKEN").map(|value| !value.trim().is_empty()).unwrap_or(false)
-        && env::var("PADDLE_WEBHOOK_SECRET").map(|value| !value.trim().is_empty()).unwrap_or(false);
-    let paddle_prices = configured_paddle_prices_unique();
+    let flutterwave_live_environment = flutterwave_enabled();
+    let flutterwave_configured = flutterwave_live_environment && env::var("FLUTTERWAVE_SECRET_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false) && env::var("FLUTTERWAVE_WEBHOOK_SECRET_HASH").map(|v| !v.trim().is_empty()).unwrap_or(false);
+    let flutterwave_plans_and_usd_amounts = configured_flutterwave_plans_unique() && configured_flutterwave_amounts();
     let configured = |key: &str| env::var(key).map(|value| !value.trim().is_empty()).unwrap_or(false);
     let resend = configured("RESEND_API_KEY");
     let fallback_from = configured("RESEND_FROM_EMAIL");
@@ -2398,14 +1818,14 @@ pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
     let oidc_client_secret = configured("PROXIMA_OIDC_CLIENT_SECRET");
     let oidc = oidc_client_id && oidc_client_secret;
     let email_ready = resend && sender_identities && templates_configured && support_inbox;
-    let all = db_ok && paddle_configured && paddle_prices && email_ready && base && oidc;
+    let all = db_ok && flutterwave_configured && flutterwave_plans_and_usd_amounts && email_ready && base && oidc;
     Json(json!({
         "status": if all { "ready" } else { "needs_configuration" },
         "checks": {
             "database": db_ok,
-            "paddle_configured": paddle_configured,
-            "paddle_live_environment": paddle_live_environment,
-            "paddle_prices": paddle_prices,
+            "flutterwave_configured": flutterwave_configured,
+            "flutterwave_live_environment": flutterwave_live_environment,
+            "flutterwave_plans_and_usd_amounts": flutterwave_plans_and_usd_amounts,
             "resend_api_key": resend,
             "resend_fallback_sender": fallback_from,
             "resend_sender_identities": sender_identities,
@@ -2681,26 +2101,12 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn paddle_signature_round_trip_rejects_invalid_and_stale_signatures() {
-        let payload = r#"{"event_id":"evt_test","event_type":"transaction.completed"}"#;
-        let secret = "test_paddle_notification_secret";
-        let timestamp = chrono::Utc::now().timestamp();
-        type HmacSha256 = Hmac<sha2::Sha256>;
-        let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
-        mac.update(format!("{timestamp}:{payload}").as_bytes());
-        let signature = hex::encode(mac.finalize().into_bytes());
-        let header = format!("ts={timestamp};h1={signature}");
-        assert!(verify_paddle_signature(payload, &header, secret));
-        assert!(!verify_paddle_signature(payload, "ts=1;h1=invalid", secret));
-        assert!(!verify_paddle_signature("changed", &header, secret));
-    }
 
     #[test]
     fn configured_plan_amounts_are_exact_minor_units() {
-        assert_eq!(expected_plan_amount("starter"), Some(14_900));
-        assert_eq!(expected_plan_amount("growth"), Some(49_900));
-        assert_eq!(expected_plan_amount("scale"), Some(119_900));
+        assert_eq!(expected_plan_amount("starter"), Some(14_000));
+        assert_eq!(expected_plan_amount("growth"), Some(49_000));
+        assert_eq!(expected_plan_amount("scale"), Some(119_000));
         assert_eq!(expected_plan_amount("free"), None);
         assert_eq!(expected_plan_amount("enterprise"), None);
     }

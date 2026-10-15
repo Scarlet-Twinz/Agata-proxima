@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ArrowUpRight, Plus, RefreshCw, Search } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api, type ApiError } from "../../api/client";
@@ -65,12 +65,16 @@ export function ResourceSurface({
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
 
-  async function load() {
+  const load = useCallback(async (showLoading = true) => {
     if (!endpoint) return;
-    setLoading(true);
-    setError("");
+    if (showLoading) {
+      setLoading(true);
+      setError("");
+    }
     try {
-      setData(await api.get<JsonValue>(endpoint));
+      const result = await api.get<JsonValue>(endpoint);
+      setData(result);
+      setError("");
     } catch (err) {
       const apiError = err as ApiError;
       if (apiError?.status === 401) {
@@ -83,9 +87,9 @@ export function ResourceSurface({
     } finally {
       setLoading(false);
     }
-  }
+  }, [endpoint]);
 
-  useEffect(() => { void load(); }, [endpoint]);
+  useEffect(() => { void load(false); }, [load]);
 
   const rows = useMemo(() => {
     const normalized = rowsFrom(data);
@@ -119,13 +123,16 @@ export function ResourceSurface({
 
       {sections.length > 0 && (
         <div className="resource-section-grid">
-          {sections.map((section) => (
-            <Link className="surface resource-info-card resource-info-card--link" key={section.title} to={section.href ?? "#"}>
-              <span className="eyebrow">EXPLORE</span>
-              <h2>{section.title}<ArrowUpRight size={15}/></h2>
+          {sections.map((section) => {
+            const content = <>
+              <span className="eyebrow">{section.href ? "EXPLORE" : "REFERENCE"}</span>
+              <h2>{section.title}{section.href && <ArrowUpRight size={15}/>}</h2>
               <p>{section.text}</p>
-            </Link>
-          ))}
+            </>;
+            return section.href
+              ? <Link className="surface resource-info-card resource-info-card--link" key={section.title} to={section.href}>{content}</Link>
+              : <article className="surface resource-info-card" key={section.title}>{content}</article>;
+          })}
         </div>
       )}
 
@@ -143,7 +150,7 @@ export function ResourceSurface({
 
           {loading && <div className="empty-state"><strong>Loading live data…</strong><span>Reading the authenticated control-plane endpoint.</span></div>}
           {!loading && error && <div className="empty-state resource-error"><strong>{error}</strong><span>Refresh after confirming the control plane and secure session are healthy.</span></div>}
-          {!loading && !error && rows.length === 0 && <div className="empty-state"><strong>No records have been created yet.</strong><span>This is a real empty state. Use the action above to create the first resource.</span>{createHref && <Link className="primary-action" to={createHref}>Create the first {title.toLowerCase().replace(" registry","")}</Link>}</div>}
+          {!loading && !error && rows.length === 0 && <div className="empty-state"><strong>No records have been created yet.</strong><span>No records were returned for the active organization. This can be normal for a new workspace. Create the first resource if appropriate, or confirm that you selected the expected organization and that your role permits access.</span>{createHref && <Link className="primary-action" to={createHref}>Create the first {title.toLowerCase().replace(" registry","")}</Link>}<div className="resource-empty-help"><Link to="/docs/core-concepts">Understand the resource model</Link><Link to="/docs/troubleshooting">Troubleshoot missing data</Link></div></div>}
 
           {!loading && !error && rows.length > 0 && (
             <div className="resource-table-wrap">

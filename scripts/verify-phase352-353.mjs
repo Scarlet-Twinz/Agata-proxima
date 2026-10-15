@@ -1,0 +1,26 @@
+import fs from "node:fs";
+import path from "node:path";
+const root = process.argv[2] ? path.resolve(process.argv[2]) : process.cwd();
+const read = (p) => fs.readFileSync(path.join(root, p), "utf8");
+const routes = read("frontend/src/app/router.tsx");
+const detail = read("frontend/src/pages/public/PublicDetail.tsx");
+const faq = read("frontend/src/pages/public/FAQ.tsx");
+const dev = read("frontend/src/pages/public/Developers.tsx");
+const checks = [];
+function check(name, ok) { checks.push({ name, ok: Boolean(ok) }); }
+check("FAQ covers real product/customer questions and removes generic readiness/email questions", /What is Agata Proxima/.test(faq) && /How does tenant isolation work/.test(faq) && /How do I get started/.test(faq) && !/production-ready for every workload/i.test(faq) && !/Does Agata send email\?/.test(faq));
+check("Developer portal links to Node.js, downloads, SDK, CLI, Terraform and integration catalog", ["/developers/nodejs", "/developers/downloads", "/developers/sdks", "/developers/cli", "/developers/terraform", "/developers/integrations"].every((x) => dev.includes(x)));
+const integrationRoutes = ["/developers/integrations", "/developers/integrations/chatgpt", "/developers/integrations/supabase", "/developers/integrations/firebase", "/developers/integrations/github", "/developers/integrations/vercel", "/developers/integrations/postgresql"];
+check("All integration routes are declared in the router", integrationRoutes.every((x) => routes.includes(x)));
+check("Every integration route has dedicated detail content", integrationRoutes.every((x) => detail.includes(JSON.stringify(x))));
+check("Node.js and downloads pages have dedicated detail content", ["/developers/nodejs", "/developers/downloads"].every((x) => detail.includes(JSON.stringify(x))));
+check("SDK/CLI/Terraform pages include practical code/workflow steps", ["Set up PowerShell", "Set up Bash", "Provider acceptance suite", "Client implementation requirements"].every((x) => detail.includes(x)));
+check("Starter-kit download exists", fs.existsSync(path.join(root, "frontend/public/downloads/agata-proxima-integration-starter-kit.zip")));
+check("Status page calls the real public health endpoint", /api\.get<HealthResponse>\("\/api\/v1\/health"\)/.test(read("frontend/src/pages/public/Status.tsx")));
+check("Terms and Privacy contain expanded sections", (read("frontend/src/pages/public/Legal.tsx").match(/\[\"[0-9]+\./g) || []).length >= 25);
+check("Pricing page is present and excluded from the patch's modification list", fs.existsSync(path.join(root, "frontend/src/pages/public/Pricing.tsx")));
+check("Public footer exposes downloads and integration catalog", ["/developers/downloads", "/developers/integrations"].every((x) => read("frontend/src/components/layout/PublicFooter.tsx").includes(x)));
+check("Public detail sidebar exposes all integration guides", integrationRoutes.every((x) => read("frontend/src/pages/public/PublicDetail.tsx").includes(x)));
+for (const c of checks) console.log(`${c.ok ? "PASS" : "FAIL"} ${c.name}`);
+console.log(`\nSummary: ${checks.filter((c) => c.ok).length}/${checks.length} passed.`);
+if (checks.some((c) => !c.ok)) process.exit(1);

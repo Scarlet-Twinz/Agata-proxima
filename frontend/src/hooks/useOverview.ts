@@ -7,7 +7,8 @@ export function useOverview() {
     queryKey: ["console", "overview"],
     queryFn: () => api.get<OverviewData>("/api/v1/control-plane/overview"),
     staleTime: 5_000,
-    refetchInterval: 5_000,
+    refetchInterval: 3_000,
+    refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
     retry: false,
   });

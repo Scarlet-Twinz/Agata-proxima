@@ -1,5 +1,5 @@
 import "./AgataLogo.css";
-import logo from "../../assets/agata-proxima-logo.svg";
+import logo from "../../assets/agata-proxima-orbit.svg";
 
 type AgataLogoProps = {
   compact?: boolean;
