@@ -1094,6 +1094,70 @@
           }
         }
       }
+    },
+    "/api/v1/security/events": {
+      "post": {
+        "summary": "Ingest a Proxima security breaker event",
+        "description": "Accepts peer-scoped breaker-trip events from an authenticated operator API key and records them in the organization's audit stream.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "node_id",
+                  "event_type",
+                  "severity",
+                  "peer_fingerprint",
+                  "reason",
+                  "observed_at"
+                ],
+                "properties": {
+                  "node_id": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "event_type": {
+                    "type": "string",
+                    "const": "security.breaker.tripped"
+                  },
+                  "severity": {
+                    "type": "string",
+                    "const": "critical"
+                  },
+                  "peer_fingerprint": {
+                    "type": "string",
+                    "pattern": "^[a-fA-F0-9]{64}$"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 256
+                  },
+                  "observed_at": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Security event recorded in the organization audit stream"
+          },
+          "400": {
+            "description": "Invalid security event envelope"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Operator write permission required"
+          }
+        }
+      }
     }
   },
   "components": {
