@@ -3112,17 +3112,14 @@ async fn ingest_security_attestation(
     if input.previous_block_hash != expected_previous {
         return (StatusCode::CONFLICT, "Attestation chain predecessor does not match the latest stored block.").into_response();
     }
-    let canonical = format!(
-        "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
-        1, ctx.organization_id, input.node_id.trim(), input.epoch_timestamp_start,
+    let computed_hash = calculate_attestation_hash(
+        ctx.organization_id, input.node_id.trim(), input.epoch_timestamp_start,
         input.epoch_timestamp_end, input.total_processed_queries,
         input.authenticated_tenant_sessions, input.blocked_unauthorized_violations,
-        input.p99_latency_overhead_ms.unwrap_or(0.0),
-        input.force_rls_active.unwrap_or(false), input.tls_termination_enforced.unwrap_or(false),
-        input.circuit_breaker_tripped.unwrap_or(false), input.previous_block_hash,
-        "agata-proxima-attestation-v1"
+        input.p99_latency_overhead_ms, input.force_rls_active,
+        input.tls_termination_enforced, input.circuit_breaker_tripped,
+        &input.previous_block_hash,
     );
-    let computed_hash = hex::encode(Sha256::digest(canonical.as_bytes()));
     if computed_hash != input.block_hash {
         return (StatusCode::UNPROCESSABLE_ENTITY, "Attestation block hash does not match canonical evidence.").into_response();
     }
@@ -3179,8 +3176,23 @@ async fn security_attestations(State(s): State<AppState>, headers: HeaderMap) ->
     };
     let attestations = rows.iter().map(|row| {
         let signature_hex: String = row.get("signature_hex");
-        let signature_valid = verify_attestation_signature(
-            row.get::<String, _>("block_hash").as_str(),
+        let stored_hash: String = row.get("block_hash");
+        let recomputed_hash = calculate_attestation_hash(
+            ctx.organization_id,
+            row.get::<String, _>("node_id").as_str(),
+            row.get("epoch_timestamp_start"),
+            row.get("epoch_timestamp_end"),
+            row.get("total_processed_queries"),
+            row.get("authenticated_tenant_sessions"),
+            row.get("blocked_unauthorized_violations"),
+            row.get("p99_latency_overhead_ms"),
+            row.get("force_rls_active"),
+            row.get("tls_termination_enforced"),
+            row.get("circuit_breaker_tripped"),
+            row.get::<String, _>("previous_block_hash").as_str(),
+        );
+        let signature_valid = stored_hash == recomputed_hash && verify_attestation_signature(
+            &stored_hash,
             row.get::<String, _>("signature_algorithm").as_str(),
             row.get::<String, _>("signing_key_id").as_str(),
             &signature_hex,
@@ -3203,6 +3215,31 @@ async fn security_attestations(State(s): State<AppState>, headers: HeaderMap) ->
         })
     }).collect::<Vec<_>>();
     Json(json!({"status": if attestations.is_empty() { "awaiting_node_evidence" } else { "available" }, "attestations": attestations})).into_response()
+}
+
+
+fn calculate_attestation_hash(
+    organization_id: Uuid,
+    node_id: &str,
+    start: i64,
+    end: i64,
+    queries: i64,
+    sessions: i64,
+    violations: i64,
+    p99_latency_overhead_ms: Option<f64>,
+    force_rls_active: Option<bool>,
+    tls_termination_enforced: Option<bool>,
+    circuit_breaker_tripped: Option<bool>,
+    previous_block_hash: &str,
+) -> String {
+    let canonical = format!(
+        "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
+        1, organization_id, node_id, start, end, queries, sessions, violations,
+        p99_latency_overhead_ms.unwrap_or(0.0), force_rls_active.unwrap_or(false),
+        tls_termination_enforced.unwrap_or(false), circuit_breaker_tripped.unwrap_or(false),
+        previous_block_hash, "agata-proxima-attestation-v1"
+    );
+    hex::encode(Sha256::digest(canonical.as_bytes()))
 }
 
 fn verify_attestation_signature(block_hash: &str, algorithm: &str, key_id: &str, signature_hex: &str) -> bool {
