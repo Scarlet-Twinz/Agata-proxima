@@ -1,4 +1,4 @@
-﻿import { Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { ArrowUpRight, Building2, ChevronRight, Database, FileCheck2, Rocket, ShieldCheck } from "lucide-react";
 import { ActivityChart } from "../../components/console/charts/ActivityChart";
 import { ActivityStream } from "../../components/console/activity/ActivityStream";
@@ -51,6 +51,8 @@ export function Overview() {
           </span>
         </div>
       )}
+
+
 
       <section className="protection-strip">
         <div className="protection-intro">

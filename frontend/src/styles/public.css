@@ -425,3 +425,5 @@
   width: 32px;
   height: 32px;
 }
+
+.platform-status--informational .platform-status-dot { background: var(--agata-blue-light); box-shadow: 0 0 0 5px rgba(92, 151, 255, 0.14); }

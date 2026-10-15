@@ -867,6 +867,137 @@
           }
         }
       }
+    },
+    "/api/v1/developer/webhooks/{id}/deliveries/{delivery_id}/retry": {
+      "post": {
+        "summary": "Retry or replay a webhook delivery",
+        "description": "Queues a previously failed, dead-lettered, or delivered organization-scoped delivery for another attempt. Requires an authenticated write-capable session.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "delivery_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Delivery queued"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "404": {
+            "description": "Delivery not found for this organization"
+          }
+        }
+      }
+    },
+    "/api/v1/developer/webhooks/{id}/rotate-secret": {
+      "post": {
+        "summary": "Rotate webhook signing secret",
+        "description": "Requires organization administrator permission. Returns the new secret once; it is encrypted at rest.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Secret rotated"
+          },
+          "403": {
+            "description": "Administrator permission required"
+          },
+          "404": {
+            "description": "Webhook not found"
+          },
+          "503": {
+            "description": "Webhook encryption key is not configured"
+          }
+        }
+      }
+    },
+    "/api/v1/developer/webhooks/{id}/enabled": {
+      "post": {
+        "summary": "Enable or disable a webhook endpoint",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "enabled"
+                ],
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Endpoint state updated"
+          },
+          "403": {
+            "description": "Insufficient permission"
+          },
+          "404": {
+            "description": "Webhook not found"
+          }
+        }
+      }
     }
   },
   "components": {

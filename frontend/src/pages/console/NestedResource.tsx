@@ -1,48 +1,10 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ArrowLeft, ArrowUpRight, BookOpen, CheckCircle2, ChevronRight, ExternalLink, KeyRound, RefreshCw, Save, ShieldCheck } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { ArrowLeft, ArrowUpRight, CheckCircle2, ChevronRight, ExternalLink, KeyRound, RefreshCw, Save, ShieldCheck } from "lucide-react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { ResourceSurface } from "../../components/console/ResourceSurface";
 import { api, type ApiError } from "../../api/client";
 
-type PaddleCheckoutApi = {
-  Initialize: (options: { token: string }) => void;
-  Checkout: { open: (options: { transactionId: string }) => void };
-};
 
-declare global {
-  interface Window {
-    Paddle?: PaddleCheckoutApi;
-  }
-}
-
-let initializedPaddleToken = "";
-
-async function openPaddleCheckout(transactionId: string, clientToken: string) {
-  if (!window.Paddle) {
-    await new Promise<void>((resolve, reject) => {
-      const existing = document.querySelector<HTMLScriptElement>('script[data-paddle-js="true"]');
-      if (existing) {
-        existing.addEventListener("load", () => resolve(), { once: true });
-        existing.addEventListener("error", () => reject(new Error("Paddle Checkout could not load.")), { once: true });
-        return;
-      }
-      const script = document.createElement("script");
-      script.src = "https://cdn.paddle.com/paddle/v2/paddle.js";
-      script.async = true;
-      script.dataset.paddleJs = "true";
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error("Paddle Checkout could not load. Check your connection and content-security policy."));
-      document.head.appendChild(script);
-    });
-  }
-  const paddle = window.Paddle;
-  if (!paddle) throw new Error("Paddle Checkout did not initialize.");
-  if (initializedPaddleToken !== clientToken) {
-    paddle.Initialize({ token: clientToken });
-    initializedPaddleToken = clientToken;
-  }
-  paddle.Checkout.open({ transactionId });
-}
 
 type Config = {
   eyebrow: string;
@@ -53,6 +15,7 @@ type Config = {
   detailBase?: string;
   createHref?: string;
   createLabel?: string;
+  sections?: { title: string; text: string; href?: string }[];
 };
 
 const developerTabs = [
@@ -342,21 +305,53 @@ function DetailPage({config,id}:{config:Config;id:string}){
   const [loading,setLoading]=useState(true); const [error,setError]=useState("");
   useEffect(()=>{let active=true; (async()=>{try{const data=await api.get<unknown>(config.endpoint!);const rows=Array.isArray(data)?data:(data&&typeof data==="object"?Object.values(data as Record<string,unknown>).find(Array.isArray):[]);const found=(Array.isArray(rows)?rows:[]).find((row)=>row&&typeof row==="object"&&String((row as Record<string,unknown>).id)===id) as Record<string,unknown>|undefined;if(active)setRecord(found??null)}catch(e){if(active)setError((e as ApiError)?.message??"Unable to load this resource.")}finally{if(active)setLoading(false)}})();return()=>{active=false}},[config.endpoint,id]);
   const entries=useMemo(()=>record?Object.entries(record).filter(([key])=>key!=="id"):[],[record]);
-  return <ContextShell config={config}><div className="page-heading"><div><span className="eyebrow">{config.eyebrow}</span><h1>{record?.name ? String(record.name) : config.title+" detail"}</h1><p>{config.description}</p></div><button className="console-refresh-button" onClick={()=>window.location.reload()}><RefreshCw size={15}/> Refresh</button></div>{loading&&<div className="surface empty-state"><strong>Loading resource…</strong><span>Reading the authenticated control-plane record.</span></div>}{!loading&&error&&<div className="surface empty-state resource-error"><strong>{error}</strong><span>Refresh after confirming the secure session and control plane.</span></div>}{!loading&&!error&&!record&&<div className="surface empty-state"><strong>Resource not found.</strong><span>The record may have been removed or may not belong to this organization.</span></div>}{record&&<><div className="resource-identity"><ShieldCheck size={19}/><div><span>Resource ID</span><strong>{id}</strong></div></div><section className="detail-grid">{entries.map(([key,value])=><div className="surface detail-field" key={key}><span>{key.replaceAll("_"," ")}</span><strong>{typeof value==="object"?JSON.stringify(value,null,2):String(value??"—")}</strong></div>)}</section><div className="context-next"><Link to={config.endpoint ? config.endpoint.replace("/api/v1","/app") : "/app"}>Back to resource</Link><Link to="/app/audit">Open audit <ArrowUpRight size={15}/></Link></div></>}</ContextShell>;
+  return <ContextShell config={config}><div className="page-heading"><div><span className="eyebrow">{config.eyebrow}</span><h1>{record?.name ? String(record.name) : config.title+" detail"}</h1><p>{config.description}</p></div><button className="console-refresh-button" onClick={()=>window.location.reload()}><RefreshCw size={15}/> Refresh</button></div>{loading&&<div className="surface empty-state"><strong>Loading resource…</strong><span>Reading the authenticated control-plane record.</span></div>}{!loading&&error&&<div className="surface empty-state resource-error"><strong>{error}</strong><span>Refresh after confirming the secure session and control plane.</span></div>}{!loading&&!error&&!record&&<div className="surface empty-state"><strong>Resource not found.</strong><span>The record may have been removed or may not belong to this organization.</span></div>}{record&&<><div className="resource-identity"><ShieldCheck size={19}/><div><span>Resource ID</span><strong>{id}</strong></div></div><section className="detail-grid">{entries.map(([key,value])=><div className="surface detail-field" key={key}><span>{key.replaceAll("_"," ")}</span><strong>{typeof value==="object"?JSON.stringify(value,null,2):String(value??"—")}</strong></div>)}</section><div className="context-next"><Link to={config.detailBase ?? (config.endpoint ? config.endpoint.replace("/api/v1","/app") : "/app")}>Back to resource</Link><Link to="/app/audit">Open audit <ArrowUpRight size={15}/></Link></div></>}</ContextShell>;
 }
 
 const teamTabs=[{label:"Members",href:"/app/team"},{label:"Invitations",href:"/app/team/invitations"},{label:"Roles",href:"/app/team/roles"}];
 
 const baseConfigs:Record<string,Config>={
+ "/app/tenants":{eyebrow:"TENANTS",title:"Tenant registry",description:"Review customer boundaries and open an organization-scoped tenant record to inspect its current state.",tabs:[{label:"Tenants",href:"/app/tenants"},{label:"Policies",href:"/app/policies"},{label:"Verification",href:"/app/verification"}],endpoint:"/api/v1/tenants",detailBase:"/app/tenants"},
+ "/app/policies":{eyebrow:"POLICIES",title:"Policy control",description:"Review versioned enforcement intent and inspect the policy record associated with a deployment.",tabs:[{label:"Policies",href:"/app/policies"},{label:"Deployments",href:"/app/deployments"},{label:"Verification",href:"/app/verification"}],endpoint:"/api/v1/policies",detailBase:"/app/policies"},
+ "/app/nodes":{eyebrow:"INFRASTRUCTURE",title:"Node inventory",description:"Inspect registered enforcement targets, their environment and reported health before relying on them for a rollout.",tabs:[{label:"Nodes",href:"/app/nodes"},{label:"Deployments",href:"/app/deployments"},{label:"Security",href:"/app/security"}],endpoint:"/api/v1/nodes",detailBase:"/app/nodes"},
+ "/app/deployments":{eyebrow:"DEPLOYMENTS",title:"Deployment control",description:"Review desired state, target placement and observed deployment records. Open a deployment to inspect its recorded fields.",tabs:[{label:"Deployments",href:"/app/deployments"},{label:"Policies",href:"/app/policies"},{label:"Verification",href:"/app/verification"}],endpoint:"/api/v1/deployments",detailBase:"/app/deployments"},
+ "/app/audit":{eyebrow:"AUDIT",title:"Audit explorer",description:"Inspect organization-scoped administrative and security evidence. Open an event to review its recorded details.",tabs:[{label:"Audit",href:"/app/audit"},{label:"Verification",href:"/app/verification"},{label:"Security",href:"/app/security"}],endpoint:"/api/v1/audit",detailBase:"/app/audit"},
  "/app/security/tenant-isolation":{eyebrow:"SECURITY",title:"Tenant isolation",description:"Inspect tenant-isolation verification evidence and enforcement state.",tabs:[{label:"Overview",href:"/app/security"},{label:"Tenant isolation",href:"/app/security/tenant-isolation"},{label:"Security events",href:"/app/security/events"}],endpoint:"/api/v1/verifications",detailBase:"/app/verification"},
  "/app/verification":{eyebrow:"VERIFICATION",title:"Verification evidence",description:"Open individual verification runs and inspect their evidence.",tabs:[{label:"Overview",href:"/app/verification"},{label:"Security posture",href:"/app/security"},{label:"Audit",href:"/app/audit"}],endpoint:"/api/v1/verifications",detailBase:"/app/verification"},
- "/app/team/invitations":{eyebrow:"TEAM",title:"Organization invitations",description:"Track invitations and their lifecycle inside the active organization.",tabs:teamTabs},
- "/app/team/roles":{eyebrow:"TEAM",title:"Roles",description:"Understand the responsibilities attached to each organization role.",tabs:teamTabs},
- "/app/team/members":{eyebrow:"TEAM",title:"Team member",description:"Inspect an organization member and their current access role.",tabs:teamTabs},
+ "/app/team/invitations":{eyebrow:"TEAM",title:"Organization invitations",description:"Track invitations and their lifecycle inside the active organization.",tabs:teamTabs,sections:[
+  {title:"Invitation lifecycle",text:"Invite the person's exact email address, assign the least-privileged role, and ask them to accept using that same address. Review expiry and revoke invitations that should no longer be usable.",href:"/app/team"},
+  {title:"Access safety",text:"Treat invitation links as sensitive. Do not forward them to another person or use an invitation as a substitute for reviewing the recipient's role.",href:"/app/team/roles"},
+  {title:"Delivery troubleshooting",text:"If an invitation does not arrive, verify the address, inspect email delivery configuration and check spam before sending another invitation.",href:"/docs/troubleshooting"},
+ ]},
+ "/app/team/roles":{eyebrow:"TEAM",title:"Organization roles",description:"Choose access according to responsibility and review privileged membership regularly.",tabs:teamTabs,sections:[
+  {title:"Owner",text:"Accountable for organization authority and the highest-impact administrative actions. Keep ownership limited and recoverable."},
+  {title:"Admin",text:"Manages organization membership and workspace configuration. Grant only to people who need administrative control."},
+  {title:"Operator",text:"Runs day-to-day operational workflows such as resources, deployments and verification without automatically needing ownership."},
+  {title:"Viewer",text:"Use for read-oriented access when a teammate needs to inspect state or evidence but should not change it."},
+ ]},
+ "/app/team/members":{eyebrow:"TEAM",title:"Team member",description:"Inspect an organization member and their current access role.",tabs:teamTabs,endpoint:"/api/v1/organization/team",detailBase:"/app/team",sections:[
+  {title:"Review access",text:"Confirm the member's identity, current role and reason for access. Reassess access when responsibilities change."},
+  {title:"Least privilege",text:"Use the narrowest role that supports the person's work and remove access when it is no longer required.",href:"/app/team/roles"},
+ ]},
  "/app/security/events":{eyebrow:"SECURITY",title:"Security events",description:"Inspect organization-scoped security and control-plane events.",tabs:[{label:"Overview",href:"/app/security"},{label:"Tenant isolation",href:"/app/security/tenant-isolation"},{label:"Security events",href:"/app/security/events"}],endpoint:"/api/v1/audit",detailBase:"/app/audit"},
  "/app/billing/usage":{eyebrow:"BILLING",title:"Usage",description:"See current entitlement limits and resource consumption.",tabs:[{label:"Usage",href:"/app/billing/usage"},{label:"Plans",href:"/app/billing/plans"},{label:"Invoices",href:"/app/billing/invoices"}],endpoint:"/api/v1/billing/entitlements"},
  "/app/billing/plans":{eyebrow:"BILLING",title:"Plans",description:"Compare the commercial catalog against the active workspace entitlement.",tabs:[{label:"Usage",href:"/app/billing/usage"},{label:"Plans",href:"/app/billing/plans"},{label:"Invoices",href:"/app/billing/invoices"}],endpoint:"/api/v1/billing/plans"},
  "/app/billing/invoices":{eyebrow:"BILLING",title:"Invoices",description:"Inspect the billing account and invoice-facing records.",tabs:[{label:"Usage",href:"/app/billing/usage"},{label:"Plans",href:"/app/billing/plans"},{label:"Invoices",href:"/app/billing/invoices"}],endpoint:"/api/v1/billing"},
+ "/app/settings/members":{eyebrow:"SETTINGS",title:"Workspace membership",description:"Review who belongs to the active organization and how access is granted, changed and removed.",tabs:[{label:"Workspace settings",href:"/app/settings"},{label:"Members",href:"/app/settings/members"},{label:"Team",href:"/app/team"},{label:"Roles",href:"/app/team/roles"}],sections:[
+  {title:"Membership source",text:"Organization membership is managed in the Team area. Review the person's identity and role there rather than assuming a workspace setting automatically changes access.",href:"/app/team"},
+  {title:"Role changes",text:"Grant the least-privileged role required for the work. Reassess access after a role or responsibility change.",href:"/app/team/roles"},
+  {title:"Access lifecycle",text:"When access is no longer required, remove or revoke it through the supported membership workflow and inspect the audit history.",href:"/app/audit"},
+ ]},
+ "/app/settings/api":{eyebrow:"SETTINGS",title:"API and workspace access",description:"Understand how browser sessions, machine credentials and organization membership govern access.",tabs:[{label:"Authentication",href:"/app/settings/authentication"},{label:"Enterprise identity",href:"/app/settings/identity"},{label:"Security",href:"/app/settings/security"},{label:"API access",href:"/app/settings/api"},{label:"Environments",href:"/app/settings/environments"}],sections:[
+  {title:"Browser sessions",text:"Human users sign in through the application session flow. Protect session cookies and use the expected CSRF protection for state-changing requests.",href:"/app/settings/authentication"},
+  {title:"Machine credentials",text:"Create organization-scoped API keys for trusted integrations, keep secrets in a server-side secret manager and revoke credentials immediately when no longer trusted.",href:"/app/developer/api-keys"},
+  {title:"Auditability",text:"Review administrative and security events after important access or configuration changes.",href:"/app/audit"},
+ ]},
+ "/app/settings/danger":{eyebrow:"SETTINGS",title:"Sensitive workspace actions",description:"Review the consequences and recovery requirements before making high-impact organization changes.",tabs:[{label:"Authentication",href:"/app/settings/authentication"},{label:"Security",href:"/app/settings/security"},{label:"API access",href:"/app/settings/api"},{label:"Sensitive actions",href:"/app/settings/danger"}],sections:[
+  {title:"Before changing access",text:"Confirm the active organization, the affected identity and the intended outcome. Preserve at least one trusted administrator and verify recovery access."},
+  {title:"Before revoking credentials",text:"Identify integrations that depend on the credential, rotate to a replacement where appropriate, verify the replacement and then revoke the old secret.",href:"/app/developer/api-keys"},
+  {title:"Before destructive operations",text:"Confirm the documented retention and recovery behavior for the specific resource. Do not assume a destructive action can be undone.",href:"/docs/operations"},
+ ]},
  "/app/developer/api-keys":{eyebrow:"DEVELOPER",title:"API keys",description:"Create, revoke and inspect organization-scoped machine credentials.",tabs:developerTabs,endpoint:"/api/v1/developer/api-keys",detailBase:"/app/developer/api-keys",createHref:"/app/developer/api-keys/new",createLabel:"Create API key"},
  "/app/developer/webhooks":{eyebrow:"DEVELOPER",title:"Webhooks",description:"Create endpoints, select events and inspect delivery history.",tabs:developerTabs,endpoint:"/api/v1/developer/webhooks",detailBase:"/app/developer/webhooks",createHref:"/app/developer/webhooks/new",createLabel:"Add webhook"},
 };
@@ -378,7 +373,8 @@ type BillingVerification = { verified: boolean; status: string; plan: string };
 function BillingPlans() {
   const [searchParams] = useSearchParams();
   const billingReturn = searchParams.get("billing");
-  const checkoutReference = searchParams.get("reference");
+  const checkoutReference = searchParams.get("reference") ?? searchParams.get("tx_ref");
+  const flutterwaveTransactionId = searchParams.get("transaction_id");
   const [catalog, setCatalog] = useState<BillingCatalog | null>(null);
   const [account, setAccount] = useState<BillingAccount | null>(null);
   const [loading, setLoading] = useState(true);
@@ -399,9 +395,9 @@ function BillingPlans() {
         if (cancelled) return;
         setCatalog(plans);
         setAccount(current);
-        if (billingReturn === "return" && checkoutReference) {
+        if (billingReturn === "return" && checkoutReference && flutterwaveTransactionId) {
           try {
-            const verification = await api.get<BillingVerification>(`/api/v1/billing/verify?reference=${encodeURIComponent(checkoutReference)}`);
+            const verification = await api.get<BillingVerification>(`/api/v1/billing/verify?reference=${encodeURIComponent(checkoutReference)}&transaction_id=${encodeURIComponent(flutterwaveTransactionId)}`);
             if (!cancelled) {
               setNotice(verification.verified
                 ? "Payment confirmed. Your plan status has been refreshed."
@@ -424,27 +420,12 @@ function BillingPlans() {
   }, [billingReturn, checkoutReference]);
 
   async function startCheckout(plan: BillingPlan) {
-    setBusyPlan(plan.key);
-    setError("");
-    setNotice("");
+    setBusyPlan(plan.key); setError(""); setNotice("");
     try {
-      const result = await api.post<{ transaction_id: string; client_token: string; environment: string }>(
-        "/api/v1/billing/checkout",
-        { price_id: plan.key },
-      );
-      if (!result.transaction_id || !result.client_token) {
-        throw new Error("Paddle did not return the checkout transaction and client token.");
-      }
-      if (result.environment !== "production") {
-        throw new Error("Only Paddle Live checkout is supported. The server must be configured for Paddle Live.");
-      }
-      await openPaddleCheckout(result.transaction_id, result.client_token);
-      setNotice("Paddle Checkout opened. Paid access changes only after the server verifies Paddle's signed billing events.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to start Paddle Checkout.");
-    } finally {
-      setBusyPlan("");
-    }
+      const result = await api.post<{ checkout_url: string; reference: string; amount: number; currency: string }>("/api/v1/billing/checkout", { price_id: plan.key });
+      if (!result.checkout_url || !result.checkout_url.startsWith("https://") || !result.reference) throw new Error("Flutterwave did not return a secure hosted checkout URL.");
+      window.location.assign(result.checkout_url);
+    } catch (err) { setError(err instanceof Error ? err.message : "Unable to start Flutterwave checkout."); setBusyPlan(""); }
   }
 
   async function openPortal() {
@@ -466,8 +447,8 @@ function BillingPlans() {
 
   return <div className="resource-page billing-plans-page">
     <div className="page-heading">
-      <div><span className="eyebrow">BILLING · PADDLE</span><h1>Plans and billing</h1><p>Choose a monthly plan. Agata verifies the configured Paddle price and confirms paid access only from a signed webhook.</p></div>
-      {account?.subscription_id && <button type="button" className="console-refresh-button" onClick={() => void openPortal()} disabled={busyPlan !== ""}>{busyPlan === "portal" ? "Opening portal…" : "Manage subscription"}</button>}
+      <div><span className="eyebrow">BILLING · FLUTTERWAVE</span><h1>Plans and billing</h1><p>Choose a monthly plan. USD prices are displayed; Flutterwave checkout charges the configured NGN monthly plan and access is enabled only after server verification.</p></div>
+      {account?.subscription_id && <button type="button" className="console-refresh-button" onClick={() => void openPortal()} disabled={busyPlan !== ""}>{busyPlan === "portal" ? "Opening portal…" : "Manage subscription (support)"}</button>}
     </div>
     {account && <section className="surface billing-current-plan">
       <div><span className="eyebrow">CURRENT WORKSPACE PLAN</span><h2>{currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1)}</h2><p>Status: <strong>{account.status}</strong>{account.current_period_end ? ` · Period ends ${new Date(account.current_period_end).toLocaleDateString()}` : ""}{account.cancel_at_period_end ? " · Cancellation scheduled" : ""}</p></div>
@@ -486,7 +467,7 @@ function BillingPlans() {
           <h2>{plan.name}</h2>
           <p className="billing-plan-description">{plan.description}</p>
           <div className="billing-plan-price"><strong>{isEnterprise ? "Custom" : money(plan.monthly_usd)}</strong>{!isEnterprise && plan.monthly_usd > 0 && <span>/ month</span>}</div>
-          <div className="billing-plan-detail"><strong>{plan.limits.nodes ?? "—"}</strong><span>nodes</span><strong>{plan.limits.tenants ?? "—"}</strong><span>tenants</span><strong>{plan.limits.integrations ?? "—"}</strong><span>integrations</span></div>
+          <div className="billing-plan-detail"><strong>{plan.limits.nodes ?? "—"}</strong><span>nodes</span><strong>{plan.limits.tenants ?? "—"}</strong><span>tenants</span><strong>{plan.limits.integrations ?? "—"}</strong><span>integrations</span></div>
           <div className="billing-plan-features"><strong>Included capabilities</strong><ul>{Object.entries(plan.features).filter(([, enabled]) => enabled).map(([key]) => <li key={key}>{labelForFeature(key)}</li>)}<li>{labelForFeature(plan.support_level)} support</li></ul></div>
           {isEnterprise
             ? <Link className="primary-action" to="/contact">Contact sales <ArrowUpRight size={15}/></Link>
@@ -496,7 +477,7 @@ function BillingPlans() {
         </section>;
       })}
     </div>}
-    {!loading && catalog && !catalog.plans.some((plan) => plan.checkout_available) && <div className="empty-state"><strong>Checkout is not configured yet.</strong><span>The server needs a Paddle API key, client-side token, notification destination secret, and three unique monthly price IDs before paid checkout is enabled.</span></div>}
+    {!loading && catalog && !catalog.plans.some((plan) => plan.checkout_available) && <div className="empty-state"><strong>Checkout is not configured yet.</strong><span>Configure the Flutterwave live secret key, webhook secret hash, three unique monthly payment-plan IDs and matching NGN amounts before checkout is enabled.</span></div>}
   </div>;
 }
 
@@ -517,19 +498,23 @@ function ApiKeysManager() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  async function loadKeys() {
-    setLoading(true);
-    setError("");
+  const loadKeys = useCallback(async (showLoading = true) => {
+    if (showLoading) {
+      setLoading(true);
+      setError("");
+    }
     try {
-      setKeys(await api.get<ApiKeyRecord[]>("/api/v1/developer/api-keys"));
+      const result = await api.get<ApiKeyRecord[]>("/api/v1/developer/api-keys");
+      setKeys(result);
+      setError("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load API keys.");
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  useEffect(() => { void loadKeys(); }, []);
+  useEffect(() => { void loadKeys(false); }, [loadKeys]);
 
   async function revokeKey(key: ApiKeyRecord) {
     if (key.revoked_at) return;
@@ -577,7 +562,7 @@ function ApiKeysManager() {
             <article className="surface api-key-row" key={key.id}>
               <div className="api-key-details">
                 <div className="api-key-title"><KeyRound size={17}/><strong>{key.name}</strong><span className={key.revoked_at ? "api-key-status api-key-status--revoked" : "api-key-status"}>{key.revoked_at ? "Revoked" : "Active"}</span></div>
-                <code>{key.key_prefix}••••••••</code>
+                <code>{key.key_prefix}…¢…¢…¢…¢…¢…¢…¢…¢</code>
                 <div className="api-key-meta">
                   <span>Created {new Date(key.created_at).toLocaleString()}</span>
                   <span>{key.last_used_at ? `Last used ${new Date(key.last_used_at).toLocaleString()}` : "Never used"}</span>
@@ -593,18 +578,148 @@ function ApiKeysManager() {
   );
 }
 
+
+type WebhookRecord = {
+  id:string; name:string; endpoint_url:string; events:string[]; enabled:boolean;
+  signing_secret_hint?:string; created_at:string; updated_at:string;
+};
+type WebhookDelivery = {
+  id:string; event_type:string; event_id:string; status:string; status_code:number|null;
+  response_ms:number|null; attempt_count:number; max_attempts:number; next_attempt_at:string;
+  last_attempt_at:string|null; delivered_at:string|null; last_error:string|null;
+  response_excerpt:string|null; created_at:string;
+};
+type WebhookCreated = { id:string; signing_secret:string; message:string };
+
+function WebhooksManager() {
+  const [items,setItems]=useState<WebhookRecord[]>([]);
+  const [deliveries,setDeliveries]=useState<Record<string,WebhookDelivery[]>>({});
+  const [name,setName]=useState("");
+  const [endpoint,setEndpoint]=useState("");
+  const [events,setEvents]=useState("*");
+  const [loading,setLoading]=useState(true);
+  const [busy,setBusy]=useState("");
+  const [error,setError]=useState("");
+  const [notice,setNotice]=useState("");
+  const [oneTimeSecret,setOneTimeSecret]=useState("");
+  const [expanded,setExpanded]=useState("");
+
+  const load=useCallback(async()=>{
+    setLoading(true); setError("");
+    try { setItems(await api.get<WebhookRecord[]>("/api/v1/developer/webhooks")); }
+    catch(e){setError(e instanceof Error?e.message:"Unable to load webhook endpoints.");}
+    finally{setLoading(false);}
+  },[]);
+  useEffect(()=>{void load();},[load]);
+
+  async function createWebhook(e:FormEvent<HTMLFormElement>){
+    e.preventDefault(); setBusy("create"); setError(""); setNotice(""); setOneTimeSecret("");
+    try {
+      const created=await api.post<WebhookCreated>("/api/v1/developer/webhooks",{
+        name,endpoint_url:endpoint,events:events.split(",").map(v=>v.trim()).filter(Boolean)
+      });
+      setOneTimeSecret(created.signing_secret);
+      setNotice("Webhook endpoint created. Copy the signing secret now; it cannot be retrieved later.");
+      setName(""); setEndpoint(""); setEvents("*"); await load();
+    } catch(err){setError(err instanceof Error?err.message:"Unable to create webhook endpoint.");}
+    finally{setBusy("");}
+  }
+
+  async function loadDeliveries(id:string){
+    setExpanded(id); setError("");
+    try {
+      const result=await api.get<WebhookDelivery[]>(`/api/v1/developer/webhooks/${id}/deliveries`);
+      setDeliveries(old=>({...old,[id]:result}));
+    } catch(err){setError(err instanceof Error?err.message:"Unable to load delivery history.");}
+  }
+  async function setEnabled(item:WebhookRecord){
+    setBusy(item.id);setError("");setNotice("");
+    try{await api.post(`/api/v1/developer/webhooks/${item.id}/enabled`,{enabled:!item.enabled});setNotice(`Webhook ${!item.enabled?"enabled":"disabled"}.`);await load();}
+    catch(err){setError(err instanceof Error?err.message:"Unable to update webhook.");}
+    finally{setBusy("");}
+  }
+  async function rotate(item:WebhookRecord){
+    if(!window.confirm(`Rotate the signing secret for "${item.name}"? The receiver must be updated immediately.`))return;
+    setBusy(item.id);setError("");setNotice("");setOneTimeSecret("");
+    try{const result=await api.post<WebhookCreated>(`/api/v1/developer/webhooks/${item.id}/rotate-secret`,{});setOneTimeSecret(result.signing_secret);setNotice(`Signing secret rotated for "${item.name}". Copy it now.`);await load();}
+    catch(err){setError(err instanceof Error?err.message:"Unable to rotate signing secret.");}
+    finally{setBusy("");}
+  }
+  async function remove(item:WebhookRecord){
+    if(!window.confirm(`Delete "${item.name}" and its delivery history? This cannot be undone.`))return;
+    setBusy(item.id);setError("");setNotice("");
+    try{await api.delete(`/api/v1/developer/webhooks/${item.id}`);setNotice(`Webhook "${item.name}" deleted.`);if(expanded===item.id)setExpanded("");await load();}
+    catch(err){setError(err instanceof Error?err.message:"Unable to delete webhook.");}
+    finally{setBusy("");}
+  }
+  async function retry(item:WebhookRecord,delivery:WebhookDelivery){
+    setBusy(delivery.id);setError("");setNotice("");
+    try{await api.post(`/api/v1/developer/webhooks/${item.id}/deliveries/${delivery.id}/retry`,{});setNotice("Delivery queued for retry.");await loadDeliveries(item.id);}
+    catch(err){setError(err instanceof Error?err.message:"Unable to retry delivery.");}
+    finally{setBusy("");}
+  }
+
+  return <div className="webhooks-manager">
+    <div className="page-heading"><div><span className="eyebrow">DEVELOPER · WEBHOOKS</span><h1>Webhooks</h1><p>Subscribe to real Agata audit events, deliver signed payloads, and inspect recorded attempts.</p></div><button className="console-refresh-button" onClick={()=>void load()} disabled={loading}><RefreshCw size={15}/> Refresh</button></div>
+    {notice&&<div className="settings-banner settings-banner--success" role="status">{notice}</div>}
+    {error&&<div className="settings-banner settings-banner--error" role="alert">{error}</div>}
+    {oneTimeSecret&&<section className="surface webhook-secret-notice"><strong>Signing secret — shown once</strong><p>Copy this into your receiving service's secret store now. It will not be displayed again.</p><code>{oneTimeSecret}</code><button type="button" className="console-refresh-button" onClick={()=>void navigator.clipboard?.writeText(oneTimeSecret)}>Copy secret</button></section>}
+    <form className="surface webhook-create-form" onSubmit={createWebhook}>
+      <div><span className="eyebrow">NEW ENDPOINT</span><h2>Add webhook</h2><p>Production destinations must use HTTPS and resolve to public IP addresses.</p></div>
+      <label>Endpoint name<input value={name} onChange={e=>setName(e.target.value)} required maxLength={120} placeholder="Production event receiver"/></label>
+      <label>HTTPS endpoint URL<input value={endpoint} onChange={e=>setEndpoint(e.target.value)} type="url" required placeholder="https://example.com/agata/events"/></label>
+      <label>Event types<input value={events} onChange={e=>setEvents(e.target.value)} required placeholder="* or developer.api_key.created,tenant.created"/><small>Enter exact audit action names separated by commas, or * to receive all audit events.</small></label>
+      <button className="primary-action" type="submit" disabled={busy==="create"}>{busy==="create"?"Creating…":"Create endpoint"}</button>
+    </form>
+    <div className="webhook-endpoint-list">
+      {loading?<div className="surface empty-state"><strong>Loading webhook endpoints…</strong><span>Reading endpoint records from the control plane.</span></div>:
+       items.length===0?<div className="surface empty-state"><strong>No webhook endpoints yet.</strong><span>Create an endpoint above to receive signed audit events.</span></div>:
+       items.map(item=><article className="surface webhook-endpoint-card" key={item.id}>
+         <div className="webhook-endpoint-heading"><div><span className="eyebrow">WEBHOOK ENDPOINT</span><h2>{item.name}</h2><code>{item.endpoint_url}</code></div><span className={item.enabled?"console-status console-status--active":"console-status console-status--pending"}>{item.enabled?"Enabled":"Disabled"}</span></div>
+         <div className="webhook-event-tags">{item.events.map(ev=><span key={ev}>{ev}</span>)}</div>
+         <p className="webhook-endpoint-meta">Created {new Date(item.created_at).toLocaleString()} · Secret hint: {item.signing_secret_hint??"rotate required for legacy endpoint"}</p>
+         <div className="webhook-actions">
+           <button type="button" onClick={()=>void loadDeliveries(item.id)}>{expanded===item.id?"Refresh deliveries":"Delivery history"}</button>
+           <button type="button" disabled={busy===item.id} onClick={()=>void setEnabled(item)}>{item.enabled?"Disable":"Enable"}</button>
+           <button type="button" disabled={busy===item.id} onClick={()=>void rotate(item)}>Rotate secret</button>
+           <button type="button" className="webhook-danger-action" disabled={busy===item.id} onClick={()=>void remove(item)}>Delete</button>
+         </div>
+         {expanded===item.id&&<div className="webhook-delivery-list"><h3>Delivery attempts</h3>
+           {(deliveries[item.id]??[]).length===0?<p>No delivery records are available for this endpoint yet.</p>:
+             (deliveries[item.id]??[]).map(delivery=><div className="webhook-delivery-row" key={delivery.id}>
+               <div><strong>{delivery.event_type}</strong><span>{delivery.status} · attempt {delivery.attempt_count}/{delivery.max_attempts} · {delivery.status_code?`HTTP ${delivery.status_code}`:"no HTTP response"}</span><code>{delivery.id}</code>{delivery.last_error&&<small>{delivery.last_error}</small>}</div>
+               <time>{new Date(delivery.created_at).toLocaleString()}</time>
+               {["failed","dead_letter","delivered"].includes(delivery.status)&&<button type="button" disabled={busy===delivery.id||!item.enabled} onClick={()=>void retry(item,delivery)}>{busy===delivery.id?"Queueing…":"Retry / replay"}</button>}
+             </div>)}
+         </div>}
+       </article>)}
+    </div>
+  </div>;
+}
+
 export function NestedResource(){
   const {pathname}=useLocation(); const params=useParams();
   const detailId=params.tenantId??params.policyId??params.nodeId??params.deploymentId??params.runId??params.eventId??params.apiKeyId??params.webhookId;
   const base=detailId?pathname.replace(/\/[^/]+$/,""):pathname;
   const config=baseConfigs[base]??baseConfigs[pathname];
   if(pathname === "/app/developer/api-keys" && config) return <ContextShell config={config}><ApiKeysManager /></ContextShell>;
+  if(pathname === "/app/developer/webhooks" && config) return <ContextShell config={config}><WebhooksManager /></ContextShell>;
   if(pathname === "/app/billing/plans" && config) return <ContextShell config={config}><BillingPlans /></ContextShell>;
   if(detailId && config?.endpoint) return <DetailPage config={config} id={detailId}/>;
-  if(config) return <ContextShell config={config}><ResourceSurface eyebrow={config.eyebrow} title={config.title} description={config.description} endpoint={config.endpoint} detailBase={config.detailBase} createHref={config.createHref} createLabel={config.createLabel}/></ContextShell>;
+  if(config) return <ContextShell config={config}><ResourceSurface eyebrow={config.eyebrow} title={config.title} description={config.description} endpoint={config.endpoint} detailBase={config.detailBase} createHref={config.createHref} createLabel={config.createLabel} sections={config.sections}/></ContextShell>;
   if (pathname === "/app/settings/identity") return <EntraIdentitySettings />;
   const doc=developerDocs[pathname];
-  const generic:Config={eyebrow:pathname.startsWith("/app/developer")?"DEVELOPER":"SETTINGS",title:doc?.title??"Workspace detail",description:doc?.intro??"Explore the operational detail behind this workspace area.",tabs:pathname.startsWith("/app/developer")?developerTabs:[{label:"Authentication",href:"/app/settings/authentication"},{label:"Enterprise identity",href:"/app/settings/identity"},{label:"Security",href:"/app/settings/security"},{label:"Environments",href:"/app/settings/environments"},{label:"Notifications",href:"/app/settings/notifications"}]};
+  const routeLabel = pathname.split("/").filter(Boolean).at(-1)?.replace(/[-_]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) ?? "Workspace";
+  const generic:Config={eyebrow:pathname.startsWith("/app/developer")?"DEVELOPER":"SETTINGS",title:doc?.title??routeLabel,description:doc?.intro??"Reference guidance and next steps for this workspace area.",tabs:pathname.startsWith("/app/developer")?developerTabs:[{label:"Authentication",href:"/app/settings/authentication"},{label:"Enterprise identity",href:"/app/settings/identity"},{label:"Security",href:"/app/settings/security"},{label:"API access",href:"/app/settings/api"},{label:"Sensitive actions",href:"/app/settings/danger"},{label:"Notifications",href:"/app/settings/notifications"}]};
   if(doc) return <DeveloperDoc config={generic} doc={doc}/>;
-  return <ContextShell config={generic}><div className="surface empty-state"><BookOpen size={24}/><strong>This workspace area is ready for its detailed contract.</strong><span>Use the related navigation to move through the product without dead-end screens.</span></div></ContextShell>;
+  return (
+    <ContextShell config={generic}>
+      <div className="page-heading">
+        <div>
+          <span className="eyebrow">{generic.eyebrow}</span>
+          <h1>{generic.title}</h1>
+        </div>
+      </div>
+    </ContextShell>
+  );
 }

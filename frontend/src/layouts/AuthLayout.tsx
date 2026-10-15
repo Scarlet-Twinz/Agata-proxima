@@ -36,7 +36,7 @@ export default function AuthLayout() {
         </div>
 
         <div className="auth-visual-footer">
-          Agata Proxima � Tenant isolation infrastructure
+          Agata Proxima — Tenant isolation infrastructure
         </div>
       </section>
 

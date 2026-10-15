@@ -1,4 +1,4 @@
-import { Globe2, Link2, Share2 } from "lucide-react";
+import { Globe2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { AgataLogo } from "../brand/AgataLogo";
 
@@ -9,9 +9,6 @@ type SocialProfile = {
 };
 
 const socialProfiles: SocialProfile[] = [
-  { label: "LinkedIn", icon: Link2 },
-  { label: "Twitter / X", icon: Share2 },
-  { label: "Instagram", icon: Share2 },
   { label: "GitHub", href: "https://github.com/Scarlet-Twinz/Agata-proxima", icon: Globe2 },
 ];
 
@@ -39,10 +36,6 @@ export function PublicFooter() {
                 ),
               )}
             </div>
-            <p className="public-social-note">
-              LinkedIn, Twitter/X and Instagram are shown as reserved social
-              destinations until their official profile URLs are configured.
-            </p>
           </div>
 
           <div>
@@ -57,9 +50,13 @@ export function PublicFooter() {
           <div>
             <div className="public-footer-title">Developers</div>
             <Link to="/developers">Developer platform</Link>
+            <Link to="/developers/downloads">Downloads</Link>
             <Link to="/developers/quickstart">Quickstart</Link>
             <Link to="/docs">Documentation</Link>
             <Link to="/developers/webhooks">Webhooks</Link>
+            <Link to="/developers/integrations">Integration catalog</Link>
+            <Link to="/developers/sdks">SDK guide</Link>
+            <Link to="/developers/cli">CLI guide</Link>
             <Link to="/developers/terraform">Terraform</Link>
           </div>
 
