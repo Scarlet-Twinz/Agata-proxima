@@ -31,6 +31,7 @@ impl EngineMetrics {
         if changed { self.breaker_trips.fetch_add(1, Ordering::Relaxed); }
         changed
     }
+    pub fn breaker_trip_event(&self) { self.breaker_trips.fetch_add(1, Ordering::Relaxed); }
     pub fn reset_breaker(&self) { self.breaker_open.store(false, Ordering::Release); }
     pub fn breaker_is_open(&self) -> bool { self.breaker_open.load(Ordering::Acquire) }
     pub fn prometheus(&self) -> String {
