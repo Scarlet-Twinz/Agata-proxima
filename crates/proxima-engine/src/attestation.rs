@@ -105,7 +105,7 @@ mod tests {
     #[test] fn attestation_is_verifiable_and_tamper_evident() {
         let mut block = AttestationBlock::new("org".into(), "node".into(), 100, 200,
             TelemetrySummary { total_processed_queries: 10, authenticated_tenant_sessions: 4,
-                blocked_unauthorized_violations: 1, p99_latency_overhead_ms: 2 },
+                blocked_unauthorized_violations: 1, p99_latency_overhead_ms: Some(2.0) },
             SecurityState { force_rls_active: true, tls_termination_enforced: true,
                 circuit_breaker_tripped: false }, "genesis".into()).unwrap();
         assert!(block.verify());
@@ -121,7 +121,7 @@ mod tests {
     #[test] fn rejects_invalid_epoch() {
         assert!(AttestationBlock::new("org".into(), "node".into(), 201, 200,
             TelemetrySummary { total_processed_queries: 0, authenticated_tenant_sessions: 0,
-                blocked_unauthorized_violations: 0, p99_latency_overhead_ms: 0 },
+                blocked_unauthorized_violations: 0, p99_latency_overhead_ms: None },
             SecurityState { force_rls_active: false, tls_termination_enforced: false,
                 circuit_breaker_tripped: false }, String::new()).is_err());
     }
