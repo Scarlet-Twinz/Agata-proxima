@@ -35,11 +35,12 @@ Configure the complete reporting contract on each reporting engine node:
 - `PROXIMA_ORGANIZATION_ID`: canonical organization UUID associated with that API key.
 - `PROXIMA_NODE_ID`: stable identifier for this engine node (1–200 characters).
 - `PROXIMA_ATTESTATION_SIGNING_KEY_ID`: key identifier shared with the control plane.
-- `PROXIMA_ATTESTATION_SIGNING_KEY`: secret with at least 32 bytes, provisioned out of band and identical on the reporting node and control plane.
+- `PROXIMA_ATTESTATION_SIGNING_KEY`: active secret with at least 32 bytes, provisioned out of band and identical on the reporting node and control plane.
+- `PROXIMA_ATTESTATION_SIGNING_KEYS_JSON` (control plane, optional): JSON object mapping retained historical key IDs to their signing secrets, so old blocks remain verifiable after rotation. Keep old keys only as long as retention policy requires and protect this setting as a secret.
 - `PROXIMA_ATTEST_FORCE_RLS_ACTIVE`: explicit operator assertion that RLS/tenant enforcement has been verified for this deployment.
 - `PROXIMA_METRICS_ENABLED` and TLS settings as appropriate for the deployment.
 
-Do not put real secrets in source control, frontend variables, logs, issue reports, or PDF reports. Rotate signing keys deliberately; the currently configured key ID must match the key used to verify records.
+Do not put real secrets in source control, frontend variables, logs, issue reports, or PDF reports. For rotation, deploy the new active key ID/secret to nodes and the control plane, and retain previous key IDs in `PROXIMA_ATTESTATION_SIGNING_KEYS_JSON` until their evidence expires under retention policy.
 
 The engine attempts to submit one signed telemetry epoch per hour to `POST /api/v1/attestations`. Each block includes a SHA-256 hash chained to the previous block and an HMAC-SHA256 signature over that hash. The control plane recomputes the block hash, verifies the signature, checks the expected predecessor under a transaction lock, and stores the record in append-only PostgreSQL tables. The attestation ledger and security-event ledger reject updates/deletes.
 
