@@ -8,7 +8,7 @@ use proxima_engine::{
     metrics,
     attestation::{AttestationConfig, AttestationLedger, SecurityState, TelemetrySummary},
     security_breaker::{BreakerConfig, SecurityBreaker},
-    protocol::{parse_frontend_frame, SSL_REQUEST_CODE},
+    protocol::SSL_REQUEST_CODE,
     session::{establish, BoxedPgStream},
     tenant::TenantTokenVerifier,
     tls::{accept_client_tls, client_acceptor, connect_upstream_tls, upstream_connector},
@@ -386,21 +386,26 @@ where
         total = total.saturating_add(size as u64);
         pending.extend_from_slice(&buffer[..size]);
         loop {
-            match parse_frontend_frame(&pending) {
-                Ok(Some((message, consumed))) => {
-                    if matches!(message.tag, b'Q' | b'E') {
-                        metrics::global().query_processed();
-                    }
-                    pending.advance(consumed);
-                }
-                Ok(None) => break,
-                Err(_) => {
-                    // The original bytes are forwarded unchanged. Drop only the observer buffer
-                    // on malformed framing so it cannot grow without bound or alter traffic.
-                    pending.clear();
-                    break;
-                }
+            if pending.len() < 5 {
+                break;
             }
+            let frame_length = i32::from_be_bytes(pending[1..5].try_into().unwrap());
+            if frame_length < 4 || frame_length as usize > 16 * 1024 * 1024 {
+                // Preserve wire behavior: observer failures never mutate or suppress forwarded bytes.
+                pending.clear();
+                break;
+            }
+            let Some(total_length) = (frame_length as usize).checked_add(1) else {
+                pending.clear();
+                break;
+            };
+            if pending.len() < total_length {
+                break;
+            }
+            if matches!(pending[0], b'Q' | b'E') {
+                metrics::global().query_processed();
+            }
+            pending.advance(total_length);
         }
         if pending.len() > 16 * 1024 * 1024 + 5 {
             pending.clear();
