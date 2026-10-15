@@ -33,7 +33,7 @@ const primaryNavigation = [
   { label: "Nodes", href: "/app/nodes", icon: Database },
   { label: "Deployments", href: "/app/deployments", icon: Rocket },
   { label: "Verification", href: "/app/verification", icon: ShieldCheck },
-  { label: "Audit", href: "/app/audit", icon: FileSearch },
+  { label: "Audit", href: "/app/audit", icon: FileSearch },\n  { label: "Attestations", href: "/app/attestations", icon: FileCheck2 },
   { label: "Team", href: "/app/team", icon: Users },
   { label: "Billing", href: "/app/billing", icon: CreditCard },
 ];
@@ -51,7 +51,7 @@ const searchNavigation = [
   { label: "Billing plans", href: "/app/billing/plans", icon: CreditCard },
   { label: "Billing invoices", href: "/app/billing/invoices", icon: CreditCard },
   { label: "Tenant isolation", href: "/app/security/tenant-isolation", icon: ShieldCheck },
-  { label: "Security events", href: "/app/security/events", icon: FileSearch },
+  { label: "Security events", href: "/app/security/events", icon: FileSearch },\n  { label: "Security attestations", href: "/app/attestations", icon: FileCheck2 },
   { label: "Developer API keys", href: "/app/developer/api-keys", icon: KeyRound },
   { label: "Developer tenant context", href: "/app/developer/tenant-context", icon: KeyRound },
   { label: "Developer webhooks", href: "/app/developer/webhooks", icon: KeyRound },
