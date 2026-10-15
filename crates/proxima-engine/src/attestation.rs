@@ -46,7 +46,7 @@ impl AttestationBlock {
         Ok(block)
     }
     pub fn calculate_hash(&self) -> String {
-        let canonical = format!("{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
+        let canonical = format!("{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
             self.attestation_version, self.organization_id, self.node_id,
             self.epoch_timestamp_start, self.epoch_timestamp_end,
             self.telemetry_summary.total_processed_queries,
