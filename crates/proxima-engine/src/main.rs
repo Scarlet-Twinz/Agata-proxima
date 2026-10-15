@@ -50,7 +50,7 @@ async fn main() -> io::Result<()> {
     }
 
     let listener = TcpListener::bind(config.listen_addr).await?;
-    let metrics_addr = std::env::var("PROXIMA_METRICS_LISTEN_ADDR")
+    let metrics_addr: std::net::SocketAddr = std::env::var("PROXIMA_METRICS_LISTEN_ADDR")
         .unwrap_or_else(|_| "127.0.0.1:9090".to_string())
         .parse()
         .map_err(|error| {
