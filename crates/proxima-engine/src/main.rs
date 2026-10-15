@@ -90,9 +90,17 @@ async fn main() -> io::Result<()> {
     if attestation_signing_ready && attestation_p99.is_some() {
         let ledger = Arc::new(AttestationLedger::new(attestation_config.clone()));
         let engine_config = config.clone();
-        let ingest_url = std::env::var("PROXIMA_ATTESTATION_INGEST_URL")
+        let configured_ingest_url = std::env::var("PROXIMA_ATTESTATION_INGEST_URL")
             .ok()
             .filter(|value| !value.trim().is_empty());
+        let ingest_url = configured_ingest_url.clone().filter(|url| {
+            url.starts_with("https://")
+                || url.starts_with("http://127.0.0.1:")
+                || url.starts_with("http://localhost:")
+        });
+        if configured_ingest_url.is_some() && ingest_url.is_none() {
+            error!("attestation ingestion requires HTTPS except for loopback development URLs");
+        }
         let ingest_token = std::env::var("PROXIMA_ATTESTATION_INGEST_TOKEN")
             .ok()
             .filter(|value| value.starts_with("aga_"));
