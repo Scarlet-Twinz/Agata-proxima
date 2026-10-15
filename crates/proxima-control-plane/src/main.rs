@@ -4416,8 +4416,11 @@ mod tests {
 
     #[test]
     fn token_hash_is_deterministic() {
-        assert_eq!(token_hash("abc"), token_hash("abc"));
-        assert_ne!(token_hash("abc"), token_hash("abd"));
+        let hash = token_hash("abc");
+        assert_eq!(hash, token_hash("abc"));
+        assert_ne!(hash, token_hash("abd"));
+        assert_eq!(hash.len(), 32);
+        assert_ne!(hash, b"abc");
     }
 
     #[test]
