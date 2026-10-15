@@ -30,7 +30,8 @@ fi
 make_token() {
   local tenant="$1"
   local ttl="${2:-3600}"
-  python3 - "$PROXIMA_VERIFY_SIGNING_KEY" "$tenant" <<'PY'
+  # Pass the requested TTL through so expired-token regression checks create an actually expired token.
+  python3 - "$PROXIMA_VERIFY_SIGNING_KEY" "$tenant" "$ttl" <<'PY'
 import hashlib
 import hmac
 import sys
