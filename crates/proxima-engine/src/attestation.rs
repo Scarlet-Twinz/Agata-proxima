@@ -27,8 +27,11 @@ impl AttestationConfig {
                 .filter(|v| v.len() >= 32)
                 .map(String::into_bytes),
             organization_id: std::env::var("PROXIMA_ORGANIZATION_ID")
+                .map(|value| safe(&value))
                 .unwrap_or_else(|_| "unconfigured".into()),
-            node_id: std::env::var("PROXIMA_NODE_ID").unwrap_or_else(|_| "local-node".into()),
+            node_id: std::env::var("PROXIMA_NODE_ID")
+                .map(|value| safe(&value))
+                .unwrap_or_else(|_| "local-node".into()),
         }
     }
 }
