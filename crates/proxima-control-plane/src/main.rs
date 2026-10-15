@@ -3107,6 +3107,9 @@ async fn create_attestation(
     if input.attestation_version != 1
         || input.node_id.trim().is_empty()
         || input.node_id.len() > 128
+        || safe_attestation_identifier(&input.node_id) != input.node_id
+        || input.telemetry_summary.as_object().map(|object| object.len()) != Some(4)
+        || input.security_state.as_object().map(|object| object.len()) != Some(3)
         || input.epoch_timestamp_start < 0
         || input.epoch_timestamp_end < input.epoch_timestamp_start
         || input.canonical_payload.len() > 64 * 1024
@@ -3255,6 +3258,7 @@ fn canonical_attestation_payload(
     security: &Value,
     previous_hash: &str,
 ) -> Option<String> {
+    if telemetry.as_object()?.len() != 4 || security.as_object()?.len() != 3 || safe_attestation_identifier(node_id) != node_id { return None; }
     let total_queries = telemetry.get("total_processed_queries")?.as_u64()?;
     let tenant_sessions = telemetry.get("authenticated_tenant_sessions")?.as_u64()?;
     let blocked = telemetry.get("blocked_unauthorized_violations")?.as_u64()?;
