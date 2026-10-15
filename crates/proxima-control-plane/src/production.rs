@@ -81,7 +81,7 @@ pub(crate) struct PasswordResetConfirm {
 }
 #[cfg(test)]
 fn expected_plan_amount(plan: &str) -> Option<i64> {
-    match plan { "starter" => Some(14_000), "growth" => Some(49_000), "scale" => Some(119_000), _ => None }
+    match plan { "starter" => Some(149), "growth" => Some(499), "scale" => Some(1199), _ => None }
 }
 fn flutterwave_plan_id(plan: &str) -> Option<String> {
     let key = match plan { "starter" => "FLUTTERWAVE_STARTER_PLAN_ID", "growth" => "FLUTTERWAVE_GROWTH_PLAN_ID", "scale" => "FLUTTERWAVE_SCALE_PLAN_ID", _ => return None };
@@ -587,7 +587,7 @@ pub(crate) async fn require_feature(
 }
 
 pub(crate) async fn plans() -> Response {
-    let catalog=[("free","Free",0_i32,"Evaluation and small proofs of concept"),("starter","Starter",140_i32,"First production SaaS deployments"),("growth","Growth",490_i32,"Multi-tenant production workloads"),("scale","Scale",1190_i32,"Larger fleets and security operations"),("enterprise","Enterprise",0_i32,"Contracted enterprise deployments")];
+    let catalog=[("free","Free",0_i32,"Evaluation and small proofs of concept"),("starter","Starter",149_i32,"First production SaaS deployments"),("growth","Growth",499_i32,"Multi-tenant production workloads"),("scale","Scale",1199_i32,"Larger fleets and security operations"),("enterprise","Enterprise",0_i32,"Contracted enterprise deployments")];
     let plans=catalog.iter().map(|(key,name,monthly_usd,description)|{
         let plan_code=flutterwave_plan_id(key);
         let (nodes,tenants,environments,retention,advanced,fleet,priority,entra,private_deployment)=plan_limits(key);
@@ -1275,7 +1275,7 @@ pub(crate) async fn billing_verify(State(s): State<AppState>,headers: HeaderMap,
     let ctx=match authenticate(&s,&headers).await {Ok(v)=>v,Err(c)=>return c.into_response()}; if let Err(c)=require_admin(&ctx,&headers){return c.into_response();}
     let reference=match q.get("reference").filter(|v|!v.trim().is_empty()){Some(v)=>v.trim(),None=>return bad("Flutterwave transaction reference is required.")};
     let transaction_id=match q.get("transaction_id").filter(|v|!v.trim().is_empty()){Some(v)=>v.trim(),None=>return bad("Flutterwave transaction ID is required.")};
-    let row=match sqlx::query("SELECT organization_id,plan_key,plan_code FROM billing_transactions WHERE provider='flutterwave' AND reference=$1 AND organization_id=$2").bind(reference).bind(ctx.organization_id).fetch_optional(&s.db).await {Ok(Some(v))=>v,Ok(None)=>return (StatusCode::NOT_FOUND,Json(json!({"ok":false,"error":"unknown_local_transaction"}))).into_response(),Err(e)=>return db_error(e)};
+    let row=match sqlx::query("SELECT organization_id,plan_key,plan_code,status FROM billing_transactions WHERE provider='flutterwave' AND reference=$1 AND organization_id=$2").bind(reference).bind(ctx.organization_id).fetch_optional(&s.db).await {Ok(Some(v))=>v,Ok(None)=>return (StatusCode::NOT_FOUND,Json(json!({"ok":false,"error":"unknown_local_transaction"}))).into_response(),Err(e)=>return db_error(e)};
     let plan:String=row.get("plan_key"); let plan_id:String=row.get::<Option<String>,_>("plan_code").unwrap_or_default(); let org:Uuid=row.get("organization_id");
     let verified=match verify_flutterwave_transaction(transaction_id,reference,&plan).await {Ok(v)=>v,Err(e)=>return (StatusCode::PAYMENT_REQUIRED,Json(json!({"ok":false,"verified":false,"message":e}))).into_response()};
     if let Err(e)=sqlx::query("UPDATE billing_transactions SET status='success',provider_checkout_id=$1,payload=$2,updated_at=now() WHERE provider='flutterwave' AND reference=$3 AND organization_id=$4").bind(transaction_id).bind(&verified).bind(reference).bind(org).execute(&s.db).await{return db_error(e);}
@@ -1287,7 +1287,7 @@ pub(crate) async fn portal(State(s):State<AppState>,headers:HeaderMap)->Response
 pub(crate) async fn flutterwave_webhook(State(s):State<AppState>,headers:HeaderMap,body:String)->Response {
     if !verify_flutterwave_hash(&headers){return StatusCode::UNAUTHORIZED.into_response();} let event:Value=match serde_json::from_str(&body){Ok(v)=>v,Err(_)=>return StatusCode::BAD_REQUEST.into_response()}; let data=event.get("data").cloned().unwrap_or(Value::Null);
     let txid=data.get("id").and_then(Value::as_i64).map(|v|v.to_string()).or_else(||data.get("id").and_then(Value::as_str).map(str::to_owned)).unwrap_or_default(); let reference=data.get("tx_ref").and_then(Value::as_str).unwrap_or_default(); if txid.is_empty()||reference.is_empty(){return StatusCode::BAD_REQUEST.into_response();}
-    let event_id=event.get("id").and_then(Value::as_str).map(str::to_owned).unwrap_or_else(||format!("{txid}:{reference}")); let event_type=event.get("event").and_then(Value::as_str).unwrap_or("charge.completed");
+    let event_type=event.get("event").and_then(Value::as_str).unwrap_or("charge.completed"); let status=data.get("status").and_then(Value::as_str).unwrap_or_default().to_ascii_lowercase(); let event_id=event.get("id").and_then(Value::as_str).map(str::to_owned).unwrap_or_else(||format!("{event_type}:{txid}:{reference}:{status}"));
     let claimed=match sqlx::query("INSERT INTO billing_events(provider,provider_event_id,event_type,payload,status,processing_started_at,attempt_count) VALUES('flutterwave',$1,$2,$3,'processing',now(),1) ON CONFLICT(provider,provider_event_id) DO UPDATE SET status='processing',processing_started_at=now(),attempt_count=billing_events.attempt_count+1,payload=EXCLUDED.payload,event_type=EXCLUDED.event_type WHERE billing_events.status NOT IN ('processed','ignored') AND (billing_events.processing_started_at IS NULL OR billing_events.processing_started_at<now()-interval '1 minute') RETURNING id").bind(&event_id).bind(event_type).bind(&event).fetch_optional(&s.db).await{Ok(v)=>v.is_some(),Err(e)=>return db_error(e)}; if !claimed{return Json(json!({"received":true,"duplicate":true})).into_response();}
     let row=match sqlx::query("SELECT organization_id,plan_key,plan_code FROM billing_transactions WHERE provider='flutterwave' AND reference=$1").bind(reference).fetch_optional(&s.db).await {
       Ok(Some(v))=>v,
@@ -1306,7 +1306,24 @@ pub(crate) async fn flutterwave_webhook(State(s):State<AppState>,headers:HeaderM
         },
         Err(e) => return db_error(e)
     };
-    let org:Uuid=row.get("organization_id");let plan:String=row.get("plan_key");let plan_id:String=row.get::<Option<String>,_>("plan_code").unwrap_or_default(); let verified=match verify_flutterwave_transaction(&txid,reference,&plan).await{Ok(v)=>v,Err(_)=>return StatusCode::PAYMENT_REQUIRED.into_response()};
+    let org:Uuid=row.get("organization_id");let plan:String=row.get("plan_key");let plan_id:String=row.get::<Option<String>,_>("plan_code").unwrap_or_default();let current_status:String=row.get("status");
+    if status=="failed" {
+        if current_status=="success" {
+            let _=sqlx::query("UPDATE billing_events SET status='ignored',processed_at=now(),processing_started_at=NULL WHERE provider='flutterwave' AND provider_event_id=$1").bind(&event_id).execute(&s.db).await;
+            return Json(json!({"received":true,"ignored":"transaction_already_successful"})).into_response();
+        }
+        if let Err(e)=sqlx::query("UPDATE billing_transactions SET status='failed',payload=$1,updated_at=now() WHERE provider='flutterwave' AND reference=$2 AND organization_id=$3 AND status <> 'success'").bind(&event).bind(reference).bind(org).execute(&s.db).await{return db_error(e);}
+        let has_subscription:bool=match sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM billing_accounts WHERE organization_id=$1 AND provider='flutterwave' AND flutterwave_plan_id=$2)").bind(org).bind(&plan_id).fetch_one(&s.db).await{Ok(v)=>v,Err(e)=>return db_error(e)};
+        if has_subscription {
+            if let Err(e)=sqlx::query("UPDATE organization_entitlements SET billing_status='past_due',billing_grace_until=COALESCE(billing_grace_until,now()+interval '7 days'),updated_at=now() WHERE organization_id=$1").bind(org).execute(&s.db).await{return db_error(e);}
+            if let Err(e)=sqlx::query("UPDATE billing_accounts SET status='attention',updated_at=now() WHERE organization_id=$1 AND provider='flutterwave' AND flutterwave_plan_id=$2").bind(org).bind(&plan_id).execute(&s.db).await{return db_error(e);}
+            let details="The latest Flutterwave subscription payment failed. Please review your billing details to avoid interruption.";
+            send_billing_notice(&s.db,org,&event_id,"Flutterwave payment failed",details).await;
+        }
+        if let Err(e)=sqlx::query("UPDATE billing_events SET status='processed',processed_at=now(),processing_started_at=NULL WHERE provider='flutterwave' AND provider_event_id=$1").bind(&event_id).execute(&s.db).await{return db_error(e);}
+        return Json(json!({"received":true,"verified":false,"status":"failed"})).into_response();
+    }
+    let verified=match verify_flutterwave_transaction(&txid,reference,&plan).await{Ok(v)=>v,Err(_)=>return StatusCode::PAYMENT_REQUIRED.into_response()};
     if let Err(e)=sqlx::query("INSERT INTO billing_transactions(organization_id,provider,reference,provider_checkout_id,plan_key,plan_code,amount,currency,status,metadata,payload,created_at,updated_at) VALUES($4,'flutterwave',$3,$1,$5,$6,$7,'USD','success',$8,$2,now(),now()) ON CONFLICT(provider,reference) DO UPDATE SET status='success',provider_checkout_id=EXCLUDED.provider_checkout_id,payload=EXCLUDED.payload,updated_at=now()").bind(&txid).bind(&verified).bind(reference).bind(org).bind(&plan).bind(&plan_id).bind({
         match flutterwave_amount_usd(&plan) {
             Some(amount) => amount,
@@ -1315,7 +1332,10 @@ pub(crate) async fn flutterwave_webhook(State(s):State<AppState>,headers:HeaderM
     }).bind(&event).execute(&s.db).await{return db_error(e);}
     if let Err(e)=sqlx::query("INSERT INTO billing_accounts(organization_id,provider,flutterwave_customer_id,flutterwave_plan_id,plan_key,status,cancel_at_period_end,updated_at) VALUES($1,'flutterwave',$2,$3,$4,'active',false,now()) ON CONFLICT(organization_id) DO UPDATE SET provider='flutterwave',flutterwave_customer_id=COALESCE(EXCLUDED.flutterwave_customer_id,billing_accounts.flutterwave_customer_id),flutterwave_plan_id=EXCLUDED.flutterwave_plan_id,plan_key=EXCLUDED.plan_key,status='active',cancel_at_period_end=false,updated_at=now()").bind(org).bind(verified.pointer("/data/customer/id").map(|v| v.to_string().trim_matches('"').to_owned())).bind(plan_id).bind(&plan).execute(&s.db).await{return db_error(e);}
     if let Err(e)=apply_entitlements(&s.db,org,&plan).await{ tracing::error!(error=%e,"Payment verified but entitlement update failed"); return internal("Payment verified but entitlement update failed."); }
-    if let Err(e)=sqlx::query("UPDATE billing_events SET status='processed',processed_at=now(),processing_started_at=NULL WHERE provider='flutterwave' AND provider_event_id=$1").bind(&event_id).execute(&s.db).await{return db_error(e);} Json(json!({"received":true,"verified":true})).into_response()
+    if let Err(e)=sqlx::query("UPDATE billing_events SET status='processed',processed_at=now(),processing_started_at=NULL WHERE provider='flutterwave' AND provider_event_id=$1").bind(&event_id).execute(&s.db).await{return db_error(e);}
+    let details = format!("Your {plan} plan payment was verified and the workspace entitlements were updated.");
+    send_billing_notice(&s.db, org, &event_id, "Flutterwave payment confirmed", &details).await;
+    Json(json!({"received":true,"verified":true})).into_response()
 }
 
 pub(crate) async fn send_verification_email(
@@ -2104,9 +2124,9 @@ mod tests {
 
     #[test]
     fn configured_plan_amounts_are_exact_minor_units() {
-        assert_eq!(expected_plan_amount("starter"), Some(14_000));
-        assert_eq!(expected_plan_amount("growth"), Some(49_000));
-        assert_eq!(expected_plan_amount("scale"), Some(119_000));
+        assert_eq!(expected_plan_amount("starter"), Some(149));
+        assert_eq!(expected_plan_amount("growth"), Some(499));
+        assert_eq!(expected_plan_amount("scale"), Some(1199));
         assert_eq!(expected_plan_amount("free"), None);
         assert_eq!(expected_plan_amount("enterprise"), None);
     }
