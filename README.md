@@ -54,6 +54,7 @@ The 25–40 platform layer adds an authenticated, durable control plane with org
 - [Security verification](docs/verification.md) — RLS, protocol tests and adversarial verification.
 - [Failure engineering](docs/failure-engineering.md) — expected behavior when the Control Plane, PostgreSQL, policies, nodes or TLS fail.
 - [Performance engineering](docs/performance.md) — reproducible benchmark dimensions; no unmeasured SLA claims.
+- [Monitor/Breaker/Attest operations](docs/production/proxima-monitor-breaker-attest.md) — metrics endpoint, fail-closed protection, signed evidence, PDF exports and release checks.
 - [Phase 3.22 entitlement contract](docs/billing/phase3-22-entitlement-contract.md) — pricing, quotas and A–H acceptance map.
 - [Microsoft Entra SSO runbook](docs/identity/microsoft-entra-oidc.md) — OIDC configuration and remaining activation gates.
 - [Paddle Live billing runbook](docs/production/paddle-billing.md) — Live credentials, price IDs, signed webhooks and activation gates.
