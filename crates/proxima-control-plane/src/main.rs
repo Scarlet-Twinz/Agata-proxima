@@ -3433,7 +3433,11 @@ async fn security_attestations(State(s): State<AppState>, headers: HeaderMap) ->
             "tls_termination_enforced": row.get::<Option<bool>, _>("tls_termination_enforced"),
             "circuit_breaker_tripped": row.get::<Option<bool>, _>("circuit_breaker_tripped"),
             "previous_block_hash": previous_hash,
-            "block_hash_signature": row.get::<String, _>("block_hash"),
+            "organization_id": ctx.organization_id,
+            "block_hash_signature": stored_hash,
+            "signature_algorithm": row.get::<String, _>("signature_algorithm"),
+            "signing_key_id": row.get::<String, _>("signing_key_id"),
+            "signature_hex": signature_hex,
             "signature_valid": signature_valid,
             "chain_link_valid": chain_link_valid
         })
