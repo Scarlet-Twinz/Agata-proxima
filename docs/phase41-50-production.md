@@ -1,6 +1,6 @@
 # Agata Proxima — Phases 41–50
 
-This release moved the platform from a private-beta foundation into production-oriented identity, commercial, integration and operational contracts. This is a historical phase record. Its provider-specific billing section is superseded by the current Paddle Live integration documented in `docs/production/paddle-billing.md`.
+This release moved the platform from a private-beta foundation into production-oriented identity, commercial, integration and operational contracts. This is a historical phase record. Its provider-specific billing section is superseded by the current Paddle Live integration documented in `docs/production/flutterwave-billing.md`.
 
 ## Phase gates
 
@@ -25,7 +25,7 @@ Production configuration uses `RESEND_API_KEY`, `RESEND_FROM_EMAIL` and `AGATA_P
 
 ## Current billing provider: Paddle Live
 
-Paddle is the only active billing provider. The Control Plane targets Paddle's Live API; Sandbox routing is intentionally unsupported. The current provider contract is documented in [Paddle Billing](production/paddle-billing.md).
+Paddle is the only active billing provider. The Control Plane targets Paddle's Live API; Sandbox routing is intentionally unsupported. The current provider contract is documented in [Flutterwave Billing](production/flutterwave-billing.md).
 
 Configure these variables in the production secret store:
 
