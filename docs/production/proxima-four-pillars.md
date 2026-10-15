@@ -6,7 +6,7 @@ This runbook describes the four-pillar implementation added to the existing Prox
 
 The engine serves Prometheus text exposition at \`/metrics\` and a health probe at \`/healthz\` on a separate listener. The default bind is \`127.0.0.1:9090\`, intentionally loopback-only. Set \`PROXIMA_METRICS_LISTEN_ADDR\` only when the deployment has a firewall or private network boundary around that listener. Do not expose this endpoint publicly.
 
-Counters include accepted/rejected connections, active sessions, failed handshakes, query/Execute messages observed, authenticated tenant sessions, bytes in each direction, cumulative session duration, blocked security violations, and breaker trips. Query observation inspects only PostgreSQL frame headers and forwards original bytes unchanged. It counts simple-query and Execute messages, not SQL statements hidden inside a prepared statement's Parse message.
+Counters include accepted/rejected connections, active sessions, failed handshakes, query/Execute messages observed, authenticated tenant sessions, bytes in each direction, cumulative session duration, blocked security violations, and breaker trips. A request-to-completion histogram exposes latency buckets so Prometheus can calculate p50/p95/p99 using `histogram_quantile`. Query observation inspects only PostgreSQL frame headers and forwards original bytes unchanged. It counts simple-query and Execute messages, not SQL statements hidden inside a prepared statement's Parse message.
 
 ## Breaker
 
