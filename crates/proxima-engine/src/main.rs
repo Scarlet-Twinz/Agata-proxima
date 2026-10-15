@@ -1,5 +1,7 @@
+use std::collections::VecDeque;
 use std::io;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use proxima_engine::{
     config::{Config, UpstreamTlsMode},
@@ -29,14 +31,54 @@ async fn main() -> io::Result<()> {
     let max_frontend_frame_bytes = std::env::var("PROXIMA_MAX_FRONTEND_FRAME_BYTES")
         .unwrap_or_else(|_| (64 * 1024 * 1024_u32).to_string())
         .parse::<u32>()
-        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, format!("invalid PROXIMA_MAX_FRONTEND_FRAME_BYTES: {error}")))?;
+        .map_err(|error| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("invalid PROXIMA_MAX_FRONTEND_FRAME_BYTES: {error}"),
+            )
+        })?;
     if !(4..=1024 * 1024 * 1024_u32).contains(&max_frontend_frame_bytes) {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "PROXIMA_MAX_FRONTEND_FRAME_BYTES must be between 4 and 1073741824"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "PROXIMA_MAX_FRONTEND_FRAME_BYTES must be between 4 and 1073741824",
+        ));
+    }
+    let max_backend_frame_bytes = std::env::var("PROXIMA_MAX_BACKEND_FRAME_BYTES")
+        .unwrap_or_else(|_| (64 * 1024 * 1024_u32).to_string())
+        .parse::<u32>()
+        .map_err(|error| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("invalid PROXIMA_MAX_BACKEND_FRAME_BYTES: {error}"),
+            )
+        })?;
+    if !(4..=1024 * 1024 * 1024_u32).contains(&max_backend_frame_bytes) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "PROXIMA_MAX_BACKEND_FRAME_BYTES must be between 4 and 1073741824",
+        ));
     }
     let metrics = Arc::new(EngineMetrics::default());
     let breaker = Arc::new(PeerCircuitBreaker::from_env()?);
+    {
+        let metrics_for_breaker = metrics.clone();
+        let breaker_for_metrics = breaker.clone();
+        tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(std::time::Duration::from_secs(5));
+            ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                ticker.tick().await;
+                metrics_for_breaker.set_breaker_open(breaker_for_metrics.any_peer_blocked());
+            }
+        });
+    }
     let force_rls_active = std::env::var("PROXIMA_ATTEST_FORCE_RLS_ACTIVE")
-        .map(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .map(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
         .unwrap_or(false);
     let attestation_metrics = metrics.clone();
     let attestation_breaker = breaker.clone();
@@ -50,16 +92,28 @@ async fn main() -> io::Result<()> {
         ).await;
     });
     let metrics_enabled = std::env::var("PROXIMA_METRICS_ENABLED")
-        .map(|value| !matches!(value.trim().to_ascii_lowercase().as_str(), "0" | "false" | "no" | "off"))
+        .map(|value| {
+            !matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "0" | "false" | "no" | "off"
+            )
+        })
         .unwrap_or(true);
     if metrics_enabled {
         let metrics_addr = std::env::var("PROXIMA_METRICS_LISTEN_ADDR")
             .unwrap_or_else(|_| "127.0.0.1:9090".to_string())
             .parse()
-            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, format!("invalid PROXIMA_METRICS_LISTEN_ADDR: {error}")))?;
+            .map_err(|error| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("invalid PROXIMA_METRICS_LISTEN_ADDR: {error}"),
+                )
+            })?;
         let metrics_for_server = metrics.clone();
         tokio::spawn(async move {
-            if let Err(error) = proxima_engine::monitor::serve(metrics_addr, metrics_for_server).await {
+            if let Err(error) =
+                proxima_engine::monitor::serve(metrics_addr, metrics_for_server).await
+            {
                 error!(%error, "Prometheus metrics server stopped");
             }
         });
@@ -160,22 +214,38 @@ async fn main() -> io::Result<()> {
                         upstream_tls_mode,
                         upstream_tls_server_name.as_deref(),
                         max_frontend_frame_bytes,
+                        max_backend_frame_bytes,
                         connection_metrics.clone(),
                     ).await {
                         Ok((client_bytes, upstream_bytes)) => {
-                            connection_metrics.connection_finished(false, client_bytes, upstream_bytes);
+                            connection_metrics
+                                .connection_finished(false, client_bytes, upstream_bytes);
                         }
                         Err(err) => {
-                            if matches!(err.kind(), io::ErrorKind::PermissionDenied | io::ErrorKind::InvalidData) {
+                            if matches!(
+                                err.kind(),
+                                io::ErrorKind::PermissionDenied | io::ErrorKind::InvalidData
+                            ) {
                                 connection_metrics.unauthorized_violation();
                                 if connection_breaker.record_failure(peer.ip()) {
                                     connection_metrics.breaker_trip_event();
-                                    connection_metrics.set_breaker_open(connection_breaker.any_peer_blocked());
-                                    error!(peer = %peer, "security breaker opened for peer after repeated malformed or unauthorized handshakes");
+                                    connection_metrics.set_breaker_open(
+                                        connection_breaker.any_peer_blocked(),
+                                    );
+                                    error!(
+                                        peer = %peer,
+                                        "security breaker opened for peer after repeated malformed or unauthorized handshakes"
+                                    );
                                     let event_peer = peer.ip().to_string();
                                     tokio::spawn(async move {
-                                        if let Err(error) = proxima_engine::attestation_reporter::report_breaker_event(event_peer.clone()).await {
-                                            error!(%error, peer = %event_peer, "critical security event could not be delivered to the control plane");
+                                        if let Err(error) =
+                                            proxima_engine::attestation_reporter::report_breaker_event(event_peer.clone()).await
+                                        {
+                                            error!(
+                                                %error,
+                                                peer = %event_peer,
+                                                "critical security event could not be delivered to the control plane"
+                                            );
                                         }
                                     });
                                 }
@@ -212,6 +282,7 @@ async fn handle_connection(
     upstream_tls_mode: UpstreamTlsMode,
     upstream_tls_server_name: Option<&str>,
     max_frontend_frame_bytes: u32,
+    max_backend_frame_bytes: u32,
     metrics: Arc<EngineMetrics>,
 ) -> io::Result<(u64, u64)> {
     info!(peer = %peer, "client connected");
@@ -283,13 +354,31 @@ async fn handle_connection(
 
     let (mut client_read, mut client_write) = tokio::io::split(client);
     let (mut upstream_read, mut upstream_write) = tokio::io::split(upstream);
+    let pending_simple_queries = Arc::new(Mutex::new(VecDeque::new()));
     let client_to_upstream = copy_client_messages(
         &mut client_read,
         &mut upstream_write,
         metrics.clone(),
+        pending_simple_queries.clone(),
         max_frontend_frame_bytes,
     );
-    let upstream_to_client = tokio::io::copy(&mut upstream_read, &mut client_write);
+    let upstream_to_client = async {
+        copy_backend_messages(
+            &mut upstream_read,
+            &mut client_write,
+            metrics.clone(),
+            pending_simple_queries,
+            max_backend_frame_bytes,
+        )
+        .await
+        .map_err(|error| {
+            if error.kind() == io::ErrorKind::InvalidData {
+                io::Error::other(format!("invalid PostgreSQL backend frame: {error}"))
+            } else {
+                error
+            }
+        })
+    };
     let (client_bytes, upstream_bytes) = tokio::try_join!(client_to_upstream, upstream_to_client)?;
 
     info!(
@@ -302,12 +391,18 @@ async fn handle_connection(
 }
 
 
+enum PendingResponse {
+    SimpleQuery(Instant),
+    Other,
+}
+
 /// Count PostgreSQL simple-query (Q) and extended Execute (E) frontend
 /// messages while rejecting malformed or oversized frames before forwarding.
 async fn copy_client_messages<R, W>(
     reader: &mut R,
     writer: &mut W,
     metrics: Arc<EngineMetrics>,
+    pending_simple_queries: Arc<Mutex<VecDeque<PendingResponse>>>,
     max_frame_bytes: u32,
 ) -> io::Result<u64>
 where
@@ -329,28 +424,54 @@ where
             return Ok(total_bytes);
         }
         let mut queries_in_chunk = 0u64;
-        for byte in &buffer[..read] {
+        let mut offset = 0usize;
+        while offset < read {
             if payload_remaining > 0 {
-                payload_remaining -= 1;
+                let available = (read - offset) as u32;
+                let consumed = payload_remaining.min(available);
+                payload_remaining -= consumed;
+                offset += consumed as usize;
                 continue;
             }
             if frame_type.is_none() {
-                frame_type = Some(*byte);
+                frame_type = Some(buffer[offset]);
+                offset += 1;
                 length_read = 0;
                 continue;
             }
-            length_bytes[length_read] = *byte;
+
+            length_bytes[length_read] = buffer[offset];
             length_read += 1;
+            offset += 1;
             if length_read == 4 {
                 let length = u32::from_be_bytes(length_bytes);
                 if length < 4 || length > max_frame_bytes {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
-                        format!("malformed or oversized PostgreSQL frontend frame length: {length}"),
+                        format!(
+                            "malformed or oversized PostgreSQL frontend frame length: {length}"
+                        ),
                     ));
                 }
                 if matches!(frame_type, Some(b'Q' | b'E')) {
                     queries_in_chunk = queries_in_chunk.saturating_add(1);
+                }
+                if matches!(frame_type, Some(b'Q' | b'S')) {
+                    let mut pending = pending_simple_queries.lock().map_err(|_| {
+                        io::Error::other("query-latency queue lock was poisoned")
+                    })?;
+                    if pending.len() >= 10_000 {
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "too many outstanding PostgreSQL response markers",
+                        ));
+                    }
+                    let marker = if frame_type == Some(b'Q') {
+                        PendingResponse::SimpleQuery(Instant::now())
+                    } else {
+                        PendingResponse::Other
+                    };
+                    pending.push_back(marker);
                 }
                 payload_remaining = length - 4;
                 frame_type = None;
@@ -362,6 +483,100 @@ where
         for _ in 0..queries_in_chunk {
             metrics.query_processed();
         }
+    }
+}
+
+/// Forward backend messages while observing simple-query round-trip latency.
+/// Frames are streamed and validated without buffering their entire payloads.
+async fn copy_backend_messages<R, W>(
+    reader: &mut R,
+    writer: &mut W,
+    metrics: Arc<EngineMetrics>,
+    pending_simple_queries: Arc<Mutex<VecDeque<PendingResponse>>>,
+    max_frame_bytes: u32,
+) -> io::Result<u64>
+where
+    R: tokio::io::AsyncRead + Unpin,
+    W: tokio::io::AsyncWrite + Unpin,
+{
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut buffer = [0u8; 16 * 1024];
+    let mut message_tag: Option<u8> = None;
+    let mut length_bytes = [0u8; 4];
+    let mut length_read = 0usize;
+    let mut payload_remaining: Option<u32> = None;
+    let mut total_bytes = 0u64;
+
+    loop {
+        let read = reader.read(&mut buffer).await?;
+        if read == 0 {
+            writer.shutdown().await?;
+            return Ok(total_bytes);
+        }
+        let mut offset = 0usize;
+        while offset < read {
+            if let Some(remaining) = payload_remaining {
+                let available = (read - offset) as u32;
+                let consumed = remaining.min(available);
+                let next_remaining = remaining - consumed;
+                offset += consumed as usize;
+                if next_remaining == 0 {
+                    if message_tag == Some(b'Z') {
+                        let response = pending_simple_queries
+                            .lock()
+                            .ok()
+                            .and_then(|mut pending| pending.pop_front());
+                        if let Some(PendingResponse::SimpleQuery(started_at)) = response {
+                            metrics.observe_simple_query_latency(started_at.elapsed());
+                        }
+                    }
+                    payload_remaining = None;
+                    message_tag = None;
+                } else {
+                    payload_remaining = Some(next_remaining);
+                }
+                continue;
+            }
+
+            if message_tag.is_none() {
+                message_tag = Some(buffer[offset]);
+                offset += 1;
+                length_read = 0;
+                continue;
+            }
+
+            length_bytes[length_read] = buffer[offset];
+            length_read += 1;
+            offset += 1;
+            if length_read == 4 {
+                let length = u32::from_be_bytes(length_bytes);
+                if length < 4 || length > max_frame_bytes {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!(
+                            "malformed or oversized PostgreSQL backend frame length: {length}"
+                        ),
+                    ));
+                }
+                length_read = 0;
+                if length == 4 {
+                    if message_tag == Some(b'Z') {
+                        let response = pending_simple_queries
+                            .lock()
+                            .ok()
+                            .and_then(|mut pending| pending.pop_front());
+                        if let Some(PendingResponse::SimpleQuery(started_at)) = response {
+                            metrics.observe_simple_query_latency(started_at.elapsed());
+                        }
+                    }
+                    message_tag = None;
+                } else {
+                    payload_remaining = Some(length - 4);
+                }
+            }
+        }
+        writer.write_all(&buffer[..read]).await?;
+        total_bytes = total_bytes.saturating_add(read as u64);
     }
 }
 
@@ -391,4 +606,71 @@ async fn client_wants_tls(client: &TcpStream) -> io::Result<bool> {
     let length = i32::from_be_bytes(probe[..4].try_into().unwrap());
     let code = i32::from_be_bytes(probe[4..8].try_into().unwrap());
     Ok(length == 8 && code == SSL_REQUEST_CODE)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    #[tokio::test]
+    async fn backend_ready_for_query_records_simple_query_latency() {
+        let (mut proxy_client, mut client_peer) = tokio::io::duplex(64);
+        let (mut upstream, mut upstream_peer) = tokio::io::duplex(64);
+        let metrics = Arc::new(EngineMetrics::default());
+        let pending = Arc::new(Mutex::new(VecDeque::from([
+            PendingResponse::SimpleQuery(Instant::now()),
+        ])));
+        let task_metrics = metrics.clone();
+        let task_pending = pending.clone();
+
+        let task = tokio::spawn(async move {
+            copy_backend_messages(
+                &mut upstream,
+                &mut proxy_client,
+                task_metrics,
+                task_pending,
+                1024,
+            )
+            .await
+        });
+
+        let response = [b'Z', 0, 0, 0, 5, b'I'];
+        upstream_peer.write_all(&response).await.unwrap();
+        upstream_peer.shutdown().await.unwrap();
+
+        let mut received = Vec::new();
+        client_peer.read_to_end(&mut received).await.unwrap();
+        assert_eq!(received, response);
+        task.await.unwrap().unwrap();
+        assert!(metrics
+            .prometheus()
+            .contains("proxima_simple_query_latency_seconds_count 1"));
+    }
+
+    #[tokio::test]
+    async fn malformed_frontend_frame_is_rejected_before_forwarding() {
+        let (mut reader, mut client_peer) = tokio::io::duplex(64);
+        let (mut upstream_writer, mut upstream_peer) = tokio::io::duplex(64);
+        let metrics = Arc::new(EngineMetrics::default());
+        let pending = Arc::new(Mutex::new(VecDeque::new()));
+        let task = tokio::spawn(async move {
+            copy_client_messages(
+                &mut reader,
+                &mut upstream_writer,
+                metrics,
+                pending,
+                1024,
+            )
+            .await
+        });
+
+        client_peer.write_all(&[b'Q', 0, 0, 0, 3]).await.unwrap();
+        client_peer.shutdown().await.unwrap();
+        let mut forwarded = Vec::new();
+        upstream_peer.read_to_end(&mut forwarded).await.unwrap();
+        let error = task.await.unwrap().unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(forwarded.is_empty());
+    }
 }
