@@ -83,15 +83,16 @@ export function Attestations() {
       `Workspace attestation records: ${attestations.length}`,
       "Integrity note: a record is fully verified only when both its signature and available chain link validate.",
       "",
-      ...attestations.flatMap((item, index) => [
-        `${index + 1}. Node: ${item.node_id} | Period: ${formatEpoch(item.epoch_timestamp_start)} - ${formatEpoch(item.epoch_timestamp_end)}`,
-        `   Signature verified: ${item.signature_valid ? "YES" : "NO"} | Chain link: ${item.chain_link_valid === null ? "UNKNOWN (truncated history)" : item.chain_link_valid ? "VALID" : "INVALID"} | RLS: ${item.force_rls_active === null ? "UNKNOWN" : item.force_rls_active ? "ACTIVE" : "INACTIVE"} | TLS: ${item.tls_termination_enforced === null ? "UNKNOWN" : item.tls_termination_enforced ? "ENFORCED" : "NOT ENFORCED"}`,
-        `   Query/Execute messages forwarded: ${item.total_processed_queries} | Tenant sessions: ${item.authenticated_tenant_sessions} | Blocked violations: ${item.blocked_unauthorized_violations} | P99 overhead ms: ${item.p99_latency_overhead_ms === null ? "UNKNOWN" : item.p99_latency_overhead_ms}`,
-        `   Previous hash: ${item.previous_block_hash || "GENESIS"}`,
-        `   Block hash: ${item.block_hash_signature}`,
-        "",
-      ]),
-    ];
+      ...(attestations.length
+        ? attestations.flatMap((item, index) => [
+            `${index + 1}. Node: ${item.node_id} | Period: ${formatEpoch(item.epoch_timestamp_start)} - ${formatEpoch(item.epoch_timestamp_end)}`,
+            `   Signature verified: ${item.signature_valid ? "YES" : "NO"} | Chain link: ${item.chain_link_valid === null ? "UNKNOWN (truncated history)" : item.chain_link_valid ? "VALID" : "INVALID"} | RLS: ${item.force_rls_active === null ? "UNKNOWN" : item.force_rls_active ? "ACTIVE" : "INACTIVE"} | TLS: ${item.tls_termination_enforced === null ? "UNKNOWN" : item.tls_termination_enforced ? "ENFORCED" : "NOT ENFORCED"}`,
+            `   Query/Execute messages forwarded: ${item.total_processed_queries} | Tenant sessions: ${item.authenticated_tenant_sessions} | Blocked violations: ${item.blocked_unauthorized_violations} | P99 overhead ms: ${item.p99_latency_overhead_ms === null ? "UNKNOWN" : item.p99_latency_overhead_ms}`,
+            `   Previous hash: ${item.previous_block_hash || "GENESIS"}`,
+            `   Block hash: ${item.block_hash_signature}`,
+            "",
+          ])
+        : ["No attestation evidence has been submitted. This report contains no verified security evidence."]),    ];
     const url = URL.createObjectURL(buildPdf(lines));
     const anchor = document.createElement("a");
     anchor.href = url;
