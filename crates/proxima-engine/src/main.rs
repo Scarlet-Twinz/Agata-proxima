@@ -43,6 +43,21 @@ async fn main() -> io::Result<()> {
             "PROXIMA_MAX_FRONTEND_FRAME_BYTES must be between 4 and 1073741824",
         ));
     }
+    let max_backend_frame_bytes = std::env::var("PROXIMA_MAX_BACKEND_FRAME_BYTES")
+        .unwrap_or_else(|_| (64 * 1024 * 1024_u32).to_string())
+        .parse::<u32>()
+        .map_err(|error| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("invalid PROXIMA_MAX_BACKEND_FRAME_BYTES: {error}"),
+            )
+        })?;
+    if !(4..=1024 * 1024 * 1024_u32).contains(&max_backend_frame_bytes) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "PROXIMA_MAX_BACKEND_FRAME_BYTES must be between 4 and 1073741824",
+        ));
+    }
     let metrics = Arc::new(EngineMetrics::default());
     let breaker = Arc::new(PeerCircuitBreaker::from_env()?);
     {
@@ -266,6 +281,7 @@ async fn handle_connection(
     upstream_tls_mode: UpstreamTlsMode,
     upstream_tls_server_name: Option<&str>,
     max_frontend_frame_bytes: u32,
+    max_backend_frame_bytes: u32,
     metrics: Arc<EngineMetrics>,
 ) -> io::Result<(u64, u64)> {
     info!(peer = %peer, "client connected");
@@ -351,7 +367,7 @@ async fn handle_connection(
             &mut client_write,
             metrics.clone(),
             pending_simple_queries,
-            max_frontend_frame_bytes,
+            max_backend_frame_bytes,
         )
         .await
         .map_err(|error| {
