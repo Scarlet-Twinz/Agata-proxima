@@ -22,9 +22,36 @@ pub struct EngineMetrics {
     unauthorized_violations: AtomicU64,
     breaker_trips: AtomicU64,
     breaker_open: AtomicBool,
+    simple_query_latency_count: AtomicU64,
+    simple_query_latency_sum_nanos: AtomicU64,
+    simple_query_latency_buckets: [AtomicU64; 9],
 }
 
 impl EngineMetrics {
+    /// Record an end-to-end simple-query round trip from the frontend Query
+    /// message to PostgreSQL's ReadyForQuery response.
+    pub fn observe_simple_query_latency(&self, elapsed: Duration) {
+        const BUCKETS_NANOS: [u64; 9] = [
+            1_000_000,
+            5_000_000,
+            10_000_000,
+            25_000_000,
+            50_000_000,
+            100_000_000,
+            250_000_000,
+            500_000_000,
+            1_000_000_000,
+        ];
+        let nanos = elapsed.as_nanos().min(u64::MAX as u128) as u64;
+        self.simple_query_latency_count.fetch_add(1, Ordering::Relaxed);
+        self.simple_query_latency_sum_nanos.fetch_add(nanos, Ordering::Relaxed);
+        for (index, bound) in BUCKETS_NANOS.iter().enumerate() {
+            if nanos <= *bound {
+                self.simple_query_latency_buckets[index].fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
+
     pub fn query_processed(&self) {
         self.total_processed_queries.fetch_add(1, Ordering::Relaxed);
     }
@@ -149,10 +176,38 @@ impl EngineMetrics {
         ));
         output.push_str("# HELP proxima_processed_queries_total PostgreSQL simple Query and extended Execute messages forwarded.\n");
         output.push_str("# TYPE proxima_processed_queries_total counter\n");
-        output.push_str(&format!("proxima_processed_queries_total {}\n", self.total_processed_queries()));
+        output.push_str(&format!(
+            "proxima_processed_queries_total {}\n",
+            self.total_processed_queries()
+        ));
         output.push_str("# HELP proxima_authenticated_tenant_sessions_total Established sessions with verified tenant context.\n");
         output.push_str("# TYPE proxima_authenticated_tenant_sessions_total counter\n");
-        output.push_str(&format!("proxima_authenticated_tenant_sessions_total {}\n", self.authenticated_tenant_sessions()));
+        output.push_str(&format!(
+            "proxima_authenticated_tenant_sessions_total {}\n",
+            self.authenticated_tenant_sessions()
+        ));
+        const BUCKETS_MS: [u64; 9] = [1, 5, 10, 25, 50, 100, 250, 500, 1000];
+        output.push_str("# HELP proxima_simple_query_latency_seconds End-to-end simple Query round-trip latency through Proxima.\n");
+        output.push_str("# TYPE proxima_simple_query_latency_seconds histogram\n");
+        for (index, bound) in BUCKETS_MS.iter().enumerate() {
+            output.push_str(&format!(
+                "proxima_simple_query_latency_seconds_bucket{{le=\"{}\"}} {}\n",
+                bound,
+                self.simple_query_latency_buckets[index].load(Ordering::Relaxed)
+            ));
+        }
+        output.push_str(&format!(
+            "proxima_simple_query_latency_seconds_bucket{{le=\"+Inf\"}} {}\n",
+            self.simple_query_latency_count.load(Ordering::Relaxed)
+        ));
+        output.push_str(&format!(
+            "proxima_simple_query_latency_seconds_sum {}\n",
+            self.simple_query_latency_sum_nanos.load(Ordering::Relaxed) as f64 / 1_000_000_000.0
+        ));
+        output.push_str(&format!(
+            "proxima_simple_query_latency_seconds_count {}\n",
+            self.simple_query_latency_count.load(Ordering::Relaxed)
+        ));
         for (name, value) in values.iter().skip(1) {
             output.push_str(&format!("# TYPE {name} counter\n{name} {value}\n"));
         }
@@ -215,6 +270,8 @@ pub async fn serve(addr: SocketAddr, metrics: Arc<EngineMetrics>) -> io::Result<
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use super::EngineMetrics;
 
     #[test]
@@ -222,10 +279,12 @@ mod tests {
         let metrics = EngineMetrics::default();
         metrics.connection_started();
         metrics.connection_finished(false, 12, 20);
+        metrics.observe_simple_query_latency(Duration::from_millis(7));
         let text = metrics.prometheus();
         assert!(text.contains("proxima_active_connections 0"));
         assert!(text.contains("proxima_client_bytes_total 12"));
         assert!(text.contains("proxima_upstream_bytes_total 20"));
+        assert!(text.contains("proxima_simple_query_latency_seconds_bucket{le=\"10\"} 1"));
     }
 
     #[test]
