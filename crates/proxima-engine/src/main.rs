@@ -345,13 +345,23 @@ async fn handle_connection(
         pending_simple_queries.clone(),
         max_frontend_frame_bytes,
     );
-    let upstream_to_client = copy_backend_messages(
-        &mut upstream_read,
-        &mut client_write,
-        metrics.clone(),
-        pending_simple_queries,
-        max_frontend_frame_bytes,
-    );
+    let upstream_to_client = async {
+        copy_backend_messages(
+            &mut upstream_read,
+            &mut client_write,
+            metrics.clone(),
+            pending_simple_queries,
+            max_frontend_frame_bytes,
+        )
+        .await
+        .map_err(|error| {
+            if error.kind() == io::ErrorKind::InvalidData {
+                io::Error::other(format!("invalid PostgreSQL backend frame: {error}"))
+            } else {
+                error
+            }
+        })
+    };
     let (client_bytes, upstream_bytes) = tokio::try_join!(client_to_upstream, upstream_to_client)?;
 
     info!(
