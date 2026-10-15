@@ -3099,8 +3099,8 @@ async fn ingest_security_event(
         Ok(value) => value,
         Err(code) => return code.into_response(),
     };
-    if !matches!(ctx.role.as_str(), "owner" | "admin") {
-        return (StatusCode::FORBIDDEN, "Only workspace owners and administrators can submit security events.").into_response();
+    if !ctx.api_key && !matches!(ctx.role.as_str(), "owner" | "admin") {
+        return (StatusCode::FORBIDDEN, "Only workspace owners, administrators, or authorized API keys can submit security events.").into_response();
     }
     if input.node_id.trim().is_empty() || input.node_id.len() > 200
         || input.event_type != "peer_breaker_opened"
@@ -3161,8 +3161,8 @@ async fn ingest_security_attestation(
         Ok(value) => value,
         Err(code) => return code.into_response(),
     };
-    if !matches!(ctx.role.as_str(), "owner" | "admin") {
-        return (StatusCode::FORBIDDEN, "Only workspace owners and administrators can submit attestation evidence.").into_response();
+    if !ctx.api_key && !matches!(ctx.role.as_str(), "owner" | "admin") {
+        return (StatusCode::FORBIDDEN, "Only workspace owners, administrators, or authorized API keys can submit attestation evidence.").into_response();
     }
     if input.node_id.trim().is_empty() || input.node_id.len() > 200
         || input.epoch_timestamp_start < 0 || input.epoch_timestamp_end < input.epoch_timestamp_start
