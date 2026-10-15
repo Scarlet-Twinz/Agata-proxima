@@ -3158,8 +3158,11 @@ async fn ingest_security_attestation(
     .bind(input.authenticated_tenant_sessions).bind(input.blocked_unauthorized_violations)
     .bind(input.p99_latency_overhead_ms).bind(input.force_rls_active).bind(input.tls_termination_enforced)
     .bind(input.circuit_breaker_tripped).bind(input.previous_block_hash).bind(computed_hash)
-    .bind(input.signing_key_id).bind(supplied_signature).execute(&s.db).await {
-        Ok(_) => (StatusCode::CREATED, Json(json!({"accepted": true, "block_hash": computed_hash}))).into_response(),
+    .bind(input.signing_key_id).bind(supplied_signature).execute(&mut *transaction).await {
+        Ok(_) => match transaction.commit().await {
+            Ok(()) => (StatusCode::CREATED, Json(json!({"accepted": true, "block_hash": computed_hash}))).into_response(),
+            Err(error) => db_error(error),
+        },
         Err(error) => db_error(error),
     }
 }
