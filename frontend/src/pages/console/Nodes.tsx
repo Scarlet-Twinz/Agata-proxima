@@ -128,10 +128,7 @@ export function Nodes() {
             </button>
           </div>
           <p className="muted-copy">Node ID: <code>{created.id}</code></p>
-          <div className="system-notice system-notice--warning">
-            <strong>Registration is not the same as successful enrollment.</strong>
-            <span>The node is currently pending. Do not send this token to a public service or mark the node production-ready until the engine's authenticated enrollment handshake and readiness checks have succeeded.</span>
-          </div>
+          <p className="muted-copy">Keep the enrollment token in a secure location.</p>
         </section>
       )}
 
