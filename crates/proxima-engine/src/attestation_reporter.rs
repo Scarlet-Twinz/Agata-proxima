@@ -158,7 +158,10 @@ pub async fn run(
                 last_successful_end = epoch_end;
             }
             Err(error) => {
-                warn!(%error, "security attestation epoch was not accepted; evidence will not be represented as verified");
+                warn!(
+                %error,
+                "security attestation epoch was not accepted; evidence will not be represented as verified"
+            );
             }
         }
     }
@@ -203,11 +206,25 @@ async fn submit_epoch(
                 .unwrap_or(0)
         });
     if let Some(previous_record) = previous {
-        if previous_record.get("signature_valid").and_then(Value::as_bool) != Some(true) {
-            return Err("latest stored attestation signature is invalid; refusing to extend the chain".into());
+        if previous_record
+            .get("signature_valid")
+            .and_then(Value::as_bool)
+            != Some(true)
+        {
+            return Err(
+                "latest stored attestation signature is invalid; refusing to extend the chain"
+                    .into(),
+            );
         }
-        if previous_record.get("chain_link_valid").and_then(Value::as_bool) == Some(false) {
-            return Err("latest stored attestation predecessor link is invalid; refusing to extend the chain".into());
+        if previous_record
+            .get("chain_link_valid")
+            .and_then(Value::as_bool)
+            == Some(false)
+        {
+            return Err(
+                "latest stored attestation predecessor link is invalid; refusing to extend the chain"
+                    .into(),
+            );
         }
     }
     let previous_hash = previous
