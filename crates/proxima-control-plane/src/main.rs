@@ -432,8 +432,14 @@ async fn main() -> Result<()> {
             get(verifications).post(create_verification),
         )
         .route("/api/v1/audit", get(audit_events))
-        .route("/api/v1/attestations", get(security_attestations).post(ingest_security_attestation))
-        .route("/api/v1/security/events", get(list_security_events).post(ingest_security_event))
+        .route(
+            "/api/v1/attestations",
+            get(security_attestations).post(ingest_security_attestation),
+        )
+        .route(
+            "/api/v1/security/events",
+            get(list_security_events).post(ingest_security_event),
+        )
         .route("/api/v1/support", get(support).post(create_support))
         .route(
             "/api/v1/public/support-requests",
@@ -3106,7 +3112,6 @@ struct AttestationIngestInput {
     signing_key_id: String,
 }
 
-
 #[derive(Deserialize)]
 struct SecurityEventInput {
     node_id: String,
@@ -3143,7 +3148,10 @@ async fn ingest_security_event(
         || !input.details.is_object()
         || input.details.to_string().len() > 4096
     {
-        return (StatusCode::BAD_REQUEST, "Security event fields are invalid.")
+        return (
+            StatusCode::BAD_REQUEST,
+            "Security event fields are invalid.",
+        )
             .into_response();
     }
     match sqlx::query(
@@ -3310,7 +3318,10 @@ async fn ingest_security_attestation(
     let supplied_signature = match hex::decode(&input.signature_hex) {
         Ok(value) => value,
         Err(_) => {
-            return (StatusCode::BAD_REQUEST, "signature_hex must be valid hexadecimal.")
+            return (
+                StatusCode::BAD_REQUEST,
+                "signature_hex must be valid hexadecimal.",
+            )
                 .into_response()
         }
     };
@@ -3459,7 +3470,6 @@ async fn security_attestations(State(s): State<AppState>, headers: HeaderMap) ->
     Json(json!({"status": if attestations.is_empty() { "awaiting_node_evidence" } else { "available" }, "attestations": attestations})).into_response()
 }
 
-
 fn calculate_attestation_hash(
     organization_id: Uuid,
     node_id: &str,
@@ -3493,7 +3503,6 @@ fn calculate_attestation_hash(
     );
     hex::encode(Sha256::digest(canonical.as_bytes()))
 }
-
 
 fn attestation_verification_key(key_id: &str) -> Option<String> {
     if let Ok(keys_json) = env::var("PROXIMA_ATTESTATION_SIGNING_KEYS_JSON") {
@@ -4513,8 +4522,18 @@ mod tests {
     fn attestation_hash_is_deterministic_and_binds_evidence() {
         let organization_id = Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap();
         let hash = calculate_attestation_hash(
-            organization_id, "node-a", 100, 200, 12, 3, 1, None,
-            Some(true), Some(true), Some(false), "previous-hash",
+            organization_id,
+            "node-a",
+            100,
+            200,
+            12,
+            3,
+            1,
+            None,
+            Some(true),
+            Some(true),
+            Some(false),
+            "previous-hash",
         );
         assert_eq!(hash.len(), 64);
         assert_eq!(hash, calculate_attestation_hash(
