@@ -132,8 +132,11 @@ async fn main() -> io::Result<()> {
                         &connection_metrics,
                     ).await;
                     if let Err(err) = result {
-                        if err.kind() == io::ErrorKind::InvalidData || err.kind() == io::ErrorKind::PermissionDenied {
+                        if err.kind() == io::ErrorKind::InvalidData {
                             connection_metrics.protocol_error();
+                            let _ = connection_breaker.record_malformed(peer.ip());
+                        } else if err.kind() == io::ErrorKind::PermissionDenied {
+                            connection_metrics.tenant_violation_blocked();
                             let _ = connection_breaker.record_malformed(peer.ip());
                         } else if err.kind() == io::ErrorKind::ConnectionRefused || err.kind() == io::ErrorKind::TimedOut {
                             connection_metrics.upstream_error();
