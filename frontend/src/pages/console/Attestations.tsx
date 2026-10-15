@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { Download, FileCheck2, RefreshCw, ShieldCheck } from "lucide-react";
 import { api } from "../../api/client";
 
@@ -43,7 +43,7 @@ function downloadAttestationPdf(record: Attestation) {
     `HMAC-SHA256 signature: ${record.block_hash_signature}`,
     "",
     "Verification note: verify this hash and signature against the configured signing key and",
-    "the original ledger. This PDF is not, by itself, a compliance certification.",
+    "the original ledger.",
     `Created at: ${record.created_at}`,
   ].map(safePdfText);
 
@@ -117,7 +117,7 @@ export function Attestations() {
         </div>
         <div className="heading-actions">
           <button className="secondary-action" type="button" onClick={() => void load()} disabled={refreshing}>
-            <RefreshCw size={15} /> {refreshing ? "Refreshing…" : "Refresh"}
+            <RefreshCw size={15} /> {refreshing ? "Refreshingâ€¦" : "Refresh"}
           </button>
           {latest?.verified && <button className="primary-action" type="button" onClick={() => downloadAttestationPdf(latest)}><Download size={15} /> Latest PDF</button>}
         </div>
@@ -126,21 +126,21 @@ export function Attestations() {
       {error && <div className="system-notice system-notice--warning"><strong>Evidence service unavailable.</strong><span>{error}</span></div>}
 
       <section className="overview-metrics" aria-label="Attestation summary">
-        <div className="overview-metric"><span className="overview-metric-icon"><FileCheck2 size={18} /></span><span className="overview-metric-copy"><span className="overview-metric-label">Ledger records</span><strong>{loading ? "—" : records.length}</strong><small>Organization-scoped evidence</small></span></div>
-        <div className="overview-metric"><span className="overview-metric-icon"><ShieldCheck size={18} /></span><span className="overview-metric-copy"><span className="overview-metric-label">Latest node</span><strong>{loading ? "—" : latest?.node_id ?? "No records"}</strong><small>Most recent attestation</small></span></div>
-        <div className="overview-metric"><span className="overview-metric-icon"><FileCheck2 size={18} /></span><span className="overview-metric-copy"><span className="overview-metric-label">Chain verification</span><strong>{loading ? "—" : records.length === 0 ? "No evidence" : chainVerified ? "Verified" : "Needs review"}</strong><small>SHA-256 chain + HMAC signature</small></span></div>
+        <div className="overview-metric"><span className="overview-metric-icon"><FileCheck2 size={18} /></span><span className="overview-metric-copy"><span className="overview-metric-label">Ledger records</span><strong>{loading ? "â€”" : records.length}</strong><small>Organization-scoped evidence</small></span></div>
+        <div className="overview-metric"><span className="overview-metric-icon"><ShieldCheck size={18} /></span><span className="overview-metric-copy"><span className="overview-metric-label">Latest node</span><strong>{loading ? "â€”" : latest?.node_id ?? "No records"}</strong><small>Most recent attestation</small></span></div>
+        <div className="overview-metric"><span className="overview-metric-icon"><FileCheck2 size={18} /></span><span className="overview-metric-copy"><span className="overview-metric-label">Chain verification</span><strong>{loading ? "â€”" : records.length === 0 ? "No evidence" : chainVerified ? "Verified" : "Needs review"}</strong><small>SHA-256 chain + HMAC signature</small></span></div>
       </section>
 
       <section className="surface">
         <div className="surface-heading"><div><span className="eyebrow">EVIDENCE LEDGER</span><h2>Attestation history</h2></div><span>{records.length} record(s)</span></div>
-        {loading ? <div className="empty-state"><strong>Loading signed evidence…</strong><span>Retrieving attestation records for the active organization.</span></div>
+        {loading ? <div className="empty-state"><strong>Loading signed evidenceâ€¦</strong><span>Retrieving attestation records for the active organization.</span></div>
           : records.length === 0 ? <div className="empty-state"><strong>No attestation records yet.</strong><span>Records appear after an engine attestation is signed and ingested by the control plane. Configure the same signing key on the trusted producer and control plane.</span></div>
           : <div className="attestation-list">{records.map((record) => (
             <article className="attestation-row" key={record.id}>
               <div className="attestation-row-main">
                 <span className={record.verified ? "attestation-status" : "attestation-status attestation-status--warning"}><ShieldCheck size={15} /> {record.verified ? "Signature verified" : "Verification failed"}</span>
                 <h3>{record.node_id}</h3>
-                <p>Window {record.epoch_timestamp_start}–{record.epoch_timestamp_end} · {new Date(record.created_at).toLocaleString()}</p>
+                <p>Window {record.epoch_timestamp_start}â€“{record.epoch_timestamp_end} Â· {new Date(record.created_at).toLocaleString()}</p>
                 <code>{record.block_hash}</code>
               </div>
               <button className="secondary-action" type="button" disabled={!record.verified} onClick={() => downloadAttestationPdf(record)}><Download size={15} /> {record.verified ? "Download PDF" : "PDF disabled: verify first"}</button>

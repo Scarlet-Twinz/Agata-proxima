@@ -4,7 +4,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
 const INDEX: &str = include_str!("../../../dashboard/index.html");
-const LOGO: &str = include_str!("../../../dashboard/logo.svg");
+const LOGO: &str = include_str!("../../../frontend/src/assets/agata-proxima-orbit.svg");
 
 pub async fn serve(addr: std::net::SocketAddr) -> io::Result<()> {
     let listener = TcpListener::bind(addr).await?;

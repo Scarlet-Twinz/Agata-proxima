@@ -113,7 +113,7 @@ async fn main() -> io::Result<()> {
         }
         tokio::spawn(async move {
             let mut interval = tokio::time::interval_at(
-                tokio::time::Instant::now() + std::time::Duration::from_secs(3600),
+                tokio::time::Instant::now(),
                 std::time::Duration::from_secs(3600),
             );
             let mut previous_queries = 0u64;
