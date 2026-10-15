@@ -10,7 +10,7 @@ type Attestation = {
   total_processed_queries: number;
   authenticated_tenant_sessions: number;
   blocked_unauthorized_violations: number;
-  p99_latency_overhead_ms: number;
+  p99_latency_overhead_ms: number | null;
   force_rls_active: boolean | null;
   tls_termination_enforced: boolean | null;
   circuit_breaker_tripped: boolean | null;
@@ -77,7 +77,7 @@ export function Attestations() {
       ...attestations.flatMap((item, index) => [
         `${index + 1}. Node: ${item.node_id} | Period: ${item.epoch_timestamp_start} - ${item.epoch_timestamp_end}`,
         `   Signature verified: ${item.signature_valid ? "YES" : "NO"} | RLS: ${item.force_rls_active === null ? "UNKNOWN" : item.force_rls_active ? "ACTIVE" : "INACTIVE"} | TLS: ${item.tls_termination_enforced === null ? "UNKNOWN" : item.tls_termination_enforced ? "ENFORCED" : "NOT ENFORCED"}`,
-        `   Queries: ${item.total_processed_queries} | Tenant sessions: ${item.authenticated_tenant_sessions} | Blocked violations: ${item.blocked_unauthorized_violations} | P99 overhead ms: ${item.p99_latency_overhead_ms}`,
+        `   Queries: ${item.total_processed_queries} | Tenant sessions: ${item.authenticated_tenant_sessions} | Blocked violations: ${item.blocked_unauthorized_violations} | P99 overhead ms: ${item.p99_latency_overhead_ms === null ? "UNKNOWN" : item.p99_latency_overhead_ms}`,
         `   Previous hash: ${item.previous_block_hash || "GENESIS"}`,
         `   Block hash: ${item.block_hash_signature}`,
         "",
