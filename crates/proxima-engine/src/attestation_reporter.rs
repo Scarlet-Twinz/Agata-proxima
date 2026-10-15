@@ -1,8 +1,7 @@
 //! Hourly signed telemetry delivery to the authenticated control plane.
 use std::{env, sync::Arc, time::Duration};
 
-use hmac::{Hmac, Mac};
-use sha2::{Digest, Sha256};
+use crate::attestation::{sign_hash_hmac, AttestationBlock, SecurityState, TelemetrySummary};
 use serde_json::{json, Value};
 use tokio::time::{interval, MissedTickBehavior};
 use tracing::{error, info, warn};
@@ -162,17 +161,27 @@ async fn submit_epoch(
     if start >= now {
         return Err("system clock has not advanced beyond the previous attestation epoch".into());
     }
-    let canonical = format!(
-        "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
-        1, config.organization_id, config.node_id, start, now, queries, sessions, violations,
-        0.0_f64, force_rls_active, tls_termination_enforced, breaker_tripped,
-        previous_hash, "agata-proxima-attestation-v1"
-    );
-    let block_hash = hex_lower(&Sha256::digest(canonical.as_bytes()));
-    let mut mac = Hmac::<Sha256>::new_from_slice(&config.signing_key)
-        .map_err(|_| "invalid attestation signing key".to_string())?;
-    mac.update(block_hash.as_bytes());
-    let signature_hex = hex_lower(&mac.finalize().into_bytes());
+    let block = AttestationBlock::new(
+        config.organization_id.clone(),
+        config.node_id.clone(),
+        start as u64,
+        now as u64,
+        TelemetrySummary {
+            total_processed_queries: queries,
+            authenticated_tenant_sessions: sessions,
+            blocked_unauthorized_violations: violations,
+            p99_latency_overhead_ms: None,
+        },
+        SecurityState {
+            force_rls_active,
+            tls_termination_enforced,
+            circuit_breaker_tripped: breaker_tripped,
+        },
+        previous_hash.clone(),
+    ).map_err(|error| error.to_string())?;
+    let block_hash = block.calculate_hash();
+    let signature_hex = sign_hash_hmac(&block_hash, &config.signing_key)
+        .map_err(|error| error.to_string())?;
     let payload = json!({
         "node_id": config.node_id,
         "epoch_timestamp_start": start,
