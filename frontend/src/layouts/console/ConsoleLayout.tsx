@@ -6,6 +6,7 @@ import {
   CreditCard,
   Database,
   FileSearch,
+  FileCheck2,
   Gauge,
   KeyRound,
   Menu,
@@ -34,6 +35,7 @@ const primaryNavigation = [
   { label: "Deployments", href: "/app/deployments", icon: Rocket },
   { label: "Verification", href: "/app/verification", icon: ShieldCheck },
   { label: "Audit", href: "/app/audit", icon: FileSearch },
+  { label: "Attestations", href: "/app/attestations", icon: FileCheck2 },
   { label: "Team", href: "/app/team", icon: Users },
   { label: "Billing", href: "/app/billing", icon: CreditCard },
 ];
