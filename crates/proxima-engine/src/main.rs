@@ -411,16 +411,21 @@ where
                     queries_in_chunk = queries_in_chunk.saturating_add(1);
                 }
                 if matches!(frame_type, Some(b'Q' | b'S')) {
-                    if let Ok(mut pending) = pending_simple_queries.lock() {
-                        if pending.len() < 10_000 {
-                            let marker = if frame_type == Some(b'Q') {
-                                PendingResponse::SimpleQuery(Instant::now())
-                            } else {
-                                PendingResponse::Other
-                            };
-                            pending.push_back(marker);
-                        }
+                    let mut pending = pending_simple_queries.lock().map_err(|_| {
+                        io::Error::other("query-latency queue lock was poisoned")
+                    })?;
+                    if pending.len() >= 10_000 {
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "too many outstanding PostgreSQL response markers",
+                        ));
                     }
+                    let marker = if frame_type == Some(b'Q') {
+                        PendingResponse::SimpleQuery(Instant::now())
+                    } else {
+                        PendingResponse::Other
+                    };
+                    pending.push_back(marker);
                 }
                 payload_remaining = length - 4;
                 frame_type = None;
