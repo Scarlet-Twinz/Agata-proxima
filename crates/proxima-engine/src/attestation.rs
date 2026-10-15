@@ -83,7 +83,7 @@ impl AttestationBlock {
         hex_lower(&Sha256::digest(canonical.as_bytes()))
     }
     pub fn verify(&self) -> bool {
-        self.epoch_timestamp_end >= self.epoch_timestamp_start
+        self.epoch_timestamp_end > self.epoch_timestamp_start
             && self.block_hash_signature == self.calculate_hash()
     }
 }
