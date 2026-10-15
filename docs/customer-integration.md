@@ -31,6 +31,9 @@ A running Engine does not call the Control Plane for every database query. If ma
 1. Create an Agata Proxima workspace.
 2. Register a Proxima node.
 3. Store the one-time enrollment token.
+
+For node bootstrap, submit the token to `POST /api/v1/node-enrollment` as JSON `{"enrollment_token":"..."}`. Newly issued tokens expire after 15 minutes and are consumed atomically on successful exchange; an expired or reused token is rejected. The response binds the enrollment to the node and organization that issued the token.
+
 4. Configure the Engine beside PostgreSQL.
 5. Configure tenant signing material.
 6. Point the application's database connection at Proxima.
