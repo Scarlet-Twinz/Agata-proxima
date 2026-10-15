@@ -76,6 +76,8 @@ fn decrypt_secret(ciphertext: &[u8]) -> anyhow::Result<String> {
         .map_err(|_| anyhow::anyhow!("Webhook signing secret is not UTF-8"))
 }
 
+// Keep audit-event context explicit so every queued webhook payload is traceable.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn enqueue_audit_event(
     db: &PgPool,
     organization_id: Uuid,
