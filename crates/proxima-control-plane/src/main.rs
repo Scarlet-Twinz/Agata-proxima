@@ -3120,7 +3120,9 @@ async fn attestations(State(s): State<AppState>, headers: HeaderMap) -> Response
                 let end = row.get::<i64,_>("epoch_timestamp_end");
                 let expected_payload = canonical_attestation_payload(ctx.organization_id, &node_id, start, end, &telemetry, &security_state, &previous);
                 let expected_previous = previous_by_node.entry(node_id.clone()).or_insert_with(|| "GENESIS".to_string());
-                let mut valid = previous == *expected_previous
+                let previous_chain_valid = *chain_valid_by_node.entry(node_id.clone()).or_insert(true);
+                let mut valid = previous_chain_valid
+                    && previous == *expected_previous
                     && expected_payload.as_deref() == Some(payload.as_str())
                     && format!("{:x}", Sha256::digest(payload.as_bytes())) == hash;
                 if let Some(key) = signing_key.as_deref() {
