@@ -10,6 +10,7 @@ grep -q 'copy_client_messages' crates/proxima-engine/src/main.rs
 grep -q 'observe_simple_query_latency' crates/proxima-engine/src/monitor.rs
 grep -q 'copy_backend_messages' crates/proxima-engine/src/main.rs
 grep -q '"/api/v1/attestations"' crates/proxima-control-plane/src/main.rs
+grep -q 'latest_per_node AS' crates/proxima-control-plane/src/main.rs
 grep -q '"/api/v1/security/events"' crates/proxima-control-plane/src/main.rs
 grep -q 'prevent_attestation_mutation' crates/proxima-control-plane/migrations/0023_security_attestations.sql
 grep -q 'prevent_security_event_mutation' crates/proxima-control-plane/migrations/0024_security_events.sql
