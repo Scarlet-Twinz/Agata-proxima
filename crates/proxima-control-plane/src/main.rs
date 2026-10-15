@@ -3112,6 +3112,45 @@ async fn create_attestation(
         Ok(value) if value.len() >= 32 => value.into_bytes(),
         _ => return service_unavailable("Attestation ingestion is disabled until PROXIMA_ATTESTATION_SIGNING_KEY is configured with at least 32 bytes."),
     };
+    let Some(total_processed_queries) = input.telemetry_summary.get("total_processed_queries").and_then(Value::as_u64) else {
+        return bad("Attestation telemetry is missing total_processed_queries.");
+    };
+    let Some(authenticated_tenant_sessions) = input.telemetry_summary.get("authenticated_tenant_sessions").and_then(Value::as_u64) else {
+        return bad("Attestation telemetry is missing authenticated_tenant_sessions.");
+    };
+    let Some(blocked_unauthorized_violations) = input.telemetry_summary.get("blocked_unauthorized_violations").and_then(Value::as_u64) else {
+        return bad("Attestation telemetry is missing blocked_unauthorized_violations.");
+    };
+    let Some(p99_latency_overhead_ms) = input.telemetry_summary.get("p99_latency_overhead_ms").and_then(Value::as_f64).filter(|value| value.is_finite() && *value >= 0.0) else {
+        return bad("Attestation telemetry has an invalid p99_latency_overhead_ms.");
+    };
+    let Some(force_rls_active) = input.security_state.get("force_rls_active").and_then(Value::as_bool) else {
+        return bad("Attestation security_state is missing force_rls_active.");
+    };
+    let Some(tls_termination_enforced) = input.security_state.get("tls_termination_enforced").and_then(Value::as_bool) else {
+        return bad("Attestation security_state is missing tls_termination_enforced.");
+    };
+    let Some(circuit_breaker_tripped) = input.security_state.get("circuit_breaker_tripped").and_then(Value::as_bool) else {
+        return bad("Attestation security_state is missing circuit_breaker_tripped.");
+    };
+    let canonical_expected = format!(
+        "attestation_version=1\\norganization_id={}\\nnode_id={}\\nepoch_timestamp_start={}\\nepoch_timestamp_end={}\\ntotal_processed_queries={}\\nauthenticated_tenant_sessions={}\\nblocked_unauthorized_violations={}\\np99_latency_overhead_ms={}\\nforce_rls_active={}\\ntls_termination_enforced={}\\ncircuit_breaker_tripped={}\\nprevious_block_hash={}\\n",
+        ctx.organization_id,
+        safe_attestation_identifier(&input.node_id),
+        input.epoch_timestamp_start,
+        input.epoch_timestamp_end,
+        total_processed_queries,
+        authenticated_tenant_sessions,
+        blocked_unauthorized_violations,
+        p99_latency_overhead_ms,
+        force_rls_active,
+        tls_termination_enforced,
+        circuit_breaker_tripped,
+        input.previous_block_hash
+    );
+    if canonical_expected != input.canonical_payload {
+        return (StatusCode::UNPROCESSABLE_ENTITY, Json(json!({"ok":false,"message":"Attestation fields do not match the signed canonical payload or active organization."}))).into_response();
+    }
     let calculated_hash = format!("{:x}", Sha256::digest(input.canonical_payload.as_bytes()));
     if calculated_hash != input.block_hash {
         return (StatusCode::UNPROCESSABLE_ENTITY, Json(json!({"ok":false,"message":"Attestation payload hash mismatch."}))).into_response();
@@ -3198,6 +3237,13 @@ async fn audit_events(State(s): State<AppState>, headers: HeaderMap) -> Response
         })).collect::<Vec<_>>()).into_response(),
         Err(e) => db_error(e),
     }
+}
+
+fn safe_attestation_identifier(value: &str) -> String {
+    value.chars()
+        .filter(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.'))
+        .take(128)
+        .collect()
 }
 
 fn valid_public_support_email(email: &str) -> bool {
