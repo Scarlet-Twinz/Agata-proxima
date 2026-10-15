@@ -4,6 +4,7 @@ use std::sync::Arc;
 use proxima_engine::{
     config::{Config, UpstreamTlsMode},
     dashboard,
+    monitor::EngineMetrics,
     protocol::SSL_REQUEST_CODE,
     session::{establish, BoxedPgStream},
     tenant::TenantTokenVerifier,
@@ -24,6 +25,23 @@ async fn main() -> io::Result<()> {
         .init();
 
     let config = Config::from_env()?;
+    let metrics = Arc::new(EngineMetrics::default());
+    let metrics_enabled = std::env::var("PROXIMA_METRICS_ENABLED")
+        .map(|value| !matches!(value.trim().to_ascii_lowercase().as_str(), "0" | "false" | "no" | "off"))
+        .unwrap_or(true);
+    if metrics_enabled {
+        let metrics_addr = std::env::var("PROXIMA_METRICS_LISTEN_ADDR")
+            .unwrap_or_else(|_| "127.0.0.1:9090".to_string())
+            .parse()
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, format!("invalid PROXIMA_METRICS_LISTEN_ADDR: {error}")))?;
+        let metrics_for_server = metrics.clone();
+        tokio::spawn(async move {
+            if let Err(error) = proxima_engine::monitor::serve(metrics_addr, metrics_for_server).await {
+                error!(%error, "Prometheus metrics server stopped");
+            }
+        });
+        info!(listen = %metrics_addr, "Prometheus metrics endpoint enabled");
+    }
     let config_tenant_role_prefix = config.tenant_role_prefix.clone();
 
     let verifier = config
@@ -75,6 +93,7 @@ async fn main() -> io::Result<()> {
                     Ok(permit) => permit,
                     Err(_) => {
                         error!(peer = %peer, "connection limit reached");
+                        metrics.connection_rejected();
                         drop(client);
                         continue;
                     }
@@ -91,6 +110,8 @@ async fn main() -> io::Result<()> {
                 let require_client_tls = config.require_client_tls;
                 let upstream_tls_mode = config.upstream_tls_mode;
                 let upstream_tls_server_name = config.upstream_tls_server_name.clone();
+                let connection_metrics = metrics.clone();
+                connection_metrics.connection_started();
 
                 tokio::spawn(async move {
                     let _permit = permit;
@@ -109,7 +130,13 @@ async fn main() -> io::Result<()> {
                         upstream_tls_mode,
                         upstream_tls_server_name.as_deref(),
                     ).await {
+                        if err.kind() == io::ErrorKind::PermissionDenied {
+                            connection_metrics.unauthorized_violation();
+                        }
                         error!(peer = %peer, error = %err, "connection failed");
+                        connection_metrics.connection_finished(true, 0, 0);
+                    } else {
+                        connection_metrics.connection_finished(false, 0, 0);
                     }
                 });
             }
