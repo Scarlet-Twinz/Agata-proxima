@@ -119,7 +119,7 @@ export function Attestations() {
           <button className="secondary-action" type="button" onClick={() => void load()} disabled={refreshing}>
             <RefreshCw size={15} /> {refreshing ? "Refreshing…" : "Refresh"}
           </button>
-          {latest && <button className="primary-action" type="button" onClick={() => downloadAttestationPdf(latest)}><Download size={15} /> Latest PDF</button>}
+          {latest?.verified && <button className="primary-action" type="button" onClick={() => downloadAttestationPdf(latest)}><Download size={15} /> Latest PDF</button>}
         </div>
       </div>
 
@@ -143,7 +143,7 @@ export function Attestations() {
                 <p>Window {record.epoch_timestamp_start}–{record.epoch_timestamp_end} · {new Date(record.created_at).toLocaleString()}</p>
                 <code>{record.block_hash}</code>
               </div>
-              <button className="secondary-action" type="button" onClick={() => downloadAttestationPdf(record)}><Download size={15} /> Download PDF</button>
+              <button className="secondary-action" type="button" disabled={!record.verified} onClick={() => downloadAttestationPdf(record)}><Download size={15} /> {record.verified ? "Download PDF" : "PDF disabled: verify first"}</button>
             </article>
           ))}</div>}
       </section>
