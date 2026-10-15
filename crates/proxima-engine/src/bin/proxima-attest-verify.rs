@@ -100,7 +100,7 @@ fn verify_record(value: &Value) -> Result<VerifiedRecord, String> {
         security,
         previous_hash.clone(),
     )
-    .map_err(str::to_string)?;
+    .map_err(|error| error.to_string())?;
     let expected_hash = block.calculate_hash();
     if supplied_hash != expected_hash {
         return Err(format!(
