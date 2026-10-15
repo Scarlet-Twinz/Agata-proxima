@@ -146,6 +146,16 @@ struct AttestationInput {
 }
 
 #[derive(Deserialize)]
+struct SecurityEventInput {
+    node_id: String,
+    event_type: String,
+    severity: String,
+    peer_fingerprint: String,
+    reason: String,
+    observed_at: i64,
+}
+
+#[derive(Deserialize)]
 struct PublicSupportInput {
     name: Option<String>,
     email: String,
@@ -443,6 +453,7 @@ async fn main() -> Result<()> {
         )
         .route("/api/v1/audit", get(audit_events))
         .route("/api/v1/attestations", get(attestations).post(create_attestation))
+        .route("/api/v1/security/events", post(ingest_security_event))
         .route("/api/v1/support", get(support).post(create_support))
         .route(
             "/api/v1/public/support-requests",
@@ -3027,6 +3038,50 @@ async fn create_verification(
         }
         Err(e) => db_error(e),
     }
+}
+
+async fn ingest_security_event(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<SecurityEventInput>,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
+    if input.event_type != "security.breaker.tripped"
+        || input.severity != "critical"
+        || input.node_id.is_empty()
+        || input.node_id.len() > 128
+        || safe_attestation_identifier(&input.node_id) != input.node_id
+        || input.peer_fingerprint.len() != 64
+        || !input.peer_fingerprint.bytes().all(|byte| byte.is_ascii_hexdigit())
+        || input.reason.len() > 256
+        || input.observed_at <= 0
+    {
+        return bad("Invalid security event envelope.");
+    }
+    audit(
+        &s.db,
+        ctx.organization_id,
+        ctx.user_id,
+        "security.breaker.tripped",
+        "security_event",
+        None,
+        json!({
+            "node_id":input.node_id,
+            "event_type":input.event_type,
+            "severity":input.severity,
+            "peer_fingerprint":input.peer_fingerprint,
+            "reason":input.reason,
+            "observed_at":input.observed_at,
+            "source":"proxima_engine"
+        }),
+    ).await;
+    Json(json!({"ok":true,"recorded":true})).into_response()
 }
 
 async fn attestations(State(s): State<AppState>, headers: HeaderMap) -> Response {
