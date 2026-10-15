@@ -295,6 +295,9 @@ async fn main() -> Result<()> {
     sqlx::raw_sql(include_str!("../migrations/0023_security_attestations.sql"))
         .execute(&db)
         .await?;
+    sqlx::raw_sql(include_str!("../migrations/0024_security_events.sql"))
+        .execute(&db)
+        .await?;
 
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
@@ -430,6 +433,7 @@ async fn main() -> Result<()> {
         )
         .route("/api/v1/audit", get(audit_events))
         .route("/api/v1/attestations", get(security_attestations).post(ingest_security_attestation))
+        .route("/api/v1/security/events", get(list_security_events).post(ingest_security_event))
         .route("/api/v1/support", get(support).post(create_support))
         .route(
             "/api/v1/public/support-requests",
@@ -3073,6 +3077,78 @@ struct AttestationIngestInput {
     block_hash: String,
     signature_hex: String,
     signing_key_id: String,
+}
+
+
+#[derive(Deserialize)]
+struct SecurityEventInput {
+    node_id: String,
+    event_type: String,
+    severity: String,
+    source_peer: String,
+    details: serde_json::Value,
+    observed_at: chrono::DateTime<chrono::Utc>,
+}
+
+async fn ingest_security_event(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<SecurityEventInput>,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(value) => value,
+        Err(code) => return code.into_response(),
+    };
+    if !matches!(ctx.role.as_str(), "owner" | "admin") {
+        return (StatusCode::FORBIDDEN, "Only workspace owners and administrators can submit security events.").into_response();
+    }
+    if input.node_id.trim().is_empty() || input.node_id.len() > 200
+        || input.event_type != "peer_breaker_opened"
+        || input.severity != "critical"
+        || input.source_peer.trim().is_empty() || input.source_peer.len() > 128
+        || !input.details.is_object()
+    {
+        return (StatusCode::BAD_REQUEST, "Security event fields are invalid.").into_response();
+    }
+    match sqlx::query(
+        "INSERT INTO security_events (organization_id,node_id,event_type,severity,source_peer,details,observed_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, created_at"
+    )
+    .bind(ctx.organization_id).bind(input.node_id.trim()).bind(input.event_type)
+    .bind(input.severity).bind(input.source_peer.trim()).bind(input.details)
+    .bind(input.observed_at).fetch_one(&s.db).await {
+        Ok(row) => (StatusCode::CREATED, Json(json!({
+            "accepted": true,
+            "id": row.get::<Uuid, _>("id"),
+            "created_at": row.get::<chrono::DateTime<chrono::Utc>, _>("created_at")
+        }))).into_response(),
+        Err(error) => db_error(error),
+    }
+}
+
+async fn list_security_events(State(s): State<AppState>, headers: HeaderMap) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(value) => value,
+        Err(code) => return code.into_response(),
+    };
+    let rows = match sqlx::query(
+        "SELECT id,node_id,event_type,severity,source_peer,details,observed_at,created_at
+         FROM security_events WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 200"
+    ).bind(ctx.organization_id).fetch_all(&s.db).await {
+        Ok(rows) => rows,
+        Err(error) => return db_error(error),
+    };
+    let events = rows.iter().map(|row| json!({
+        "id": row.get::<Uuid, _>("id"),
+        "node_id": row.get::<String, _>("node_id"),
+        "event_type": row.get::<String, _>("event_type"),
+        "severity": row.get::<String, _>("severity"),
+        "source_peer": row.get::<String, _>("source_peer"),
+        "details": row.get::<serde_json::Value, _>("details"),
+        "observed_at": row.get::<chrono::DateTime<chrono::Utc>, _>("observed_at"),
+        "created_at": row.get::<chrono::DateTime<chrono::Utc>, _>("created_at")
+    })).collect::<Vec<_>>();
+    Json(json!({"events": events})).into_response()
 }
 
 async fn ingest_security_attestation(
