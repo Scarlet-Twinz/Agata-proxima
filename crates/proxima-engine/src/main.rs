@@ -580,3 +580,70 @@ async fn client_wants_tls(client: &TcpStream) -> io::Result<bool> {
     let code = i32::from_be_bytes(probe[4..8].try_into().unwrap());
     Ok(length == 8 && code == SSL_REQUEST_CODE)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    #[tokio::test]
+    async fn backend_ready_for_query_records_simple_query_latency() {
+        let (mut proxy_client, mut client_peer) = tokio::io::duplex(64);
+        let (mut upstream, mut upstream_peer) = tokio::io::duplex(64);
+        let metrics = Arc::new(EngineMetrics::default());
+        let pending = Arc::new(Mutex::new(VecDeque::from([
+            PendingResponse::SimpleQuery(Instant::now()),
+        ])));
+        let task_metrics = metrics.clone();
+        let task_pending = pending.clone();
+
+        let task = tokio::spawn(async move {
+            copy_backend_messages(
+                &mut upstream,
+                &mut proxy_client,
+                task_metrics,
+                task_pending,
+                1024,
+            )
+            .await
+        });
+
+        let response = [b'Z', 0, 0, 0, 5, b'I'];
+        upstream_peer.write_all(&response).await.unwrap();
+        upstream_peer.shutdown().await.unwrap();
+
+        let mut received = Vec::new();
+        client_peer.read_to_end(&mut received).await.unwrap();
+        assert_eq!(received, response);
+        task.await.unwrap().unwrap();
+        assert!(metrics
+            .prometheus()
+            .contains("proxima_simple_query_latency_seconds_count 1"));
+    }
+
+    #[tokio::test]
+    async fn malformed_frontend_frame_is_rejected_before_forwarding() {
+        let (mut reader, mut client_peer) = tokio::io::duplex(64);
+        let (mut upstream_writer, mut upstream_peer) = tokio::io::duplex(64);
+        let metrics = Arc::new(EngineMetrics::default());
+        let pending = Arc::new(Mutex::new(VecDeque::new()));
+        let task = tokio::spawn(async move {
+            copy_client_messages(
+                &mut reader,
+                &mut upstream_writer,
+                metrics,
+                pending,
+                1024,
+            )
+            .await
+        });
+
+        client_peer.write_all(&[b'Q', 0, 0, 0, 3]).await.unwrap();
+        client_peer.shutdown().await.unwrap();
+        let mut forwarded = Vec::new();
+        upstream_peer.read_to_end(&mut forwarded).await.unwrap();
+        let error = task.await.unwrap().unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(forwarded.is_empty());
+    }
+}
