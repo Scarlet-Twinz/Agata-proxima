@@ -6,7 +6,7 @@ This runbook describes the four-pillar implementation added to the existing Prox
 
 The engine serves Prometheus text exposition at \`/metrics\` and a health probe at \`/healthz\` on a separate listener. The default bind is \`127.0.0.1:9090\`, intentionally loopback-only. Set \`PROXIMA_METRICS_LISTEN_ADDR\` only when the deployment has a firewall or private network boundary around that listener. Do not expose this endpoint publicly.
 
-Counters include accepted/rejected connections, active sessions, failed handshakes, query/Execute messages observed, authenticated tenant sessions, bytes in each direction, cumulative session duration, blocked security violations, and breaker trips. A request-to-completion histogram exposes latency buckets so Prometheus can calculate p50/p95/p99 using `histogram_quantile`. Query observation inspects only PostgreSQL frame headers and forwards original bytes unchanged. It counts simple-query and Execute messages, not SQL statements hidden inside a prepared statement's Parse message.
+Counters include accepted/rejected connections, active sessions, failed handshakes, query/Execute messages observed, authenticated tenant sessions, bytes in each direction, cumulative session duration, blocked security violations, and breaker trips. A request-to-completion histogram exposes latency buckets so Prometheus can calculate p50/p95/p99 using `histogram_quantile`, for example `histogram_quantile(0.99, sum by (le) (rate(proxima_engine_query_roundtrip_latency_seconds_bucket[5m])))`. Query observation inspects only PostgreSQL frame headers and forwards original bytes unchanged. It counts simple-query and Execute messages, not SQL statements hidden inside a prepared statement's Parse message.
 
 ## Breaker
 
@@ -16,7 +16,7 @@ The breaker drops new connections from the offending peer; it does not trip a gl
 
 ## Attest
 
-The engine writes append-only JSON Lines records to \`PROXIMA_ATTESTATION_LEDGER_PATH\` (default \`data/proxima-attestations.jsonl\`). Every record includes a SHA-256 hash chain and HMAC-SHA256 signature. The signing key must be 32 bytes or longer and must be kept in a secret manager, never in source control.
+The engine writes append-only JSON Lines records to \`PROXIMA_ATTESTATION_LEDGER_PATH\` (default \`data/proxima-attestations.jsonl\`). Every record includes a SHA-256 hash chain and HMAC-SHA256 signature. The HMAC signing key must be 32 bytes or longer and must be kept in a secret manager, never in source control. HMAC is symmetric: protect the key on both the engine and control-plane hosts because either side can validate and produce signatures.
 
 Required settings for hourly evidence emission:
 
