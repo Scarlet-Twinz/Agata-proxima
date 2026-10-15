@@ -33,8 +33,23 @@ function pdfEscape(value: string) {
 }
 
 function buildPdf(lines: string[]) {
+  const wrappedLines = lines.flatMap((line) => {
+    if (!line) return [""];
+    const chunks: string[] = [];
+    let remaining = line;
+    while (remaining.length > 96) {
+      let splitAt = remaining.lastIndexOf(" ", 96);
+      if (splitAt < 1) splitAt = 96;
+      chunks.push(remaining.slice(0, splitAt));
+      remaining = remaining.slice(splitAt).trimStart();
+    }
+    chunks.push(remaining);
+    return chunks;
+  });
   const pages: string[][] = [];
-  for (let index = 0; index < lines.length; index += 42) pages.push(lines.slice(index, index + 42));
+  for (let index = 0; index < wrappedLines.length; index += 42) {
+    pages.push(wrappedLines.slice(index, index + 42));
+  }
   if (!pages.length) pages.push(["No attestation evidence available."]);
   const objects: string[] = [];
   objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
