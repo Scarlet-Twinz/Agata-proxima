@@ -29,7 +29,7 @@ Configure these server-side environment variables to use the five purpose-specif
    - `RESEND_TEMPLATE_NEW_LOGIN_ALERT_ID`
    - `RESEND_TEMPLATE_SUPPORT_REQUEST_RECEIVED_ID`
    - `RESEND_TEMPLATE_BILLING_UPDATE_ID`
-6. Verify the DNS records shown in Resend for the exact domain. The current account reports DKIM and SPF as verified.
+6. Verify the DNS records shown in Resend for the exact approved domain. Record current DKIM and SPF status only after checking the live provider dashboard.
 7. Publish a DMARC TXT record at `_dmarc.your-approved-domain.example` after checking the domain's existing DNS policy. Do not overwrite an existing DMARC policy blindly; begin with an appropriate monitoring policy and review aggregate reports before enforcement.
 8. Keep tracking settings intentional. Open/click tracking are currently disabled in Resend, which is appropriate for security-sensitive transactional messages.
 
@@ -55,7 +55,7 @@ Configure these server-side environment variables to use the five purpose-specif
 
 ## Security rules
 
-- Never put Resend API keys in Git, browser code, public Vercel variables, documentation, or chat.
+- Never put Resend API keys in Git, browser code, public frontend build variables, documentation, or chat.
 - Do not log full public support message bodies or email credentials.
 - Public support requests are stored before notification attempts. Mail failure must not delete the support request or be represented as successful delivery.
 - The support inbox destination must be an actual monitored mailbox. Resend sending-domain verification alone does not create an inbox or enable inbound receiving.
