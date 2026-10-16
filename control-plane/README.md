@@ -15,7 +15,7 @@ Before enrolling nodes, configure `PROXIMA_NODE_ENROLLMENT_ENCRYPTION_KEY` for t
 Start a PostgreSQL instance for the control plane:
 
 ```text
-PROXIMA_CONTROL_DATABASE_URL=postgres://proxima_control:proxima-control-dev@127.0.0.1:55432/proxima_control
+PROXIMA_CONTROL_DATABASE_URL=postgres://proxima_control:proxima-control-dev@127.0.0.1:55443/proxima_control
 PROXIMA_CONTROL_BIND=127.0.0.1:8080
 PROXIMA_NODE_ENROLLMENT_ENCRYPTION_KEY=<64-hex-character-secret>
 ```
