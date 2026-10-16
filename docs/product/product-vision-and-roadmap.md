@@ -354,7 +354,7 @@ Use the following handoff brief when transferring work to another engineer or de
 
 ## 12. Decisions still to resolve
 
-- **Canonical product/domain spelling:** current README uses “Agata Proxima” and `agataproxima.com`; a later instruction specified “Agata Prozima” and `AgataProzima.com`. Verify domain ownership and confirm one canonical spelling before public-facing edits.
+- **Canonical public domain:** use the domain verified by ownership and DNS records. Keep the approved spelling consistent across README, website metadata, identity callbacks, email lifecycle links, billing webhooks, and deployment configuration.
 - **Payment provider:** the current repository implements Flutterwave billing. Live acceptance remains blocked until the real checkout returns the configured USD currency and exact amount, webhook verification succeeds, and the full payment/entitlement lifecycle is tested. See `docs/production/flutterwave-billing.md`.
 - **Metrics implementation:** confirm whether a Prometheus exporter already exists; the local operator dashboard is not proof that a Prometheus endpoint exists.
 - **Circuit breaker semantics:** decide whether it is per connection, per source, per tenant or service-wide; define safe thresholds and recovery.
