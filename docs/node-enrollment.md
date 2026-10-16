@@ -30,8 +30,10 @@ PowerShell generation example:
 
 ```powershell
 $bytes = New-Object byte[] 32
-[System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
-$env:PROXIMA_NODE_ENROLLMENT_ENCRYPTION_KEY = [Convert]::ToHexString($bytes).ToLowerInvariant()
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$rng.GetBytes($bytes)
+$env:PROXIMA_NODE_ENROLLMENT_ENCRYPTION_KEY = [BitConverter]::ToString($bytes).Replace("-", "").ToLowerInvariant()
+$rng.Dispose()
 ```
 
 Bash generation example:
