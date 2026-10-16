@@ -6,7 +6,6 @@ Use this index to find the right guide for the task. Product documentation focus
 
 - [Architecture](architecture.md) — major components and trust boundaries.
 - [Product vision and roadmap](product/product-vision-and-roadmap.md) — product pillars, design principles, acceptance criteria, and execution checkpoints.
-- [Product proposal review](product/source-proposal-review.md) — proposal ideas separated from verified implementation and engineering recommendations.
 - [Cloud and control plane](cloud.md) — management-plane overview.
 - [Connection lifecycle](connection-lifecycle.md) — PostgreSQL connection behavior.
 
@@ -38,7 +37,6 @@ Use this index to find the right guide for the task. Product documentation focus
 - [Deployment runbook](production/phase55-deployment-runbook.md) — environment and deployment requirements.
 - [Operational readiness](production/operational-readiness-runbook.md) — health, backups, recovery, monitoring, and incident response.
 - [Four-pillar runbook](production/proxima-four-pillars.md) — Monitor, Breaker, Attest, and verification operations.
-- [Repository consolidation](production/repository-consolidation.md) — branch and repository workflow.
 - [Launch work map](production/remaining-launch-work-map.md) — remaining launch dependencies and acceptance work.
 
 ## Identity and billing
