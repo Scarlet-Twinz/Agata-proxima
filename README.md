@@ -52,6 +52,7 @@ The 25–40 platform layer adds an authenticated, durable control plane with org
 ## Documentation
 
 - [Practical usage guide](docs/usage.md) — local setup, resources, verification, billing, team access and SSO.
+- [Secure node enrollment](docs/node-enrollment.md) — node registration, one-time bootstrap, process variables, identity persistence and token rotation.
 - [Developer/API guide](docs/developer-guide.md) — authenticated API routes and integration contracts.
 - [Customer integration guide](docs/customer-integration.md) — connecting an existing SaaS application to Proxima.
 - [Security verification](docs/verification.md) — RLS, protocol tests and adversarial verification.

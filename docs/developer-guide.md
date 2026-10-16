@@ -42,7 +42,7 @@ Invitation requests use `organization_id`, `email`, and an optional role. Invita
 - `GET /api/v1/audit`
 - `GET/POST /api/v1/support`
 
-The request shapes and end-to-end workflow are documented in [usage.md](usage.md). The machine-readable API contract is at `control-plane/openapi.json` and is exposed locally at `/docs/openapi.json`.
+The request shapes and end-to-end workflow are documented in [usage.md](usage.md). Node bootstrap has a dedicated [Secure Node Enrollment guide](node-enrollment.md), including one-time token lifecycle, process environment variables, identity persistence and recovery. The machine-readable API contract is at `control-plane/openapi.json` and is exposed locally at `/docs/openapi.json`.
 
 ## Developer resources
 
