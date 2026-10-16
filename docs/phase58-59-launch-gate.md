@@ -8,7 +8,7 @@ Completed in the repository:
 
 - Billing checkout and customer billing response contracts are aligned with the customer UI.
 - The canonical plan catalogue is Free $0, Starter $149/month, Growth $499/month, Scale $1,199/month and Enterprise custom.
-- Paddle Live checkout uses three unique environment-configured `pri_...` price IDs; account/domain approval, Live prices, credentials and signed webhook acceptance remain external launch gates. Sandbox routing is unsupported.
+- Flutterwave checkout uses distinct environment-configured Starter, Growth, and Scale plan IDs. Provider approval, production credentials, USD checkout/amount validation, transaction verification, webhook hash validation, and entitlement lifecycle acceptance remain external launch gates. See `docs/production/flutterwave-billing.md`.
 - Plan capacity enforcement covers nodes, tenants and environments.
 - Plan quotas cover active webhook integrations, monthly verifications, team seats/invitations, API keys and API requests.
 - Plan feature enforcement covers policy management, fleet controls, advanced verification, priority support, Microsoft Entra OIDC and private deployment.
@@ -39,7 +39,7 @@ Repository-side acceptance requires:
 These are **not** falsely marked complete by repository code:
 
 - public HTTPS deployment;
-- Paddle Live account/domain approval, exact monthly price amounts, checkout and signed webhook delivery;
+- Flutterwave account approval, exact monthly USD amounts, checkout, transaction verification and webhook hash validation;
 - Agata-owned Resend domain and DNS verification;
 - real Microsoft Entra application registration and end-to-end SSO;
 - production secret rotation;
