@@ -73,6 +73,7 @@ Start at the [documentation index](docs/README.md).
 | Understand failure behavior | [Failure engineering](docs/failure-engineering.md) |
 | Review performance methodology | [Performance engineering](docs/performance.md) |
 | Configure Microsoft Entra OIDC | [Identity runbook](docs/identity/microsoft-entra-oidc.md) |
+| Review pricing and plan limits | [Pricing and entitlements](docs/billing/pricing-proposal.md) |
 | Configure Flutterwave billing | [Billing runbook](docs/production/flutterwave-billing.md) |
 | Prepare a deployment | [Deployment runbook](docs/production/phase55-deployment-runbook.md) |
 | Review operational readiness | [Operational readiness](docs/production/operational-readiness-runbook.md) |
