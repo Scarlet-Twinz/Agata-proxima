@@ -1,6 +1,6 @@
 # Agata Proxima — Remaining Launch Work Map
 
-This map follows the completed Phase 3.22-A–H repository gates. It separates repository work from tasks that require the founder's Flutterwave/Entra accounts or a real production environment. It does not mark an external task complete because documentation or code exists.
+This map follows the completed Phase 3.22-A–H repository gates. It separates repository work from tasks that require the account owner's Flutterwave and Microsoft Entra accounts or a real production environment. It does not mark an external task complete because documentation or code exists.
 
 ## Completed repository work
 
@@ -22,10 +22,10 @@ CI verifies repository implementation and regression gates; external account set
 | Flutterwave account and plan setup | Account owner, then repository verification | Account approval, live credentials and confirmed USD checkout behavior | Configure `FLUTTERWAVE_SECRET_KEY`, `FLUTTERWAVE_WEBHOOK_SECRET_HASH`, `FLUTTERWAVE_ENVIRONMENT=production`, three distinct numeric plan IDs and the canonical USD amounts; verify checkout, transaction verification, webhook hash, duplicate delivery and failure handling. See `docs/production/flutterwave-billing.md`. |
 | Microsoft Entra SSO | Account owner creates the app registration; repository/deployment work completes integration | Public HTTPS Control Plane callback URL | Multitenant Web app registered; exact callback set; client ID and secret safely configured; organization Entra tenant ID bound; real login creates the correct Agata session and audit event. The UI start flow exists, but SSO is not production-accepted until the real end-to-end test passes. |
 | Production hosting and database | Account owner creates the selected provider resources; repository deployment preparation is ready | Stable public backend URL and managed database | Follow `docs/production/deployment-architecture.md`: host the React frontend and Rust Control Plane separately, use a managed PostgreSQL database, preserve tested API/session routing, enforce TLS and restricted access, apply the ordered migration chain through 0024, and run smoke tests. Production hosting has not been approved; do not deploy to Vercel unless the owner explicitly approves it and confirms the selected plan permits the intended commercial use. Public DNS, API hosting, managed-database, and deployment-secret-store state require direct verification. |
-| Production email | Founder/domain owner plus deployment configuration | Agata-owned domain and Resend access | Sending domain DNS is verified; production sender and API key configured in secret store; verification, password reset and invitations are delivered in a real test. |
+| Production email | Domain/account owner plus deployment configuration | Agata-owned domain and Resend access | Sending domain DNS is verified; production sender and API key configured in secret store; verification, password reset and invitations are delivered in a real test. |
 | Operational readiness | Repository scripts/runbooks plus hosting configuration | Production deployment and database | Health/readiness probes alert correctly; automated backups/PITR enabled; restore drill to an isolated database records RPO/RTO; alerting and rollback are tested. |
 | External SaaS/security acceptance | Engineering + security reviewer | Deployed Control Plane, Engine and customer-like test app | Three-tenant acceptance verifies tenant-local operations, rejects cross-tenant reads/writes, checks expired context, and records evidence; load testing and independent security assessment are completed. |
-| Launch sign-off | Founder and engineering | All tracks above | No critical open launch gates; runbooks and incident ownership are clear; production launch checklist has evidence for every item. |
+| Launch sign-off | Product owner and engineering | All tracks above | No critical open launch gates; runbooks and incident ownership are clear; production launch checklist has evidence for every item. |
 
 ## Flutterwave setup sequence
 

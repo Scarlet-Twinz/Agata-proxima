@@ -166,9 +166,9 @@ The repository already describes a `tools/proxima-verify.sh` harness and Postgre
 
 Audit existing routes, schemas, frontend flows and migrations before modifying them. Avoid duplicating capabilities that already exist.
 
-## 4. Additional recommendations I want included
+## 4. Cross-cutting engineering recommendations
 
-These recommendations extend the proposal. They are proposed work, not claims of current implementation.
+These recommendations extend the product requirements. They are proposed work, not claims of current implementation.
 
 ### A. Reproducible benchmark suite
 - Compare direct PostgreSQL traffic with traffic through Proxima under the same environment and workload.
@@ -338,21 +338,7 @@ Do not pre-fill these statuses without fresh evidence.
 8. Continue the checkpoints in order, preserving existing completed work and documenting blockers.
 9. Only after the evidence is ready, prepare the technical launch post and publish measured claims.
 
-## 11. New-chat handoff prompt
-
-Use the following handoff brief when transferring work to another engineer or development session:
-
-> We are continuing the **Agata Proxima** repository, `Scarlet-Twinz/Agata-proxima`. Treat `docs/production/docs/product/product-vision-and-roadmap.md` as the handoff document for the product vision and four pillars, and treat the existing **Final Production Roadmap checkpoints 3.51–3.70 as the sole execution roadmap**.
->
-> The vision includes Proxima Engine (Rust/Tokio PostgreSQL tenant-isolation boundary), Proxima Monitor (Prometheus/observability and reproducible benchmarks), Proxima Breaker (scoped defensive circuit breaker), Proxima Attest (signed, independently verifiable tamper-evident evidence), Proxima Verify, and the management/control plane and commercial platform.
->
-> First inspect the current repository branch, commit, working tree and existing docs/code/tests. Do not assume this roadmap proves any feature is implemented. Build a checkpoint/pillar gap matrix with evidence. Preserve verified work and avoid duplicate features, destructive Git operations, unapproved provider/domain changes or unmeasured security/performance claims. Distinguish local tests, CI, staging and production acceptance. Do not deploy, change DNS or activate live billing unless explicitly asked.
->
-> Planned metrics, defensive breaker behavior, attestation cadence, licensing, and pricing are not accepted merely because they appear in this roadmap. Acceptance requires implemented behavior, relevant automated tests, and environment-specific evidence. Additional recommendations include reproducible benchmarks, a security-claims register, supply-chain/release integrity, key lifecycle controls, resilience and recovery testing, a standalone attestation verifier, and a real pilot acceptance process.
->
-> Resume with the next incomplete checkpoint in 3.51–3.70, based on repository evidence, and explain the exact change and acceptance test before making broad changes.
-
-## 12. Decisions still to resolve
+## 11. Decisions still to resolve
 
 - **Canonical public domain:** use the domain verified by ownership and DNS records. Keep the approved spelling consistent across README, website metadata, identity callbacks, email lifecycle links, billing webhooks, and deployment configuration.
 - **Payment provider:** the current repository implements Flutterwave billing. Live acceptance remains blocked until the real checkout returns the configured USD currency and exact amount, webhook verification succeeds, and the full payment/entitlement lifecycle is tested. See `docs/production/flutterwave-billing.md`.
@@ -362,7 +348,7 @@ Use the following handoff brief when transferring work to another engineer or de
 - **Open-source/commercial split and pricing:** validate through competitor research and customer interviews; PDF price points are not binding.
 - **Pilot customer and target deployment environment:** identify a realistic first deployment and the acceptance evidence it can produce.
 
-## 13. North-star definition of success
+## 12. Definition of success
 
 Agata Proxima succeeds when an independent developer can understand and deploy it, a security engineer can test its tenant-isolation claims, an operator can observe and safely manage it, and a customer can verify its evidence—while the product behaves predictably under failure and the business can support real customers.
 
