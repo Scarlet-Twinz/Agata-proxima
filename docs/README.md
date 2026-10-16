@@ -31,6 +31,7 @@ Use this index to find the right guide for the task. Product documentation focus
 
 - [Performance engineering](performance.md) — reproducible measurement guidance.
 - [Production readiness](production-readiness.md) — readiness criteria.
+- [Production acceptance matrix](production/phase3b-3-24-40-acceptance.md) — live acceptance gates for hosting, billing, identity, email, database recovery, and security.
 - [Release readiness](release-readiness.md) — release checks.
 - [Production hardening](production-hardening.md) — hardening requirements.
 - [Deployment architecture](production/deployment-architecture.md) — deployment topology.
