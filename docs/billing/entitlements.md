@@ -1,6 +1,6 @@
 # Agata Proxima Entitlement Matrix
 
-Launch pricing is **Free $0 / Starter $149 / Growth $499 / Scale $1,199 / Enterprise custom**, billed monthly. This file is aligned with `docs/billing/entitlement-matrix.md` and `docs/billing/phase3-22-entitlement-contract.md`.
+Launch pricing is **Free $0 / Starter $149 / Growth $499 / Scale $1,199 / Enterprise custom**, billed monthly. This file is aligned with `docs/billing/entitlement-matrix.md`. `docs/billing/phase3-22-entitlement-contract.md` is a historical acceptance record; use the current Flutterwave runbook for provider configuration.
 
 The fundamental Proxima Engine security boundary is available on every plan. Commercial limits may reject new resource creation or feature use, but must never weaken existing tenant isolation.
 
@@ -40,7 +40,7 @@ Enterprise values are determined by an authorized agreement and provisioning; a 
 - Missing or untrusted paid entitlement state fails closed for protected operations.
 - Capacity checks must remain safe under concurrent creation attempts.
 - A downgrade does not delete customer resources or disable isolation. If current usage exceeds the destination plan, preserve existing data, block capacity-increasing writes above the limit, and allow safe remediation.
-- Free is an Agata entitlement and does not require a Lemon Squeezy subscription.
+- Free is an Agata entitlement and does not require a Flutterwave subscription.
 
 ## Metering and enforcement contract
 
@@ -55,26 +55,29 @@ Phase 3.22-A–H repository acceptance is complete and its targeted gates pass i
 7. Feature gates, Enterprise provisioning restrictions and support-level entitlements.
 8. Billing lifecycle transitions, fixed seven-day failed-renewal grace, cancellation at the recorded period end, downgrade preservation, idempotent webhook processing and regression checks.
 
-Passing repository gates proves the code/test acceptance boundary, not live production provider activation. The production environment still needs a Lemon Squeezy payment round trip, database rollout, real SSO acceptance and operational verification.
+Passing repository gates proves the code/test acceptance boundary, not live production provider activation. The production environment still needs a Flutterwave payment round trip, database rollout, real SSO acceptance and operational verification.
 
 ## Billing source of truth
 
-Lemon Squeezy is the provider for paid subscription lifecycle. Agata's database stores normalized billing state, organization membership, resolved entitlements and audit history. Signed provider events are processed idempotently. A browser redirect or client-supplied plan value never proves payment.
+Flutterwave is the current provider integration for paid checkout. Agata's database stores normalized billing state, organization membership, resolved entitlements and audit history. The server verifies the transaction and local reference, validates the configured `verif-hash` webhook header, and processes duplicate notifications idempotently. A browser redirect or client-supplied plan value never proves payment.
 
-Only the Agata-specific environment-configured Lemon Squeezy variant IDs are accepted:
+Configure distinct numeric plan IDs and expected USD amounts using the current [Flutterwave billing runbook](../production/flutterwave-billing.md):
 
-- `LEMON_SQUEEZY_STARTER_VARIANT_ID`
-- `LEMON_SQUEEZY_GROWTH_VARIANT_ID`
-- `LEMON_SQUEEZY_SCALE_VARIANT_ID`
+- `FLUTTERWAVE_STARTER_PLAN_ID`
+- `FLUTTERWAVE_GROWTH_PLAN_ID`
+- `FLUTTERWAVE_SCALE_PLAN_ID`
+- `FLUTTERWAVE_STARTER_AMOUNT_USD=149`
+- `FLUTTERWAVE_GROWTH_AMOUNT_USD=499`
+- `FLUTTERWAVE_SCALE_AMOUNT_USD=1199`
 
-Before checkout, the backend validates the USD store, product/variant store relationship, published status, Test/Live mode, monthly interval, and exact variant price. Expected amounts in minor units are Starter `14900`, Growth `49900` and Scale `119900`. The signed webhook validates its raw-body signature, store, mode, organization, local checkout reference, and configured variant before paid entitlements are applied.
+Before paid checkout is enabled, verify the live checkout currency and exact amount, server-side transaction verification, webhook hash validation, duplicate delivery, and entitlement transitions in the intended environment.
 
 ## Upgrade and downgrade behavior
 
 ### Upgrade
 
 1. The customer starts checkout for a supported paid plan.
-2. Lemon Squeezy verifies the transaction and sends its signed webhook.
+2. Flutterwave processes the checkout transaction and sends a webhook that must pass the configured hash validation.
 3. Agata validates the provider signature, store/mode, organization, local checkout reference and configured variant; catalog amount/currency checks occur before checkout.
 4. The billing state and resolved entitlement are updated idempotently.
 5. The plan transition is audited.
@@ -89,10 +92,10 @@ Before checkout, the backend validates the USD store, product/variant store rela
 
 ## Provider catalog
 
-The intended monthly Lemon Squeezy plans are:
+The intended monthly Flutterwave plan amounts are:
 
 - Agata Proxima Starter — $149/month
 - Agata Proxima Growth — $499/month
 - Agata Proxima Scale — $1,199/month
 
-Do not reuse unrelated products or change provider plans solely because this document exists. Before enabling live checkout, confirm that the actual Lemon Squeezy variant IDs and amounts match this catalogue and complete a real checkout → signed webhook → entitlement acceptance test. Annual billing is not part of the current active Lemon Squeezy contract.
+Do not enable paid checkout until the actual Flutterwave plan IDs, USD checkout currency, amounts, transaction verification, webhook validation, and entitlement lifecycle pass in the intended environment. Annual billing is not part of the current active billing contract.
