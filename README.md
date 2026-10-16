@@ -77,7 +77,6 @@ Start at the [documentation index](docs/README.md).
 | Prepare a deployment | [Deployment runbook](docs/production/phase55-deployment-runbook.md) |
 | Review operational readiness | [Operational readiness](docs/production/operational-readiness-runbook.md) |
 | Understand product direction | [Product vision and roadmap](docs/product/product-vision-and-roadmap.md) |
-| Review proposal ideas and evidence cautions | [Product proposal review](docs/product/source-proposal-review.md) |
 | Inspect the API contract | [OpenAPI specification](control-plane/openapi.json) |
 
 ## Verification
