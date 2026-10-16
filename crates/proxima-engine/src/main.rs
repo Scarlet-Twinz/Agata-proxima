@@ -388,7 +388,7 @@ async fn main() -> io::Result<()> {
                 previous_violations = current_violations;
                 previous_breaker_trips = current_breaker_trips;
                 match ledger.append_hourly(telemetry, state).await {
-                    Ok(hash) => {
+                    Ok(_) => {
                         if let (Some(url), Some(token), Some(client)) = (
                             ingest_url.as_deref(),
                             ingest_token.as_deref(),
