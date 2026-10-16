@@ -128,6 +128,7 @@ jobs:
           test -f docs/production/operational-readiness-runbook.md
           ! grep -qi 'Stripe webhooks' docs/developer-guide.md
           bash tests/launch/frontend_route_contract.sh
+          bash tests/launch/node_enrollment_docs_gate.sh
 
       - name: Flutterwave billing integration
         run: bash tests/launch/flutterwave_billing_gate.sh

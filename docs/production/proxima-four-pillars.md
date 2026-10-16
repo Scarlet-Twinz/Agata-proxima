@@ -2,6 +2,10 @@
 
 This runbook describes the four-pillar implementation added to the existing Proxima Engine. It does not replace the Engine's PostgreSQL wire-protocol, tenant-token, TLS, or RLS enforcement paths.
 
+## Node identity and bootstrap
+
+Register a node through the Control Plane and bootstrap its identity using the one-time enrollment token before expecting node-scoped evidence to be associated with that node. The Control Plane encrypts the generated 32-byte node signing credential with AES-256-GCM using `PROXIMA_NODE_ENROLLMENT_ENCRYPTION_KEY` (32 bytes represented as 64 hex characters). The Engine persists the returned identity at `PROXIMA_NODE_IDENTITY_PATH` or the platform default and reuses it on later starts. The enrollment token is single-use; remove it from the launching shell after startup. See [Secure Node Enrollment](../node-enrollment.md) for exact commands and recovery steps.
+
 ## Monitor
 
 The engine serves Prometheus text exposition at \`/metrics\` and a health probe at \`/healthz\` on a separate listener. The default bind is \`127.0.0.1:9090\`, intentionally loopback-only. Set \`PROXIMA_METRICS_LISTEN_ADDR\` only when the deployment has a firewall or private network boundary around that listener. Do not expose this endpoint publicly.

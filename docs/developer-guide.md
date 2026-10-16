@@ -42,7 +42,7 @@ Invitation requests use `organization_id`, `email`, and an optional role. Invita
 - `GET /api/v1/audit`
 - `GET/POST /api/v1/support`
 
-The request shapes and end-to-end workflow are documented in [usage.md](usage.md). The machine-readable API contract is at `control-plane/openapi.json` and is exposed locally at `/docs/openapi.json`.
+The request shapes and end-to-end workflow are documented in [usage.md](usage.md). Node bootstrap has a dedicated [Secure Node Enrollment guide](node-enrollment.md), including one-time token lifecycle, process environment variables, identity persistence and recovery. The machine-readable API contract is at `control-plane/openapi.json` and is exposed locally at `/docs/openapi.json`.
 
 ## Developer resources
 
@@ -54,22 +54,21 @@ The request shapes and end-to-end workflow are documented in [usage.md](usage.md
 
 API keys are organization-scoped. Store newly issued credentials securely and revoke keys that are no longer needed. Webhook receivers should use HTTPS, verify the signing contract, tolerate retries and avoid treating a delivery as an exactly-once transport.
 
-## Billing — Lemon Squeezy
+## Billing — Flutterwave
 
-Lemon Squeezy is the active billing provider. Server-authoritative endpoints are:
+Flutterwave is the configured billing provider in the current Control Plane implementation. Server-authoritative endpoints are:
 
 - `GET /api/v1/billing`
 - `GET /api/v1/billing/plans`
 - `GET /api/v1/billing/entitlements`
 - `POST /api/v1/billing/checkout`
-- `POST /api/v1/billing/portal`
-- `GET /api/v1/billing/verify?reference=...`
-- `GET /api/v1/billing/lemonsqueezy/callback`
-- `POST /api/v1/webhooks/lemonsqueezy`
+- `POST /api/v1/billing/portal` — currently returns a support message rather than a self-service portal.
+- `GET /api/v1/billing/verify?reference=...&transaction_id=...`
+- `POST /api/v1/webhooks/flutterwave`
 
-The public/server catalogue is Free $0, Starter $149/month, Growth $499/month, Scale $1,199/month and Enterprise custom. Checkout is configured for USD. Lemon Squeezy variant IDs must resolve to published monthly subscription variants at exactly the expected USD amounts and selected Test/Live mode. The server validates the variant before checkout and applies paid entitlements only from a verified, store-matched, mode-matched, idempotently processed webhook.
+The catalogue is Free $0, Starter $149/month, Growth $499/month, Scale $1,199/month and Enterprise custom. Configure `FLUTTERWAVE_SECRET_KEY`, `FLUTTERWAVE_WEBHOOK_SECRET_HASH`, `FLUTTERWAVE_ENVIRONMENT=production`, `FLUTTERWAVE_STARTER_PLAN_ID`, `FLUTTERWAVE_GROWTH_PLAN_ID`, `FLUTTERWAVE_SCALE_PLAN_ID`, and the three `FLUTTERWAVE_*_AMOUNT_USD` values in the Control Plane secret store.
 
-Configure `LEMON_SQUEEZY_API_KEY`, `LEMON_SQUEEZY_STORE_ID`, the three `LEMON_SQUEEZY_*_VARIANT_ID` values, `LEMON_SQUEEZY_WEBHOOK_SECRET`, and `LEMON_SQUEEZY_TEST_MODE=true` for initial verification. Keep secrets in the deployment secret store. Live activation remains blocked until test-mode checkout, signed webhook, subscription lifecycle and entitlement reconciliation checks pass.
+The server verifies the provider transaction, local reference, amount and USD currency before applying entitlements. Webhook requests are checked against `verif-hash` and duplicate event handling is idempotent. Do not treat a browser return as proof of payment. See [the Flutterwave billing runbook](production/flutterwave-billing.md) for the full configuration contract and checklist.
 
 ## Microsoft Entra SSO
 

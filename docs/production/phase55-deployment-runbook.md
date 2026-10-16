@@ -9,7 +9,7 @@ HTTPS
 Agata Proxima Control Plane
   |
   +--> Control PostgreSQL
-  +--> Paddle Billing
+  +--> Flutterwave Billing
   +--> Resend
   +--> Microsoft Entra ID (SSO, after external acceptance)
   +--> Proxima Engine nodes
@@ -28,26 +28,21 @@ Use a deployment secret store, not a committed `.env` file. Do not paste secret 
 - `PROXIMA_CONTROL_DATABASE_URL`
 - `PROXIMA_COOKIE_SECURE=true`
 - `AGATA_PUBLIC_BASE_URL=https://<your-public-control-plane-host>`
+- `PROXIMA_NODE_ENROLLMENT_ENCRYPTION_KEY` — 32 random bytes encoded as 64 hexadecimal characters; required to encrypt node signing credentials at rest.
 
-### Paddle Billing
+### Flutterwave Billing
 
-- `PADDLE_API_KEY`
-- `PADDLE_CLIENT_TOKEN`
-- `PADDLE_WEBHOOK_SECRET`
-- `PADDLE_ENVIRONMENT=production` for the Paddle Live-only integration
-- `PADDLE_STARTER_PRICE_ID`
-- `PADDLE_GROWTH_PRICE_ID`
-- `PADDLE_SCALE_PRICE_ID`
+- `FLUTTERWAVE_SECRET_KEY`
+- `FLUTTERWAVE_WEBHOOK_SECRET_HASH` — expected value of Flutterwave's `verif-hash` webhook header.
+- `FLUTTERWAVE_ENVIRONMENT=production`
+- `FLUTTERWAVE_STARTER_PLAN_ID`
+- `FLUTTERWAVE_GROWTH_PLAN_ID`
+- `FLUTTERWAVE_SCALE_PLAN_ID`
+- `FLUTTERWAVE_STARTER_AMOUNT_USD=149`
+- `FLUTTERWAVE_GROWTH_AMOUNT_USD=499`
+- `FLUTTERWAVE_SCALE_AMOUNT_USD=1199`
 
-Set `AGATA_PUBLIC_BASE_URL` to the browser-facing app origin. In production, route `/api/v1/*`, the OIDC callback and health/readiness endpoints from that origin to the Rust Control Plane (for example, through a same-origin reverse proxy). The OIDC callback sets a host-only session cookie and redirects to `/app`; a separate frontend/backend origin without an explicit cookie/proxy design will break sign-in.
-
-Before enabling checkout, verify that the configured Paddle price IDs (`pri_...`) are active Agata Proxima monthly USD recurring prices with the canonical amounts:
-
-- Starter — $149/month
-- Growth — $499/month
-- Scale — $1,199/month
-
-Free has no recurring Paddle price. Enterprise is contract-managed. After the Control Plane is deployed and Paddle approves the business and `agataproxima.com` checkout domain, configure the Live notification destination at `https://api.agataproxima.com/api/v1/webhooks/paddle`. Verify `Paddle-Signature`, event idempotency, and entitlement processing using the approved Live acceptance procedure. This deployment does not use Sandbox.
+Configure three distinct numeric plan IDs. The server-side catalogue is Free $0, Starter $149/month, Growth $499/month, Scale $1,199/month and Enterprise custom. The Control Plane validates the configured amounts and checks the provider transaction currency and amount before applying entitlements. Confirm that the actual hosted checkout returns USD and the expected amount; do not assume display currency and charge currency are interchangeable. Configure the webhook at `https://<api-host>/api/v1/webhooks/flutterwave` and validate `verif-hash`, transaction-reference checks and duplicate-event handling in the target environment. The billing portal endpoint currently returns a support message instead of a self-service portal.
 
 ### Resend email
 
@@ -68,8 +63,8 @@ Do not mark SSO live until the multitenant Entra application, exact production H
 - HTTPS terminates correctly and secure cookies are enabled.
 - Control Plane health/readiness endpoints are reachable.
 - Database migrations are applied in order and schema state is verified without destructive resets.
-- Paddle price IDs, USD currency, monthly intervals and amounts match the canonical catalogue.
-- The Paddle webhook endpoint is reachable and signature verification passes.
+- Flutterwave plan IDs are distinct and configured amounts match the canonical catalogue.
+- Flutterwave checkout returns USD with the expected amount, and webhook hash/transaction verification succeeds.
 - Resend sending domain is verified and a real delivery test succeeds.
 - Entra redirect URI exactly matches the production callback before SSO is enabled.
 - Backups exist and a restore has been exercised with measured RPO/RTO.

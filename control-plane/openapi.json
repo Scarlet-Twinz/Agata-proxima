@@ -3,7 +3,7 @@
   "info": {
     "title": "Agata Proxima Control Plane API",
     "version": "0.2.0",
-    "description": "Authenticated management plane for organizations, tenants, policies, fleet, deployments, verification, audit, support and Paddle Billing. The Proxima Engine remains the independent data-plane enforcement authority."
+    "description": "Authenticated management plane for organizations, tenants, policies, fleet and secure node enrollment, deployments, verification, signed attestations, audit, support and Flutterwave billing. The Proxima Engine remains the independent data-plane enforcement authority."
   },
   "servers": [
     {
@@ -138,22 +138,151 @@
     },
     "/api/v1/nodes": {
       "get": {
+        "summary": "List organization-scoped nodes",
+        "description": "Returns node inventory for the authenticated organization. Enrollment tokens and signing credentials are never returned by this endpoint.",
         "responses": {
           "200": {
-            "description": "Fleet inventory"
+            "description": "Organization-scoped fleet inventory",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "name",
+                      "environment",
+                      "region",
+                      "status"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "environment": {
+                        "type": "string"
+                      },
+                      "region": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "version": {
+                        "type": "string"
+                      },
+                      "last_seen_at": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "format": "date-time"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
           }
         }
       },
       "post": {
+        "summary": "Register a node",
+        "description": "Requires an authenticated organization session, write permission and current x-csrf-token. The response contains a one-time enrollment token; store it securely because list calls never return it.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "organization_id",
+                  "name"
+                ],
+                "properties": {
+                  "organization_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "environment": {
+                    "type": "string",
+                    "default": "production"
+                  },
+                  "region": {
+                    "type": "string",
+                    "default": "auto"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Node registered; one-time enrollment token returned"
+            "description": "Node registered; enrollment_token is returned only once",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "name",
+                    "status",
+                    "enrollment_token"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "const": "pending"
+                    },
+                    "enrollment_token": {
+                      "type": "string",
+                      "minLength": 32
+                    },
+                    "warning": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "402": {
+            "description": "Node capacity or entitlement limit reached"
+          },
+          "403": {
+            "description": "Organization mismatch or write permission denied"
           }
         }
       }
     },
     "/api/v1/nodes/{id}/enrollment": {
       "post": {
+        "summary": "Mark a registered node as enrolling",
+        "description": "Requires an authenticated session, write permission and CSRF token. Updates the organization-owned node status and records an audit event. It does not issue or consume the one-time token.",
         "parameters": [
           {
             "name": "id",
@@ -167,10 +296,38 @@
         ],
         "responses": {
           "200": {
-            "description": "Enrollment started"
+            "description": "Enrollment started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "name",
+                    "status"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "const": "enrolling"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
           },
           "404": {
-            "description": "Node not found"
+            "description": "Node not found in the active organization"
           }
         }
       }
@@ -1155,6 +1312,152 @@
           },
           "403": {
             "description": "Operator write permission required"
+          }
+        }
+      }
+    },
+    "/api/v1/nodes/enroll": {
+      "post": {
+        "summary": "Bootstrap a registered node identity",
+        "description": "Bootstrap endpoint authenticated by the node UUID and one-time enrollment token in the JSON body. The token must be unused, unexpired and belong to the pending node. The Control Plane encrypts the generated node signing key at rest using PROXIMA_NODE_ENROLLMENT_ENCRYPTION_KEY; the Engine must persist the returned key securely.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "node_id",
+                  "enrollment_token"
+                ],
+                "properties": {
+                  "node_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "enrollment_token": {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 256
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Node identity bootstrapped; signing_key is a one-time 32-byte key encoded as 64 hex characters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "node_id",
+                    "organization_id",
+                    "name",
+                    "status",
+                    "signing_key"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "node_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "organization_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "const": "enrolling"
+                    },
+                    "signing_key": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token invalid, expired, consumed, or node is not pending"
+          },
+          "503": {
+            "description": "Node credential encryption is not configured correctly"
+          }
+        }
+      }
+    },
+    "/api/v1/nodes/{id}/enrollment-token": {
+      "post": {
+        "summary": "Rotate an unused node enrollment token",
+        "description": "Requires an authenticated session, write permission and CSRF token. Only available for an organization-owned node still pending/enrolling with an unconsumed token and no stored signing credential. The replacement expires after 30 minutes and is returned once.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Replacement one-time token issued; expires after 30 minutes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "name",
+                    "status",
+                    "enrollment_token"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "const": "pending"
+                    },
+                    "enrollment_token": {
+                      "type": "string"
+                    },
+                    "warning": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Node does not exist in this organization or is not eligible for token rotation"
           }
         }
       }

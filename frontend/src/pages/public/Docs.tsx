@@ -44,6 +44,7 @@ const guideGroups = [
     icon: Workflow,
     links: [
       { title: "Policies and deployments", text: "Connect versioned policy intent to an explicit deployment target.", to: "/developers/policies" },
+      { title: "Secure node enrollment", text: "Register a node, configure its one-time bootstrap variables, and persist its identity.", to: "/docs/node-enrollment" },
       { title: "Verification", text: "Test tenant-local access and negative cross-tenant cases.", to: "/docs/verification" },
       { title: "Operations", text: "Use health, fleet, audit and rollout signals during day-to-day operation.", to: "/docs/operations" },
     ],

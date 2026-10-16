@@ -11,6 +11,7 @@ const resources = [
   ["Tenant context", "Resolve and preserve tenant identity through each protected operation.", "/developers/tenant-context", "core"],
   ["Policies", "Manage enforcement intent and link changes to deployment and verification.", "/developers/policies", "core"],
   ["Fleet and deployments", "Register nodes, configure environments and inspect deployment lifecycle.", "/developers/fleet", "core"],
+  ["Secure node enrollment", "Bootstrap a node with a one-time token and persist its identity safely.", "/docs/node-enrollment", "core"],
   ["Verification", "Test allowed access, denied cross-tenant access and missing-context behavior.", "/developers/verification", "core"],
   ["Audit and events", "Review security-relevant changes and integrate event delivery.", "/developers/events", "core"],
   ["Webhooks", "Configure signed events, verify signatures and operate delivery retries.", "/developers/webhooks", "core"],
@@ -27,7 +28,7 @@ const integrations = [
   ["Vercel", "Configure deployment environments, server-side secrets and post-deploy checks.", "/developers/integrations/vercel", Workflow],
   ["PostgreSQL + RLS", "Apply least-privilege database roles and test tenant-scoped queries.", "/developers/integrations/postgresql", Server],
 ];
-const side = [["Developer home", "/developers"], ["Quickstart", "/developers/quickstart"], ["Downloads", "/developers/downloads"], ["Node.js", "/developers/nodejs"], ["Authentication", "/developers/authentication"], ["Organizations", "/developers/organizations"], ["Tenant context", "/developers/tenant-context"], ["Policies", "/developers/policies"], ["Verification", "/developers/verification"], ["Webhooks", "/developers/webhooks"], ["SDKs", "/developers/sdks"], ["CLI", "/developers/cli"], ["Terraform", "/developers/terraform"], ["API reference", "/developers/api-reference"], ["Integration catalog", "/developers/integrations"]];
+const side = [["Developer home", "/developers"], ["Quickstart", "/developers/quickstart"], ["Downloads", "/developers/downloads"], ["Node.js", "/developers/nodejs"], ["Authentication", "/developers/authentication"], ["Organizations", "/developers/organizations"], ["Tenant context", "/developers/tenant-context"], ["Policies", "/developers/policies"], ["Node enrollment", "/docs/node-enrollment"], ["Verification", "/developers/verification"], ["Webhooks", "/developers/webhooks"], ["SDKs", "/developers/sdks"], ["CLI", "/developers/cli"], ["Terraform", "/developers/terraform"], ["API reference", "/developers/api-reference"], ["Integration catalog", "/developers/integrations"]];
 
 export function Developers() {
   return <PublicPage eyebrow="Developer platform" title="Build, connect and verify with Agata Proxima." description="A complete developer path for authentication, tenant context, policy and deployment workflows, verification, audit, signed webhooks and API-based integrations.">

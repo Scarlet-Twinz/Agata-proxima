@@ -21,6 +21,7 @@ import { Contact } from "../pages/public/Contact";
 import { Legal } from "../pages/public/Legal";
 import { NotFound } from "../pages/public/NotFound";
 import { PublicDetail } from "../pages/public/PublicDetail";
+import { Nodes } from "../pages/console/Nodes";
 import { SupportRequest } from "../pages/public/SupportRequest";
 
 import Login from "../pages/auth/Login";
@@ -34,7 +35,6 @@ import {
   Billing,
   Deployments,
   Developer,
-  Nodes,
   Policies,
   Security as ConsoleSecurity,
   Support as ConsoleSupport,
@@ -59,7 +59,7 @@ const detailRoutes = [
   "/developers/integrations/firebase", "/developers/integrations/github", "/developers/integrations/vercel",
   "/developers/integrations/postgresql",
   "/docs/getting-started", "/docs/core-concepts", "/docs/api-reference", "/docs/security",
-  "/docs/operations", "/docs/troubleshooting", "/docs/verification",
+  "/docs/operations", "/docs/troubleshooting", "/docs/node-enrollment", "/docs/verification",
   "/changelog/frontend-reconstruction", "/changelog/control-plane-foundation",
 ];
 

@@ -69,7 +69,7 @@ Resource creation requires the real `organization_id` from your session/organiza
 - Verification: `organization_id`, optional `tenant_id`, `kind`, `status`, `evidence` (JSON).
 - Webhook: `name`, `endpoint_url`, `events` (array).
 
-Node registration may return a one-time enrollment token. Store it securely immediately. Never use another organization's ID or expose the PostgreSQL upstream as a bypass around Proxima.
+Node registration returns a one-time enrollment token. Copy it immediately and configure `PROXIMA_NODE_ID`, `PROXIMA_NODE_ENROLLMENT_URL`, and `PROXIMA_NODE_ENROLLMENT_TOKEN` in the Engine process environment. The Engine consumes it through `POST /api/v1/nodes/enroll` and persists identity at `PROXIMA_NODE_IDENTITY_PATH` (or its platform default). Configure `PROXIMA_NODE_ENROLLMENT_ENCRYPTION_KEY` on the Control Plane before enrollment. Follow [Secure Node Enrollment](node-enrollment.md) for exact PowerShell/Bash setup, API payloads, token rotation and troubleshooting. Never use another organization's ID or expose the PostgreSQL upstream as a bypass around Proxima.
 
 ## 5. Use the correct integration sequence
 
