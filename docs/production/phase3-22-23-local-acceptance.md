@@ -27,11 +27,11 @@ Set these values in `.env.local`:
 - `PROXIMA_OIDC_CLIENT_ID=<Application (client) ID from Entra>`
 - `PROXIMA_OIDC_CLIENT_SECRET=<the Secret VALUE, stored locally>`
 - `RESEND_API_KEY=<Resend API key, stored locally>`
-- `RESEND_FROM_NO_REPLY_EMAIL=Agata Proxima <no-reply@<approved-sending-domain>>`
-- `RESEND_FROM_SUPPORT_EMAIL=Agata Proxima Support <support@<approved-sending-domain>>`
-- `RESEND_FROM_SECURITY_EMAIL=Agata Proxima Security <security@<approved-sending-domain>>`
-- `RESEND_FROM_BILLING_EMAIL=Agata Proxima Billing <billing@<approved-sending-domain>>`
-- `RESEND_FROM_NOTIFICATIONS_EMAIL=Agata Proxima <notifications@<approved-sending-domain>>`
+- `RESEND_FROM_NO_REPLY_EMAIL=Agata Proxima <no-reply@your-approved-domain.example>`
+- `RESEND_FROM_SUPPORT_EMAIL=Agata Proxima Support <support@your-approved-domain.example>`
+- `RESEND_FROM_SECURITY_EMAIL=Agata Proxima Security <security@your-approved-domain.example>`
+- `RESEND_FROM_BILLING_EMAIL=Agata Proxima Billing <billing@your-approved-domain.example>`
+- `RESEND_FROM_NOTIFICATIONS_EMAIL=Agata Proxima <notifications@your-approved-domain.example>`
 - `AGATA_SUPPORT_INBOX_EMAIL=<your monitored inbox>`
 
 Retain the six `RESEND_TEMPLATE_*_ID` values from the checked-in example.
@@ -41,7 +41,7 @@ Do not replace them with template names or paste API keys into source code.
 
 For local sign-in, the Entra app registration must include the exact Web redirect
 URI `http://127.0.0.1:8080/api/v1/auth/oidc/callback`. Keep the production URI
-`https://<approved-domain>/api/v1/auth/oidc/callback` registered only after the production domain is confirmed. Do not
+`https://your-approved-domain.example/api/v1/auth/oidc/callback` registered only after the production domain is confirmed. Do not
 change tenant/account-type settings merely to make a test pass. The configured
 tenant ID sent to `POST /api/v1/organization/oidc/entra` must be the Entra
 Directory (tenant) ID in UUID format.
