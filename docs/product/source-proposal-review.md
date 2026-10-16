@@ -70,15 +70,13 @@ The proposal proposes an open-core strategy: keep the core engine available to d
 
 The proposal recommends updating the README, completing performance and security documentation, preparing a Hacker News launch, making a Show HN submission, publishing architecture material and encouraging developers to share the project organically.
 
-It predicts attention, GitHub stars, enterprise interest and significant revenue. It also suggests the product could attract technical reviewers who will ask about P99 latency, connection pooling, memory overhead and security boundaries.
+The proposal recommends a public launch supported by technical materials and reproducible evidence, including latency, connection pooling, memory use, and security-boundary explanations.
 
 **Review note:** Treat launch attention and revenue as uncertain outcomes. Build launch readiness around a reproducible demo, accurate README, transparent benchmark results, security verification, clear limitations, working deployment, support and pilot feedback. Do not claim production readiness merely because the codebase is large or CI passes.
 
 ## Additional statements in the proposal that require careful treatment
 
-The proposal uses strong phrases such as “world first,” “nobody else on earth,” “zero-overhead,” “absolute tenant isolation,” “guarantees they pass,” “nonexistent direct competitors,” “guaranteed financial outcomes,” and predicts the product can become a global standard.
-
-These are unverified claims, not established facts. Public product, security, compliance, sales, and investor materials should use specific, testable language tied to a threat model and supporting evidence.
+The proposal includes broad claims about market position, performance, isolation guarantees, regulatory compliance, adoption, and revenue. Treat these as hypotheses, not established facts. Public product, security, compliance, sales, and investor materials should use specific, testable language tied to a threat model and supporting evidence.
 
 ## How to use this file
 
