@@ -4,12 +4,12 @@ This document defines the current monthly price schedule and the intended plan-c
 
 ## Monthly pricing
 
-| Plan | Price | Intended use |
+| Plan | Monthly price | Intended use |
 |---|---:|---|
-| Free | $0/month | Evaluation, development, and small proofs of concept |
-| Starter | $149/month | Initial production SaaS deployments |
-| Growth | $499/month | Teams operating multiple production tenants |
-| Scale | $1,199/month | Larger fleets and security/operations teams |
+| Free | $0 | Evaluation, development, and small proofs of concept |
+| Starter | $149 | Initial production SaaS deployments |
+| Growth | $499 | Teams operating multiple production tenants |
+| Scale | $1,199 | Larger fleets and security/operations teams |
 | Enterprise | Custom | Contracted enterprise deployments |
 
 Prices are denominated in USD. Annual billing is not part of the current verified checkout contract unless separately configured and tested.
