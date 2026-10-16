@@ -16,13 +16,13 @@
 Set these in the **Control Plane service's server-side environment/secrets**, not in public frontend build variables:
 
 - `RESEND_API_KEY`
-- `RESEND_FROM_NO_REPLY_EMAIL=Agata Proxima <no-reply@<approved-sending-domain>>`
-- `RESEND_FROM_SUPPORT_EMAIL=Agata Proxima Support <support@<approved-sending-domain>>`
-- `RESEND_FROM_SECURITY_EMAIL=Agata Proxima Security <security@<approved-sending-domain>>`
-- `RESEND_FROM_BILLING_EMAIL=Agata Proxima Billing <billing@<approved-sending-domain>>`
-- `RESEND_FROM_NOTIFICATIONS_EMAIL=Agata Proxima <notifications@<approved-sending-domain>>`
+- `RESEND_FROM_NO_REPLY_EMAIL=Agata Proxima <no-reply@your-approved-domain.example>`
+- `RESEND_FROM_SUPPORT_EMAIL=Agata Proxima Support <support@your-approved-domain.example>`
+- `RESEND_FROM_SECURITY_EMAIL=Agata Proxima Security <security@your-approved-domain.example>`
+- `RESEND_FROM_BILLING_EMAIL=Agata Proxima Billing <billing@your-approved-domain.example>`
+- `RESEND_FROM_NOTIFICATIONS_EMAIL=Agata Proxima <notifications@your-approved-domain.example>`
 - `AGATA_SUPPORT_INBOX_EMAIL=<an actually monitored inbox>`
-- `AGATA_PUBLIC_BASE_URL=https://<approved-domain>` once the HTTPS production deployment is active.
+- `AGATA_PUBLIC_BASE_URL=https://your-approved-domain.example` once the HTTPS production deployment is active.
 
 Provider-domain state must be verified directly in Resend and authoritative DNS before deployment. This document does not assert that any specific production domain is currently verified. Sending-domain verification does not create an inbound mailbox; confirm receiving and MX routing separately.
 
