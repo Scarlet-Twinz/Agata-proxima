@@ -7,8 +7,8 @@ The following tests are release gates.
 - CSRF-protected writes reject missing or incorrect tokens;
 - viewer memberships cannot perform administrative writes;
 - organization IDs in request bodies cannot escape the authenticated organization;
-- billing checkout accepts only configured Agata Price IDs;
-- Stripe webhook signatures are required;
+- billing checkout accepts only configured Starter, Growth, and Scale plan IDs;
+- Flutterwave webhook `verif-hash` validation is required;
 - duplicate webhook events do not duplicate billing state.
 
 ## Entitlement bypass
