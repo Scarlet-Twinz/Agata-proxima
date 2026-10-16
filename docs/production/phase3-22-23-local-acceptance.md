@@ -27,11 +27,11 @@ Set these values in `.env.local`:
 - `PROXIMA_OIDC_CLIENT_ID=<Application (client) ID from Entra>`
 - `PROXIMA_OIDC_CLIENT_SECRET=<the Secret VALUE, stored locally>`
 - `RESEND_API_KEY=<Resend API key, stored locally>`
-- `RESEND_FROM_NO_REPLY_EMAIL=Agata Proxima <no-reply@agataproxima.com>`
-- `RESEND_FROM_SUPPORT_EMAIL=Agata Proxima Support <support@agataproxima.com>`
-- `RESEND_FROM_SECURITY_EMAIL=Agata Proxima Security <security@agataproxima.com>`
-- `RESEND_FROM_BILLING_EMAIL=Agata Proxima Billing <billing@agataproxima.com>`
-- `RESEND_FROM_NOTIFICATIONS_EMAIL=Agata Proxima <notifications@agataproxima.com>`
+- `RESEND_FROM_NO_REPLY_EMAIL=Agata Proxima <no-reply@<approved-sending-domain>>`
+- `RESEND_FROM_SUPPORT_EMAIL=Agata Proxima Support <support@<approved-sending-domain>>`
+- `RESEND_FROM_SECURITY_EMAIL=Agata Proxima Security <security@<approved-sending-domain>>`
+- `RESEND_FROM_BILLING_EMAIL=Agata Proxima Billing <billing@<approved-sending-domain>>`
+- `RESEND_FROM_NOTIFICATIONS_EMAIL=Agata Proxima <notifications@<approved-sending-domain>>`
 - `AGATA_SUPPORT_INBOX_EMAIL=<your monitored inbox>`
 
 Retain the six `RESEND_TEMPLATE_*_ID` values from the checked-in example.
@@ -41,7 +41,7 @@ Do not replace them with template names or paste API keys into source code.
 
 For local sign-in, the Entra app registration must include the exact Web redirect
 URI `http://127.0.0.1:8080/api/v1/auth/oidc/callback`. Keep the production URI
-`https://agataproxima.com/api/v1/auth/oidc/callback` registered as well. Do not
+`https://<approved-domain>/api/v1/auth/oidc/callback` registered only after the production domain is confirmed. Do not
 change tenant/account-type settings merely to make a test pass. The configured
 tenant ID sent to `POST /api/v1/organization/oidc/entra` must be the Entra
 Directory (tenant) ID in UUID format.
@@ -100,6 +100,6 @@ Do not label the final category passed until it has actually been exercised.
 
 The earlier local-acceptance record reports that a DMARC TXT record was created in WhoGoHost with name `_dmarc` and value `v=DMARC1; p=none;`. This is an owner-reported configuration, not proof that the record is currently visible in authoritative DNS. Verify public DNS before marking DNS acceptance passed; do not create a second DMARC record.
 
-Resend sending-domain verification does not create an inbound mailbox. Set `AGATA_SUPPORT_INBOX_EMAIL` to a real, monitored inbox and verify that support notifications arrive and replies are received. Do not assume `support@agataproxima.com` can receive mail unless an actual mailbox or inbound routing has been configured.
+Resend sending-domain verification does not create an inbound mailbox. Set `AGATA_SUPPORT_INBOX_EMAIL` to a real, monitored inbox and verify that support notifications arrive and replies are received. Do not assume the sender address can receive mail unless an actual mailbox or inbound routing has been configured.
 
 The prior DNS-zone review recorded the apex `@` A record as `127.0.0.1`, which is a loopback address and not a public website destination. Re-check the current authoritative DNS zone; only replace it after the actual hosting target is known. Never guess an IP address or change nameservers as a cleanup shortcut.
