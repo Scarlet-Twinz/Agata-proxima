@@ -42,7 +42,8 @@ Use this index to find the right guide for the task. Product documentation focus
 ## Identity and billing
 
 - [Microsoft Entra OIDC](identity/microsoft-entra-oidc.md) — identity-provider configuration and activation gates.
-- [Entitlement contract](billing/phase3-22-entitlement-contract.md) — server-side entitlement and quota behavior.
+- [Pricing and entitlements](billing/pricing-and-entitlements.md) — monthly prices, plan capacity, and billing acceptance gates.
+- [Historical Phase 3.22 entitlement record](billing/phase3-22-entitlement-contract.md) — earlier repository acceptance snapshot; not current provider setup instructions.
 - [Flutterwave billing](production/flutterwave-billing.md) — billing configuration and activation gates.
 - [Transactional email](production/phase3-23-resend-transactional-email.md) — email delivery setup and verification.
 

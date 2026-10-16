@@ -2,7 +2,7 @@
 
 > **Purpose:** This document defines the product direction, technical principles, acceptance criteria, and engineering roadmap for Agata Proxima. It consolidates the product proposal, the four pillars, engineering recommendations, launch considerations, known caveats, and the existing execution checkpoints 3.51–3.70.
 >
-> **This document is a plan, not proof of implementation.** A feature is not “done” merely because it appears here, in the README, or in a previous conversation. Mark it complete only when repository evidence and the relevant tests/operational checks support that status.
+> **This document is a plan, not proof of implementation.** A feature is not complete merely because it appears in planning or documentation. Mark it complete only when repository evidence and the relevant tests or operational checks support that status.
 
 **Repository:** `Scarlet-Twinz/Agata-proxima`  
 **Canonical roadmap:** `AGATA PROXIMA — FINAL PRODUCTION ROADMAP`, checkpoints **3.51–3.70**  
@@ -109,7 +109,7 @@ Proxima should not claim to eliminate every possible data leak. The threat model
 - Define breaker states, transitions, cool-down, recovery, operator override and audit events.
 - Decide which actions are automatic, which require operator approval, and how to prevent an attacker from deliberately tripping the breaker.
 - Prefer narrowly scoped isolation and rate limits. “Fail-closed” should mean rejecting operations whose required security decision cannot be made safely, not indiscriminately shutting down unrelated workloads.
-- Use an explicit, validated configuration setting only after its semantics are specified. The PDF proposes `PROXIMA_SECURITY_BREAKER=fail-closed`; this is a proposal, not a claim that the variable already exists.
+- Use an explicit, validated configuration setting only after its semantics are specified. A proposed setting such as `PROXIMA_SECURITY_BREAKER=fail-closed` must not be treated as implemented until the code and tests confirm it.
 - Emit append-only security audit events with enough context to investigate but without secrets or sensitive SQL payloads.
 - Alert the control plane when available; preserve local enforcement if the control plane is unavailable.
 
@@ -119,7 +119,7 @@ Proxima should not claim to eliminate every possible data leak. The threat model
 
 **Purpose:** Produce integrity-protected evidence of defined enforcement events and verification outcomes that customers can validate independently.
 
-**Core concept from the source proposal:**
+**Attestation design goals:**
 - Periodic (the proposal suggests hourly) evidence snapshots.
 - An append-only or tamper-evident ledger of relevant security metadata.
 - Signed evidence that can be exported and displayed in the management dashboard.
@@ -219,20 +219,20 @@ Create a table for every public security claim with: claim wording, threat model
 
 ## 5. What the source PDF says versus what is verified
 
-The source proposal recommends the four pillars, Prometheus/Grafana metrics, a fail-closed security breaker, a cryptographic compliance attestation generator, a public launch strategy and a freemium/open-core commercialization model. It also includes aspirational claims and suggested pricing.
+The product strategy combines four technical pillars, operational telemetry, bounded defensive behavior, verifiable security evidence, a developer adoption strategy, and a sustainable commercial model. Performance targets, security claims, pricing, and launch outcomes require independent validation before they are published as facts.
 
-Important source proposals that must remain labeled as proposals until implemented and verified:
+Items requiring explicit design approval and acceptance:
 - `/metrics` and metric names such as `proxima_active_connections`, `proxima_query_processing_time_ms`, and `proxima_blocked_tenant_violations_total`.
 - The breaker variable `PROXIMA_SECURITY_CIRCUIT_BREAKER=fail-closed` (the proposal also uses `PROXIMA_SECURITY_BREAKER=fail-closed`; choose one documented name only if adopted).
 - Hourly attestation snapshots, SHA-256 block hashing, signed reports and PDF certificate export.
 - Suggested Growth/Scale prices of $490/month and $1,190/month and other pricing shown in the proposal. These are source-document ideas, not validated pricing decisions.
 - Absolute market, performance, security, compliance, adoption, or financial claims. Publish only claims supported by defined tests, measurements, and an explicit threat model.
 
-This roadmap preserves the useful product concepts while distinguishing source proposals, engineering recommendations, and verified implementation status.
+This roadmap separates planned capabilities, engineering recommendations, and verified implementation status.
 
 ## 6. Competitive position and open-source/commercial strategy
 
-The PDF proposes an open-core approach: make the core engine available to developers and monetize higher-value management, monitoring, evidence, organizational controls and enterprise operations. This is a strategic option, not a final licensing/pricing decision.
+An open-core model is one strategic option: make the core engine available to developers while monetizing higher-value management, monitoring, evidence, organizational controls, and enterprise operations. Licensing and pricing require explicit approval; this document does not make those decisions.
 
 Before committing:
 - Compare the actual feature set with PostgreSQL RLS, PgBouncer, Odyssey, database gateways/proxies, policy engines and relevant cloud-native approaches.
@@ -254,7 +254,7 @@ The business layer must be treated as a set of verifiable workflows:
 - Ensure subscription and feature entitlements are enforced on the server/control plane, not only hidden in the frontend.
 - Confirm production hosting, TLS, database backups, restore, monitoring, error tracking, incident response and support ownership.
 
-**Provider and naming reconciliation is required before live activation.** Repository README currently mentions Paddle Billing; the most recent project discussions mention Flutterwave, and earlier conversations considered Paystack/Lemon Squeezy. Do not assume a provider is final from this document alone. Inspect the current branch, env example, billing routes, migrations, frontend pricing and provider dashboard; record one explicitly approved provider and verify it end-to-end before launch.
+**Billing status:** Flutterwave is the current provider integration in the repository. Live activation remains conditional on confirming the production account, USD checkout amount/currency, plan identifiers, signed webhook behavior, and entitlement updates against the [Flutterwave billing runbook](../production/flutterwave-billing.md). Historical provider migrations are retained for migration integrity; they are not instructions for new deployments.
 
 There is also a naming/domain discrepancy to resolve before external publication: repository README says **Agata Proxima** and links/notes have used **agataproxima.com**, while a later user instruction specified **Agata Prozima / AgataProzima.com** without a hyphen. Do not silently rewrite domain references. Inspect actual domain ownership/DNS and obtain one canonical spelling before changing public-facing references. The project name in this roadmap remains “Agata Proxima” as used by the current repository README until the naming decision is reconciled.
 
@@ -348,7 +348,7 @@ Use the following handoff brief when transferring work to another engineer or de
 >
 > First inspect the current repository branch, commit, working tree and existing docs/code/tests. Do not assume this roadmap proves any feature is implemented. Build a checkpoint/pillar gap matrix with evidence. Preserve verified work and avoid duplicate features, destructive Git operations, unapproved provider/domain changes or unmeasured security/performance claims. Distinguish local tests, CI, staging and production acceptance. Do not deploy, change DNS or activate live billing unless explicitly asked.
 >
-> The source proposal recommends metrics, a fail-closed breaker, hourly signed attestation reports and an open-core launch model. Treat those as proposals until verified. Our extra recommendations include a reproducible benchmark suite, a public security claims register, supply-chain/release integrity, key lifecycle controls, resilience/recovery testing, a standalone attestation verifier and a real pilot acceptance process.
+> Planned metrics, defensive breaker behavior, attestation cadence, licensing, and pricing are not accepted merely because they appear in this roadmap. Acceptance requires implemented behavior, relevant automated tests, and environment-specific evidence. Additional recommendations include reproducible benchmarks, a security-claims register, supply-chain/release integrity, key lifecycle controls, resilience and recovery testing, a standalone attestation verifier, and a real pilot acceptance process.
 >
 > Resume with the next incomplete checkpoint in 3.51–3.70, based on repository evidence, and explain the exact change and acceptance test before making broad changes.
 
