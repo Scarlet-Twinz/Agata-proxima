@@ -226,9 +226,9 @@ Important source proposals that must remain labeled as proposals until implement
 - The breaker variable `PROXIMA_SECURITY_CIRCUIT_BREAKER=fail-closed` (the proposal also uses `PROXIMA_SECURITY_BREAKER=fail-closed`; choose one documented name only if adopted).
 - Hourly attestation snapshots, SHA-256 block hashing, signed reports and PDF certificate export.
 - Suggested Growth/Scale prices of $490/month and $1,190/month and other pricing shown in the proposal. These are source-document ideas, not validated pricing decisions.
-- Claims of worldwide uniqueness, nonexistent direct competitors, guaranteed compliance, near-zero latency, very low memory use, inevitable virality or guaranteed financial outcomes. Do not repeat these as established facts.
+- Absolute market, performance, security, compliance, adoption, or financial claims. Publish only claims supported by defined tests, measurements, and an explicit threat model.
 
-The source proposal should be retained alongside this roadmap when the original binary can be added through the normal repository workflow. This Markdown file preserves the source concepts and explicitly distinguishes them from engineering recommendations and verified status.
+This roadmap preserves the useful product concepts while distinguishing source proposals, engineering recommendations, and verified implementation status.
 
 ## 6. Competitive position and open-source/commercial strategy
 
