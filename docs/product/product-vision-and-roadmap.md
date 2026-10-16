@@ -1,6 +1,6 @@
-# Agata Proxima — Master Vision, Product Blueprint & Final Execution Map
+# Agata Proxima — Product Vision and Engineering Roadmap
 
-> **Purpose of this document:** This is the canonical hand-off document for continuing the Agata/Proxima work in a new ChatGPT conversation, a new development session, or with another engineer. It consolidates the product dream described in the supplied “my dream pdf.pdf”, the four-pillar proposal, additional engineering recommendations, acceptance criteria, launch strategy, known caveats, and the existing final execution checkpoints 3.51–3.70.
+> **Purpose:** This document defines the product direction, technical principles, acceptance criteria, and engineering roadmap for Agata Proxima. It consolidates the product proposal, the four pillars, engineering recommendations, launch considerations, known caveats, and the existing execution checkpoints 3.51–3.70.
 >
 > **This document is a plan, not proof of implementation.** A feature is not “done” merely because it appears here, in the README, or in a previous conversation. Mark it complete only when repository evidence and the relevant tests/operational checks support that status.
 
@@ -119,8 +119,8 @@ Proxima should not claim to eliminate every possible data leak. The threat model
 
 **Purpose:** Produce integrity-protected evidence of defined enforcement events and verification outcomes that customers can validate independently.
 
-**Core concept from the supplied PDF:**
-- Periodic (the PDF suggests hourly) evidence snapshots.
+**Core concept from the source proposal:**
+- Periodic (the proposal suggests hourly) evidence snapshots.
 - An append-only or tamper-evident ledger of relevant security metadata.
 - Signed evidence that can be exported and displayed in the management dashboard.
 - A readable report/PDF for customer security reviews.
@@ -168,7 +168,7 @@ Audit existing routes, schemas, frontend flows and migrations before modifying t
 
 ## 4. Additional recommendations I want included
 
-These recommendations extend the PDF. They are proposed work, not claims of current implementation.
+These recommendations extend the proposal. They are proposed work, not claims of current implementation.
 
 ### A. Reproducible benchmark suite
 - Compare direct PostgreSQL traffic with traffic through Proxima under the same environment and workload.
@@ -219,16 +219,16 @@ Create a table for every public security claim with: claim wording, threat model
 
 ## 5. What the source PDF says versus what is verified
 
-The attached source file is named **`my dream pdf.pdf`** and is nine pages long. It proposes the four pillars, Prometheus/Grafana metrics, a fail-closed security breaker, a cryptographic compliance attestation generator, a public launch strategy and a freemium/open-core commercialization model. It also includes aspirational claims and suggested pricing.
+The source proposal recommends the four pillars, Prometheus/Grafana metrics, a fail-closed security breaker, a cryptographic compliance attestation generator, a public launch strategy and a freemium/open-core commercialization model. It also includes aspirational claims and suggested pricing.
 
 Important source proposals that must remain labeled as proposals until implemented and verified:
 - `/metrics` and metric names such as `proxima_active_connections`, `proxima_query_processing_time_ms`, and `proxima_blocked_tenant_violations_total`.
-- The breaker variable `PROXIMA_SECURITY_CIRCUIT_BREAKER=fail-closed` (the PDF also uses `PROXIMA_SECURITY_BREAKER=fail-closed`; choose one documented name only if adopted).
+- The breaker variable `PROXIMA_SECURITY_CIRCUIT_BREAKER=fail-closed` (the proposal also uses `PROXIMA_SECURITY_BREAKER=fail-closed`; choose one documented name only if adopted).
 - Hourly attestation snapshots, SHA-256 block hashing, signed reports and PDF certificate export.
-- Suggested Growth/Scale prices of $490/month and $1,190/month and other pricing shown in the PDF. These are source-document ideas, not validated pricing decisions.
-- Claims of worldwide uniqueness, nonexistent direct competitors, guaranteed compliance, near-zero latency, very low memory use, inevitable virality or guaranteed financial outcomes. Do not repeat these as established facts.
+- Suggested Growth/Scale prices of $490/month and $1,190/month and other pricing shown in the proposal. These are source-document ideas, not validated pricing decisions.
+- Absolute market, performance, security, compliance, adoption, or financial claims. Publish only claims supported by defined tests, measurements, and an explicit threat model.
 
-The source PDF should be retained alongside this roadmap when the original binary can be added through the normal repository workflow. This Markdown file preserves the source concepts and explicitly distinguishes them from engineering recommendations and verified status.
+This roadmap preserves the useful product concepts while distinguishing source proposals, engineering recommendations, and verified implementation status.
 
 ## 6. Competitive position and open-source/commercial strategy
 
@@ -333,29 +333,29 @@ Do not pre-fill these statuses without fresh evidence.
 3. Build a gap matrix for the four pillars: existing implementation, missing implementation, test evidence, documentation, operational dependency and acceptance owner.
 4. Audit metrics and benchmark support before adding either; the README currently says performance documentation should avoid unmeasured SLA claims.
 5. Define the threat model and breaker semantics before implementing automatic global responses.
-6. Define Attest’s signed evidence schema and independent verification model before building the PDF/export UI.
+6. Define Attest’s signed evidence schema and independent verification model before building the proposal/export UI.
 7. Integrate the missing work into checkpoints 3.51–3.70.
 8. Continue the checkpoints in order, preserving existing completed work and documenting blockers.
 9. Only after the evidence is ready, prepare the technical launch post and publish measured claims.
 
 ## 11. New-chat handoff prompt
 
-Copy the following prompt into a new conversation when continuing work:
+Use the following handoff brief when transferring work to another engineer or development session:
 
-> We are continuing the **Agata Proxima** repository, `Scarlet-Twinz/Agata-proxima`. Treat `docs/production/AGATA_PROXIMA_MASTER_VISION_AND_EXECUTION_MAP.md` as the handoff document for the product vision and four pillars, and treat the existing **Final Production Roadmap checkpoints 3.51–3.70 as the sole execution roadmap**.
+> We are continuing the **Agata Proxima** repository, `Scarlet-Twinz/Agata-proxima`. Treat `docs/production/docs/product/product-vision-and-roadmap.md` as the handoff document for the product vision and four pillars, and treat the existing **Final Production Roadmap checkpoints 3.51–3.70 as the sole execution roadmap**.
 >
 > The vision includes Proxima Engine (Rust/Tokio PostgreSQL tenant-isolation boundary), Proxima Monitor (Prometheus/observability and reproducible benchmarks), Proxima Breaker (scoped defensive circuit breaker), Proxima Attest (signed, independently verifiable tamper-evident evidence), Proxima Verify, and the management/control plane and commercial platform.
 >
 > First inspect the current repository branch, commit, working tree and existing docs/code/tests. Do not assume this roadmap proves any feature is implemented. Build a checkpoint/pillar gap matrix with evidence. Preserve verified work and avoid duplicate features, destructive Git operations, unapproved provider/domain changes or unmeasured security/performance claims. Distinguish local tests, CI, staging and production acceptance. Do not deploy, change DNS or activate live billing unless explicitly asked.
 >
-> The supplied dream PDF proposed metrics, a fail-closed breaker, hourly signed attestation reports and an open-core launch model. Treat those as proposals until verified. Our extra recommendations include a reproducible benchmark suite, a public security claims register, supply-chain/release integrity, key lifecycle controls, resilience/recovery testing, a standalone attestation verifier and a real pilot acceptance process.
+> The source proposal recommends metrics, a fail-closed breaker, hourly signed attestation reports and an open-core launch model. Treat those as proposals until verified. Our extra recommendations include a reproducible benchmark suite, a public security claims register, supply-chain/release integrity, key lifecycle controls, resilience/recovery testing, a standalone attestation verifier and a real pilot acceptance process.
 >
 > Resume with the next incomplete checkpoint in 3.51–3.70, based on repository evidence, and explain the exact change and acceptance test before making broad changes.
 
 ## 12. Decisions still to resolve
 
 - **Canonical product/domain spelling:** current README uses “Agata Proxima” and `agataproxima.com`; a later instruction specified “Agata Prozima” and `AgataProzima.com`. Verify domain ownership and confirm one canonical spelling before public-facing edits.
-- **Payment provider:** repository README mentions Paddle; later work discussed Flutterwave and earlier providers. Audit code/configuration and confirm one provider before live activation.
+- **Payment provider:** the current repository implements Flutterwave billing. Live acceptance remains blocked until the real checkout returns the configured USD currency and exact amount, webhook verification succeeds, and the full payment/entitlement lifecycle is tested. See `docs/production/flutterwave-billing.md`.
 - **Metrics implementation:** confirm whether a Prometheus exporter already exists; the local operator dashboard is not proof that a Prometheus endpoint exists.
 - **Circuit breaker semantics:** decide whether it is per connection, per source, per tenant or service-wide; define safe thresholds and recovery.
 - **Attestation trust model:** select signing scheme/key custody, verifier format, evidence coverage and limitations before claiming audit readiness.

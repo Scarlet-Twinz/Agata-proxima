@@ -1,137 +1,101 @@
 # Agata Proxima
 
-Agata Proxima is security infrastructure for multi-tenant applications.
+**Security infrastructure for multi-tenant applications.**
 
-Proxima is being built around a simple principle:
+Agata Proxima is being developed to make PostgreSQL tenant isolation an infrastructure boundary that can be enforced, tested, monitored, and audited. The core data plane is written in Rust; the repository also contains a management control plane, a React frontend, verification tooling, and operational documentation.
 
-> Tenant isolation should be an infrastructure boundary that can be enforced, tested, and audited — not a security assumption repeated throughout application code.
+> **Project status:** Active development. Repository code and passing CI do not, by themselves, establish production readiness. Live-provider activation, deployed-environment testing, and final operational acceptance must be verified separately.
 
-## Architecture
+## Product capabilities
 
-```
-Application
-    |
-    v
-+----------------------+
-|    Proxima Engine    |
-|                      |
-| connection lifecycle |
-| identity/context     |
-| policy enforcement   |
-| verification        |
-| audit                |
-+----------+-----------+
-           |
-           v
-      PostgreSQL
-```
+- **Proxima Engine** — PostgreSQL protocol gateway and tenant-context enforcement.
+- **Proxima Verify** — repeatable isolation and adversarial verification.
+- **Proxima Monitor** — operational metrics and runtime visibility.
+- **Proxima Breaker** — scoped defensive handling for defined protocol and authentication violations.
+- **Proxima Attest** — signed, tamper-evident security evidence and report workflows.
+- **Control Plane** — organization, tenant, policy, node, deployment, audit, identity, and billing workflows.
 
-The first implementation targets PostgreSQL and is written in Rust with Tokio.
+Capability names describe the product architecture. See the implementation and acceptance documentation before relying on any security or production claim.
 
-## Product direction
+## Get started
 
-- **Proxima Engine** — the self-hosted data-plane component.
-- **Proxima Verify** — isolation verification and adversarial security testing.
-- **Proxima Monitor** — a separate, internal Prometheus endpoint for engine telemetry.
-- **Proxima Breaker** — peer-scoped fail-closed defense against repeated protocol and tenant-authentication violations.
-- **Proxima Attest** — signed, hash-chained security evidence with a control-plane verification API and downloadable PDF reports.
-- **Proxima Cloud** — the hosted control plane for policies, deployments, audit, monitoring, attestations, and fleet management.
+### Prerequisites
 
-Security guarantees will be documented against an explicit threat model. Proxima will not claim protection that it cannot demonstrate with tests.
+- Rust toolchain compatible with the workspace
+- Docker with Docker Compose
+- Node.js and npm for frontend work
+- PostgreSQL for database integration and verification tests
 
-## Status
+### Run the control plane locally
 
-The repository now includes the Proxima Engine, a durable Control Plane, a public React frontend, the Phase 3.22-A–H entitlement enforcement workstreams, Flutterwave Billing integration, Microsoft Entra OIDC groundwork, operational runbooks and acceptance gates. Repository CI has passed for the canonical entitlement gates. Live provider activation and production operational acceptance remain separate launch gates.
-
-The current engine establishes a verified tenant context, maps it to a PostgreSQL role, brokers the PostgreSQL authentication/startup exchange, and then enters the normal query stream only after PostgreSQL reports a ready session.
-
-The repository includes a real PostgreSQL integration test, independent RLS verification, malformed-frame property tests, connection safety limits, and an adversarial `Proxima Verify` harness. Client-side PostgreSQL TLS is now terminated at Proxima with Rustls when configured, and the upstream database leg can require independent CA + hostname verification. The repository also contains the Proxima operator dashboard, deeper adversarial verification, and a documented Cloud control-plane boundary.
-
-The 25–40 platform layer adds an authenticated, durable control plane with organization membership, tenant inventory, versioned policies, node enrollment, deployment intent, verification evidence, append-only audit events, support requests, OpenAPI documentation, a public product homepage, sign-up/sign-in and a full command center. The control plane is intentionally non-authoritative: an already-running Proxima Engine continues to enforce tenant isolation when the control plane is unavailable.
-
-## Documentation
-
-- [Practical usage guide](docs/usage.md) — local setup, resources, verification, billing, team access and SSO.
-- [Secure node enrollment](docs/node-enrollment.md) — node registration, one-time bootstrap, process variables, identity persistence and token rotation.
-- [Developer/API guide](docs/developer-guide.md) — authenticated API routes and integration contracts.
-- [Customer integration guide](docs/customer-integration.md) — connecting an existing SaaS application to Proxima.
-- [Security verification](docs/verification.md) — RLS, protocol tests and adversarial verification.
-- [Failure engineering](docs/failure-engineering.md) — expected behavior when the Control Plane, PostgreSQL, policies, nodes or TLS fail.
-- [Performance engineering](docs/performance.md) — reproducible benchmark dimensions; no unmeasured SLA claims.
-- [Proxima four-pillar runbook](docs/production/proxima-four-pillars.md) — Monitor, Breaker, Attest, signed ingestion, PDF evidence, and benchmark operation.
-- [Phase 3.22 entitlement contract](docs/billing/phase3-22-entitlement-contract.md) — pricing, quotas and A–H acceptance map.
-- [Microsoft Entra SSO runbook](docs/identity/microsoft-entra-oidc.md) — OIDC configuration and remaining activation gates.
-- [Paddle Live billing runbook](docs/production/flutterwave-billing.md) — Live credentials, price IDs, signed webhooks and activation gates.
-- [Production deployment runbook](docs/production/phase55-deployment-runbook.md) — production environment requirements.
-- [Deployment architecture](docs/production/deployment-architecture.md) — prepared Vercel frontend, container API, managed PostgreSQL and same-origin routing path.
-- [Operational readiness runbook](docs/production/operational-readiness-runbook.md) — health, backups, restore drills, monitoring and incident response.
-- [Production smoke workflow](.github/workflows/production-smoke.yml) — scheduled liveness checks and a manual full-readiness gate once the public URL is configured.
-- [Remaining launch work map](docs/production/remaining-launch-work-map.md) — Paddle Live acceptance, Microsoft Entra SSO, hosting and production acceptance.
-- [Phase 3B checkpoints 3.24–3.40](docs/production/phase3b-3-24-40-acceptance.md) — one status matrix separating repository evidence from live launch blockers.
-- [Repository map and branch policy](docs/production/repository-consolidation.md) — canonical `main` workflow, reviewed PRs, preserved legacy branches, and safe cleanup rules.
-- [OpenAPI contract](control-plane/openapi.json) — machine-readable Control Plane API.
-
-## License
-
-MIT
-
-
-## Verification
-
-The primary verification gates are:
-
-```text
-cargo fmt --all -- --check
-cargo check --workspace --all-targets
-cargo test --workspace --all-targets
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-bash tests/postgres/verify_rls.sh
-```
-
-For a configured deployment, run:
-
-```bash
-bash tools/proxima-verify.sh
-```
-
-See [docs/verification.md](docs/verification.md) for the security verification model and deployment invariants.
-
-
-## Operator dashboard
-
-When `PROXIMA_DASHBOARD_ENABLED=true`, open `http://127.0.0.1:9080/`.
-
-The dashboard is intentionally a local operator surface. It reports configuration/runtime telemetry and does not invent database health.
-
-## TLS
-
-For PostgreSQL clients using standard SSLRequest negotiation:
-
-- set `PROXIMA_TLS_CERT_FILE` and `PROXIMA_TLS_KEY_FILE`;
-- clients can use `sslmode=require`;
-- set `PROXIMA_TLS_REQUIRE_CLIENT=true` to reject plaintext;
-- set `PROXIMA_UPSTREAM_TLS_MODE=verify-full` with a trusted CA and server name for encrypted database transport.
-
-See `docs/phase18-24-release.md` for the exact security boundary and remaining external acceptance gates.
-
-## Run the platform locally
-
-The Engine remains the default workspace target:
-
-```bash
-cargo run
-```
-
-The management platform runs separately so the control plane never becomes a dependency of Engine enforcement:
+From the repository root:
 
 ```bash
 docker compose up -d control-postgres
 cargo run -p proxima-control-plane
 ```
 
-Then open:
+By default, the Command Center listens at `http://127.0.0.1:8080`. The actual address can be changed through `PROXIMA_CONTROL_BIND`.
 
-- Engine operator dashboard: `http://127.0.0.1:9080` by default (`PROXIMA_DASHBOARD_LISTEN_ADDR` can change it).
-- Proxima Command Center: `http://127.0.0.1:8080` by default (`PROXIMA_CONTROL_BIND` can change it).
+### Run the engine
 
-On Windows, use `scripts/proxima-platform.ps1` after Docker Desktop and the Rust MSVC toolchain are available.
+In a separate terminal:
+
+```bash
+cargo run
+```
+
+The local operator dashboard, when enabled, defaults to `http://127.0.0.1:9080`. Configure the required database and security environment variables for your setup before connecting real workloads.
+
+### Run the frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Use the local URL printed by Vite. See the [usage guide](docs/usage.md) for the complete local workflow and configuration details.
+
+## Documentation
+
+Start at the [documentation index](docs/README.md).
+
+| Need | Guide |
+|---|---|
+| Understand the architecture | [Architecture](docs/architecture.md) |
+| Install and run locally | [Usage guide](docs/usage.md) |
+| Connect a SaaS application | [Customer integration](docs/customer-integration.md) |
+| Use the APIs and developer workflows | [Developer guide](docs/developer-guide.md) |
+| Enroll and rotate node credentials | [Secure node enrollment](docs/node-enrollment.md) |
+| Understand security assumptions | [Threat model](docs/threat-model.md) |
+| Verify tenant isolation | [Verification guide](docs/verification.md) |
+| Understand failure behavior | [Failure engineering](docs/failure-engineering.md) |
+| Review performance methodology | [Performance engineering](docs/performance.md) |
+| Configure Microsoft Entra OIDC | [Identity runbook](docs/identity/microsoft-entra-oidc.md) |
+| Configure Flutterwave billing | [Billing runbook](docs/production/flutterwave-billing.md) |
+| Prepare a deployment | [Deployment runbook](docs/production/phase55-deployment-runbook.md) |
+| Review operational readiness | [Operational readiness](docs/production/operational-readiness-runbook.md) |
+| Understand product direction | [Product vision and roadmap](docs/product/product-vision-and-roadmap.md) |
+| Inspect the API contract | [OpenAPI specification](control-plane/openapi.json) |
+
+## Verification
+
+Run the checks appropriate to your environment. Core Rust workspace checks include:
+
+```bash
+cargo fmt --all -- --check
+cargo check --workspace --all-targets
+cargo test --workspace --all-targets
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+```
+
+PostgreSQL-backed and deployed-environment checks have additional prerequisites. Follow the [verification guide](docs/verification.md) and the relevant launch gates; do not interpret a successful compile or CI run as production acceptance.
+
+## Security
+
+Please do not publish credentials, access tokens, customer data, or exploitable vulnerability details in public issues. Review [SECURITY.md](SECURITY.md) for the responsible reporting process.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for repository workflow, testing expectations, and pull-request standards.

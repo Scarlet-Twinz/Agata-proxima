@@ -1,5 +1,5 @@
 $ErrorActionPreference = "Continue"
-$repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$repoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $repoRoot
 
 $results = [System.Collections.Generic.List[object]]::new()

@@ -2,10 +2,11 @@
 
 **Canonical domain:** `agataproxima.com`  
 **Canonical integration branch:** `main`  
-**Active billing provider:** Paddle Live API only  
-**Status rule:** repository implementation and a live production acceptance are separate. A checkpoint is not fully passed until its listed external evidence exists.
+**Historical provider recorded in this snapshot:** Paddle Live API (2026-10-11)  
+**Current provider implementation:** Flutterwave; see the [current billing runbook](flutterwave-billing.md).  
+**Status rule:** This is a historical checkpoint snapshot, not the current live billing status. Repository implementation and production acceptance are separate; verify current blockers against the current provider runbook before acting.
 
-This page is the single checkpoint summary for 3.24–3.40. See [repository consolidation and branch map](repository-consolidation.md) for the canonical PR/branch policy. The detailed runbooks linked below remain the execution instructions; do not infer that a task is complete merely because a script or runbook exists. A repository-side PASS is not a production PASS while the external-evidence column is blocked.
+This page is the single checkpoint summary for 3.24–3.40. See [repository consolidation and branch map](repository-consolidation.md) for the canonical PR/branch policy. The detailed runbooks linked below preserve the status recorded at the time of this snapshot. Do not use this dated matrix as the source of truth for current provider configuration; do not infer that a task is complete merely because a script or runbook exists. A repository-side PASS is not a production PASS while the external-evidence column is blocked.
 
 | Checkpoint | Repository gate (source-level) | Production/external gate |
 |---|---|---|

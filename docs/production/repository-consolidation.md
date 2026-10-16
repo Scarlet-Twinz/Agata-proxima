@@ -2,7 +2,7 @@
 
 **Canonical integration target:** `main`  
 **Canonical public domain:** `agataproxima.com`  
-**Active billing provider:** Paddle Live API only  
+**Current billing implementation:** Flutterwave; live acceptance remains pending. See [Flutterwave billing runbook](flutterwave-billing.md).  
 **Phase numbering:** follow the Final Execution Map; Phase 3B work continues through 3.50 and Phase 3C starts at 3.51.
 
 ## One source of truth
@@ -19,7 +19,7 @@ Do not merge intermediate PRs into one another or treat a green run on an older 
 - **Closed #88** — dashboard/API-key/support schema, included in #91.
 - **Closed #87** — Entra settings UI; equivalent settings and identity-linking behavior is integrated into the active `NestedResource.tsx` route, and the duplicate root route tree was removed.
 - **Closed #86, #85, #84** — environment/Entra onboarding, local acceptance/auth guard, and Axum route fixes are represented in the consolidated tree.
-- **Closed #83, #82, #81, #80, #79** — obsolete Lemon Squeezy provider variants. Paddle is active; historical migration 0017 remains for auditability, while provider-specific Lemon Squeezy implementation modules are not active.
+- **Closed #83, #82, #81, #80, #79** — obsolete Lemon Squeezy provider variants. Paddle and Lemon Squeezy references describe earlier implementation attempts. The current repository uses the Flutterwave integration and its forward migration; historical migrations remain for migration integrity. Use the current Flutterwave runbook for runtime configuration.
 - **Closed #77** — Resend transactional email, included in #91.
 - **Closed #41** — the older environment/CI guard is superseded by the stricter current repository launch gate.
 
@@ -48,7 +48,7 @@ These are **not safe to merge wholesale** and must remain visible until their un
 
 ## Production acceptance is a separate gate
 
-Repository CI can prove source-level checks, but cannot prove provider approval, public DNS/TLS, Live Paddle charges/webhooks, managed-database backup/restore, real support inbox delivery, alert delivery, independent red-team review, or a deployment rollback. Track those in [Phase 3B acceptance status](phase3b-3-24-40-acceptance.md); do not mark them passed without external evidence.
+Repository CI can prove source-level checks, but cannot prove provider approval, public DNS/TLS, live Flutterwave charges/webhooks, managed-database backup/restore, real support inbox delivery, alert delivery, independent red-team review, or a deployment rollback. Track those in [Phase 3B acceptance status](phase3b-3-24-40-acceptance.md); do not mark them passed without external evidence.
 
 
 ## Branch-reference audit (2026-10-11)
