@@ -217,15 +217,15 @@ Create a table for every public security claim with: claim wording, threat model
 - Provide support contact, incident communication process, retention/deletion policy and customer data export path where applicable.
 - Remove duplicate or broken links only after tracing references and dependencies; preserve useful legacy documents and migration history.
 
-## 5. What the source PDF says versus what is verified
+## 5. Planned capabilities and implementation evidence
 
 The product strategy combines four technical pillars, operational telemetry, bounded defensive behavior, verifiable security evidence, a developer adoption strategy, and a sustainable commercial model. Performance targets, security claims, pricing, and launch outcomes require independent validation before they are published as facts.
 
 Items requiring explicit design approval and acceptance:
 - `/metrics` and metric names such as `proxima_active_connections`, `proxima_query_processing_time_ms`, and `proxima_blocked_tenant_violations_total`.
-- The breaker variable `PROXIMA_SECURITY_CIRCUIT_BREAKER=fail-closed` (the proposal also uses `PROXIMA_SECURITY_BREAKER=fail-closed`; choose one documented name only if adopted).
+- Breaker configuration names and fail-closed semantics must match the implemented configuration contract and tests; do not publish unverified variable names.
 - Hourly attestation snapshots, SHA-256 block hashing, signed reports and PDF certificate export.
-- Suggested Growth/Scale prices of $490/month and $1,190/month and other pricing shown in the proposal. These are source-document ideas, not validated pricing decisions.
+- The current monthly schedule is Free $0, Starter $149, Growth $499, Scale $1,199, and Enterprise custom. Live billing acceptance remains separate; see [Pricing and Entitlements](../billing/pricing-and-entitlements.md) and the [Flutterwave runbook](../production/flutterwave-billing.md).
 - Absolute market, performance, security, compliance, adoption, or financial claims. Publish only claims supported by defined tests, measurements, and an explicit threat model.
 
 This roadmap separates planned capabilities, engineering recommendations, and verified implementation status.
@@ -239,7 +239,7 @@ Before committing:
 - Avoid absolute statements such as “no competitors” or “nobody has built this.”
 - State what Proxima adds, what existing tools already do well, what it depends on and when it is not the right choice.
 - Decide which repository components are open-source and under which license; preserve the actual license terms.
-- Test willingness to pay with pilot customers before treating PDF price points as established.
+- Test willingness to pay with pilot customers before treating pricing assumptions as validated.
 - Publish honest, reproducible technical material rather than promising GitHub stars or Hacker News front-page placement.
 
 ## 7. Commercial and operational requirements
@@ -256,7 +256,7 @@ The business layer must be treated as a set of verifiable workflows:
 
 **Billing status:** Flutterwave is the current provider integration in the repository. Live activation remains conditional on confirming the production account, USD checkout amount/currency, plan identifiers, signed webhook behavior, and entitlement updates against the [Flutterwave billing runbook](../production/flutterwave-billing.md). Historical provider migrations are retained for migration integrity; they are not instructions for new deployments.
 
-There is also a naming/domain discrepancy to resolve before external publication: repository README says **Agata Proxima** and links/notes have used **agataproxima.com**, while a later user instruction specified **Agata Prozima / AgataProzima.com** without a hyphen. Do not silently rewrite domain references. Inspect actual domain ownership/DNS and obtain one canonical spelling before changing public-facing references. The project name in this roadmap remains “Agata Proxima” as used by the current repository README until the naming decision is reconciled.
+Use only the canonical public domain verified against domain ownership, DNS, and the approved deployment configuration. Keep it consistent across API routing, identity callbacks, email lifecycle links, and billing webhooks.
 
 ## 8. Final Execution Map — checkpoints 3.51–3.70
 

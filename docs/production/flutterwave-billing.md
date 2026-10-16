@@ -24,7 +24,7 @@ Do not commit these values, store them in tracked environment examples, or paste
 
 The webhook route is:
 
-`https://api.agataproxima.com/api/v1/webhooks/flutterwave`
+`https://<approved-api-domain>/api/v1/webhooks/flutterwave`
 
 The billing portal endpoint currently returns `501 Not Implemented` with a support message; do not describe a self-service customer portal as available until it is implemented and tested.
 

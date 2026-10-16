@@ -3,7 +3,7 @@
 > **Historical record:** This phase document preserves an earlier repository acceptance snapshot and contains provider-specific details from the former Lemon Squeezy integration. Flutterwave is the current billing provider. Do not use old provider variables, variant IDs, or checkout instructions below to configure a deployment. Use the [current Flutterwave billing runbook](../production/flutterwave-billing.md). Historical CI results do not prove live billing acceptance.
 
 
-Status: repository implementation complete for workstreams A–H. All eight Phase 3.22 acceptance gates, the full Rust quality suite, PostgreSQL RLS verification, migration verification, OpenAPI generation, and the Phase 58–59 launch gate passed on the Phase 3.22-H pull request. This confirms repository-side acceptance, not live production billing acceptance: deployment still requires valid Lemon Squeezy API credentials, store ID, webhook secret and variant IDs, the production webhook URL, and a successful real-environment payment round trip. Checkout validates the configured USD store, published product/variant, Test/Live mode, monthly interval and exact amount before redirecting. The webhook validates the raw-body signature, store/mode, organization, local checkout reference and configured variant before applying entitlements.
+This document preserves the original Phase 3.22-H repository acceptance record. Its provider-specific implementation details are historical and must not be used as current deployment instructions. Flutterwave is the current provider integration; use the [current Flutterwave billing runbook](../production/flutterwave-billing.md). The historical CI and test results below do not establish live production acceptance.
 
 ## Pricing source of truth
 
