@@ -16,6 +16,10 @@ grep -Fq '"/docs/node-enrollment"' frontend/src/app/router.tsx || fail "node enr
 grep -Fq 'to: "/docs/node-enrollment"' frontend/src/pages/public/Docs.tsx || fail "documentation home link missing"
 grep -Fq 'import { Nodes } from "../pages/console/Nodes";' frontend/src/app/router.tsx || fail "dedicated node management page not wired into active router"
 grep -Fq 'PROXIMA_NODE_ENROLLMENT_ENCRYPTION_KEY' crates/proxima-control-plane/src/main.rs || fail "runtime encryption key missing"
+grep -Fq 'PROXIMA_NODE_ENROLLMENT_ENCRYPTION_KEY' control-plane/README.md || fail "Control Plane README misses enrollment key"
+grep -Fq 'PROXIMA_NODE_ENROLLMENT_ENCRYPTION_KEY' docs/production/phase55-deployment-runbook.md || fail "production runbook misses enrollment key"
+grep -Fq 'FLUTTERWAVE_SECRET_KEY' docs/developer-guide.md || fail "developer guide does not name the active billing provider"
+! grep -Eiq 'PADDLE_|Paddle Billing|Lemon Squeezy is the active' docs/developer-guide.md docs/production/phase55-deployment-runbook.md docs/production/remaining-launch-work-map.md || fail "active operator docs contain a stale billing provider"
 grep -Fq 'PROXIMA_NODE_ENROLLMENT_URL' crates/proxima-engine/src/main.rs || fail "engine bootstrap implementation missing"
 python -m json.tool control-plane/openapi.json >/dev/null
 python scripts/ops/check-doc-links.py
