@@ -54,7 +54,7 @@ Before enabling paid checkout, verify all of the following in the intended live 
 6. Failed, unknown-reference, wrong-currency, and wrong-amount transactions do not grant entitlements.
 7. The resulting entitlement changes are recorded and auditable.
 
-Historical Paddle, Paystack, and Lemon Squeezy migration records may remain in the repository to preserve database migration history. They are not current provider setup instructions.
+Historical provider migration records may remain in the repository to preserve database migration history. They are not current provider setup instructions.
 
 ## Production status
 

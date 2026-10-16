@@ -87,7 +87,7 @@ Do not commit secrets, place secret values in public build variables, or paste c
 - **Microsoft Entra:** register the exact callback URI for the approved public origin, configure the client ID/secret securely, bind the expected Entra tenant to the correct Agata organization, and test a real sign-in end to end.
 - **Transactional email:** verify the sending domain, configure the production sender and API key in the secret store, and test verification, password reset, invitation, and support workflows in the deployed environment.
 
-Use the current provider-specific runbooks for detailed configuration. Historical Paddle, Paystack, and Lemon Squeezy migration files are retained only for migration integrity; they are not current deployment instructions.
+Use the current provider-specific runbooks for detailed configuration. Historical provider migration files are retained only for migration integrity; they are not current deployment instructions.
 
 ## Production acceptance checklist
 
