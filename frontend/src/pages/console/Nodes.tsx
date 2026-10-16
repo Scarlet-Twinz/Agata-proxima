@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api } from "../../api/client";
 import { getSession } from "../../api/auth";
+import "./Nodes.css";
 
 type NodeRecord = {
   id: string;
@@ -144,13 +145,14 @@ export function Nodes() {
   }
 
   return (
-    <main style={{ maxWidth: 1000, margin: "0 auto", padding: 24, color: "var(--text-primary, inherit)" }}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+    <main className="nodes-page">
+      <header className="nodes-header">
         <div>
+          <p className="nodes-eyebrow">INFRASTRUCTURE CONTROL</p>
           <h1>Node Management</h1>
           <p>Register infrastructure nodes and securely enroll them into your organization.</p>
         </div>
-        <button type="button" onClick={() => void load()} disabled={loading}>
+        <button className="nodes-button nodes-button-secondary" type="button" onClick={() => void load()} disabled={loading}>
           {loading ? "Refreshing…" : "Refresh nodes"}
         </button>
       </header>
@@ -158,15 +160,15 @@ export function Nodes() {
       {error && <p role="alert" style={{ color: "#dc2626" }}>{error}</p>}
       {notice && <p role="status">{notice}</p>}
 
-      <section style={{ border: "1px solid #64748b55", borderRadius: 12, padding: 20, marginTop: 20 }}>
+      <section className="nodes-panel nodes-register-panel">
         <h2>Register a node</h2>
-        <form onSubmit={createNode} style={{ display: "grid", gap: 12, maxWidth: 520 }}>
+        <form className="nodes-register-form" onSubmit={createNode}>
           <label>
             Node name
             <input required minLength={2} maxLength={100} value={name}
               onChange={e => setName(e.target.value)}
               placeholder="e.g. production-node-01"
-              style={{ display: "block", width: "100%", padding: 10, marginTop: 5 }} />
+              className="nodes-input" />
           </label>
           <label>
             Environment
@@ -183,14 +185,14 @@ export function Nodes() {
               placeholder="auto"
               style={{ display: "block", width: "100%", padding: 10, marginTop: 5 }} />
           </label>
-          <button type="submit" disabled={saving || loading || !organizationId || !name.trim()}>
+          <button className="nodes-button nodes-button-primary" type="submit" disabled={saving || loading || !organizationId || !name.trim()}>
             {saving ? "Registering…" : "Register node"}
           </button>
         </form>
       </section>
 
       {created && (
-        <section style={{ border: "1px solid #0d948855", borderRadius: 12, padding: 20, marginTop: 20 }}>
+        <section className="nodes-panel nodes-created-panel">
           <h2>Node registered</h2>
           <p>Node ID: <code>{created.id}</code></p>
           <p>Status: {created.status}</p>
@@ -206,24 +208,24 @@ export function Nodes() {
                   rows={2}
                   value={created.enrollment_token}
                   onFocus={event => event.currentTarget.select()}
-                  style={{ display: "block", width: "100%", padding: 10, marginTop: 8, fontFamily: "monospace", overflowWrap: "anywhere" }}
+                  className="nodes-secret-field"
                   aria-label="One-time enrollment token"
                 />
               </label>
-              <button type="button" onClick={() => void copySecret("token")} disabled={copying !== null}>
+              <button className="nodes-button nodes-button-primary" type="button" onClick={() => void copySecret("token")} disabled={copying !== null}>
                 {copying === "token" ? "Copying token…" : "Copy token only"}
               </button>
               <label style={{ display: "block", marginTop: 12 }}>
                 Enrollment configuration
                 <textarea readOnly rows={4} value={configuration}
                   onFocus={event => event.currentTarget.select()}
-                  style={{ display: "block", width: "100%", padding: 10, marginTop: 8, fontFamily: "monospace" }} />
+                  className="nodes-secret-field nodes-config-field" />
               </label>
-              <button type="button" onClick={() => void copySecret("configuration")} disabled={copying !== null}>
+              <button className="nodes-button nodes-button-secondary" type="button" onClick={() => void copySecret("configuration")} disabled={copying !== null}>
                 {copying === "configuration" ? "Copying configuration…" : "Copy enrollment configuration"}
               </button>
               <p>Use these variables in the node process environment, then start the node engine. Do not commit the token or paste it into logs.</p>
-              <button type="button" onClick={acknowledgeSecretCopied}>
+              <button className="nodes-button nodes-button-confirm" type="button" onClick={acknowledgeSecretCopied}>
                 I have copied and saved the credentials — hide secret
               </button>
               <p><small>After confirming, the token and configuration will be removed from this screen and cannot be shown again.</small></p>
@@ -232,29 +234,29 @@ export function Nodes() {
         </section>
       )}
 
-      <section style={{ marginTop: 28 }}>
+      <section className="nodes-list-section">
         <h2>Registered nodes ({nodes.length})</h2>
         {loading ? <p>Loading nodes…</p> : nodes.length === 0 ? (
           <p>No nodes registered yet.</p>
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <div className="nodes-table-wrap">
+            <table className="nodes-table">
               <thead>
                 <tr>
                   {["Name", "Environment", "Region", "Status", "Last seen", "Node ID"].map(label => (
-                    <th key={label} style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #64748b55" }}>{label}</th>
+                    <th key={label}>{label}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {nodes.map(node => (
                   <tr key={node.id}>
-                    <td style={{ padding: 10 }}>{node.name}</td>
-                    <td style={{ padding: 10 }}>{node.environment ?? "—"}</td>
-                    <td style={{ padding: 10 }}>{node.region ?? "—"}</td>
-                    <td style={{ padding: 10 }}>{node.status}</td>
-                    <td style={{ padding: 10 }}>{node.last_seen_at ?? "Never"}</td>
-                    <td style={{ padding: 10 }}><code>{node.id}</code></td>
+                    <td>{node.name}</td>
+                    <td>{node.environment ?? "—"}</td>
+                    <td>{node.region ?? "—"}</td>
+                    <td><span className={`nodes-status nodes-status-${node.status.toLowerCase()}`}>{node.status}</span></td>
+                    <td>{node.last_seen_at ?? "Never"}</td>
+                    <td><code className="nodes-id">{node.id}</code></td>
                   </tr>
                 ))}
               </tbody>
