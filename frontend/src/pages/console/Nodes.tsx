@@ -1,4 +1,5 @@
-﻿import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { Check, Copy, RefreshCw, Server, ShieldCheck } from "lucide-react";
 import { api } from "../../api/client";
 import { getSession } from "../../api/auth";
 
@@ -32,6 +33,7 @@ export function Nodes() {
   const [created, setCreated] = useState<CreatedNode | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState<"token" | "configuration" | "">("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -40,9 +42,7 @@ export function Nodes() {
     setError("");
     try {
       const session = await getSession();
-      if (!session?.authenticated) {
-        throw new Error("Your session has expired. Sign in again.");
-      }
+      if (!session?.authenticated) throw new Error("Your session has expired. Sign in again.");
       setOrganizationId(session.organization_id);
       setNodes(await api.get<NodeRecord[]>("/api/v1/nodes"));
     } catch (e) {
@@ -52,17 +52,15 @@ export function Nodes() {
     }
   }, []);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useEffect(() => { void load(); }, [load]);
 
   async function createNode(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     setError("");
     setNotice("");
+    setCopied("");
     setCreated(null);
-
     try {
       const result = await api.post<CreatedNode>("/api/v1/nodes", {
         organization_id: organizationId,
@@ -70,7 +68,6 @@ export function Nodes() {
         environment,
         region: region.trim() || "auto",
       });
-
       setCreated(result);
       setName("");
       await load();
@@ -89,103 +86,165 @@ export function Nodes() {
       ].join("\n")
     : "";
 
-  async function copyConfiguration() {
-    if (!configuration) return;
+  async function copyText(value: string, kind: "token" | "configuration") {
+    setNotice("");
     try {
-      await navigator.clipboard.writeText(configuration);
-      setNotice("Enrollment configuration copied. Treat it as a secret.");
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const field = document.createElement("textarea");
+        field.value = value;
+        field.setAttribute("readonly", "");
+        field.style.position = "fixed";
+        field.style.opacity = "0";
+        document.body.appendChild(field);
+        field.select();
+        const successful = document.execCommand("copy");
+        field.remove();
+        if (!successful) throw new Error("Clipboard copy failed");
+      }
+      setCopied(kind);
+      setNotice(kind === "token" ? "Enrollment token copied. Store it securely." : "Enrollment configuration copied. Store it securely.");
     } catch {
-      setNotice("Clipboard unavailable. Copy the configuration manually.");
+      setNotice("Clipboard access is unavailable here. Select the text and copy it manually.");
     }
   }
 
+  function hideSecret() {
+    setCreated(null);
+    setCopied("");
+    setNotice("Enrollment secret hidden from this screen.");
+  }
+
   return (
-    <main style={{ maxWidth: 1000, margin: "0 auto", padding: 24, color: "var(--text-primary, inherit)" }}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+    <div className="resource-page">
+      <div className="page-heading">
         <div>
+          <span className="eyebrow">INFRASTRUCTURE</span>
           <h1>Node Management</h1>
           <p>Register infrastructure nodes and securely enroll them into your organization.</p>
         </div>
-        <button type="button" onClick={() => void load()} disabled={loading}>
-          {loading ? "Refreshing…" : "Refresh nodes"}
-        </button>
-      </header>
-
-      {error && <p role="alert" style={{ color: "#dc2626" }}>{error}</p>}
-      {notice && <p role="status">{notice}</p>}
-
-      <section style={{ border: "1px solid #64748b55", borderRadius: 12, padding: 20, marginTop: 20 }}>
-        <h2>Register a node</h2>
-        <form onSubmit={createNode} style={{ display: "grid", gap: 12, maxWidth: 520 }}>
-          <label>
-            Node name
-            <input required minLength={2} maxLength={100} value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="e.g. production-node-01"
-              style={{ display: "block", width: "100%", padding: 10, marginTop: 5 }} />
-          </label>
-          <label>
-            Environment
-            <select value={environment} onChange={e => setEnvironment(e.target.value)}
-              style={{ display: "block", width: "100%", padding: 10, marginTop: 5 }}>
-              <option value="production">Production</option>
-              <option value="staging">Staging</option>
-              <option value="development">Development</option>
-            </select>
-          </label>
-          <label>
-            Region
-            <input value={region} onChange={e => setRegion(e.target.value)}
-              placeholder="auto"
-              style={{ display: "block", width: "100%", padding: 10, marginTop: 5 }} />
-          </label>
-          <button type="submit" disabled={saving || loading || !organizationId || !name.trim()}>
-            {saving ? "Registering…" : "Register node"}
+        <div className="heading-actions">
+          <button className="console-refresh-button" type="button" onClick={() => void load()} disabled={loading}>
+            <RefreshCw size={15} className={loading ? "is-spinning" : ""} />
+            {loading ? "Refreshing…" : "Refresh"}
           </button>
+        </div>
+      </div>
+
+      {error && <div className="settings-banner settings-banner--error" role="alert">{error}</div>}
+      {notice && <div className="settings-banner settings-banner--success" role="status">{notice}</div>}
+
+      <section className="surface settings-section">
+        <div className="settings-section-heading">
+          <div>
+            <h2>Register a node</h2>
+            <p>Add an engine to the active organization and select its operating environment.</p>
+          </div>
+          <Server size={20} aria-hidden="true" />
+        </div>
+        <form onSubmit={createNode} className="settings-form">
+          <div className="settings-grid">
+            <label className="settings-field">
+              <span>Node name</span>
+              <input required minLength={2} maxLength={100} value={name}
+                onChange={e => setName(e.target.value)} placeholder="e.g. production-node-01" />
+            </label>
+            <label className="settings-field">
+              <span>Environment</span>
+              <select value={environment} onChange={e => setEnvironment(e.target.value)}>
+                <option value="production">Production</option>
+                <option value="staging">Staging</option>
+                <option value="development">Development</option>
+              </select>
+            </label>
+            <label className="settings-field">
+              <span>Region</span>
+              <input value={region} onChange={e => setRegion(e.target.value)} placeholder="auto" />
+            </label>
+          </div>
+          <div className="action-actions">
+            <button className="primary-action" type="submit" disabled={saving || loading || !organizationId || !name.trim()}>
+              <Server size={15} /> {saving ? "Registering…" : "Register node"}
+            </button>
+          </div>
         </form>
       </section>
 
       {created && (
-        <section style={{ border: "1px solid #0d948855", borderRadius: 12, padding: 20, marginTop: 20 }}>
-          <h2>Node registered</h2>
-          <p>Node ID: <code>{created.id}</code></p>
-          <p>Status: {created.status}</p>
-          <p><strong>One-time enrollment token</strong> — keep it private. It cannot be retrieved again after leaving this screen.</p>
-          <label>
-            Enrollment configuration
-            <textarea readOnly rows={4} value={configuration}
-              style={{ display: "block", width: "100%", padding: 10, marginTop: 8, fontFamily: "monospace" }} />
+        <section className="surface settings-section" aria-labelledby="node-created-heading">
+          <div className="settings-section-heading">
+            <div>
+              <span className="eyebrow">ONE-TIME CREDENTIAL</span>
+              <h2 id="node-created-heading">Node registered</h2>
+              <p>Copy the token or complete enrollment configuration now. The secret is only shown once.</p>
+            </div>
+            <ShieldCheck size={21} aria-hidden="true" />
+          </div>
+          <div className="settings-grid">
+            <div className="settings-field">
+              <span>Node ID</span>
+              <div className="settings-readonly"><code>{created.id}</code></div>
+            </div>
+            <div className="settings-field">
+              <span>Status</span>
+              <div className="settings-readonly"><span className={`console-status console-status--${created.status.toLowerCase()}`}>{created.status}</span></div>
+            </div>
+          </div>
+          <label className="action-field node-secret-field">
+            Enrollment token — keep it private
+            <textarea readOnly rows={2} value={created.enrollment_token} onFocus={e => e.currentTarget.select()} />
           </label>
-          <button type="button" onClick={() => void copyConfiguration()}>
-            Copy enrollment configuration
-          </button>
-          <p>Use these variables in the node process environment, then start the node engine. Do not commit the token or paste it into logs.</p>
+          <div className="action-actions">
+            <button className="secondary-action" type="button" onClick={() => void copyText(created.enrollment_token, "token")}>
+              {copied === "token" ? <Check size={15} /> : <Copy size={15} />}
+              {copied === "token" ? "Token copied" : "Copy token only"}
+            </button>
+            <button className="primary-action" type="button" onClick={() => void copyText(configuration, "configuration")}>
+              {copied === "configuration" ? <Check size={15} /> : <Copy size={15} />}
+              {copied === "configuration" ? "Configuration copied" : "Copy enrollment configuration"}
+            </button>
+          </div>
+          <label className="action-field node-secret-field">
+            Enrollment configuration
+            <textarea readOnly rows={4} value={configuration} onFocus={e => e.currentTarget.select()} />
+          </label>
+          <div className="action-note">
+            <ShieldCheck size={16} />
+            Set these variables in the node process environment. Never commit the token or paste it into logs.
+          </div>
+          <div className="action-actions">
+            <button className="secondary-action" type="button" onClick={hideSecret}>
+              <Check size={15} /> I have saved the credentials — hide secret
+            </button>
+          </div>
         </section>
       )}
 
-      <section style={{ marginTop: 28 }}>
-        <h2>Registered nodes ({nodes.length})</h2>
-        {loading ? <p>Loading nodes…</p> : nodes.length === 0 ? (
-          <p>No nodes registered yet.</p>
+      <section className="surface resource-data-surface">
+        <div className="resource-data-heading">
+          <div>
+            <span className="eyebrow">LIVE CONTROL-PLANE DATA</span>
+            <h2>{loading ? "Loading nodes…" : `Registered nodes (${nodes.length})`}</h2>
+          </div>
+        </div>
+        {loading ? (
+          <div className="empty-state"><strong>Loading live data…</strong><span>Reading nodes from the authenticated control plane.</span></div>
+        ) : nodes.length === 0 ? (
+          <div className="empty-state"><strong>No nodes registered yet.</strong><span>Register a node above to begin enrollment.</span></div>
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  {["Name", "Environment", "Region", "Status", "Last seen", "Node ID"].map(label => (
-                    <th key={label} style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #64748b55" }}>{label}</th>
-                  ))}
-                </tr>
-              </thead>
+          <div className="resource-table-wrap">
+            <table className="resource-table">
+              <thead><tr>{["Name", "Environment", "Region", "Status", "Last seen", "Node ID"].map(label => <th key={label}>{label}</th>)}</tr></thead>
               <tbody>
                 {nodes.map(node => (
                   <tr key={node.id}>
-                    <td style={{ padding: 10 }}>{node.name}</td>
-                    <td style={{ padding: 10 }}>{node.environment ?? "—"}</td>
-                    <td style={{ padding: 10 }}>{node.region ?? "—"}</td>
-                    <td style={{ padding: 10 }}>{node.status}</td>
-                    <td style={{ padding: 10 }}>{node.last_seen_at ?? "Never"}</td>
-                    <td style={{ padding: 10 }}><code>{node.id}</code></td>
+                    <td>{node.name}</td>
+                    <td>{node.environment ?? "—"}</td>
+                    <td>{node.region ?? "—"}</td>
+                    <td><span className={`console-status console-status--${node.status.toLowerCase()}`}>{node.status}</span></td>
+                    <td>{node.last_seen_at ? new Date(node.last_seen_at).toLocaleString() : "Never"}</td>
+                    <td><code>{node.id}</code></td>
                   </tr>
                 ))}
               </tbody>
@@ -193,6 +252,6 @@ export function Nodes() {
           </div>
         )}
       </section>
-    </main>
+    </div>
   );
 }
