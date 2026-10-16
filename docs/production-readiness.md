@@ -14,6 +14,7 @@ This checklist separates repository implementation from external production acce
 - [ ] External identity provider / SSO — runtime activation still requires a real public callback and Entra tenant acceptance
 - [ ] Managed secret rotation
 - [ ] Independent security assessment
+- [ ] Engine startup fails closed for production when `PROXIMA_TENANT_SIGNING_KEY` is absent; verify effective `tenant_enforcement=true` before customer traffic
 
 ## Reliability
 - [x] Health endpoint
@@ -33,6 +34,7 @@ This checklist separates repository implementation from external production acce
 - [ ] Centralized production metrics
 - [ ] Alerting
 - [ ] On-call runbook
+- [ ] Complete OpenAPI request/response schemas for public API operations, validated against the actual handlers
 
 ## Product
 - [x] Public homepage
