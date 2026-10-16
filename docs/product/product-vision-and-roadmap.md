@@ -225,7 +225,7 @@ Items requiring explicit design approval and acceptance:
 - `/metrics` and metric names such as `proxima_active_connections`, `proxima_query_processing_time_ms`, and `proxima_blocked_tenant_violations_total`.
 - Breaker configuration names and fail-closed semantics must match the implemented configuration contract and tests; do not publish unverified variable names.
 - Hourly attestation snapshots, SHA-256 block hashing, signed reports and PDF certificate export.
-- The current monthly schedule is Free $0, Starter $149, Growth $499, Scale $1,199, and Enterprise custom. Live billing acceptance remains separate; see [Pricing and Entitlements](../billing/pricing-and-entitlements.md) and the [Flutterwave runbook](../production/flutterwave-billing.md).
+- The current monthly schedule is Free $0, Starter $149, Growth $499, Scale $1,199, and Enterprise custom. Live billing acceptance remains separate; see [Pricing and Entitlements](../billing/pricing-proposal.md) and the [Flutterwave runbook](../production/flutterwave-billing.md).
 - Absolute market, performance, security, compliance, adoption, or financial claims. Publish only claims supported by defined tests, measurements, and an explicit threat model.
 
 This roadmap separates planned capabilities, engineering recommendations, and verified implementation status.
