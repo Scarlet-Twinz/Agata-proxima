@@ -106,6 +106,11 @@ struct NodeInput {
     environment: Option<String>,
     region: Option<String>,
 }
+#[derive(Deserialize)]
+struct NodeEnrollmentInput {
+    node_id: Uuid,
+    enrollment_token: String,
+}
 
 #[derive(Deserialize)]
 struct DeploymentInput {
@@ -320,6 +325,11 @@ async fn main() -> Result<()> {
     sqlx::raw_sql(include_str!("../migrations/0023_proxima_attestations.sql"))
         .execute(&db)
         .await?;
+    sqlx::raw_sql(include_str!(
+        "../migrations/0024_secure_node_enrollment.sql"
+    ))
+    .execute(&db)
+    .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
@@ -444,6 +454,11 @@ async fn main() -> Result<()> {
         .route("/api/v1/tenants", get(tenants).post(create_tenant))
         .route("/api/v1/policies", get(policies).post(create_policy))
         .route("/api/v1/nodes", get(nodes).post(create_node))
+        .route("/api/v1/nodes/enroll", post(enroll_node))
+        .route(
+            "/api/v1/nodes/{id}/enrollment-token",
+            post(rotate_node_enrollment_token),
+        )
         .route(
             "/api/v1/deployments",
             get(deployments).post(create_deployment),
@@ -2601,7 +2616,10 @@ async fn create_organization(
         Some(id),
         "workspace",
         "Organization created",
-        &format!("â€œ{}â€ is ready with its own Production project.", name),
+        &format!(
+            "Ã¢â‚¬Å“{}Ã¢â‚¬Â is ready with its own Production project.",
+            name
+        ),
         Some("/app"),
     )
     .await;
@@ -2866,6 +2884,73 @@ async fn create_node(
     }
 }
 
+async fn rotate_node_enrollment_token(
+    State(s): State<AppState>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
+
+    // Only rotate a token for an unconsumed node with no stored
+    // signing credential. Never overwrite an enrolled node identity.
+    let token = format!("{}-{}", Uuid::new_v4(), Uuid::new_v4());
+
+    let result = sqlx::query(
+        "UPDATE nodes
+         SET enrollment_token_hash = $3,
+             enrollment_token_expires_at = now() + interval '30 minutes',
+             enrollment_token_consumed_at = NULL,
+             status = 'pending',
+             updated_at = now()
+         WHERE id = $1
+           AND organization_id = $2
+           AND status IN ('pending', 'enrolling')
+           AND enrollment_token_consumed_at IS NULL
+           AND node_signing_key_ciphertext IS NULL
+         RETURNING id, name",
+    )
+    .bind(id)
+    .bind(ctx.organization_id)
+    .bind(token_hash(&token))
+    .fetch_optional(&s.db)
+    .await;
+
+    match result {
+        Ok(Some(row)) => {
+            let node_id: Uuid = row.get("id");
+            let name: String = row.get("name");
+
+            audit(
+                &s.db,
+                ctx.organization_id,
+                ctx.user_id,
+                "node.enrollment_token.rotated",
+                "node",
+                Some(node_id),
+                json!({}),
+            )
+            .await;
+
+            Json(json!({
+                "id": node_id,
+                "name": name,
+                "status": "pending",
+                "enrollment_token": token,
+                "warning": "Store this token securely. It expires in 30 minutes and is returned only once."
+            }))
+            .into_response()
+        }
+        Ok(None) => StatusCode::NOT_FOUND.into_response(),
+        Err(e) => db_error(e),
+    }
+}
 async fn start_enrollment(
     State(s): State<AppState>,
     Path(id): Path<Uuid>,
@@ -2906,6 +2991,76 @@ async fn start_enrollment(
     }
 }
 
+async fn enroll_node(
+    State(s): State<AppState>,
+    Json(input): Json<NodeEnrollmentInput>,
+) -> Response {
+    if input.enrollment_token.len() < 32 || input.enrollment_token.len() > 256 {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    let mut node_key = [0u8; 32];
+    if ring::rand::SecureRandom::fill(&ring::rand::SystemRandom::new(), &mut node_key).is_err() {
+        return internal("Unable to generate node credentials.");
+    }
+
+    let (ciphertext, nonce) = match encrypt_node_signing_key(input.node_id, &mut node_key) {
+        Ok(value) => value,
+        Err(_) => {
+            node_key.fill(0);
+            return service_unavailable("Node credential encryption is not configured correctly.");
+        }
+    };
+
+    let result = sqlx::query(
+        "UPDATE nodes
+         SET status='enrolling',
+             enrollment_token_consumed_at=now(),
+             node_signing_key_ciphertext=$3,
+             node_signing_key_nonce=$4,
+             updated_at=now()
+         WHERE id=$1
+           AND enrollment_token_hash=$2
+           AND enrollment_token_consumed_at IS NULL
+           AND enrollment_token_expires_at > now()
+           AND status='pending'
+         RETURNING organization_id, name",
+    )
+    .bind(input.node_id)
+    .bind(token_hash(&input.enrollment_token))
+    .bind(ciphertext)
+    .bind(nonce)
+    .fetch_optional(&s.db)
+    .await;
+
+    match result {
+        Ok(Some(row)) => {
+            let organization_id: Uuid = row.get("organization_id");
+            let name: String = row.get("name");
+            let response = Json(json!({
+                "ok": true,
+                "node_id": input.node_id,
+                "organization_id": organization_id,
+                "name": name,
+                "status": "enrolling",
+                "signing_key": hex::encode(node_key),
+                "message": "Store this credential securely. It is returned only once."
+            }))
+            .into_response();
+
+            node_key.fill(0);
+            response
+        }
+        Ok(None) => {
+            node_key.fill(0);
+            StatusCode::UNAUTHORIZED.into_response()
+        }
+        Err(error) => {
+            node_key.fill(0);
+            db_error(error)
+        }
+    }
+}
 async fn deployments(State(s): State<AppState>, headers: HeaderMap) -> Response {
     let ctx = match authenticate(&s, &headers).await {
         Ok(v) => v,
@@ -3104,7 +3259,7 @@ async fn attestations(State(s): State<AppState>, headers: HeaderMap) -> Response
          FROM proxima_attestations WHERE organization_id=$1 ORDER BY node_id ASC, epoch_timestamp_end ASC, created_at ASC LIMIT 1000"
     ).bind(ctx.organization_id).fetch_all(&s.db).await {
         Ok(rows) => {
-            let signing_key = env::var("PROXIMA_ATTESTATION_SIGNING_KEY").ok().filter(|key| key.len() >= 32).map(String::into_bytes);
+
             let mut previous_by_node = std::collections::HashMap::<String, String>::new();
             let mut chain_valid_by_node = std::collections::HashMap::<String, bool>::new();
             let mut verified_by_id = std::collections::HashMap::<Uuid, bool>::new();
@@ -3126,12 +3281,41 @@ async fn attestations(State(s): State<AppState>, headers: HeaderMap) -> Response
                     && previous == *expected_previous
                     && expected_payload.as_deref() == Some(payload.as_str())
                     && format!("{:x}", Sha256::digest(payload.as_bytes())) == hash;
-                if let Some(key) = signing_key.as_deref() {
+                let node_key = if let Ok(node_uuid) = Uuid::parse_str(&node_id) {
+                    match sqlx::query(
+                        "SELECT node_signing_key_ciphertext,node_signing_key_nonce
+                         FROM nodes WHERE id=$1 AND organization_id=$2"
+                    )
+                    .bind(node_uuid)
+                    .bind(ctx.organization_id)
+                    .fetch_optional(&s.db)
+                    .await
+                    {
+                        Ok(Some(node_row)) => {
+                            let ciphertext = node_row.get::<Option<Vec<u8>>,_>("node_signing_key_ciphertext");
+                            let nonce = node_row.get::<Option<Vec<u8>>,_>("node_signing_key_nonce");
+                            match (ciphertext, nonce) {
+                                (Some(ciphertext), Some(nonce)) =>
+                                    decrypt_node_signing_key(node_uuid, &ciphertext, &nonce).ok(),
+                                _ => None,
+                            }
+                        }
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
+
+                if let Some(key) = node_key.as_deref() {
                     if let Ok(mut mac) = hmac::Hmac::<Sha256>::new_from_slice(key) {
                         mac.update(hash.as_bytes());
                         valid &= hex::encode(mac.finalize().into_bytes()) == signature;
-                    } else { valid = false; }
-                } else { valid = false; }
+                    } else {
+                        valid = false;
+                    }
+                } else {
+                    valid = false;
+                }
                 verified_by_id.insert(id, valid);
                 chain_valid_by_node.insert(node_id, valid);
                 *expected_previous = hash;
@@ -3192,9 +3376,44 @@ async fn create_attestation(
     {
         return bad("Invalid attestation envelope.");
     }
-    let signing_key = match env::var("PROXIMA_ATTESTATION_SIGNING_KEY") {
-        Ok(value) if value.len() >= 32 => value.into_bytes(),
-        _ => return service_unavailable("Attestation ingestion is disabled until PROXIMA_ATTESTATION_SIGNING_KEY is configured with at least 32 bytes."),
+    let node_uuid = match Uuid::parse_str(&input.node_id) {
+        Ok(id) => id,
+        Err(_) => return bad("Attestation node_id must be the UUID of an enrolled node."),
+    };
+
+    let node_key_row = match sqlx::query(
+        "SELECT node_signing_key_ciphertext,node_signing_key_nonce
+         FROM nodes WHERE id=$1 AND organization_id=$2",
+    )
+    .bind(node_uuid)
+    .bind(ctx.organization_id)
+    .fetch_optional(&s.db)
+    .await
+    {
+        Ok(Some(row)) => row,
+        Ok(None) => {
+            return (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(json!({"ok":false,"message":"Attestation node is not enrolled in this organization."})),
+            ).into_response();
+        }
+        Err(e) => return db_error(e),
+    };
+
+    let ciphertext = node_key_row.get::<Option<Vec<u8>>, _>("node_signing_key_ciphertext");
+    let nonce = node_key_row.get::<Option<Vec<u8>>, _>("node_signing_key_nonce");
+    let signing_key = match (ciphertext, nonce) {
+        (Some(ciphertext), Some(nonce)) => {
+            match decrypt_node_signing_key(node_uuid, &ciphertext, &nonce) {
+                Ok(key) if key.len() == 32 => key,
+                _ => {
+                    return service_unavailable(
+                        "The enrolled node signing key could not be verified.",
+                    )
+                }
+            }
+        }
+        _ => return service_unavailable("The node has not completed secure enrollment."),
     };
     let Some(total_processed_queries) = input
         .telemetry_summary
@@ -3701,7 +3920,7 @@ async fn create_public_support_request(
         "support-request-received",
         json!({
             "DISPLAY_NAME": escape_template_value(stored_name),
-            "ORGANIZATION": escape_template_value(&format!("Public inquiry Â· {topic}")),
+            "ORGANIZATION": escape_template_value(&format!("Public inquiry Ã‚Â· {topic}")),
             "SUBJECT": escape_template_value(&subject),
             "REQUEST_ID": request_id.to_string()
         }),
@@ -4132,6 +4351,73 @@ fn verify_password(password: &str, hash: &str) -> bool {
         .unwrap_or(false)
 }
 
+fn encrypt_node_signing_key(
+    node_id: Uuid,
+    plaintext: &mut [u8],
+) -> Result<(Vec<u8>, Vec<u8>), String> {
+    let master_hex = env::var("PROXIMA_NODE_ENROLLMENT_ENCRYPTION_KEY")
+        .map_err(|_| "Missing enrollment encryption key".to_string())?;
+    let master_key =
+        hex::decode(master_hex).map_err(|_| "Invalid enrollment encryption key".to_string())?;
+
+    if master_key.len() != 32 {
+        return Err("Enrollment encryption key must be 32 bytes".into());
+    }
+
+    let unbound = ring::aead::UnboundKey::new(&ring::aead::AES_256_GCM, &master_key)
+        .map_err(|_| "Unable to initialize encryption".to_string())?;
+    let key = ring::aead::LessSafeKey::new(unbound);
+
+    let mut nonce_bytes = [0u8; 12];
+    ring::rand::SecureRandom::fill(&ring::rand::SystemRandom::new(), &mut nonce_bytes)
+        .map_err(|_| "Unable to generate encryption nonce".to_string())?;
+
+    let nonce = ring::aead::Nonce::assume_unique_for_key(nonce_bytes);
+    let mut ciphertext = plaintext.to_vec();
+
+    key.seal_in_place_append_tag(
+        nonce,
+        ring::aead::Aad::from(node_id.as_bytes()),
+        &mut ciphertext,
+    )
+    .map_err(|_| "Unable to encrypt node credentials".to_string())?;
+
+    Ok((ciphertext, nonce_bytes.to_vec()))
+}
+fn decrypt_node_signing_key(
+    node_id: Uuid,
+    ciphertext: &[u8],
+    nonce_bytes: &[u8],
+) -> Result<Vec<u8>, String> {
+    let master_hex = env::var("PROXIMA_NODE_ENROLLMENT_ENCRYPTION_KEY")
+        .map_err(|_| "Missing enrollment encryption key".to_string())?;
+    let master_key = hex::decode(master_hex.trim())
+        .map_err(|_| "Invalid enrollment encryption key".to_string())?;
+
+    let master_key: [u8; 32] = master_key
+        .try_into()
+        .map_err(|_| "Enrollment encryption key must be 32 bytes".to_string())?;
+
+    let nonce_bytes: [u8; 12] = nonce_bytes
+        .try_into()
+        .map_err(|_| "Invalid node signing key nonce".to_string())?;
+
+    let unbound = ring::aead::UnboundKey::new(&ring::aead::AES_256_GCM, &master_key)
+        .map_err(|_| "Unable to initialize decryption".to_string())?;
+    let key = ring::aead::LessSafeKey::new(unbound);
+    let nonce = ring::aead::Nonce::assume_unique_for_key(nonce_bytes);
+    let mut plaintext = ciphertext.to_vec();
+
+    let opened = key
+        .open_in_place(
+            nonce,
+            ring::aead::Aad::from(node_id.as_bytes()),
+            &mut plaintext,
+        )
+        .map_err(|_| "Unable to decrypt node signing key".to_string())?;
+
+    Ok(opened.to_vec())
+}
 fn token_hash(token: &str) -> Vec<u8> {
     let mut hasher = Sha256::new();
     hasher.update(token.as_bytes());

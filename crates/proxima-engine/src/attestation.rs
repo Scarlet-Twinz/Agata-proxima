@@ -22,10 +22,16 @@ impl AttestationConfig {
             ledger_path: std::env::var("PROXIMA_ATTESTATION_LEDGER_PATH")
                 .map(PathBuf::from)
                 .unwrap_or_else(|_| PathBuf::from("data/proxima-attestations.jsonl")),
-            signing_key: std::env::var("PROXIMA_ATTESTATION_SIGNING_KEY")
+            signing_key: std::env::var("PROXIMA_NODE_SIGNING_KEY_HEX")
                 .ok()
-                .filter(|v| v.len() >= 32)
-                .map(String::into_bytes),
+                .and_then(|value| hex::decode(value.trim()).ok())
+                .filter(|value| value.len() == 32)
+                .or_else(|| {
+                    std::env::var("PROXIMA_ATTESTATION_SIGNING_KEY")
+                        .ok()
+                        .filter(|value| value.len() >= 32)
+                        .map(String::into_bytes)
+                }),
             organization_id: std::env::var("PROXIMA_ORGANIZATION_ID")
                 .map(|value| safe(&value))
                 .unwrap_or_else(|_| "unconfigured".into()),
@@ -106,6 +112,95 @@ impl AttestationLedger {
         Ok(digest)
     }
 
+    pub async fn pending_records(&self) -> io::Result<Vec<String>> {
+        let _guard = self.lock.lock().await;
+        let verification = self.verify_chain_unlocked().await?;
+        if !verification.valid {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                verification
+                    .error
+                    .unwrap_or_else(|| "invalid ledger chain".into()),
+            ));
+        }
+
+        let cursor = read_delivery_cursor(&self.config.ledger_path).await?;
+        let content = match tokio::fs::read_to_string(&self.config.ledger_path).await {
+            Ok(content) => content,
+            Err(error) if error.kind() == io::ErrorKind::NotFound && cursor == "GENESIS" => {
+                return Ok(Vec::new());
+            }
+            Err(error) => return Err(error),
+        };
+
+        let records: Vec<String> = content
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .map(str::to_owned)
+            .collect();
+        let start = next_unacknowledged_index(&records, &cursor)?;
+        Ok(records.into_iter().skip(start).collect())
+    }
+
+    pub async fn acknowledge_record(&self, block_hash: &str) -> io::Result<()> {
+        let _guard = self.lock.lock().await;
+        let verification = self.verify_chain_unlocked().await?;
+        if !verification.valid {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                verification
+                    .error
+                    .unwrap_or_else(|| "invalid ledger chain".into()),
+            ));
+        }
+
+        let cursor = read_delivery_cursor(&self.config.ledger_path).await?;
+        let content = tokio::fs::read_to_string(&self.config.ledger_path).await?;
+        let records: Vec<String> = content
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .map(str::to_owned)
+            .collect();
+        let next = next_unacknowledged_index(&records, &cursor)?;
+        let record = records.get(next).ok_or_else(|| {
+            io::Error::new(io::ErrorKind::NotFound, "no pending record to acknowledge")
+        })?;
+
+        if json_field(record, "block_hash").as_deref() != Some(block_hash) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "refusing out-of-order delivery acknowledgement",
+            ));
+        }
+
+        let state_path = self.config.ledger_path.with_extension("delivery.json");
+        if let Some(parent) = state_path.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+
+        let temp_path = state_path.with_extension("delivery.json.tmp");
+        let state = serde_json::json!({"acknowledged_block_hash": block_hash});
+        let mut file = tokio::fs::OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(&temp_path)
+            .await?;
+        file.write_all(format!("{state}\n").as_bytes()).await?;
+        file.sync_all().await?;
+        drop(file);
+
+        // Atomic replacement on platforms supporting rename-over-existing.
+        // If replacement fails, leave the temp file and report the failure.
+        #[cfg(windows)]
+        {
+            if tokio::fs::metadata(&state_path).await.is_ok() {
+                tokio::fs::remove_file(&state_path).await?;
+            }
+        }
+        tokio::fs::rename(&temp_path, &state_path).await?;
+        Ok(())
+    }
     pub async fn latest_record(&self) -> io::Result<Option<String>> {
         match tokio::fs::read_to_string(&self.config.ledger_path).await {
             Ok(content) => Ok(content.lines().last().map(str::to_owned)),
@@ -234,6 +329,49 @@ pub struct ChainVerification {
     pub error: Option<String>,
 }
 
+fn next_unacknowledged_index(records: &[String], cursor: &str) -> io::Result<usize> {
+    if cursor == "GENESIS" {
+        return Ok(0);
+    }
+
+    records
+        .iter()
+        .position(|line| json_field(line, "block_hash").as_deref() == Some(cursor))
+        .map(|index| index + 1)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "delivery cursor does not match the signed ledger",
+            )
+        })
+}
+
+async fn read_delivery_cursor(ledger_path: &Path) -> io::Result<String> {
+    let state_path = ledger_path.with_extension("delivery.json");
+    let content = match tokio::fs::read_to_string(state_path).await {
+        Ok(content) => content,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok("GENESIS".into()),
+        Err(error) => return Err(error),
+    };
+
+    let value: serde_json::Value = serde_json::from_str(&content).map_err(|error| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("invalid delivery cursor: {error}"),
+        )
+    })?;
+
+    value
+        .get("acknowledged_block_hash")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "delivery cursor has no acknowledged block hash",
+            )
+        })
+}
 async fn previous_hash(path: &Path) -> io::Result<String> {
     match tokio::fs::read_to_string(path).await {
         Ok(content) => match content.lines().last() {

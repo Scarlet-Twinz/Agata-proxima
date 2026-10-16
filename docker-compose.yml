@@ -1,4 +1,4 @@
-﻿services:
+services:
   postgres:
     image: postgres:17
     environment:
@@ -16,6 +16,8 @@
       context: .
       dockerfile: Dockerfile
     environment:
+      PROXIMA_TENANT_SIGNING_KEY: ${PROXIMA_TENANT_SIGNING_KEY:?Set PROXIMA_TENANT_SIGNING_KEY in .env}
+      PROXIMA_NODE_IDENTITY_PATH: /var/lib/agata-proxima/node-identity.json
       PROXIMA_LISTEN_ADDR: 0.0.0.0:6432
       PROXIMA_UPSTREAM_ADDR: postgres:5432
       PROXIMA_DASHBOARD_LISTEN_ADDR: 0.0.0.0:9080
@@ -28,6 +30,8 @@
     ports:
       - "6432:6432"
       - "9080:9080"
+    volumes:
+      - proxima-node-identity:/var/lib/agata-proxima
     read_only: true
     tmpfs:
       - /tmp
@@ -62,6 +66,8 @@
       dockerfile: crates/proxima-control-plane/Dockerfile
     environment:
       PROXIMA_CONTROL_DATABASE_URL: postgres://proxima_control:proxima-control-dev@control-postgres:5432/proxima_control
+      PROXIMA_NODE_ENROLLMENT_ENCRYPTION_KEY: ${PROXIMA_NODE_ENROLLMENT_ENCRYPTION_KEY:?Set PROXIMA_NODE_ENROLLMENT_ENCRYPTION_KEY in .env}
+      AGATA_WEBHOOK_ENCRYPTION_KEY: ${AGATA_WEBHOOK_ENCRYPTION_KEY:?Set AGATA_WEBHOOK_ENCRYPTION_KEY in .env}
       PROXIMA_CONTROL_BIND: 0.0.0.0:8080
       PROXIMA_COOKIE_SECURE: "false"
       RUST_LOG: proxima_control_plane=info
@@ -70,11 +76,12 @@
       FLUTTERWAVE_STARTER_PLAN_ID: ${FLUTTERWAVE_STARTER_PLAN_ID:-171661}
       FLUTTERWAVE_GROWTH_PLAN_ID: ${FLUTTERWAVE_GROWTH_PLAN_ID:-171662}
       FLUTTERWAVE_SCALE_PLAN_ID: ${FLUTTERWAVE_SCALE_PLAN_ID:-171663}
-      FLUTTERWAVE_STARTER_AMOUNT_USD: ${FLUTTERWAVE_STARTER_AMOUNT_USD:-140}
-      FLUTTERWAVE_GROWTH_AMOUNT_USD: ${FLUTTERWAVE_GROWTH_AMOUNT_USD:-490}
-      FLUTTERWAVE_SCALE_AMOUNT_USD: ${FLUTTERWAVE_SCALE_AMOUNT_USD:-1190}
+      FLUTTERWAVE_STARTER_AMOUNT_USD: ${FLUTTERWAVE_STARTER_AMOUNT_USD:-149}
+      FLUTTERWAVE_GROWTH_AMOUNT_USD: ${FLUTTERWAVE_GROWTH_AMOUNT_USD:-499}
+      FLUTTERWAVE_SCALE_AMOUNT_USD: ${FLUTTERWAVE_SCALE_AMOUNT_USD:-1199}
     ports:
       - "8080:8080"
+    restart: unless-stopped
     read_only: true
     tmpfs:
       - /tmp
@@ -88,3 +95,6 @@
       interval: 5s
       timeout: 3s
       retries: 10
+
+volumes:
+  proxima-node-identity:

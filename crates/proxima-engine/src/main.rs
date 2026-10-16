@@ -21,6 +21,240 @@ use tokio::sync::Semaphore;
 use tokio::time::timeout;
 use tracing::{error, info};
 
+async fn deliver_pending_attestations(
+    ledger: &AttestationLedger,
+    client: &reqwest::Client,
+    url: &str,
+    token: &str,
+) {
+    loop {
+        let pending = match ledger.pending_records().await {
+            Ok(records) => records,
+            Err(error) => {
+                error!(%error, "cannot read pending attestations; delivery stopped");
+                return;
+            }
+        };
+
+        let Some(record) = pending.first() else {
+            return;
+        };
+        let value: serde_json::Value = match serde_json::from_str(record) {
+            Ok(value) => value,
+            Err(error) => {
+                error!(%error, "invalid pending attestation JSON; delivery stopped");
+                return;
+            }
+        };
+
+        let Some(hash) = value
+            .get("block_hash")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned)
+        else {
+            error!("pending attestation has no block hash");
+            return;
+        };
+        let Some(predecessor) = value
+            .get("previous_block_hash")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned)
+        else {
+            error!(block_hash = %hash, "pending attestation has no predecessor");
+            return;
+        };
+
+        let mut accepted = false;
+
+        for attempt in 0..5u32 {
+            let result = client
+                .post(url)
+                .bearer_auth(token)
+                .header("content-type", "application/json")
+                .body(record.clone())
+                .send()
+                .await;
+
+            match result {
+                Ok(response) if response.status().is_success() => {
+                    accepted = true;
+                }
+                Ok(response) if response.status() == reqwest::StatusCode::CONFLICT => {
+                    let body = response
+                        .json::<serde_json::Value>()
+                        .await
+                        .unwrap_or_else(|_| serde_json::json!({}));
+                    let expected = body
+                        .get("expected_previous_block_hash")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or("");
+
+                    // A matching current hash is consistent with a lost success response.
+                    if expected == hash {
+                        accepted = true;
+                    } else if expected != predecessor {
+                        error!(
+                            block_hash = %hash,
+                            expected_previous_block_hash = %expected,
+                            local_previous_block_hash = %predecessor,
+                            "unresolved chain conflict; evidence preserved and delivery stopped"
+                        );
+                        return;
+                    } else if attempt < 4 {
+                        tokio::time::sleep(std::time::Duration::from_secs(1u64 << attempt)).await;
+                        continue;
+                    } else {
+                        error!(block_hash = %hash, "chain conflict persisted; record remains pending");
+                        return;
+                    }
+                }
+                Ok(response)
+                    if response.status().is_server_error()
+                        || response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS =>
+                {
+                    let status = response.status();
+                    if attempt == 4 {
+                        error!(block_hash = %hash, %status, "retry limit reached; record remains pending");
+                        return;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_secs(1u64 << attempt)).await;
+                    continue;
+                }
+                Ok(response) => {
+                    error!(block_hash = %hash, status = %response.status(),
+                        "permanent rejection; record remains pending and later records are withheld");
+                    return;
+                }
+                Err(error) => {
+                    if attempt == 4 {
+                        error!(block_hash = %hash, %error, "delivery retries exhausted; record remains pending");
+                        return;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_secs(1u64 << attempt)).await;
+                    continue;
+                }
+            }
+
+            if accepted {
+                if let Err(error) = ledger.acknowledge_record(&hash).await {
+                    error!(block_hash = %hash, %error,
+                        "could not persist delivery acknowledgement; safe redelivery may occur");
+                    return;
+                }
+                info!(block_hash = %hash, "signed attestation delivered and acknowledged");
+                break;
+            }
+        }
+
+        if !accepted {
+            return;
+        }
+    }
+}
+async fn bootstrap_node_identity() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use std::{env, fs, path::PathBuf};
+
+    let identity_path = env::var_os("PROXIMA_NODE_IDENTITY_PATH")
+        .map(PathBuf::from)
+        .or_else(|| {
+            env::var_os("LOCALAPPDATA").map(|base| {
+                PathBuf::from(base)
+                    .join("AgataProxima")
+                    .join("node-identity.json")
+            })
+        })
+        .unwrap_or_else(|| PathBuf::from("data/node-identity.json"));
+
+    fn apply_identity(
+        value: &serde_json::Value,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let node_id = value["node_id"]
+            .as_str()
+            .ok_or("Identity is missing node_id")?;
+        let organization_id = value["organization_id"]
+            .as_str()
+            .ok_or("Identity is missing organization_id")?;
+        let key = value["signing_key"]
+            .as_str()
+            .ok_or("Identity is missing signing_key")?;
+
+        let decoded = hex::decode(key)?;
+        if decoded.len() != 32 {
+            return Err("Node signing key must be exactly 32 bytes".into());
+        }
+
+        std::env::set_var("PROXIMA_NODE_ID", node_id);
+        std::env::set_var("PROXIMA_ORGANIZATION_ID", organization_id);
+        std::env::set_var("PROXIMA_NODE_SIGNING_KEY_HEX", key);
+        Ok(())
+    }
+
+    if env::var("PROXIMA_NODE_SIGNING_KEY_HEX")
+        .ok()
+        .and_then(|key| hex::decode(key).ok())
+        .is_some_and(|key| key.len() == 32)
+    {
+        return Ok(());
+    }
+
+    if identity_path.is_file() {
+        let bytes = fs::read(&identity_path)?;
+        let identity: serde_json::Value = serde_json::from_slice(&bytes)?;
+        apply_identity(&identity)?;
+        return Ok(());
+    }
+
+    let url = env::var("PROXIMA_NODE_ENROLLMENT_URL").ok();
+    let token = env::var("PROXIMA_NODE_ENROLLMENT_TOKEN").ok();
+    let node_id = env::var("PROXIMA_NODE_ID").ok();
+
+    if url.is_none() && token.is_none() && node_id.is_none() {
+        return Ok(());
+    }
+
+    let url = url.ok_or("Missing PROXIMA_NODE_ENROLLMENT_URL")?;
+    let token = token.ok_or("Missing PROXIMA_NODE_ENROLLMENT_TOKEN")?;
+    let node_id = node_id.ok_or("Missing PROXIMA_NODE_ID")?;
+
+    let response = reqwest::Client::new()
+        .post(url)
+        .json(&serde_json::json!({
+            "node_id": node_id,
+            "enrollment_token": token
+        }))
+        .send()
+        .await?
+        .error_for_status()?;
+
+    let identity: serde_json::Value = response.json().await?;
+
+    // Validate the complete identity before persisting it.
+    let key = identity["signing_key"]
+        .as_str()
+        .ok_or("Enrollment response is missing signing_key")?;
+    if hex::decode(key)?.len() != 32 {
+        return Err("Enrollment returned an invalid signing key".into());
+    }
+    let _ = identity["organization_id"]
+        .as_str()
+        .ok_or("Enrollment response is missing organization_id")?;
+    let _ = identity["node_id"]
+        .as_str()
+        .ok_or("Enrollment response is missing node_id")?;
+
+    let parent = identity_path.parent().ok_or("Invalid node identity path")?;
+    fs::create_dir_all(parent)?;
+
+    let temporary_path = identity_path.with_extension("json.tmp");
+    fs::write(&temporary_path, serde_json::to_vec_pretty(&identity)?)?;
+    fs::rename(&temporary_path, &identity_path)?;
+
+    apply_identity(&identity)?;
+    env::remove_var("PROXIMA_NODE_ENROLLMENT_TOKEN");
+
+    eprintln!("Engine node identity loaded successfully.");
+    Ok(())
+}
 #[tokio::main]
 async fn main() -> io::Result<()> {
     tracing_subscriber::fmt()
@@ -81,6 +315,11 @@ async fn main() -> io::Result<()> {
         .timeout(std::time::Duration::from_secs(5))
         .build()
         .ok();
+    if let Err(error) = bootstrap_node_identity().await {
+        eprintln!("Engine node bootstrap failed: {error}");
+        std::process::exit(1);
+    }
+
     let attestation_config = AttestationConfig::from_env();
     let attestation_signing_ready = attestation_config.signing_key.is_some();
     let attestation_p99 = std::env::var("PROXIMA_ATTESTATION_P99_OVERHEAD_MS")
@@ -155,29 +394,7 @@ async fn main() -> io::Result<()> {
                             ingest_token.as_deref(),
                             http_client.as_ref(),
                         ) {
-                            match ledger.latest_record().await {
-                                Ok(Some(record)) => {
-                                    match client.post(url)
-                                        .bearer_auth(token)
-                                        .header("content-type", "application/json")
-                                        .body(record)
-                                        .send()
-                                        .await
-                                    {
-                                        Ok(response) if response.status().is_success() => {
-                                            info!(block_hash = %hash, status = %response.status(), "signed attestation delivered to control plane");
-                                        }
-                                        Ok(response) => {
-                                            error!(block_hash = %hash, status = %response.status(), "control plane rejected signed attestation");
-                                        }
-                                        Err(error) => {
-                                            error!(block_hash = %hash, %error, "could not deliver signed attestation to control plane");
-                                        }
-                                    }
-                                }
-                                Ok(None) => error!("attestation ledger append succeeded but latest record was not found"),
-                                Err(error) => error!(%error, "could not read latest attestation for delivery"),
-                            }
+                            deliver_pending_attestations(&ledger, client, url, token).await;
                         }
                     }
                     Err(error) => {
