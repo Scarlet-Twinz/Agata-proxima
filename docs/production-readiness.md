@@ -41,8 +41,8 @@ This checklist separates repository implementation from external production acce
 - [x] Tenants / Policies / Fleet / Deployments
 - [x] Verification / Audit / Security / Infrastructure
 - [x] Developer / Support surfaces
-- [x] Paddle Live billing entitlement model, plan catalogue and repository integration contract
-- [ ] Paddle Live activation — complete business/domain approval, configure Live credentials and three exact monthly USD price IDs, then verify signed webhook and approved Live payment lifecycle
+- [x] Flutterwave billing entitlement model, plan catalogue and repository integration contract
+- [ ] Flutterwave live activation — complete provider approval, configure production credentials and distinct plan IDs, then verify USD checkout, transaction amount, webhook hash, and entitlement lifecycle
 - [ ] Production email lifecycle acceptance — verify each configured Resend template and sender in the deployed environment, and confirm support notifications reach a monitored inbox
 - [ ] Customer-facing status page
 - [x] Practical `/docs/usage` guide covering setup, first workspace, nodes, tenants, environments, verification, integrations, seats/invitations, billing, API use and troubleshooting
@@ -61,7 +61,7 @@ The canonical monthly prices are:
 | Scale | $1,199 |
 | Enterprise | Custom |
 
-Free requires no Paddle subscription. Paid checkout must use three unique configured Paddle Live `pri_...` price IDs. Each price must be active, recurring monthly, USD, and match the canonical plan amount before checkout is enabled. Sandbox routing is unsupported.
+Free requires no provider subscription. Paid checkout must use the configured Flutterwave Starter, Growth, and Scale plan IDs. Verify that checkout returns USD and the exact canonical monthly amount, and validate transaction references, `verif-hash`, duplicate delivery, and entitlement transitions before enabling paid checkout.
 
 ## Phase 3.22-A–H acceptance state
 
@@ -76,12 +76,12 @@ All eight repository-side Phase 3.22 entitlement gates are implemented and passe
 - [x] G — API keys/rate limits, feature gates, enterprise provisioning and support tiers
 - [x] H — Billing lifecycle, grace/downgrade behavior, webhook idempotency and regression gates
 
-Passing these repository gates does not mean that Paddle Live payment acceptance or the external production gates below have been completed.
+Passing these repository gates does not mean that Flutterwave live payment acceptance or the external production gates below have been completed.
 
 ## External production acceptance still required
 
 - Real Microsoft Entra login and callback against a registered production application.
-- Paddle Live business/domain approval, checkout, signed webhook delivery, plan/amount verification, renewal failure/recovery and cancellation acceptance.
+- Flutterwave account approval, USD checkout, transaction verification, webhook hash validation, plan/amount checks, duplicate delivery, renewal failure/recovery, and cancellation acceptance.
 - Verified Resend delivery using the Agata-owned domain.
 - Public HTTPS deployment and production secret management/rotation.
 - Backup/restore exercise with measured RPO/RTO.
