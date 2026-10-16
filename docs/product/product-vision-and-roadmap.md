@@ -355,7 +355,7 @@ Use the following handoff brief when transferring work to another engineer or de
 ## 12. Decisions still to resolve
 
 - **Canonical product/domain spelling:** current README uses “Agata Proxima” and `agataproxima.com`; a later instruction specified “Agata Prozima” and `AgataProzima.com`. Verify domain ownership and confirm one canonical spelling before public-facing edits.
-- **Payment provider:** repository README mentions Paddle; later work discussed Flutterwave and earlier providers. Audit code/configuration and confirm one provider before live activation.
+- **Payment provider:** the current repository implements Flutterwave billing. Live acceptance remains blocked until the real checkout returns the configured USD currency and exact amount, webhook verification succeeds, and the full payment/entitlement lifecycle is tested. See `docs/production/flutterwave-billing.md`.
 - **Metrics implementation:** confirm whether a Prometheus exporter already exists; the local operator dashboard is not proof that a Prometheus endpoint exists.
 - **Circuit breaker semantics:** decide whether it is per connection, per source, per tenant or service-wide; define safe thresholds and recovery.
 - **Attestation trust model:** select signing scheme/key custody, verifier format, evidence coverage and limitations before claiming audit readiness.
