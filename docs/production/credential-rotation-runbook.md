@@ -27,12 +27,13 @@ This is an execution plan, not proof that rotation has been performed. Run each 
 - Determine whether the implementation supports a dual-key transition. If it does not, schedule a controlled maintenance window and plan for affected sessions/tokens to expire or be reissued.
 - Do not assume changing a key is transparent. Verify valid tokens, expired tokens, rejected old tokens, tenant A/B isolation and audit events before declaring rotation complete.
 
-### Paddle Live API key and notification destination secret
+### Flutterwave API credential and webhook hash
 
-- Issue a replacement Live API key with only the permissions required by the billing integration.
-- Update `PADDLE_API_KEY` in the backend secret store and verify Live price preflight, checkout readiness and customer-portal access without creating an unintended charge.
-- Rotate the notification destination secret in Paddle and update `PADDLE_WEBHOOK_SECRET` as one coordinated change. Verify a legitimate signed event is accepted and invalid/old signatures are rejected.
-- Confirm duplicate-event idempotency and that no entitlement is granted from an invalid webhook. Revoke the previous API key/secret only after the coordinated verification succeeds.
+- Issue a replacement Flutterwave API secret through the provider dashboard and update `FLUTTERWAVE_SECRET_KEY` in the backend secret store.
+- Rotate the configured webhook hash in coordination with the provider webhook settings and update `FLUTTERWAVE_WEBHOOK_SECRET_HASH` in the same controlled change.
+- Verify readiness, server-side transaction verification, expected USD amount/currency checks, acceptance of a valid `verif-hash`, and rejection of an invalid or old hash. Use a provider-supported test transaction or an approved non-charging verification path; do not create an unintended live charge.
+- Confirm duplicate-notification idempotency and that no entitlement is granted from an invalid webhook. Revoke the previous API credential only after the coordinated verification succeeds.
+- Do not rotate plan IDs as though they were secrets. Confirm the configured Starter, Growth, and Scale plan IDs and expected USD amounts remain correct after credential rotation.
 
 ### Resend API key
 
