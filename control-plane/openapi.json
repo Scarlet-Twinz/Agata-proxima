@@ -560,7 +560,7 @@
     },
     "/api/v1/billing/checkout": {
       "post": {
-        "summary": "Create a Paddle checkout transaction for an Agata Proxima monthly plan",
+        "summary": "Create a Flutterwave checkout for an Agata Proxima monthly plan",
         "requestBody": {
           "required": true,
           "content": {
@@ -578,7 +578,7 @@
                       "growth",
                       "scale"
                     ],
-                    "description": "Agata Proxima plan key (starter, growth, or scale); the server resolves and validates the configured Paddle price ID."
+                    "description": "Agata Proxima plan key (starter, growth, or scale); the server resolves and validates the configured Flutterwave payment plan ID."
                   }
                 }
               }
@@ -587,7 +587,7 @@
         },
         "responses": {
           "200": {
-            "description": "Paddle transaction ID and client token for opening Paddle Checkout",
+            "description": "Flutterwave hosted checkout URL and local transaction reference",
             "content": {
               "application/json": {
                 "schema": {
@@ -595,10 +595,10 @@
                   "required": [
                     "ok",
                     "provider",
-                    "transaction_id",
-                    "client_token",
-                    "environment",
-                    "reference"
+                    "checkout_url",
+                    "reference",
+                    "amount",
+                    "currency"
                   ],
                   "properties": {
                     "ok": {
@@ -607,26 +607,28 @@
                     "provider": {
                       "type": "string",
                       "enum": [
-                        "paddle"
+                        "flutterwave"
                       ]
                     },
-                    "transaction_id": {
-                      "type": "string"
-                    },
-                    "client_token": {
+                    "checkout_url": {
                       "type": "string",
-                      "description": "Public Paddle client-side token, not the server API key."
-                    },
-                    "environment": {
-                      "type": "string",
-                      "enum": [
-                        "sandbox",
-                        "production"
-                      ]
+                      "format": "uri",
+                      "description": "HTTPS URL returned by Flutterwave for the hosted checkout."
                     },
                     "reference": {
                       "type": "string",
-                      "format": "uuid"
+                      "format": "uuid",
+                      "description": "Locally stored transaction reference used for server-side verification."
+                    },
+                    "amount": {
+                      "type": "number",
+                      "description": "Expected USD amount for the selected plan."
+                    },
+                    "currency": {
+                      "type": "string",
+                      "enum": [
+                        "USD"
+                      ]
                     }
                   }
                 }
@@ -643,33 +645,31 @@
             "description": "Plan is not permitted"
           },
           "503": {
-            "description": "Paddle is not configured, the price does not match the catalog, or the provider is unavailable."
+            "description": "Flutterwave is not configured, plan IDs or USD amounts are invalid, or the provider is unavailable."
           }
         }
       }
     },
     "/api/v1/billing/portal": {
       "post": {
-        "summary": "Create an authenticated Paddle customer portal session",
+        "summary": "Request subscription-management assistance",
         "responses": {
-          "200": {
-            "description": "Temporary Paddle customer portal URL for the authenticated organization"
-          },
-          "400": {
-            "description": "No subscription exists"
-          },
           "401": {
             "description": "Authentication required"
           },
-          "503": {
-            "description": "Paddle portal URL is not available"
+          "403": {
+            "description": "Organization administrator required"
+          },
+          "501": {
+            "description": "Subscription-management portal is not implemented"
           }
-        }
+        },
+        "description": "Self-service billing portal is not implemented. Contact Agata Proxima support to manage or cancel a subscription."
       }
     },
     "/api/v1/billing/verify": {
       "get": {
-        "summary": "Check locally stored Paddle transaction status",
+        "summary": "Verify a locally stored Flutterwave transaction",
         "parameters": [
           {
             "name": "reference",
@@ -677,15 +677,31 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Local checkout reference returned by the checkout endpoint."
+          },
+          {
+            "name": "transaction_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Flutterwave transaction ID returned after hosted checkout."
           }
         ],
         "responses": {
           "200": {
-            "description": "Local transaction status; paid entitlement is applied only after a verified Paddle webhook"
+            "description": "Transaction verified against Flutterwave; entitlement state is updated only after server-side verification."
+          },
+          "400": {
+            "description": "Missing or invalid transaction reference/ID"
           },
           "401": {
             "description": "Authentication required"
+          },
+          "402": {
+            "description": "Flutterwave transaction could not be verified"
           },
           "403": {
             "description": "Organization, plan, currency or amount mismatch"
@@ -958,69 +974,6 @@
           },
           "500": {
             "description": "Persistence failed."
-          }
-        }
-      }
-    },
-    "/api/v1/webhooks/paddle": {
-      "post": {
-        "summary": "Receive signed Paddle Billing webhook events",
-        "description": "Validates the Paddle-Signature header against the raw request body and destination secret before processing idempotent transaction/subscription events.",
-        "security": [],
-        "parameters": [
-          {
-            "name": "Paddle-Signature",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Paddle timestamped HMAC-SHA256 signature (ts and h1)."
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "event_id",
-                  "event_type",
-                  "data"
-                ],
-                "properties": {
-                  "event_id": {
-                    "type": "string"
-                  },
-                  "event_type": {
-                    "type": "string"
-                  },
-                  "data": {
-                    "type": "object",
-                    "additionalProperties": true
-                  }
-                },
-                "additionalProperties": true
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Event processed, safely ignored, or recognized as a duplicate"
-          },
-          "400": {
-            "description": "Malformed event or missing signature"
-          },
-          "401": {
-            "description": "Invalid or stale Paddle signature"
-          },
-          "403": {
-            "description": "Checkout, organization, or price mismatch"
-          },
-          "503": {
-            "description": "Webhook signing secret or database unavailable"
           }
         }
       }
@@ -1458,6 +1411,69 @@
           },
           "404": {
             "description": "Node does not exist in this organization or is not eligible for token rotation"
+          }
+        }
+      }
+    },
+    "/api/v1/webhooks/flutterwave": {
+      "post": {
+        "summary": "Receive Flutterwave webhook events",
+        "description": "Validates the configured Flutterwave `verif-hash` header before processing transaction events idempotently. A browser redirect is not proof of payment.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "verif-hash",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Configured Flutterwave webhook hash value."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "event_id",
+                  "event_type",
+                  "data"
+                ],
+                "properties": {
+                  "event_id": {
+                    "type": "string"
+                  },
+                  "event_type": {
+                    "type": "string"
+                  },
+                  "data": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Event processed, safely ignored, or recognized as a duplicate"
+          },
+          "400": {
+            "description": "Malformed event or missing transaction reference"
+          },
+          "401": {
+            "description": "Invalid or missing Flutterwave webhook hash"
+          },
+          "402": {
+            "description": "Transaction verification failed"
+          },
+          "503": {
+            "description": "Webhook signing hash or database unavailable"
           }
         }
       }
