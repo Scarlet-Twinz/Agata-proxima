@@ -52,7 +52,7 @@ The upstream PostgreSQL endpoint must not be exposed as an alternate untrusted p
 
 ## TLS
 
-When PostgreSQL negotiates end-to-end TLS through the current engine, tenant enforcement is fail-closed because Proxima cannot inspect the encrypted PostgreSQL session. TLS termination and upstream TLS validation remain an explicit deployment boundary rather than an implied capability.
+The supported TLS-termination path has two independently configured legs: client-to-Engine TLS and Engine-to-upstream PostgreSQL TLS. When client TLS is required, the Engine terminates that connection; upstream TLS can independently validate the upstream certificate and hostname according to the selected mode. The current client TLS acceptor does not authenticate client certificates, so this is not mutual TLS (mTLS). If a deployment uses end-to-end TLS passthrough instead, the Engine cannot inspect the encrypted PostgreSQL session and tenant enforcement must fail closed. Verify the exact configured mode with the TLS integration tests; do not infer it from a successful TCP connection.
 
 ## Release gate
 
