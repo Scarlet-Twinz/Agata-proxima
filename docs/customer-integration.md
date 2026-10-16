@@ -30,7 +30,7 @@ A running Engine does not call the Control Plane for every database query. If ma
 ## 4. Typical onboarding
 1. Create an Agata Proxima workspace.
 2. Register a Proxima node.
-3. Store the one-time enrollment token.
+3. Copy the one-time enrollment token and configure `PROXIMA_NODE_ID`, `PROXIMA_NODE_ENROLLMENT_URL`, and `PROXIMA_NODE_ENROLLMENT_TOKEN` for the Engine process. The token expires after 30 minutes and is consumed once by `POST /api/v1/nodes/enroll`; follow the [Secure Node Enrollment runbook](node-enrollment.md) for exact commands, encryption-key setup, identity persistence and token rotation.
 4. Configure the Engine beside PostgreSQL.
 5. Configure tenant signing material.
 6. Point the application's database connection at Proxima.
