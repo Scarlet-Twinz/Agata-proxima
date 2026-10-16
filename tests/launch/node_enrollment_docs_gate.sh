@@ -12,6 +12,8 @@ grep -Fq 'PROXIMA_NODE_ENROLLMENT_TOKEN' docs/node-enrollment.md || fail "one-ti
 grep -Fq 'PROXIMA_NODE_IDENTITY_PATH' docs/node-enrollment.md || fail "identity persistence docs missing"
 grep -Fq '"/api/v1/nodes/enroll"' control-plane/openapi.json || fail "bootstrap endpoint missing from OpenAPI"
 grep -Fq '"/api/v1/nodes/{id}/enrollment-token"' control-plane/openapi.json || fail "token rotation endpoint missing from OpenAPI"
+grep -Fq '"signing_key"' control-plane/openapi.json || fail "node bootstrap response schema missing from OpenAPI"
+grep -Fq '"enrollment_token"' control-plane/openapi.json || fail "node token response schema missing from OpenAPI"
 grep -Fq '"/docs/node-enrollment"' frontend/src/app/router.tsx || fail "node enrollment public route missing"
 grep -Fq 'to: "/docs/node-enrollment"' frontend/src/pages/public/Docs.tsx || fail "documentation home link missing"
 grep -Fq 'import { Nodes } from "../pages/console/Nodes";' frontend/src/app/router.tsx || fail "dedicated node management page not wired into active router"

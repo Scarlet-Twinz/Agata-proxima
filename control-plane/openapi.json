@@ -142,7 +142,52 @@
         "description": "Returns node inventory for the authenticated organization. Enrollment tokens and signing credentials are never returned by this endpoint.",
         "responses": {
           "200": {
-            "description": "Fleet inventory"
+            "description": "Organization-scoped fleet inventory",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "name",
+                      "environment",
+                      "region",
+                      "status"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "environment": {
+                        "type": "string"
+                      },
+                      "region": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "version": {
+                        "type": "string"
+                      },
+                      "last_seen_at": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "format": "date-time"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "401": {
             "description": "Authentication required"
@@ -187,7 +232,40 @@
         },
         "responses": {
           "200": {
-            "description": "Node registered; one-time enrollment token returned"
+            "description": "Node registered; enrollment_token is returned only once",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "name",
+                    "status",
+                    "enrollment_token"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "const": "pending"
+                    },
+                    "enrollment_token": {
+                      "type": "string",
+                      "minLength": 32
+                    },
+                    "warning": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
           },
           "401": {
             "description": "Authentication required"
@@ -218,7 +296,32 @@
         ],
         "responses": {
           "200": {
-            "description": "Enrollment started"
+            "description": "Enrollment started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "name",
+                    "status"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "const": "enrolling"
+                    }
+                  }
+                }
+              }
+            }
           },
           "401": {
             "description": "Authentication required"
@@ -1245,7 +1348,50 @@
         },
         "responses": {
           "200": {
-            "description": "Node identity bootstrapped; signing_key is a one-time 32-byte key encoded as 64 hex characters"
+            "description": "Node identity bootstrapped; signing_key is a one-time 32-byte key encoded as 64 hex characters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "node_id",
+                    "organization_id",
+                    "name",
+                    "status",
+                    "signing_key"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "node_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "organization_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "const": "enrolling"
+                    },
+                    "signing_key": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
           },
           "401": {
             "description": "Token invalid, expired, consumed, or node is not pending"
@@ -1273,7 +1419,39 @@
         ],
         "responses": {
           "200": {
-            "description": "Replacement one-time token issued"
+            "description": "Replacement one-time token issued; expires after 30 minutes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "name",
+                    "status",
+                    "enrollment_token"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "const": "pending"
+                    },
+                    "enrollment_token": {
+                      "type": "string"
+                    },
+                    "warning": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
           },
           "401": {
             "description": "Authentication required"
