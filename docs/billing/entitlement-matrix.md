@@ -33,30 +33,33 @@ The fundamental Proxima Engine security boundary is available on every plan. Pri
 
 ### Free
 
-New organizations start on Free. No Lemon Squeezy subscription is required.
+New organizations start on Free. No Flutterwave subscription is required.
 
 ### Paid subscriptions
 
-Lemon Squeezy is the billing source of truth for paid subscriptions. The Control Plane stores a normalized billing state and derives the organization entitlement record from the verified Lemon Squeezy variant ID.
+Flutterwave is the current provider integration for paid checkout. The Control Plane stores normalized billing state and derives organization entitlements only after server-side transaction verification and webhook validation.
 
-Only these environment-configured Lemon Squeezy variant IDs are accepted:
+Configure distinct numeric plan IDs and the expected USD amounts using the variables documented in [`../production/flutterwave-billing.md`](../production/flutterwave-billing.md):
 
-- `LEMON_SQUEEZY_STARTER_VARIANT_ID`
-- `LEMON_SQUEEZY_GROWTH_VARIANT_ID`
-- `LEMON_SQUEEZY_SCALE_VARIANT_ID`
+- `FLUTTERWAVE_STARTER_PLAN_ID`
+- `FLUTTERWAVE_GROWTH_PLAN_ID`
+- `FLUTTERWAVE_SCALE_PLAN_ID`
+- `FLUTTERWAVE_STARTER_AMOUNT_USD=149`
+- `FLUTTERWAVE_GROWTH_AMOUNT_USD=499`
+- `FLUTTERWAVE_SCALE_AMOUNT_USD=1199`
 
-A checkout request that does not resolve to one of the three configured plan keys or variant IDs is rejected.
+Checkout must reject unsupported plan keys and must not grant paid entitlements from a browser redirect or client-supplied plan value.
 
 ### Subscription lifecycle
 
-- Checkout creates a Lemon Squeezy subscription.
-- Lemon Squeezy webhook signatures are verified before processing.
-- Lemon Squeezy event IDs are idempotent.
+- Checkout creates a provider checkout using the configured Flutterwave plan.
+- Flutterwave's configured `verif-hash` webhook header is validated before processing.
+- Duplicate provider notifications are handled idempotently.
 - Subscription create/update events set the plan from the locally correlated checkout reference and configured variant ID.
 - Subscription deletion returns the organization to Free.
 - Payment failure marks the billing state `past_due`; the organization retains its plan during the payment-recovery period.
 - The Control Plane never grants a paid plan merely because a browser says payment succeeded.
-- The webhook is authoritative for paid entitlement state.
+- The verified server-side transaction and accepted webhook flow are authoritative for paid entitlement state.
 
 ### Why this design
 
@@ -68,7 +71,7 @@ Starter -> Growth -> Scale
 
 by editing a frontend request.
 
-The backend maps the configured Lemon Squeezy variant ID to the corresponding plan, and the database stores the resulting entitlement.
+The backend maps the validated Flutterwave transaction and configured plan to the corresponding entitlement, and the database stores the normalized billing state.
 
 The Engine's tenant-isolation enforcement remains independent of this billing state.
 
