@@ -33,6 +33,7 @@ export default function ResetPassword() {
       setMessage(result.message || "Password reset successfully. Sign in with your new password.");
       setPassword("");
       setConfirmation("");
+      window.history.replaceState(null, "", window.location.pathname);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to reset the password. Request a new link and try again.");
     } finally {
@@ -68,6 +69,7 @@ export default function ResetPassword() {
       </form>}
 
       {!token && <div className="auth-error" role="alert">This reset link is missing its token. Request a new password reset link.</div>}
+      <Link className="auth-back-link" to="/recovery"><ArrowLeft size={15} /> Request a new reset link</Link>
       <Link className="auth-back-link" to="/login"><ArrowLeft size={15} /> Back to sign in</Link>
     </div>
   );
