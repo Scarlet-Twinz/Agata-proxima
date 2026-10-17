@@ -391,6 +391,7 @@ const baseConfigs:Record<string,Config>={
  ]},
  "/app/developer/api-keys":{eyebrow:"DEVELOPER",title:"API keys",description:"Create, revoke and inspect organization-scoped machine credentials.",tabs:developerTabs,endpoint:"/api/v1/developer/api-keys",detailBase:"/app/developer/api-keys",createHref:"/app/developer/api-keys/new",createLabel:"Create API key"},
  "/app/developer/service-accounts":{eyebrow:"DEVELOPER",title:"Service accounts",description:"Manage machine identities and linked API-key lifecycle.",tabs:developerTabs,endpoint:"/api/v1/developer/service-accounts"},
+ "/app/developer/events":{eyebrow:"DEVELOPER",title:"Event and audit stream",description:"Inspect persisted organization audit events and the event records that feed webhook delivery.",tabs:developerTabs,endpoint:"/api/v1/audit",detailBase:"/app/audit"},
  "/app/developer/webhooks":{eyebrow:"DEVELOPER",title:"Webhooks",description:"Create endpoints, select events and inspect delivery history.",tabs:developerTabs,endpoint:"/api/v1/developer/webhooks",detailBase:"/app/developer/webhooks",createHref:"/app/developer/webhooks/new",createLabel:"Add webhook"},
  "/app/developer/environments":{eyebrow:"DEVELOPER",title:"Environments",description:"Create and manage development, staging and production stages within the active organization.",tabs:developerTabs},
 };
@@ -621,6 +622,27 @@ function ApiKeysManager() {
 }
 
 
+
+type OpenApiOperation = {summary?:string;description?:string;responses?:Record<string,{description?:string}>};
+type OpenApiDocument = {info?:{title?:string;version?:string;description?:string};paths?:Record<string,Record<string,OpenApiOperation>>};
+
+function ApiReferenceExplorer(){
+  const [spec,setSpec]=useState<OpenApiDocument|null>(null);
+  const [query,setQuery]=useState("");
+  const [loading,setLoading]=useState(true);
+  const [error,setError]=useState("");
+  useEffect(()=>{let active=true;api.get<OpenApiDocument>("/docs/openapi.json").then(value=>{if(active)setSpec(value);}).catch(e=>{if(active)setError(e instanceof Error?e.message:"Unable to load the OpenAPI document.");}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;};},[]);
+  const operations=useMemo(()=>Object.entries(spec?.paths??{}).flatMap(([path,methods])=>Object.entries(methods).filter(([method])=>["get","post","put","patch","delete","head","options"].includes(method.toLowerCase())).map(([method,op])=>({path,method:method.toUpperCase(),...op}))).filter(op=>(op.path+" "+op.method+" "+(op.summary??"")+" "+(op.description??"")).toLowerCase().includes(query.trim().toLowerCase())),[spec,query]);
+  return <div className="resource-page"><div className="page-heading"><div><span className="eyebrow">DEVELOPER · LIVE SPECIFICATION</span><h1>API reference</h1><p>Endpoint inventory is loaded from the repository's OpenAPI document served by the control plane, not hard-coded into this screen.</p></div><a className="console-refresh-button" href="/docs/openapi.json" target="_blank" rel="noreferrer">Open raw OpenAPI JSON</a></div>
+    {loading&&<div className="surface empty-state"><strong>Loading OpenAPI specification…</strong></div>}
+    {error&&<div className="settings-banner settings-banner--error" role="alert">{error}</div>}
+    {spec&&<><section className="surface environment-boundary-note"><span className="eyebrow">{spec.info?.title??"OpenAPI"}</span><h2>Version {spec.info?.version??"unknown"} · {operations.length} matching operations</h2><p>{spec.info?.description??"API specification loaded from the running control plane."}</p></section>
+      <label className="resource-search"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search method, endpoint or description" aria-label="Search API operations"/></label>
+      <div className="environment-record-list">{operations.map((op,index)=><article className="surface environment-record-card" key={op.method+" "+op.path}><div className="webhook-endpoint-heading"><div><span className="eyebrow">{op.method}</span><h2><code>{op.path}</code></h2></div></div><p><strong>{op.summary??"Endpoint"}</strong></p>{op.description&&<p>{op.description}</p>}<p className="webhook-endpoint-meta">Responses: {Object.entries(op.responses??{}).map(([status,value])=>status+" "+(value.description??"")).join(" · ")||"See API response schema"}</p></article>)}</div>
+      {!operations.length&&<div className="surface empty-state"><strong>No matching endpoints.</strong><span>Try another path or method.</span></div>}
+    </>}
+  </div>;
+}
 
 type ServiceAccountRecord = {id:string;name:string;description:string;environment_id:string|null;environment_name:string|null;status:"active"|"disabled";active_key_count:number;created_at:string;updated_at:string};
 
@@ -940,6 +962,7 @@ export function NestedResource(){
   const doc=developerDocs[pathname];
   const routeLabel = pathname.split("/").filter(Boolean).at(-1)?.replace(/[-_]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) ?? "Workspace";
   const generic:Config={eyebrow:pathname.startsWith("/app/developer")?"DEVELOPER":"SETTINGS",title:doc?.title??routeLabel,description:doc?.intro??"Reference guidance and next steps for this workspace area.",tabs:pathname.startsWith("/app/developer")?developerTabs:[{label:"Authentication",href:"/app/settings/authentication"},{label:"Enterprise identity",href:"/app/settings/identity"},{label:"Security",href:"/app/settings/security"},{label:"API access",href:"/app/settings/api"},{label:"Sensitive actions",href:"/app/settings/danger"},{label:"Notifications",href:"/app/settings/notifications"}]};
+  if(pathname === "/app/developer/api-reference") return <ContextShell config={generic}><ApiReferenceExplorer /></ContextShell>;
   if(doc) return <DeveloperDoc config={generic} doc={doc}/>;
   return (
     <ContextShell config={generic}>
