@@ -8,6 +8,8 @@ const downloads = [
   { title: "Docker and local setup", description: "Start the local PostgreSQL services, run the control plane, check health endpoints and diagnose common Compose failures.", to: "/docs/usage", label: "Open local setup guide", icon: Container },
   { title: "OpenAPI contract", description: "Inspect the versioned HTTP API contract before generating an application-owned client or wiring an integration.", href: `${repository}/blob/main/control-plane/openapi.json`, label: "View OpenAPI JSON", icon: FileJson },
   { title: "Developer quickstart", description: "Follow the authentication, organization context, tenant creation and verification workflow.", to: "/developers/quickstart", label: "Open quickstart", icon: Code2 },
+  { title: "ChatGPT / MCP integration", description: "Connect an assistant through a scoped MCP server and a least-privilege service identity.", to: "/developers/integrations/chatgpt", label: "Open ChatGPT integration guide", icon: Code2 },
+  { title: "Vercel deployment", description: "Configure frontend routing, environment variables, HTTPS and preview/production separation.", to: "/developers/integrations/vercel", label: "Open Vercel deployment guide", icon: ShieldCheck },
   { title: "Deployment blueprint", description: "Review the frontend, API, database, same-origin routing, secrets and production operations architecture.", href: `${repository}/blob/main/docs/production/deployment-architecture.md`, label: "Read deployment blueprint", icon: ShieldCheck },
   { title: "Source and release history", description: "Review implementation, tests, issues and repository changes directly in GitHub.", href: repository, label: "Open GitHub repository", icon: ExternalLink },
 ];
