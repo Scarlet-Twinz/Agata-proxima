@@ -1,0 +1,17 @@
+.git
+**/.git
+**/node_modules
+**/target
+**/dist
+**/.next
+**/__pycache__
+**/.pytest_cache
+**/.venv
+**/venv
+logs/
+data/
+phase4-corrected-backup-20261015-143151/
+phase4-delivery-patch-backup-20261015-142315/
+phase4-source-backup-20261015-141838/
+*.bak
+*.log
