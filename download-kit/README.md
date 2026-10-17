@@ -1,6 +1,6 @@
 # Agata Proxima Integration Starter Kit
 
-This integration kit contains implementation examples for connecting a server-side application to the Agata Proxima control-plane API and receiving signed Agata webhooks. It is an example bundle, not a published npm SDK, standalone CLI binary, Terraform provider or an already-deployed ChatGPT/MCP integration.
+This integration kit contains a server-side JavaScript API client, a read-only Node.js CLI, request examples and integration templates for the Agata Proxima Control Plane. The JavaScript client and CLI run from this source bundle; they are not a published npm SDK or a precompiled standalone binary. A Terraform provider and hosted ChatGPT/MCP service are not included.
 
 ## Requirements
 
@@ -20,7 +20,7 @@ Do not put `AGATA_API_KEY` in a browser variable, commit it to Git, or include i
 
 ## Contents
 
-- `node/agata-client.mjs`: small server-side fetch client.
+- `node/agata-client.mjs`: server-side client with JSON handling, request timeouts, HTTP error details and methods for tenants, policies, nodes, deployments, verification records, audit and webhooks.
 - `node/example.mjs`: health, plan catalogue and tenant-list example.
 - `cli/agata.ps1`: PowerShell API smoke commands.
 - `cli/agata.sh`: Bash API smoke commands.
