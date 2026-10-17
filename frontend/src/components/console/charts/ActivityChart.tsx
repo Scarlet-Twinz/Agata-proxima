@@ -21,7 +21,7 @@ export function ActivityChart({ points, height = 250 }: Props) {
       x: points.length === 1
         ? width / 2
         : padding + (index / (points.length - 1)) * usableWidth,
-      y: max === min ? height / 2 : height - padding - ((point.value - min) / range) * usableHeight,
+      y: max === min ? (max === 0 ? height - padding : height / 2) : height - padding - ((point.value - min) / range) * usableHeight,
       value: point.value,
       timestamp: point.timestamp,
     }));
@@ -51,7 +51,13 @@ export function ActivityChart({ points, height = 250 }: Props) {
 
         {[0, 1, 2, 3].map((step) => {
           const y = 28 + (step / 3) * (height - 56);
-          return <line key={step} x1="28" x2="872" y1={y} y2={y} className="chart-gridline" />;
+          const label = max === min ? max : Math.round(max - (step / 3) * (max - min));
+          return (
+            <g key={step}>
+              <line x1="28" x2="872" y1={y} y2={y} className="chart-gridline" />
+              <text x="8" y={y + 4} className="chart-axis-label">{label}</text>
+            </g>
+          );
         })}
         <line
           x1="28"
@@ -71,6 +77,14 @@ export function ActivityChart({ points, height = 250 }: Props) {
         {plotted.coordinates.length > 1 && (
           <path d={plotted.path} className="chart-line" />
         )}
+
+        {points.length > 0 && [0, Math.floor((points.length - 1) / 2), points.length - 1].filter((index, position, all) => all.indexOf(index) === position).map((index, position, labels) => {
+          const point = points[index];
+          const x = points.length === 1 ? 450 : 28 + (index / (points.length - 1)) * 844;
+          const label = new Date(point.timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+          const anchor = position === 0 ? "start" : position === labels.length - 1 ? "end" : "middle";
+          return <text key={point.timestamp} x={x} y={height - 7} textAnchor={anchor} className="chart-axis-label">{label}</text>;
+        })}
 
         {plotted.coordinates.map((point) => (
           <circle
