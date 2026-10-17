@@ -1542,14 +1542,18 @@ pub(crate) async fn verify_email_code(
         Err(e) => db_error(e),
     }
 }
-pub(crate) async fn reset_password_page(Query(q): Query<VerifyInput>) -> Response {
-    // Encode the untrusted query token as a JavaScript string, then escape HTML
-    // script delimiters so a crafted token cannot break out of the inline script.
-    let token_json = serde_json::to_string(&q.token)
+fn safe_inline_json_string(value: &str) -> String {
+    serde_json::to_string(value)
         .unwrap_or_else(|_| "\"\"".to_string())
         .replace('<', "\\u003c")
         .replace('>', "\\u003e")
-        .replace('&', "\\u0026");
+        .replace('&', "\\u0026")
+}
+
+pub(crate) async fn reset_password_page(Query(q): Query<VerifyInput>) -> Response {
+    // Encode the untrusted query token and escape HTML script delimiters so a
+    // crafted query cannot break out of the inline script.
+    let token_json = safe_inline_json_string(&q.token);
     Html(format!(
         r#"<!doctype html>
 <html lang="en">
@@ -2203,6 +2207,14 @@ mod tests {
         assert_eq!(super::plan_support_level("growth"), "priority");
         assert_eq!(super::plan_support_level("scale"), "priority_plus");
         assert_eq!(super::plan_support_level("enterprise"), "enterprise_custom");
+    }
+
+    #[test]
+    fn reset_token_is_escaped_before_inline_script_insertion() {
+        let encoded = super::safe_inline_json_string("</script><script>alert(1)</script>");
+        assert!(!encoded.to_ascii_lowercase().contains("</script>"));
+        assert!(encoded.contains("\\u003c"));
+        assert!(encoded.contains("\\u003e"));
     }
 
     #[test]
