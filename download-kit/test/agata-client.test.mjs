@@ -22,7 +22,7 @@ function response(status, body, headers = {}) {
 
 test("rejects missing or malformed configuration", () => {
   assert.throws(() => new AgataClient({ baseUrl: "not-a-url", apiKey: "aga_x" }), /HTTP\(S\)/);
-  assert.throws(() => new AgataClient({ baseUrl: "https://api.example.test", apiKey: "bad" }), /aga_/);
+  assert.throws(() => new AgataClient({ baseUrl: "https://api.example.test", apiKey: "bad" }), /organization-scoped Agata API key/);
   assert.throws(() => new AgataClient({ baseUrl: "https://api.example.test", apiKey: "aga_x", timeoutMs: 0 }), /timeoutMs/);
 });
 
