@@ -42,6 +42,8 @@ const primaryNavigation = [
 
 const platformNavigation = [
   { label: "Developer", href: "/app/developer", icon: KeyRound },
+  { label: "Access", href: "/app/settings/members", icon: Users },
+  { label: "Authentication", href: "/app/settings/authentication", icon: ShieldCheck },
   { label: "Settings", href: "/app/settings", icon: Settings },
   { label: "Support", href: "/app/support", icon: CircleHelp },
 ];
