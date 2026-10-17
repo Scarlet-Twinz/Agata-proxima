@@ -22,36 +22,40 @@ Capability names describe the product architecture. See the implementation and a
 ### Prerequisites
 
 - Rust toolchain compatible with the workspace
-- Docker with Docker Compose
-- Node.js and npm for frontend work
-- PostgreSQL for database integration and verification tests
+- Docker Desktop with Docker Compose
+- Node.js 24 and npm for frontend work
+- OpenSSL for generating a local enrollment encryption key, or use the PowerShell command in the usage guide
 
 ### Run the control plane locally
 
-From the repository root:
+From the repository root, start PostgreSQL and configure the local-only environment:
 
 ```bash
 docker compose up -d control-postgres
+export PROXIMA_CONTROL_DATABASE_URL="postgres://proxima_control:proxima-control-dev@127.0.0.1:55443/proxima_control"
+export PROXIMA_CONTROL_BIND="127.0.0.1:8080"
+export PROXIMA_COOKIE_SECURE="false"
+export PROXIMA_NODE_ENROLLMENT_ENCRYPTION_KEY="$(openssl rand -hex 32)"
 cargo run -p proxima-control-plane
 ```
 
-By default, the Command Center listens at `http://127.0.0.1:8080`. The actual address can be changed through `PROXIMA_CONTROL_BIND`.
+These values are for local development only. Keep the database port bound to localhost, never expose the local password or encryption key, and use the [usage guide](docs/usage.md) for the equivalent Windows PowerShell setup. The Command Center listens at `http://127.0.0.1:8080`.
 
 ### Run the engine
 
 In a separate terminal:
 
 ```bash
-cargo run
+cargo run -p proxima-engine
 ```
 
-The local operator dashboard, when enabled, defaults to `http://127.0.0.1:9080`. Configure the required database and security environment variables for your setup before connecting real workloads.
+Configure the Engine's PostgreSQL upstream, enrollment URL and one-time enrollment token before starting it. Follow the [node enrollment runbook](docs/node-enrollment.md) and [usage guide](docs/usage.md) before connecting a workload.
 
 ### Run the frontend
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
