@@ -74,3 +74,26 @@ test("starter example uses methods exposed by the client", async () => {
   assert.match(source, /listTenants\(/);
   assert.doesNotMatch(source, /\.plans\(|\.tenants\(/);
 });
+
+test("webhook lifecycle methods call the supported API routes", async () => {
+  const calls = [];
+  const client = clientWith(async (url, options) => {
+    calls.push({ path: url.replace("https://api.example.test", ""), method: options.method, body: options.body ? JSON.parse(options.body) : undefined });
+    return response(200, { ok: true });
+  });
+  await client.createWebhook({ name: "Audit", endpoint_url: "https://receiver.example.test/hook", events: ["*"] });
+  await client.listWebhookDeliveries("hook/1");
+  await client.setWebhookEnabled("hook/1", false);
+  await client.retryWebhookDelivery("hook/1", "delivery/2");
+  await client.rotateWebhookSecret("hook/1");
+  await client.deleteWebhook("hook/1");
+  assert.deepEqual(calls.map(({ path, method }) => [path, method]), [
+    ["/api/v1/developer/webhooks", "POST"],
+    ["/api/v1/developer/webhooks/hook%2F1/deliveries", "GET"],
+    ["/api/v1/developer/webhooks/hook%2F1/enabled", "POST"],
+    ["/api/v1/developer/webhooks/hook%2F1/deliveries/delivery%2F2/retry", "POST"],
+    ["/api/v1/developer/webhooks/hook%2F1/rotate-secret", "POST"],
+    ["/api/v1/developer/webhooks/hook%2F1", "DELETE"],
+  ]);
+  assert.deepEqual(calls[2].body, { enabled: false });
+});
