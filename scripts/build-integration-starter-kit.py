@@ -7,7 +7,7 @@ kit = root / "download-kit"
 out = root / "frontend/public/downloads/agata-proxima-integration-starter-kit.zip"
 required = [
     "package.json", "package-lock.json", "README.md",
-    "node/agata-client.mjs", "node/example.mjs",
+    "node/agata-client.mjs", "node/example.mjs", "cli/bin/agata.mjs",
     "cli/agata.sh", "cli/agata.ps1", "webhooks/receiver-example.mjs",
     "chatgpt-mcp/server.mjs", "chatgpt-mcp/README.md",
     "integrations/supabase-edge-function.example.ts",
