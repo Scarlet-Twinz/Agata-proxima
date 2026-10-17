@@ -4343,6 +4343,10 @@ fn require_write(ctx: &AuthContext, headers: &HeaderMap) -> Result<(), StatusCod
     }
 }
 
+fn session_max_age_seconds(remember_me: bool) -> i64 {
+    if remember_me { 2_592_000 } else { 43_200 }
+}
+
 fn auth_response(
     s: &AppState,
     user: Uuid,
@@ -4352,7 +4356,7 @@ fn auth_response(
     remember_me: bool,
 ) -> Response {
     let secure = if s.secure_cookie { "; Secure" } else { "" };
-    let max_age = if remember_me { 2_592_000 } else { 43_200 };
+    let max_age = session_max_age_seconds(remember_me);
     let cookie = format!(
         "proxima_session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={max_age}{secure}"
     );
@@ -4661,6 +4665,12 @@ fn unique_error(e: sqlx::Error) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn remember_me_selects_the_expected_session_lifetime() {
+        assert_eq!(session_max_age_seconds(false), 43_200);
+        assert_eq!(session_max_age_seconds(true), 2_592_000);
+    }
 
     #[test]
     fn slugify_is_stable() {
