@@ -699,11 +699,6 @@ function WebhooksManager() {
 
   return <div className="webhooks-manager">
     <div className="page-heading"><div><span className="eyebrow">DEVELOPER · WEBHOOKS</span><h1>Webhooks</h1><p>Subscribe to real Agata audit events, deliver signed payloads, and inspect recorded attempts.</p></div><button className="console-refresh-button" onClick={()=>void load()} disabled={loading}><RefreshCw size={15}/> Refresh</button></div>
-    <section className="surface environment-capacity-summary">
-      <div><span className="eyebrow">PLAN CAPACITY</span><h2>{activeCount} / {environmentLimit===null?"—":environmentLimit} active environments</h2><p>{planName ? "Current plan: "+planName+". " : ""}An environment is a named stage within this organization. Node registration may have already created the stage used by your existing node.</p></div>
-      <Link className="table-detail-link" to="/app/billing/plans">Review plan limits <ArrowUpRight size={14}/></Link>
-    </section>
-    {limitReached&&<div className="system-notice system-notice--warning" role="status"><strong>Environment limit reached.</strong><span>This organization has used its active environment allowance. You can edit or disable the existing environment; creating another requires available plan capacity.</span></div>}
     {notice&&<div className="settings-banner settings-banner--success" role="status">{notice}</div>}
     {error&&<div className="settings-banner settings-banner--error" role="alert">{error}</div>}
     {oneTimeSecret&&<section className="surface webhook-secret-notice"><strong>Signing secret — shown once</strong><p>Copy this into your receiving service's secret store now. It will not be displayed again.</p><code>{oneTimeSecret}</code><button type="button" className="console-refresh-button" onClick={()=>void navigator.clipboard?.writeText(oneTimeSecret)}>Copy secret</button></section>}
@@ -847,6 +842,11 @@ function EnvironmentManager(){
       <p><strong>Organization</strong> is the account, membership and billing boundary. An <strong>environment</strong> is a named stage inside it, such as development, staging or production. Creating an environment does not create another organization, database, network or secret store.</p>
       <p>API keys and webhook subscriptions are currently organization-scoped. For safer separation, create purpose-specific credentials and webhook destinations for each stage, and store each secret only in that stage's server-side secret store. Environment labels alone are not a security boundary.</p>
     </section>
+    <section className="surface environment-capacity-summary">
+      <div><span className="eyebrow">PLAN CAPACITY</span><h2>{activeCount} / {environmentLimit===null?"—":environmentLimit} active environments</h2><p>{planName ? "Current plan: "+planName+". " : ""}An environment is a named stage within this organization. Node registration may have already created the stage used by your existing node.</p></div>
+      <Link className="table-detail-link" to="/app/billing/plans">Review plan limits <ArrowUpRight size={14}/></Link>
+    </section>
+    {limitReached&&<div className="system-notice system-notice--warning" role="status"><strong>Environment limit reached.</strong><span>This organization has used its active environment allowance. You can edit or disable the existing environment; creating another requires available plan capacity.</span></div>}
     {notice&&<div className="settings-banner settings-banner--success" role="status">{notice}</div>}
     {error&&<div className="settings-banner settings-banner--error" role="alert">{error}</div>}
     <form className="surface webhook-create-form environment-create-form" onSubmit={createEnvironment}>
