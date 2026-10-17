@@ -700,7 +700,21 @@ function WebhooksManager() {
     <div className="page-heading"><div><span className="eyebrow">DEVELOPER · WEBHOOKS</span><h1>Webhooks</h1><p>Subscribe to real Agata audit events, deliver signed payloads, and inspect recorded attempts.</p></div><button className="console-refresh-button" onClick={()=>void load()} disabled={loading}><RefreshCw size={15}/> Refresh</button></div>
     {notice&&<div className="settings-banner settings-banner--success" role="status">{notice}</div>}
     {error&&<div className="settings-banner settings-banner--error" role="alert">{error}</div>}
-    {oneTimeSecret&&<section className="surface webhook-secret-notice"><strong>Signing secret — shown once</strong><p>Copy this into your receiving service's secret store now. It will not be displayed again.</p><code>{oneTimeSecret}</code><button type="button" className="console-refresh-button" onClick={()=>void navigator.clipboard?.writeText(oneTimeSecret)}>Copy secret</button></section>}
+    {oneTimeSecret&&<section className="surface webhook-secret-notice"><strong>Signing secret — shown once</strong><p>Copy this into your receiving service's secret store now. It will not be displayed again.</p><code>{oneTimeSecret}</code><button type="button" className="console-refresh-button" onClick={()=>void navigator.clipboard?.writeText(oneTimeSecret)}>Copy secret</button></section>}
+    <section className="surface webhook-guide">
+      <div className="surface-heading"><div><span className="eyebrow">RECEIVER CONTRACT</span><h2>Verify every delivery before processing it</h2><p>Agata signs the exact JSON request body. Verify the signature on the raw bytes before parsing the payload or triggering any business action.</p></div></div>
+      <div className="webhook-guide-grid">
+        <article><strong>1. Verify the signature</strong><p>Read X-Agata-Signature in the form t=timestamp,v1=hex. Compute HMAC-SHA256 using the endpoint signing secret over the UTF-8 bytes of timestamp + "." + raw request body. Compare the hex digest in constant time and reject timestamps outside a short tolerance.</p></article>
+        <article><strong>2. Deduplicate deliveries</strong><p>Persist X-Agata-Delivery-Id with a unique constraint before running side effects. Successful deliveries may be replayed and failed deliveries may retry, so a receiver must be idempotent across process restarts.</p></article>
+        <article><strong>3. Acknowledge reliably</strong><p>Return a 2xx response only after the event is durably accepted. The delivery worker times out after 10 seconds, does not follow redirects and retries failures with bounded backoff. After eight attempts, inspect the dead-letter record and retry after fixing the cause.</p></article>
+      </div>
+      <div className="webhook-guide-code"><span className="eyebrow">SIGNED HEADERS</span><pre className="context-code">X-Agata-Event: developer.api_key.created
+X-Agata-Event-Id: <event-uuid>
+X-Agata-Delivery-Id: <delivery-uuid>
+X-Agata-Signature: t=<unix-seconds>,v1=<hex-hmac-sha256></pre></div>
+      <p className="webhook-guide-note">The downloadable receiver example validates signatures and request size and demonstrates duplicate handling. Its in-memory deduplication is for local demonstration only; use a durable database-backed unique delivery record before production processing.</p>
+      <div className="context-next"><Link to="/developers/webhooks">Open full webhook guide <ArrowUpRight size={15}/></Link><Link to="/app/developer/api-reference">API reference <ArrowUpRight size={15}/></Link></div>
+    </section>
     <form className="surface webhook-create-form" onSubmit={createWebhook}>
       <div><span className="eyebrow">NEW ENDPOINT</span><h2>Add webhook</h2><p>Production destinations must use HTTPS and resolve to public IP addresses.</p></div>
       <label>Endpoint name<input value={name} onChange={e=>setName(e.target.value)} required maxLength={120} placeholder="Production event receiver"/></label>
