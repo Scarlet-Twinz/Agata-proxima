@@ -56,7 +56,7 @@ export function UsageGuide() {
                 <ul>
                   <li>Health and readiness probes must be configured in the hosting environment.</li>
                   <li>Database backups must be encrypted and a restore must be tested against an isolated database.</li>
-                  <li>Alerts must cover database health, API failures, API failures, email delivery and backup age.</li>
+                  <li>Alerts must cover database health, API failures, email delivery and backup age.</li>
                   <li>Never restore over the live database as a test.</li>
                 </ul>
                 <div className="public-detail-links">
