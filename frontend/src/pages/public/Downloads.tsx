@@ -1,4 +1,4 @@
-import { ArrowDownToLine, BookOpen, Code2, Container, FileJson, Github, ShieldCheck } from "lucide-react";
+import { ArrowDownToLine, BookOpen, Code2, Container, FileJson, ExternalLink, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PublicPage } from "../../components/layout/PublicPage";
 
@@ -9,7 +9,7 @@ const downloads = [
   { title: "OpenAPI contract", description: "Inspect the versioned HTTP API contract before generating an application-owned client or wiring an integration.", href: `${repository}/blob/main/control-plane/openapi.json`, label: "View OpenAPI JSON", icon: FileJson },
   { title: "Developer quickstart", description: "Follow the authentication, organization context, tenant creation and verification workflow.", to: "/developers/quickstart", label: "Open quickstart", icon: Code2 },
   { title: "Deployment blueprint", description: "Review the frontend, API, database, same-origin routing, secrets and production operations architecture.", href: `${repository}/blob/main/docs/production/deployment-architecture.md`, label: "Read deployment blueprint", icon: ShieldCheck },
-  { title: "Source and release history", description: "Review implementation, tests, open issues and repository changes directly in GitHub.", href: repository, label: "Open GitHub repository", icon: Github },
+  { title: "Source and release history", description: "Review implementation, tests, open issues and repository changes directly in GitHub.", href: repository, label: "Open GitHub repository", icon: ExternalLink },
 ];
 
 export function Downloads() {
