@@ -687,7 +687,7 @@ a {
   gap: 9px;
 }
 
-.topology-core::after {
+.topology:has(.topology-links--connected) .topology-core::after {
   content: "";
   position: absolute;
   right: -34px;
