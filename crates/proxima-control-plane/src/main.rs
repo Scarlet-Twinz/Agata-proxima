@@ -179,6 +179,20 @@ struct ApiKeyInput {
 }
 
 #[derive(Deserialize)]
+struct EnvironmentInput {
+    name: String,
+    slug: Option<String>,
+    description: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct EnvironmentPatchInput {
+    name: Option<String>,
+    description: Option<String>,
+    status: Option<String>,
+}
+
+#[derive(Deserialize)]
 struct WebhookInput {
     name: String,
     endpoint_url: String,
@@ -454,6 +468,14 @@ async fn main() -> Result<()> {
         )
         .route("/api/v1/organizations/{id}", delete(delete_organization))
         .route("/api/v1/tenants", get(tenants).post(create_tenant))
+        .route(
+            "/api/v1/developer/environments",
+            get(developer_environments).post(create_developer_environment),
+        )
+        .route(
+            "/api/v1/developer/environments/{id}",
+            patch(update_developer_environment).delete(delete_developer_environment),
+        )
         .route("/api/v1/policies", get(policies).post(create_policy))
         .route("/api/v1/nodes", get(nodes).post(create_node))
         .route("/api/v1/nodes/enroll", post(enroll_node))
@@ -2790,6 +2812,245 @@ async fn create_policy(
             Json(json!({"id":id,"status":"draft"})).into_response()
         }
         Err(e) => unique_error(e),
+    }
+}
+
+fn normalize_environment_slug(value: &str) -> String {
+    let mut slug = String::new();
+    let mut pending_dash = false;
+    for ch in value.trim().chars() {
+        if ch.is_ascii_alphanumeric() {
+            if pending_dash && !slug.is_empty() {
+                slug.push('-');
+            }
+            slug.push(ch.to_ascii_lowercase());
+            pending_dash = false;
+        } else if !slug.is_empty() {
+            pending_dash = true;
+        }
+    }
+    slug
+}
+
+async fn developer_environments(State(s): State<AppState>, headers: HeaderMap) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    match sqlx::query(
+        "SELECT e.id,e.name,e.slug,e.description,e.status,e.created_at,e.updated_at,
+                (SELECT count(*) FROM nodes n
+                 WHERE n.organization_id=e.organization_id
+                   AND (lower(n.environment)=e.slug OR lower(n.environment)=lower(e.name)))::bigint AS node_count
+         FROM organization_environments e
+         WHERE e.organization_id=$1
+         ORDER BY CASE WHEN e.status='active' THEN 0 ELSE 1 END, e.name",
+    )
+    .bind(ctx.organization_id)
+    .fetch_all(&s.db)
+    .await
+    {
+        Ok(rows) => Json(rows.iter().map(|r| json!({
+            "id":r.get::<Uuid,_>("id"),
+            "name":r.get::<String,_>("name"),
+            "slug":r.get::<String,_>("slug"),
+            "description":r.get::<String,_>("description"),
+            "status":r.get::<String,_>("status"),
+            "node_count":r.get::<i64,_>("node_count"),
+            "created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),
+            "updated_at":r.get::<chrono::DateTime<chrono::Utc>,_>("updated_at")
+        })).collect::<Vec<_>>()).into_response(),
+        Err(e) => db_error(e),
+    }
+}
+
+async fn create_developer_environment(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<EnvironmentInput>,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
+
+    let name = input.name.trim();
+    if name.is_empty() || name.len() > 100 {
+        return (StatusCode::BAD_REQUEST, Json(json!({
+            "ok":false,"error":"invalid_environment_name",
+            "message":"Environment name must contain 1–100 characters."
+        }))).into_response();
+    }
+    let slug = normalize_environment_slug(input.slug.as_deref().unwrap_or(name));
+    if slug.is_empty() || slug.len() > 100 {
+        return (StatusCode::BAD_REQUEST, Json(json!({
+            "ok":false,"error":"invalid_environment_slug",
+            "message":"Environment slug must contain letters or numbers and may use hyphens between words."
+        }))).into_response();
+    }
+    let description = input.description.unwrap_or_default().trim().to_string();
+    if description.len() > 500 {
+        return (StatusCode::BAD_REQUEST, Json(json!({
+            "ok":false,"error":"invalid_environment_description",
+            "message":"Environment description must be 500 characters or fewer."
+        }))).into_response();
+    }
+
+    if let Err(response) = production::enforce_capacity(&s.db, ctx.organization_id, "environments").await {
+        return response;
+    }
+
+    let id = Uuid::new_v4();
+    match sqlx::query(
+        "INSERT INTO organization_environments(id,organization_id,name,slug,description,status,created_by)
+         VALUES($1,$2,$3,$4,$5,'active',$6)
+         RETURNING id,name,slug,description,status,created_at,updated_at",
+    )
+    .bind(id)
+    .bind(ctx.organization_id)
+    .bind(name)
+    .bind(&slug)
+    .bind(description)
+    .bind(ctx.user_id)
+    .fetch_one(&s.db)
+    .await
+    {
+        Ok(row) => {
+            audit(&s.db, ctx.organization_id, ctx.user_id, "developer.environment.created", "environment", Some(id), json!({"slug":slug})).await;
+            Json(json!({
+                "id":row.get::<Uuid,_>("id"),
+                "name":row.get::<String,_>("name"),
+                "slug":row.get::<String,_>("slug"),
+                "description":row.get::<String,_>("description"),
+                "status":row.get::<String,_>("status"),
+                "node_count":0,
+                "created_at":row.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),
+                "updated_at":row.get::<chrono::DateTime<chrono::Utc>,_>("updated_at")
+            })).into_response()
+        }
+        Err(e) => unique_error(e),
+    }
+}
+
+async fn update_developer_environment(
+    State(s): State<AppState>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+    Json(input): Json<EnvironmentPatchInput>,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
+    if input.name.as_ref().is_some_and(|v| v.trim().is_empty() || v.trim().len() > 100) {
+        return (StatusCode::BAD_REQUEST, Json(json!({
+            "ok":false,"error":"invalid_environment_name",
+            "message":"Environment name must contain 1–100 characters."
+        }))).into_response();
+    }
+    if input.description.as_ref().is_some_and(|v| v.len() > 500) {
+        return (StatusCode::BAD_REQUEST, Json(json!({
+            "ok":false,"error":"invalid_environment_description",
+            "message":"Environment description must be 500 characters or fewer."
+        }))).into_response();
+    }
+    if input.status.as_deref().is_some_and(|v| !matches!(v, "active" | "disabled")) {
+        return (StatusCode::BAD_REQUEST, Json(json!({
+            "ok":false,"error":"invalid_environment_status",
+            "message":"Environment status must be active or disabled."
+        }))).into_response();
+    }
+    match sqlx::query(
+        "UPDATE organization_environments
+         SET name=COALESCE($3,name), description=COALESCE($4,description),
+             status=COALESCE($5,status), updated_at=now()
+         WHERE id=$1 AND organization_id=$2
+         RETURNING id,name,slug,description,status,created_at,updated_at",
+    )
+    .bind(id)
+    .bind(ctx.organization_id)
+    .bind(input.name.map(|v| v.trim().to_string()))
+    .bind(input.description.map(|v| v.trim().to_string()))
+    .bind(input.status)
+    .fetch_optional(&s.db)
+    .await
+    {
+        Ok(Some(row)) => {
+            audit(&s.db, ctx.organization_id, ctx.user_id, "developer.environment.updated", "environment", Some(id), json!({"status":row.get::<String,_>("status")})).await;
+            Json(json!({
+                "id":row.get::<Uuid,_>("id"),
+                "name":row.get::<String,_>("name"),
+                "slug":row.get::<String,_>("slug"),
+                "description":row.get::<String,_>("description"),
+                "status":row.get::<String,_>("status"),
+                "created_at":row.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),
+                "updated_at":row.get::<chrono::DateTime<chrono::Utc>,_>("updated_at")
+            })).into_response()
+        }
+        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({
+            "ok":false,"error":"environment_not_found","message":"Environment not found in the active organization."
+        }))).into_response(),
+        Err(e) => db_error(e),
+    }
+}
+
+async fn delete_developer_environment(
+    State(s): State<AppState>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
+
+    let result = sqlx::query(
+        "DELETE FROM organization_environments e
+         WHERE e.id=$1 AND e.organization_id=$2
+           AND NOT EXISTS (
+               SELECT 1 FROM nodes n
+               WHERE n.organization_id=e.organization_id
+                 AND (lower(n.environment)=e.slug OR lower(n.environment)=lower(e.name))
+           )",
+    )
+    .bind(id)
+    .bind(ctx.organization_id)
+    .execute(&s.db)
+    .await;
+    match result {
+        Ok(r) if r.rows_affected() == 1 => {
+            audit(&s.db, ctx.organization_id, ctx.user_id, "developer.environment.deleted", "environment", Some(id), json!({})).await;
+            Json(json!({"ok":true})).into_response()
+        }
+        Ok(_) => {
+            let exists = sqlx::query_scalar::<_, bool>(
+                "SELECT EXISTS(SELECT 1 FROM organization_environments WHERE id=$1 AND organization_id=$2)",
+            )
+            .bind(id)
+            .bind(ctx.organization_id)
+            .fetch_one(&s.db)
+            .await;
+            match exists {
+                Ok(true) => (StatusCode::CONFLICT, Json(json!({
+                    "ok":false,"error":"environment_in_use",
+                    "message":"This environment is referenced by registered nodes. Disable it instead of deleting it."
+                }))).into_response(),
+                Ok(false) => (StatusCode::NOT_FOUND, Json(json!({
+                    "ok":false,"error":"environment_not_found","message":"Environment not found in the active organization."
+                }))).into_response(),
+                Err(e) => db_error(e),
+            }
+        }
+        Err(e) => db_error(e),
     }
 }
 
