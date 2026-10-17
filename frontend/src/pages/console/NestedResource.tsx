@@ -528,6 +528,8 @@ type ApiKeyRecord = {
   last_used_at: string | null;
   created_at: string;
   revoked_at: string | null;
+  service_account_id?: string | null;
+  service_account_name?: string | null;
 };
 
 function ApiKeysManager() {
@@ -603,6 +605,7 @@ function ApiKeysManager() {
                 <div className="api-key-title"><KeyRound size={17}/><strong>{key.name}</strong><span className={key.revoked_at ? "api-key-status api-key-status--revoked" : "api-key-status"}>{key.revoked_at ? "Revoked" : "Active"}</span></div>
                 <code>{key.key_prefix}…¢…¢…¢…¢…¢…¢…¢…¢</code>
                 <div className="api-key-meta">
+                  {key.service_account_name && <span>Service account: {key.service_account_name}</span>}
                   <span>Created {new Date(key.created_at).toLocaleString()}</span>
                   <span>{key.last_used_at ? `Last used ${new Date(key.last_used_at).toLocaleString()}` : "Never used"}</span>
                   {key.revoked_at && <span>Revoked {new Date(key.revoked_at).toLocaleString()}</span>}
