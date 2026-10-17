@@ -547,6 +547,10 @@ async fn main() -> Result<()> {
             get(developer_event_catalog),
         )
         .route(
+            "/api/v1/developer/webhooks/configuration",
+            get(webhook_configuration),
+        )
+        .route(
             "/api/v1/developer/webhooks",
             get(webhooks).post(create_webhook),
         )
