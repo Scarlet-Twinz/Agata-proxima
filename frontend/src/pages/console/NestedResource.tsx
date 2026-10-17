@@ -948,7 +948,7 @@ function EnvironmentManager(){
 export function NestedResource(){
   const {pathname}=useLocation(); const params=useParams();
   const detailId=params.tenantId??params.policyId??params.nodeId??params.deploymentId??params.runId??params.eventId??params.apiKeyId??params.webhookId;
-  const base=detailId?pathname.replace(/\/[^/]+$/,""):pathname;
+  const base=detailId?pathname.replace(/\/[^/]+$/,""):pathname.endsWith("/new")?pathname.replace(/\/new$/,""):pathname;
   const config=baseConfigs[base]??baseConfigs[pathname];
   if(pathname === "/app/developer/api-keys/new" && config) return <ContextShell config={config}><ApiKeyCreatePage /></ContextShell>;
   if(pathname === "/app/developer/service-accounts" && config) return <ContextShell config={config}><ServiceAccountsManager /></ContextShell>;
