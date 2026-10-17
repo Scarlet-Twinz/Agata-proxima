@@ -84,6 +84,7 @@ export class AgataClient {
   retryWebhookDelivery(id, deliveryId, options) { return this.request(`/api/v1/developer/webhooks/${encodeURIComponent(id)}/deliveries/${encodeURIComponent(deliveryId)}/retry`, { ...options, method: "POST", body: {} }); }
   rotateWebhookSecret(id, options) { return this.request(`/api/v1/developer/webhooks/${encodeURIComponent(id)}/rotate-secret`, { ...options, method: "POST", body: {} }); }
   setWebhookEnabled(id, enabled, options) { return this.request(`/api/v1/developer/webhooks/${encodeURIComponent(id)}/enabled`, { ...options, method: "POST", body: { enabled } }); }
+  listServiceAccounts(options) { return this.request("/api/v1/developer/service-accounts", options); }
   listEnvironments(options) { return this.request("/api/v1/developer/environments", options); }
   createEnvironment(input, options) { return this.request("/api/v1/developer/environments", { ...options, method: "POST", body: input }); }
   updateEnvironment(id, input, options) { return this.request(`/api/v1/developer/environments/${encodeURIComponent(id)}`, { ...options, method: "PATCH", body: input }); }
