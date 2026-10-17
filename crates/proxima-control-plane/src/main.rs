@@ -2898,8 +2898,11 @@ async fn rotate_node_enrollment_token(
         return c.into_response();
     }
 
-    // Only rotate a token for an unconsumed node with no stored
-    // signing credential. Never overwrite an enrolled node identity.
+    // A consumed token plus stored signing key can mean the control plane
+    // committed enrollment but the engine never persisted the one-time response.
+    // Permit an authenticated operator to recover that stuck "enrolling" node by
+    // rotating its token and clearing the orphaned credential. Do not reset nodes
+    // outside this incomplete-enrollment state.
     let token = format!("{}-{}", Uuid::new_v4(), Uuid::new_v4());
 
     let result = sqlx::query(
@@ -2907,13 +2910,21 @@ async fn rotate_node_enrollment_token(
          SET enrollment_token_hash = $3,
              enrollment_token_expires_at = now() + interval '30 minutes',
              enrollment_token_consumed_at = NULL,
+             node_signing_key_ciphertext = NULL,
+             node_signing_key_nonce = NULL,
              status = 'pending',
              updated_at = now()
          WHERE id = $1
            AND organization_id = $2
-           AND status IN ('pending', 'enrolling')
-           AND enrollment_token_consumed_at IS NULL
-           AND node_signing_key_ciphertext IS NULL
+           AND (
+             (status = 'pending'
+              AND enrollment_token_consumed_at IS NULL
+              AND node_signing_key_ciphertext IS NULL)
+             OR
+             (status = 'enrolling'
+              AND enrollment_token_consumed_at IS NOT NULL
+              AND node_signing_key_ciphertext IS NOT NULL)
+           )
          RETURNING id, name",
     )
     .bind(id)
