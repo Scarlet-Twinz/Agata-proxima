@@ -37,6 +37,8 @@ const resetPassword = read('pages/auth/ResetPassword.tsx');
 const consoleSurfaces = read('pages/console/ConsoleSurfaces.tsx');
 const actionPage = read('pages/console/ActionPage.tsx');
 const footer = read('components/layout/PublicFooter.tsx');
+const publicLayout = read('layouts/PublicLayout.tsx');
+const consoleLayout = read('layouts/console/ConsoleLayout.tsx');
 const activityChart = read('components/console/charts/ActivityChart.tsx');
 const controlPlane = fs.readFileSync(path.join(root, 'crates', 'proxima-control-plane', 'src', 'main.rs'), 'utf8');
 const tenantScopeMigration = fs.readFileSync(path.join(root, 'crates', 'proxima-control-plane', 'migrations', '0025_tenant_organization_boundary.sql'), 'utf8');
@@ -116,6 +118,11 @@ addCheck('Activity chart labels a full daily series and handles zero activity', 
 addCheck('Homepage exposes the integration starter kit and footer includes requested social brands', /to="\/developers\/downloads"/.test(home) && ['GitHub','LinkedIn','Twitter','Hacker News'].every(label => footer.includes(label)));
 addCheck('Signup links Terms of Service and Privacy Policy directly', /to="\/terms"/.test(signup) && /to="\/privacy"/.test(signup));
 addCheck('Password reset token is escaped before inline-script insertion', /safe_inline_json_string\(&q\.token\)/.test(productionSource) && /reset_token_is_escaped_before_inline_script_insertion/.test(productionSource));
+addCheck('Direct dashboard entry is gated by a server-verified session', /path:\s*"\/app",\s*element:\s*<ConsoleLayout\s*\/>/.test(router) && /getSession\(\)/.test(consoleLayout) && /if \(!current\)/.test(consoleLayout) && /navigate\("\/login"/.test(consoleLayout));
+addCheck('Remembered sessions restore the CSRF token after browser restart', /cache:"no-store"/.test(authApi) && /sessionStorage\.setItem\("proxima_csrf", session\.csrf_token\)/.test(authApi));
+addCheck('Public navigation and footer provide scroll-to-top behavior', /window\.scrollTo\(0, 0\)/.test(publicLayout) && /window\.scrollTo\(\{ top: 0, behavior: "smooth" \}\)/.test(footer));
+addCheck('Sparse verification telemetry is rendered across the complete 30-day window', /Array\.from\(\{ length: 30 \}/.test(activityChart) && /dailyPoints/.test(activityChart));
+addCheck('Verification action wording does not imply it executes the underlying test', /createLabel="Record result"/.test(consoleSurfaces) && /does not execute the test/.test(actionPage));
 
 console.log('\nAgata Proxima public/dashboard static acceptance audit');
 for (const check of checks) {
