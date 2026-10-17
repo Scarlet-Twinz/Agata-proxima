@@ -749,6 +749,11 @@
                 "properties": {
                   "name": {
                     "type": "string"
+                  },
+                  "service_account_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Optional active service account to associate with this key."
                   }
                 }
               }
@@ -1612,6 +1617,148 @@
           },
           "409": {
             "description": "Environment is in use"
+          }
+        }
+      }
+    },
+    "/api/v1/developer/service-accounts": {
+      "get": {
+        "summary": "List machine service accounts",
+        "description": "Lists service accounts in the authenticated organization, including environment association and active linked-key count.",
+        "responses": {
+          "200": {
+            "description": "Service account inventory"
+          },
+          "401": {
+            "description": "Authentication required"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a service account",
+        "description": "Creates a named machine identity. Creation and changes require an authenticated human session with write access. Link API keys to the service account; disabling it blocks linked keys and deleting it revokes them.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "environment_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "uuid",
+                    "description": "Optional environment association for ownership context; not a separate security boundary."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Service account created"
+          },
+          "400": {
+            "description": "Invalid name or environment"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "API-key authentication cannot create service accounts"
+          }
+        }
+      }
+    },
+    "/api/v1/developer/service-accounts/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "patch": {
+        "summary": "Update a service account",
+        "description": "Updates the name, description, status or active environment association. Disabling a service account blocks authentication for its linked keys.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "disabled"
+                    ]
+                  },
+                  "environment_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated service account"
+          },
+          "400": {
+            "description": "Invalid update"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Service account not found"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a service account",
+        "description": "Deletes the service account and revokes all associated API keys atomically.",
+        "responses": {
+          "200": {
+            "description": "Deleted; associated keys revoked"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Service account not found"
           }
         }
       }
