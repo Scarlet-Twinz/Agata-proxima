@@ -40,7 +40,7 @@ export function ActivityChart({ points, height = 250 }: Props) {
         viewBox={`0 0 900 ${height}`}
         preserveAspectRatio="none"
         role="img"
-        aria-label="Verification activity trend"
+        aria-label="Daily verification records over the last 30 days"
       >
         <defs>
           <linearGradient id="agata-chart-fill" x1="0" x2="0" y1="0" y2="1">
@@ -80,7 +80,7 @@ export function ActivityChart({ points, height = 250 }: Props) {
             r={plotted.coordinates.length === 1 ? 6 : 3.5}
             className="chart-point"
           >
-            <title>{`${point.timestamp}: ${point.value} verification run(s)`}</title>
+            <title>{`${point.timestamp}: ${point.value} verification record(s)`}</title>
           </circle>
         ))}
       </svg>
@@ -91,12 +91,12 @@ export function ActivityChart({ points, height = 250 }: Props) {
         </div>
       )}
       {points.length > 0 && points.every((point) => point.value === 0) && (
-        <p className="chart-caption">No verification runs recorded in the last 30 days.</p>
+        <p className="chart-caption">No verification records in the last 30 days.</p>
       )}
       {points.length > 0 && (
         <div className="chart-axis-labels" aria-hidden="true">
           <span>{new Date(points[0].timestamp).toLocaleDateString()}</span>
-          <span>Verification runs · last 30 days</span>
+          <span>Verification records · last 30 days</span>
           <span>{new Date(points[points.length - 1].timestamp).toLocaleDateString()}</span>
         </div>
       )}
