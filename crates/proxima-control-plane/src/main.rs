@@ -1606,7 +1606,26 @@ async fn control_plane_overview(State(s): State<AppState>, headers: HeaderMap) -
     .await;
     let active_deployments = scalar_count(&s.db, "SELECT count(*) FROM deployments WHERE organization_id=$1 AND status NOT IN ('healthy','rolled_back')", ctx.organization_id).await;
     let latest_verification = sqlx::query("SELECT status FROM verification_results WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 1").bind(ctx.organization_id).fetch_optional(&s.db).await.ok().flatten();
-    let trend_rows = sqlx::query("SELECT date_trunc('day',created_at) AS timestamp,count(*)::bigint AS value FROM verification_results WHERE organization_id=$1 GROUP BY 1 ORDER BY 1 DESC LIMIT 30").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
+    // Return a complete 30-day series, including genuine zero-activity days.
+    // This gives the chart a useful time axis without inventing verification runs.
+    let trend_rows = sqlx::query(
+        "SELECT days.timestamp AS timestamp, count(vr.created_at)::bigint AS value
+         FROM generate_series(
+             date_trunc('day', now()) - interval '29 days',
+             date_trunc('day', now()),
+             interval '1 day'
+         ) AS days(timestamp)
+         LEFT JOIN verification_results vr
+           ON vr.organization_id=$1
+          AND vr.created_at >= days.timestamp
+          AND vr.created_at < days.timestamp + interval '1 day'
+         GROUP BY days.timestamp
+         ORDER BY days.timestamp DESC"
+    )
+    .bind(ctx.organization_id)
+    .fetch_all(&s.db)
+    .await
+    .unwrap_or_default();
     let tenant_rows = sqlx::query("SELECT t.id,t.name,t.status FROM tenants t JOIN projects p ON p.id=t.project_id WHERE p.organization_id=$1 ORDER BY t.created_at DESC LIMIT 12").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
     let node_rows = sqlx::query("SELECT id,name,region,environment,status,version FROM nodes WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 12").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
     let audit_rows = sqlx::query("SELECT id,action,resource_type,resource_id,created_at FROM audit_events WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 10").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
@@ -1614,15 +1633,16 @@ async fn control_plane_overview(State(s): State<AppState>, headers: HeaderMap) -
         .as_ref()
         .map(|r| r.get::<String, _>("status").to_uppercase())
         .unwrap_or_else(|| "NO RUNS".into());
+    let database_connected = sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
     Json(json!({
         "organization_id": ctx.organization_id,
         "role": ctx.role,
         "metrics": {"tenants":tenant_count,"policies":policy_count,"nodes":node_count,"active_deployments":active_deployments},
         "protection": {
-            "tenantIsolation": if tenant_count > 0 {"ENFORCED"} else {"READY"},
-            "policyEnforcement": if policy_count > 0 {"CONFIGURED"} else {"READY"},
+            "tenantIsolation": if tenant_count > 0 {"CONFIGURED"} else {"NOT CONFIGURED"},
+            "policyEnforcement": if policy_count > 0 {"CONFIGURED"} else {"NOT CONFIGURED"},
             "verification": verification_state,
-            "databaseProtection": "CONNECTED"
+            "databaseProtection": if database_connected {"CONNECTED"} else {"UNAVAILABLE"}
         },
         "verificationTrend": trend_rows.iter().rev().map(|r| json!({"timestamp":r.get::<chrono::DateTime<chrono::Utc>,_>("timestamp"),"value":r.get::<i64,_>("value")})).collect::<Vec<_>>(),
         "tenants": tenant_rows.iter().map(|r| json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"status":r.get::<String,_>("status")})).collect::<Vec<_>>(),
