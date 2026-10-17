@@ -24,7 +24,7 @@ Capability names describe the product architecture. See the implementation and a
 - Rust toolchain compatible with the workspace
 - Docker Desktop with Docker Compose
 - Node.js 24 and npm for frontend work
-- OpenSSL for generating a local enrollment encryption key, or use the PowerShell command in the usage guide
+- OpenSSL for generating the node-enrollment encryption key when enrolling nodes, or use the PowerShell instructions in the node-enrollment runbook
 
 ### Run the control plane locally
 
@@ -35,11 +35,10 @@ docker compose up -d control-postgres
 export PROXIMA_CONTROL_DATABASE_URL="postgres://proxima_control:proxima-control-dev@127.0.0.1:55443/proxima_control"
 export PROXIMA_CONTROL_BIND="127.0.0.1:8080"
 export PROXIMA_COOKIE_SECURE="false"
-export PROXIMA_NODE_ENROLLMENT_ENCRYPTION_KEY="$(openssl rand -hex 32)"
 cargo run -p proxima-control-plane
 ```
 
-These values are for local development only. Keep the database port bound to localhost, never expose the local password or encryption key, and use the [usage guide](docs/usage.md) for the equivalent Windows PowerShell setup. The Command Center listens at `http://127.0.0.1:8080`.
+These values are for local development only. Keep the database port bound to localhost and never expose the local password. Before enrolling nodes, generate a 64-character key once with `openssl rand -hex 32`, store it in an untracked local secret file, and reuse that same value as `PROXIMA_NODE_ENROLLMENT_ENCRYPTION_KEY` whenever the Control Plane starts. Do not generate a new key on every restart. Use the [usage guide](docs/usage.md) for Windows PowerShell setup and the [node-enrollment runbook](docs/node-enrollment.md) for the exact enrollment flow. The Command Center listens at `http://127.0.0.1:8080`.
 
 ### Run the engine
 
