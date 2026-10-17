@@ -8,7 +8,7 @@ const operatingAreas = [
   ["Policy control","Version enforcement intent and connect it to deployments.","/app/policies"],
   ["Fleet","Register nodes, environments and deployment targets.","/app/nodes"],
   ["Deployments","Move desired state through an observable lifecycle.","/app/deployments"],
-  ["Verification","Run and inspect security verification evidence.","/app/verification"],
+  ["Verification","Record test outcomes and review the evidence from executed isolation checks.","/app/verification"],
   ["Audit","Trace administrative and security activity.","/app/audit"],
 ];
 
@@ -17,7 +17,7 @@ const developerAreas = [
   ["Webhooks", "Signed event delivery, attempt history and receiver verification.", "/developers/webhooks"],
   ["API reference", "The control-plane contract and authenticated request examples.", "/developers/api-reference"],
   ["Quickstart", "A step-by-step path to a controlled tenant-isolation test.", "/developers/quickstart"],
-  ["Events and audit", "Understand event scope, evidence and operational history.", "/developers/events"],
+  ["Events and audit", "Understand event scope, evidence and operational history.", "/developers/events"],\n  ["JavaScript SDK", "Use the server-side client from the integration starter kit.", "/developers/sdks"],\n  ["CLI", "Run health checks and list resources from a terminal or CI job.", "/developers/cli"],
 ];
 
 export function Home() {
@@ -72,7 +72,7 @@ export function Home() {
 
     <section className="public-section">
       <div className="agata-container">
-        <div className="public-section-header"><div className="public-eyebrow">Developer experience</div><h2>Developer guides for APIs, webhooks and integrations.</h2><p>Explore authentication, API requests, webhook delivery, SDK implementation, CLI workflows, Terraform provider requirements and integration recipes for your stack.</p></div>
+        <div className="public-section-header"><div className="public-eyebrow">Developer resources</div><h2>Integrate through the API, JavaScript client, CLI and signed webhooks.</h2><p>Use the API reference for exact request contracts, the starter-kit client and CLI for common operations, and webhook guides for authenticated event delivery.</p></div>
         <div className="home-developer-grid">{developerAreas.map(([title,text,to])=><Link key={title} to={to}><span className="home-dev-icon">{title==="Webhooks"?<Webhook size={18}/>:title==="API reference"?<Database size={18}/>:title==="Events and audit"?<ShieldCheck size={18}/>:<Terminal size={18}/>}</span><span><strong>{title}</strong><small>{text}</small></span><ArrowRight size={15}/></Link>)}</div>
         <div className="home-doc-strip"><div><strong>Need the complete engineering reference?</strong><span>Open the documentation tree, then drill into a specific concept without losing the navigation context.</span></div><Link to="/docs" className="agata-button agata-button-primary">Open documentation <ArrowRight size={16}/></Link></div>
       </div>
@@ -110,7 +110,7 @@ export function Home() {
 
     <section className="public-section">
       <div className="agata-container">
-        <div className="public-section-header"><div className="public-eyebrow">Built for serious systems</div><h2>For teams of different sizes sharing infrastructure across customers.</h2><p>Whether you are a small startup, a growing SaaS company, a medium-sized engineering organization or a larger enterprise, the key question is whether you need tenant isolation to be explicit and testable.</p></div>
+        <div className="public-section-header"><div className="public-eyebrow">Who it serves</div><h2>Tenant isolation for applications serving multiple customer organizations.</h2><p>Agata Proxima is designed for SaaS teams, platform engineers and security teams that need a defined tenant boundary, controlled runtime access and evidence from repeatable tests.</p></div>
         <div className="home-audience-grid">{[["B2B SaaS","/solutions/b2b-saas"],["Enterprise applications","/solutions/enterprise-saas"],["Developer platforms","/solutions/developer-platforms"],["Security-sensitive workloads","/solutions/security-sensitive"]].map(([label,to])=><Link className="home-audience-link" to={to} key={label}><Check size={18} color="var(--agata-blue)"/><span>{label}</span><ArrowRight size={16}/></Link>)}</div>
       </div>
     </section>
