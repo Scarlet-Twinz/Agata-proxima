@@ -748,6 +748,116 @@ X-Agata-Signature: t=&lt;unix-seconds&gt;,v1=&lt;hex-hmac-sha256&gt;</pre></div>
   </div>;
 }
 
+type EnvironmentRecord = {
+  id:string; name:string; slug:string; description:string; status:"active"|"disabled";
+  node_count?:number; created_at:string; updated_at:string;
+};
+
+function EnvironmentManager(){
+  const [items,setItems]=useState<EnvironmentRecord[]>([]);
+  const [name,setName]=useState("");
+  const [slug,setSlug]=useState("");
+  const [description,setDescription]=useState("");
+  const [slugTouched,setSlugTouched]=useState(false);
+  const [loading,setLoading]=useState(true);
+  const [busy,setBusy]=useState("");
+  const [error,setError]=useState("");
+  const [notice,setNotice]=useState("");
+  const [editing,setEditing]=useState<EnvironmentRecord|null>(null);
+  const [editName,setEditName]=useState("");
+  const [editDescription,setEditDescription]=useState("");
+
+  const load=useCallback(async()=>{
+    setLoading(true);setError("");
+    try{setItems(await api.get<EnvironmentRecord[]>("/api/v1/developer/environments"));}
+    catch(e){setError(e instanceof Error?e.message:"Unable to load environments.");}
+    finally{setLoading(false);}
+  },[]);
+  useEffect(()=>{void load();},[load]);
+
+  function changeName(value:string){
+    setName(value);
+    if(!slugTouched){
+      setSlug(value.toLowerCase().trim().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,""));
+    }
+  }
+  async function createEnvironment(e:FormEvent<HTMLFormElement>){
+    e.preventDefault();setBusy("create");setError("");setNotice("");
+    try{
+      const item=await api.post<EnvironmentRecord>("/api/v1/developer/environments",{name:name.trim(),slug:slug.trim(),description:description.trim()});
+      setNotice(`Environment "${item.name}" created. It belongs to the active organization.`);
+      setName("");setSlug("");setDescription("");setSlugTouched(false);await load();
+    }catch(err){setError(err instanceof Error?err.message:"Unable to create environment.");}
+    finally{setBusy("");}
+  }
+  function startEdit(item:EnvironmentRecord){
+    setEditing(item);setEditName(item.name);setEditDescription(item.description);
+  }
+  async function saveEdit(e:FormEvent<HTMLFormElement>){
+    e.preventDefault();if(!editing)return;
+    setBusy(editing.id);setError("");setNotice("");
+    try{
+      const updated=await api.patch<EnvironmentRecord>(`/api/v1/developer/environments/${editing.id}`,{name:editName.trim(),description:editDescription.trim()});
+      setNotice(`Environment "${updated.name}" updated.`);setEditing(null);await load();
+    }catch(err){setError(err instanceof Error?err.message:"Unable to update environment.");}
+    finally{setBusy("");}
+  }
+  async function toggle(item:EnvironmentRecord){
+    setBusy(item.id);setError("");setNotice("");
+    try{
+      const status=item.status==="active"?"disabled":"active";
+      await api.patch(`/api/v1/developer/environments/${item.id}`,{status});
+      setNotice(`Environment "${item.name}" ${status==="active"?"enabled":"disabled"}.`);await load();
+    }catch(err){setError(err instanceof Error?err.message:"Unable to update environment status.");}
+    finally{setBusy("");}
+  }
+  async function remove(item:EnvironmentRecord){
+    if(!window.confirm(`Delete environment "${item.name}"? Environments referenced by registered nodes cannot be deleted; disable those instead.`))return;
+    setBusy(item.id);setError("");setNotice("");
+    try{await api.delete(`/api/v1/developer/environments/${item.id}`);setNotice(`Environment "${item.name}" deleted.`);await load();}
+    catch(err){setError(err instanceof Error?err.message:"Unable to delete environment.");}
+    finally{setBusy("");}
+  }
+
+  return <div className="environment-manager">
+    <div className="page-heading"><div><span className="eyebrow">DEVELOPER · ENVIRONMENTS</span><h1>Environments</h1><p>Create and manage named deployment stages inside the active organization.</p></div><button type="button" className="console-refresh-button" onClick={()=>void load()} disabled={loading}><RefreshCw size={15}/> Refresh</button></div>
+    <section className="surface environment-boundary-note">
+      <span className="eyebrow">ORGANIZATION ≠ ENVIRONMENT</span>
+      <h2>One organization can contain several environments</h2>
+      <p><strong>Organization</strong> is the account, membership and billing boundary. An <strong>environment</strong> is a named stage inside it, such as development, staging or production. Creating an environment does not create another organization, database, network or secret store.</p>
+      <p>API keys and webhook subscriptions are currently organization-scoped. For safer separation, create purpose-specific credentials and webhook destinations for each stage, and store each secret only in that stage's server-side secret store. Environment labels alone are not a security boundary.</p>
+    </section>
+    {notice&&<div className="settings-banner settings-banner--success" role="status">{notice}</div>}
+    {error&&<div className="settings-banner settings-banner--error" role="alert">{error}</div>}
+    <form className="surface webhook-create-form environment-create-form" onSubmit={createEnvironment}>
+      <div><span className="eyebrow">NEW ENVIRONMENT</span><h2>Create environment</h2><p>Use a stable slug such as <code>development</code>, <code>staging</code> or <code>production</code>. Slugs are unique within this organization.</p></div>
+      <label>Display name<input value={name} onChange={e=>changeName(e.target.value)} required maxLength={100} placeholder="Staging"/></label>
+      <label>Environment slug<input value={slug} onChange={e=>{setSlugTouched(true);setSlug(e.target.value.toLowerCase().trim().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,""));}} required maxLength={100} pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="staging"/><small>Lowercase letters and numbers, separated by single hyphens.</small></label>
+      <label>Description (optional)<textarea value={description} onChange={e=>setDescription(e.target.value)} maxLength={500} rows={3} placeholder="Pre-release acceptance testing with synthetic customer data."/></label>
+      <button className="primary-action" type="submit" disabled={busy==="create"||!name.trim()||!slug.trim()}>{busy==="create"?"Creating…":"Create environment"}</button>
+    </form>
+    <div className="environment-record-list">
+      {loading?<div className="surface empty-state"><strong>Loading environments…</strong><span>Reading environment records from the control plane.</span></div>:
+       items.length===0?<div className="surface empty-state"><strong>No environments created yet.</strong><span>Create your first environment above. It will be saved to the active organization's database and appear here after refresh.</span></div>:
+       items.map(item=><article className="surface environment-record-card" key={item.id}>
+         {editing?.id===item.id?
+           <form className="environment-edit-form" onSubmit={saveEdit}>
+             <label>Display name<input value={editName} onChange={e=>setEditName(e.target.value)} required maxLength={100}/></label>
+             <label>Description<textarea value={editDescription} onChange={e=>setEditDescription(e.target.value)} maxLength={500} rows={3}/></label>
+             <div className="webhook-actions"><button type="submit" disabled={busy===item.id}>{busy===item.id?"Saving…":"Save changes"}</button><button type="button" onClick={()=>setEditing(null)} disabled={busy===item.id}>Cancel</button></div>
+           </form>:
+           <>
+             <div className="webhook-endpoint-heading"><div><span className="eyebrow">ENVIRONMENT</span><h2>{item.name}</h2><code>{item.slug}</code></div><span className={item.status==="active"?"console-status console-status--active":"console-status console-status--pending"}>{item.status==="active"?"Active":"Disabled"}</span></div>
+             <p>{item.description||"No description added."}</p>
+             <p className="webhook-endpoint-meta">Created {new Date(item.created_at).toLocaleString()} · {item.node_count??0} matching registered node(s)</p>
+             <div className="webhook-actions"><button type="button" onClick={()=>startEdit(item)}>Edit details</button><button type="button" disabled={busy===item.id} onClick={()=>void toggle(item)}>{item.status==="active"?"Disable":"Enable"}</button><button type="button" className="webhook-danger-action" disabled={busy===item.id} onClick={()=>void remove(item)}>Delete</button></div>
+           </>
+         }
+       </article>)}
+    </div>
+  </div>;
+}
+
 export function NestedResource(){
   const {pathname}=useLocation(); const params=useParams();
   const detailId=params.tenantId??params.policyId??params.nodeId??params.deploymentId??params.runId??params.eventId??params.apiKeyId??params.webhookId;
@@ -755,6 +865,7 @@ export function NestedResource(){
   const config=baseConfigs[base]??baseConfigs[pathname];
   if(pathname === "/app/developer/api-keys" && config) return <ContextShell config={config}><ApiKeysManager /></ContextShell>;
   if(pathname === "/app/developer/webhooks" && config) return <ContextShell config={config}><WebhooksManager /></ContextShell>;
+  if(pathname === "/app/developer/environments" && config) return <ContextShell config={config}><EnvironmentManager /></ContextShell>;
   if(pathname === "/app/billing/plans" && config) return <ContextShell config={config}><BillingPlans /></ContextShell>;
   if(detailId && config?.endpoint) return <DetailPage config={config} id={detailId}/>;
   if(config) return <ContextShell config={config}><ResourceSurface eyebrow={config.eyebrow} title={config.title} description={config.description} endpoint={config.endpoint} detailBase={config.detailBase} createHref={config.createHref} createLabel={config.createLabel} sections={config.sections}/></ContextShell>;
