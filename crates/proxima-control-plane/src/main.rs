@@ -3182,7 +3182,7 @@ async fn create_verification(
     let id = Uuid::new_v4();
     if let Some(tenant_id) = input.tenant_id {
         let tenant_exists = match sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS(SELECT 1 FROM tenants WHERE id=$1 AND organization_id=$2)",
+            "SELECT EXISTS(SELECT 1 FROM tenants t JOIN projects p ON p.id=t.project_id WHERE t.id=$1 AND p.organization_id=$2)",
         )
         .bind(tenant_id)
         .bind(ctx.organization_id)
