@@ -1605,7 +1605,7 @@ async fn control_plane_overview(State(s): State<AppState>, headers: HeaderMap) -
     )
     .await;
     let active_deployments = scalar_count(&s.db, "SELECT count(*) FROM deployments WHERE organization_id=$1 AND status NOT IN ('healthy','rolled_back')", ctx.organization_id).await;
-    let latest_verification = sqlx::query("SELECT status FROM verification_results WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 1").bind(ctx.organization_id).fetch_optional(&s.db).await.ok().flatten();
+    let latest_verification = sqlx::query("SELECT status,evidence FROM verification_results WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 1").bind(ctx.organization_id).fetch_optional(&s.db).await.ok().flatten();
     // Return a complete 30-day series, including genuine zero-activity days.
     // This gives the chart a useful time axis without inventing verification runs.
     let trend_rows = sqlx::query(
@@ -1631,8 +1631,16 @@ async fn control_plane_overview(State(s): State<AppState>, headers: HeaderMap) -
     let audit_rows = sqlx::query("SELECT id,action,resource_type,resource_id,created_at FROM audit_events WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 10").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
     let verification_state = latest_verification
         .as_ref()
-        .map(|r| r.get::<String, _>("status").to_uppercase())
-        .unwrap_or_else(|| "NO RUNS".into());
+        .map(|r| {
+            let status = r.get::<String, _>("status").to_uppercase();
+            let evidence = r.get::<Value, _>("evidence");
+            if evidence.get("recording_mode").and_then(Value::as_str) == Some("operator_reported") {
+                format!("REPORTED {status}")
+            } else {
+                format!("RECORDED {status}")
+            }
+        })
+        .unwrap_or_else(|| "NO RECORDS".into());
     let database_connected = sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
     Json(json!({
         "organization_id": ctx.organization_id,
