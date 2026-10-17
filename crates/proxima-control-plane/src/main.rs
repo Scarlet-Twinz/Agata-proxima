@@ -1624,7 +1624,12 @@ async fn control_plane_overview(State(s): State<AppState>, headers: HeaderMap) -
         Ok(v) => v,
         Err(c) => return c.into_response(),
     };
-    let tenant_count = scalar_count(&s.db, "SELECT count(*) FROM tenants WHERE organization_id=$1", ctx.organization_id).await;
+    let tenant_count = scalar_count(
+        &s.db,
+        "SELECT count(*) FROM tenants WHERE organization_id=$1",
+        ctx.organization_id,
+    )
+    .await;
     let policy_count = scalar_count(
         &s.db,
         "SELECT count(*) FROM policies WHERE organization_id=$1",
