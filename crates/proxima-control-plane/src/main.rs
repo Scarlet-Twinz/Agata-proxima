@@ -3023,7 +3023,7 @@ async fn enroll_node(
            AND enrollment_token_hash=$2
            AND enrollment_token_consumed_at IS NULL
            AND enrollment_token_expires_at > now()
-           AND status='pending'
+           AND status IN ('pending', 'enrolling')
          RETURNING organization_id, name",
     )
     .bind(input.node_id)
