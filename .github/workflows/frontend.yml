@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "frontend/**"
+      - "scripts/verify-public-content.mjs"
+      - "scripts/verify-public-dashboard.mjs"
       - ".github/workflows/frontend.yml"
   push:
     branches: [main, phase3a-product-completion]
