@@ -105,7 +105,7 @@ export function ActivityChart({ points, height = 250 }: Props) {
       {plotted.dailyPoints.length === 0 && (
         <div className="chart-empty-overlay" role="status">
           <strong>No verification history yet</strong>
-          <span>Run a verification to populate this graph. No sample telemetry is being invented.</span>
+          <span>Record a verification result with completed test evidence to populate this graph.</span>
         </div>
       )}
       {plotted.dailyPoints.length > 0 && plotted.dailyPoints.every((point) => point.value === 0) && (
