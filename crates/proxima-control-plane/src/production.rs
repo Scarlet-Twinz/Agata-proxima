@@ -200,6 +200,7 @@ pub(crate) async fn enforce_capacity(
     let (limit_column, count_sql) = match resource {
         "tenants" => ("tenant_limit", "SELECT count(*) FROM tenants t JOIN projects p ON p.id=t.project_id WHERE p.organization_id=$1"),
         "nodes" => ("node_limit", "SELECT count(*) FROM nodes WHERE organization_id=$1"),
+        "environments" => ("environment_limit", "SELECT count(*) FROM organization_environments WHERE organization_id=$1 AND status='active'"),
         _ => return Err(bad("Unsupported capacity resource.")),
     };
     let limit: i32 = row.get(limit_column);
