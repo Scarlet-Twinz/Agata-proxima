@@ -32,7 +32,8 @@ if (!resource || resource === "--help" || resource === "-h" || resource === "hel
   process.exit(resource ? 0 : 2);
 }
 const commands = {
-  whoami: [undefined, (client) => client.session()],\n  health: ["health", (client) => client.health()],
+  whoami: [undefined, (client) => client.session()],
+  health: ["health", (client) => client.health()],
   plans: ["list", (client) => client.listPlans()],
   tenants: ["list", (client) => client.listTenants()],
   policies: ["list", (client) => client.listPolicies()],
