@@ -709,9 +709,9 @@ function WebhooksManager() {
         <article><strong>3. Acknowledge reliably</strong><p>Return a 2xx response only after the event is durably accepted. The delivery worker times out after 10 seconds, does not follow redirects and retries failures with bounded backoff. After eight attempts, inspect the dead-letter record and retry after fixing the cause.</p></article>
       </div>
       <div className="webhook-guide-code"><span className="eyebrow">SIGNED HEADERS</span><pre className="context-code">X-Agata-Event: developer.api_key.created
-X-Agata-Event-Id: <event-uuid>
-X-Agata-Delivery-Id: <delivery-uuid>
-X-Agata-Signature: t=<unix-seconds>,v1=<hex-hmac-sha256></pre></div>
+X-Agata-Event-Id: &lt;event-uuid&gt;
+X-Agata-Delivery-Id: &lt;delivery-uuid&gt;
+X-Agata-Signature: t=&lt;unix-seconds&gt;,v1=&lt;hex-hmac-sha256&gt;</pre></div>
       <p className="webhook-guide-note">The downloadable receiver example validates signatures and request size and demonstrates duplicate handling. Its in-memory deduplication is for local demonstration only; use a durable database-backed unique delivery record before production processing.</p>
       <div className="context-next"><Link to="/developers/webhooks">Open full webhook guide <ArrowUpRight size={15}/></Link><Link to="/app/developer/api-reference">API reference <ArrowUpRight size={15}/></Link></div>
     </section>
