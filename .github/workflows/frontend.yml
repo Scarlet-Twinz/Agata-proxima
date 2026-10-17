@@ -13,6 +13,8 @@ on:
     branches: [main, phase3a-product-completion]
     paths:
       - "frontend/**"
+      - "download-kit/**"
+      - "packages/javascript-sdk/**"
       - "scripts/verify-public-content.mjs"
       - "scripts/verify-public-dashboard.mjs"
       - ".github/workflows/frontend.yml"
