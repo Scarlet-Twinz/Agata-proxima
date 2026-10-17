@@ -8,10 +8,7 @@ import (
   "github.com/hashicorp/terraform-plugin-framework/provider"
   providerschema "github.com/hashicorp/terraform-plugin-framework/provider/schema"
   "github.com/hashicorp/terraform-plugin-framework/resource"
-  "github.com/hashicorp/terraform-plugin-framework/schema/validator"
   "github.com/hashicorp/terraform-plugin-framework/types"
-  "github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
-  "github.com/hashicorp/terraform-plugin-framework/diag"
 )
 
 type providerModel struct {
@@ -54,5 +51,3 @@ func (p *AgataProvider) Resources(_ context.Context) []func() resource.Resource 
 func (p *AgataProvider) DataSources(_ context.Context) []func() datasource.DataSource { return nil }
 
 var _ provider.Provider = (*AgataProvider)(nil)
-var _ validator.String = stringvalidator.LengthAtLeast(1)
-var _ diag.Diagnostics
