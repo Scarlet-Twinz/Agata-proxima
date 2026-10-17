@@ -95,7 +95,7 @@ export function ActionPage(){
    <li><strong>Submit the evidence below.</strong><span>Select Tenant A in the dropdown to associate this record with that tenant. Choose Pass only when the required checks actually passed; use Review when you have not run them yet.</span></li>
   </ol>
   <div className="verification-guide-code"><div className="context-code-toolbar"><span>Example evidence JSON — replace with your real test results</span><button type="button" className="console-refresh-button" onClick={()=>void copyVerificationEvidence()}><Copy size={14}/>{guideCopied?"Copied":"Copy JSON"}</button></div><pre className="context-code">{verificationEvidenceExample}</pre><p>This JSON is a record of results, not executable test code. The names and outcomes above are examples; replace them with checks you actually performed.</p></div>
-  <div className="verification-guide-next"><Link to="/app/tenants">Open tenant registry <ArrowLeft size={14}/></Link><Link to="/app/verification">Review verification records <ArrowLeft size={14}/></Link><Link to="/app/audit">Inspect audit events <ArrowLeft size={14}/></Link></div>
+  <div className="verification-guide-next"><Link to="/app/tenants">Open tenant registry <ArrowUpRight size={14}/></Link><Link to="/app/verification">Review verification records <ArrowUpRight size={14}/></Link><Link to="/app/audit">Inspect audit events <ArrowUpRight size={14}/></Link></div>
  </section>}
  <section className="surface action-card">{error&&<div className="console-inline-error">{error}</div>}<form onSubmit={submit} className="action-form">
  {["tenant","policy","node","api-key","webhook"].includes(config.kind)&&field("Name","name","Production tenant")}
