@@ -2,7 +2,7 @@
 
 This is the practical operating guide for the repository-backed product. It covers local development, organizations and tenants, verification, team access, billing, SSO, and the boundary between local development and production.
 
-> **Honest status:** Phase 3.22-A–H repository gates have passed. Live Flutterwave payments, Microsoft Entra SSO, production email, hosted database operations and runtime external-SaaS acceptance remain external acceptance tasks.
+> **Release acceptance:** Repository gates cover builds, automated tests, database migrations, API contracts and configuration checks. Deployment acceptance validates payment processing, Microsoft Entra SSO, email delivery, hosted database operations and external integrations against the target environment's credentials, callback URLs and operational controls.
 
 ## 1. Know which database you are using
 
