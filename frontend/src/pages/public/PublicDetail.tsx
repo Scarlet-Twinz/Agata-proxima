@@ -121,6 +121,24 @@ const details: Record<string, Detail> = {
     sections:[{title:"Organization boundary",paragraphs:["Authenticate the caller, resolve the organization, then operate on resources that belong to that organization."]},{title:"Membership",bullets:["Owner — organization authority","Admin — operational administration","Operator — day-to-day resource operations","Viewer — read-oriented access"]}],
     links:[{label:"Tenant context",to:"/developers/tenant-context"},{label:"API reference",to:"/developers/api-reference"}],
   },
+  "/developers/service-accounts": {
+    eyebrow:"Developers · Service accounts", title:"Give every backend integration its own machine identity.", description:"Create named service accounts, associate them with an environment for ownership context, and manage the API keys linked to each identity.",
+    sections:[
+      {title:"Create the identity",bullets:["Open the authenticated dashboard and go to Developer → Service accounts.","Create a named identity for one integration, such as staging-backend or billing-sync.","Optionally associate the service account with a stage for operational context."]},
+      {title:"Issue and rotate credentials",paragraphs:["Create an API key and link it to the service account. The key is shown once; store it in the runtime's server-side secret store. Disabling the service account blocks authentication for linked keys, and deleting it revokes them."]},
+      {title:"Understand the security boundary",paragraphs:["Service accounts provide a distinct machine-identity and credential lifecycle. API keys remain organization-scoped, and an environment association is not a separate authorization boundary. Do not expose machine keys in browser code or source control."]}
+    ],
+    links:[{label:"API authentication",to:"/developers/authentication"},{label:"API reference",to:"/developers/api-reference"}],
+  },
+  "/developers/environments": {
+    eyebrow:"Developers · Environments", title:"Name the stages you actually operate.", description:"Environments are named stages inside one organization, such as development, staging and production.",
+    sections:[
+      {title:"When to create an environment",paragraphs:["Create an environment when you have a real separate stage or node group to register. You do not need an environment just to create an API key. The registry is used by node registration and gives your team consistent stage metadata."]},
+      {title:"What an environment does not create",bullets:["It does not create a new organization or API deployment.","It does not provision a database, network or secret store.","API keys and webhook subscriptions remain organization-scoped; environment labels are not a security boundary."]},
+      {title:"Recommended sequence",bullets:["Create development, staging and production records if those stages exist.","Set each runtime's API origin to the correct deployed Control Plane.","Register nodes against the correct environment.","Use a separate service account per integration and keep each key in its runtime secret store.","Run acceptance tests against the actual protected path before production traffic."]}
+    ],
+    links:[{label:"Service accounts",to:"/developers/service-accounts"},{label:"Fleet and nodes",to:"/developers/fleet"},{label:"API reference",to:"/developers/api-reference"}],
+  },
   "/developers/policies": {
     eyebrow:"Developers · Policies", title:"Declare enforcement intent before deployment.", description:"Policies are versioned documents that describe the security behavior the platform should enforce.",
     sections:[{title:"Policy lifecycle",bullets:["Draft the policy","Review the document","Deploy the intended version","Run verification","Retain evidence"]},{title:"Why versioning matters",paragraphs:["A versioned policy gives operators an explicit answer to which security intent was active when a deployment or verification occurred."]}],
