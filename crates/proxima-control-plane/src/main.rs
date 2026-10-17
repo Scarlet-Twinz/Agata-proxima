@@ -1624,7 +1624,7 @@ async fn control_plane_overview(State(s): State<AppState>, headers: HeaderMap) -
         Ok(v) => v,
         Err(c) => return c.into_response(),
     };
-    let tenant_count = scalar_count(&s.db, "SELECT count(*) FROM tenants t JOIN projects p ON p.id=t.project_id WHERE p.organization_id=$1", ctx.organization_id).await;
+    let tenant_count = scalar_count(&s.db, "SELECT count(*) FROM tenants WHERE organization_id=$1", ctx.organization_id).await;
     let policy_count = scalar_count(
         &s.db,
         "SELECT count(*) FROM policies WHERE organization_id=$1",
@@ -1638,24 +1638,33 @@ async fn control_plane_overview(State(s): State<AppState>, headers: HeaderMap) -
     )
     .await;
     let active_deployments = scalar_count(&s.db, "SELECT count(*) FROM deployments WHERE organization_id=$1 AND status NOT IN ('healthy','rolled_back')", ctx.organization_id).await;
-    let latest_verification = sqlx::query("SELECT status FROM verification_results WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 1").bind(ctx.organization_id).fetch_optional(&s.db).await.ok().flatten();
+    let latest_verification = sqlx::query("SELECT status,evidence FROM verification_results WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 1").bind(ctx.organization_id).fetch_optional(&s.db).await.ok().flatten();
     let trend_rows = sqlx::query("SELECT days.day AS timestamp,count(v.id)::bigint AS value FROM generate_series(date_trunc('day',now())-interval '29 days',date_trunc('day',now()),interval '1 day') AS days(day) LEFT JOIN verification_results v ON v.organization_id=$1 AND date_trunc('day',v.created_at)=days.day GROUP BY days.day ORDER BY days.day ASC LIMIT 30").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
-    let tenant_rows = sqlx::query("SELECT t.id,t.name,t.status FROM tenants t JOIN projects p ON p.id=t.project_id WHERE p.organization_id=$1 ORDER BY t.created_at DESC LIMIT 12").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
+    let tenant_rows = sqlx::query("SELECT id,name,status FROM tenants WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 12").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
     let node_rows = sqlx::query("SELECT id,name,region,environment,status,version FROM nodes WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 12").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
     let audit_rows = sqlx::query("SELECT id,action,resource_type,resource_id,created_at FROM audit_events WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 10").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
     let verification_state = latest_verification
         .as_ref()
-        .map(|r| r.get::<String, _>("status").to_uppercase())
-        .unwrap_or_else(|| "NO RUNS".into());
+        .map(|r| {
+            let status = r.get::<String, _>("status").to_uppercase();
+            let evidence = r.get::<Value, _>("evidence");
+            if evidence.get("recording_mode").and_then(Value::as_str) == Some("operator_reported") {
+                format!("REPORTED {status}")
+            } else {
+                format!("RECORDED {status}")
+            }
+        })
+        .unwrap_or_else(|| "NO RECORDS".into());
+    let database_connected = sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
     Json(json!({
         "organization_id": ctx.organization_id,
         "role": ctx.role,
         "metrics": {"tenants":tenant_count,"policies":policy_count,"nodes":node_count,"active_deployments":active_deployments},
         "protection": {
-            "tenantIsolation": if tenant_count > 0 {"CONFIGURED"} else {"NOT CONFIGURED"},
-            "policyEnforcement": if policy_count > 0 {"CONFIGURED"} else {"NOT CONFIGURED"},
+            "tenantIsolation": if tenant_count > 0 {"TENANTS PRESENT"} else {"NO TENANTS"},
+            "policyEnforcement": if policy_count > 0 {"POLICIES PRESENT"} else {"NO POLICIES"},
             "verification": verification_state,
-            "databaseProtection": "CONNECTED"
+            "databaseProtection": if database_connected {"CONNECTED"} else {"UNAVAILABLE"}
         },
         "verificationTrend": trend_rows.iter().map(|r| json!({"timestamp":r.get::<chrono::DateTime<chrono::Utc>,_>("timestamp"),"value":r.get::<i64,_>("value")})).collect::<Vec<_>>(),
         "tenants": tenant_rows.iter().map(|r| json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"status":r.get::<String,_>("status")})).collect::<Vec<_>>(),
@@ -3542,6 +3551,30 @@ async fn create_verification(
         return c.into_response();
     }
 
+    let status = input.status.trim().to_ascii_lowercase();
+    if !matches!(status.as_str(), "pass" | "fail" | "review") {
+        return bad("Verification outcome must be pass, fail, or review.");
+    }
+    let Some(evidence_object) = input.evidence.as_object() else {
+        return bad("Verification evidence must be a JSON object with completed test details.");
+    };
+    if evidence_object.is_empty()
+        || input
+            .evidence
+            .get("checks")
+            .and_then(Value::as_array)
+            .is_some_and(|checks| checks.is_empty())
+    {
+        return bad(
+            "Add actual test evidence and at least one completed check before recording a result.",
+        );
+    }
+    let mut evidence = input.evidence;
+    if let Some(object) = evidence.as_object_mut() {
+        object.insert("recording_mode".into(), json!("operator_reported"));
+        object.insert("recorded_at".into(), json!(chrono::Utc::now()));
+    }
+
     if input.kind.starts_with("advanced") {
         if let Err(response) =
             production::require_feature(&s.db, ctx.organization_id, "advanced_verification").await
@@ -3558,7 +3591,7 @@ async fn create_verification(
     let id = Uuid::new_v4();
     if let Some(tenant_id) = input.tenant_id {
         let tenant_exists = match sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS(SELECT 1 FROM tenants t JOIN projects p ON p.id=t.project_id WHERE t.id=$1 AND p.organization_id=$2)",
+            "SELECT EXISTS(SELECT 1 FROM tenants t WHERE t.id=$1 AND t.organization_id=$2)",
         )
         .bind(tenant_id)
         .bind(ctx.organization_id)
@@ -3581,10 +3614,10 @@ async fn create_verification(
         "INSERT INTO verification_results(id,organization_id,tenant_id,kind,status,evidence,created_by)
          VALUES($1,$2,$3,$4,$5,$6,$7)"
     ).bind(id).bind(ctx.organization_id).bind(input.tenant_id).bind(&input.kind)
-    .bind(&input.status).bind(&input.evidence).bind(ctx.user_id).execute(&s.db).await {
+    .bind(&status).bind(&evidence).bind(ctx.user_id).execute(&s.db).await {
         Ok(_) => {
-            audit(&s.db, ctx.organization_id, ctx.user_id, "verification.recorded", "verification", Some(id), json!({"kind":input.kind,"status":input.status})).await;
-            Json(json!({"id":id,"status":input.status})).into_response()
+            audit(&s.db, ctx.organization_id, ctx.user_id, "verification.recorded", "verification", Some(id), json!({"kind":input.kind,"status":status,"recording_mode":"operator_reported"})).await;
+            Json(json!({"id":id,"status":status,"recording_mode":"operator_reported","message":"Verification result recorded with operator-submitted evidence."})).into_response()
         }
         Err(e) => db_error(e),
     }
