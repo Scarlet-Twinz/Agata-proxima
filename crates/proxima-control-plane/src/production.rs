@@ -1148,7 +1148,7 @@ pub(crate) async fn entra_callback(
     audit(&s.db, organization_id, user_id, "auth.login", "session", None,
         json!({"method":"microsoft-entra-oidc","tenant_id":tenant_id,"subject":subject})).await;
 
-    match create_session(&s.db, user_id, organization_id).await {
+    match create_session(&s.db, user_id, organization_id, false).await {
         Ok((token, _csrf)) => {
             let mut response = Html(
                 "<html><head><meta http-equiv=\"refresh\" content=\"0;url=/app\"></head><body style=\"background:#05090d;color:#eef7f7;font-family:Arial;padding:60px\">Signing you inÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦</body></html>"
