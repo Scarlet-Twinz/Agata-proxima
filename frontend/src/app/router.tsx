@@ -31,6 +31,7 @@ import Recovery from "../pages/auth/Recovery";
 import { Overview } from "../pages/console/Overview";
 import { Attestations } from "../pages/console/Attestations";
 import {
+  Access,
   Audit,
   Billing,
   Deployments,
@@ -78,6 +79,7 @@ const consoleResourceRoutes = [
   { path: "settings", element: <SettingsHub /> },
   { path: "developer", element: <Developer /> },
   { path: "support", element: <ConsoleSupport /> },
+  { path: "settings/members", element: <Access /> },
 ];
 
 const nestedConsoleRoutes = [
@@ -108,7 +110,6 @@ const nestedConsoleRoutes = [
   "developer/sdks",
   "developer/cli",
   "developer/terraform",
-  "settings/members",
   "settings/authentication",
   "settings/identity",
   "settings/security",

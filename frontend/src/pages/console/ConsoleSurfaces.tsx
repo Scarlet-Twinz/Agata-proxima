@@ -44,6 +44,16 @@ export function Security() {
   </div>;
 }
 
+export function Access() {
+  return <ResourceSurface endpoint="/api/v1/organization/team" detailBase="/app/team/members" eyebrow="ACCESS" title="Access and membership" description="Review live organization membership and role assignments. Use Team to invite members, revoke invitations and manage the access lifecycle." sections={[
+    {title:"Member management",text:"Invite or remove members and review current roles in the Team workspace.",href:"/app/team"},
+    {title:"Role responsibilities",text:"Use owner, admin, operator and viewer roles according to the least-privilege principle.",href:"/app/team/roles"},
+    {title:"Authentication",text:"Review session behavior and enterprise identity configuration.",href:"/app/settings/authentication"},
+  ]} links={[
+    {label:"Team management",href:"/app/team"},{label:"Role guide",href:"/app/team/roles"},{label:"Audit access changes",href:"/app/audit"},
+  ]}/>;
+}
+
 export function Tenants() {
   return <ResourceSurface endpoint="/api/v1/tenants" detailBase="/app/tenants" createHref="/app/tenants/new" createLabel="Create tenant" eyebrow="TENANTS" title="Tenant registry" description="Manage customer boundaries, isolation modes and project placement." links={[
     {label:"Policies",href:"/app/policies"},{label:"Verification",href:"/app/verification"},{label:"Nodes",href:"/app/nodes"},
