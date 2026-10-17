@@ -617,6 +617,47 @@ function ApiKeysManager() {
 }
 
 
+
+type ServiceAccountRecord = {id:string;name:string;description:string;environment_id:string|null;environment_name:string|null;status:"active"|"disabled";active_key_count:number;created_at:string;updated_at:string};
+
+function ServiceAccountsManager(){
+  const [items,setItems]=useState<ServiceAccountRecord[]>([]);
+  const [envs,setEnvs]=useState<Array<{id:string;name:string;slug:string;status:string}>>([]);
+  const [name,setName]=useState("");const [description,setDescription]=useState("");const [environmentId,setEnvironmentId]=useState("");
+  const [loading,setLoading]=useState(true);const [busy,setBusy]=useState("");const [error,setError]=useState("");const [notice,setNotice]=useState("");
+  const load=useCallback(async()=>{setLoading(true);setError("");try{const [a,e]=await Promise.all([api.get<ServiceAccountRecord[]>("/api/v1/developer/service-accounts"),api.get<Array<{id:string;name:string;slug:string;status:string}>>("/api/v1/developer/environments")]);setItems(a);setEnvs(e);}catch(x){setError(x instanceof Error?x.message:"Unable to load service accounts.");}finally{setLoading(false);}},[]);
+  useEffect(()=>{void load();},[load]);
+  async function create(e:FormEvent<HTMLFormElement>){e.preventDefault();setBusy("create");setError("");setNotice("");try{const a=await api.post<ServiceAccountRecord>("/api/v1/developer/service-accounts",{name:name.trim(),description:description.trim(),...(environmentId?{environment_id:environmentId}:{})});setNotice("Service account "+a.name+" created. Create an API key linked to it.");setName("");setDescription("");setEnvironmentId("");await load();}catch(x){setError(x instanceof Error?x.message:"Unable to create service account.");}finally{setBusy("");}}
+  async function toggle(a:ServiceAccountRecord){const status=a.status==="active"?"disabled":"active";if(status==="disabled"&&!window.confirm("Disable "+a.name+"? Its linked API keys will stop authenticating."))return;setBusy(a.id);setError("");try{await api.patch("/api/v1/developer/service-accounts/"+a.id,{status});setNotice("Service account "+status+".");await load();}catch(x){setError(x instanceof Error?x.message:"Unable to update service account.");}finally{setBusy("");}}
+  async function remove(a:ServiceAccountRecord){if(!window.confirm("Delete "+a.name+" and revoke every linked API key?"))return;setBusy(a.id);setError("");try{await api.delete("/api/v1/developer/service-accounts/"+a.id);setNotice("Service account deleted; linked keys revoked.");await load();}catch(x){setError(x instanceof Error?x.message:"Unable to delete service account.");}finally{setBusy("");}}
+  return <div className="resource-page">
+    <div className="page-heading"><div><span className="eyebrow">DEVELOPER · MACHINE IDENTITIES</span><h1>Service accounts</h1><p>Create named identities for backend integrations and control their linked API keys.</p></div><button type="button" className="console-refresh-button" onClick={()=>void load()} disabled={loading}><RefreshCw size={15}/> Refresh</button></div>
+    <section className="surface environment-boundary-note"><span className="eyebrow">HOW IT WORKS</span><h2>Service account → API key → Agata API</h2><p>A service account is a named identity for a backend integration, not a human login. Link API keys to it. Disabling it blocks linked keys; deleting it revokes them. An optional environment records the deployment stage, but does not create a separate database or network.</p></section>
+    {notice&&<div className="settings-banner settings-banner--success" role="status">{notice}</div>}{error&&<div className="settings-banner settings-banner--error" role="alert">{error}</div>}
+    <form className="surface webhook-create-form environment-create-form" onSubmit={create}><div><span className="eyebrow">NEW MACHINE IDENTITY</span><h2>Create service account</h2></div>
+      <label>Name<input value={name} onChange={e=>setName(e.target.value)} required maxLength={120} placeholder="staging-backend"/></label>
+      <label>Environment (optional)<select value={environmentId} onChange={e=>setEnvironmentId(e.target.value)}><option value="">Organization-wide context</option>{envs.filter(x=>x.status==="active").map(x=><option key={x.id} value={x.id}>{x.name} ({x.slug})</option>)}</select><small>Context only; not a security isolation boundary.</small></label>
+      <label>Description<textarea value={description} onChange={e=>setDescription(e.target.value)} maxLength={500} rows={3} placeholder="What system uses this identity?"/></label>
+      <button className="primary-action" type="submit" disabled={busy==="create"||!name.trim()}>{busy==="create"?"Creating…":"Create service account"}</button></form>
+    {loading?<div className="surface empty-state"><strong>Loading service accounts…</strong></div>:items.length===0?<div className="surface empty-state"><strong>No service accounts yet.</strong><span>Create one per integration to manage credentials separately.</span></div>:<div className="environment-record-list">{items.map(a=><article className="surface environment-record-card" key={a.id}><div className="webhook-endpoint-heading"><div><span className="eyebrow">SERVICE ACCOUNT</span><h2>{a.name}</h2><code>{a.id}</code></div><span className={a.status==="active"?"console-status console-status--active":"console-status console-status--pending"}>{a.status}</span></div><p>{a.description||"No description added."}</p><p className="webhook-endpoint-meta">Environment: {a.environment_name||"Organization-wide"} · {a.active_key_count} active key(s)</p><div className="webhook-actions"><Link to={"/app/developer/api-keys/new?service_account_id="+encodeURIComponent(a.id)}>Create linked API key</Link><button type="button" disabled={busy===a.id} onClick={()=>void toggle(a)}>{a.status==="active"?"Disable":"Enable"}</button><button type="button" className="webhook-danger-action" disabled={busy===a.id} onClick={()=>void remove(a)}>Delete and revoke keys</button></div></article>)}</div>}
+  </div>;
+}
+
+function ApiKeyCreatePage(){
+  const [params]=useSearchParams();const [name,setName]=useState("");const [serviceAccountId,setServiceAccountId]=useState(params.get("service_account_id")||"");
+  const [accounts,setAccounts]=useState<ServiceAccountRecord[]>([]);const [busy,setBusy]=useState(false);const [error,setError]=useState("");const [created,setCreated]=useState<{key:string;message:string}|null>(null);
+  useEffect(()=>{let active=true;api.get<ServiceAccountRecord[]>("/api/v1/developer/service-accounts").then(rows=>{if(active)setAccounts(rows.filter(a=>a.status==="active"));}).catch(()=>{if(active)setAccounts([]);});return()=>{active=false;};},[]);
+  async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);setError("");setCreated(null);try{const r=await api.post<{key:string;message:string}>("/api/v1/developer/api-keys",{name:name.trim(),...(serviceAccountId?{service_account_id:serviceAccountId}:{})});setCreated(r);setName("");}catch(x){setError(x instanceof Error?x.message:"Unable to create API key.");}finally{setBusy(false);}}
+  return <div className="resource-page"><div className="page-heading"><div><span className="eyebrow">DEVELOPER · CREDENTIALS</span><h1>Create API key</h1><p>The full key is shown once. Store it in a server-side secret manager.</p></div><Link className="console-refresh-button" to="/app/developer/api-keys">Back to API keys</Link></div>
+    {error&&<div className="settings-banner settings-banner--error" role="alert">{error}</div>}
+    {created&&<section className="surface environment-boundary-note"><span className="eyebrow">COPY NOW · ONE-TIME SECRET</span><h2>API key created</h2><p>{created.message}</p><code style={{display:"block",overflowWrap:"anywhere",padding:"12px"}}>{created.key}</code><button type="button" className="primary-action" onClick={()=>void navigator.clipboard?.writeText(created.key)}>Copy API key</button></section>}
+    <form className="surface webhook-create-form environment-create-form" onSubmit={submit}><div><span className="eyebrow">NEW CREDENTIAL</span><h2>Key details</h2></div>
+      <label>API key name<input value={name} onChange={e=>setName(e.target.value)} required maxLength={120} placeholder="staging-backend"/></label>
+      <label>Service account (optional)<select value={serviceAccountId} onChange={e=>setServiceAccountId(e.target.value)}><option value="">Organization-scoped key</option>{accounts.map(a=><option key={a.id} value={a.id}>{a.name}{a.environment_name?" · "+a.environment_name:""}</option>)}</select><small>Linked keys are blocked when their service account is disabled and revoked when it is deleted.</small></label>
+      <button className="primary-action" type="submit" disabled={busy||!name.trim()}>{busy?"Creating…":"Create API key"}</button></form>
+  </div>;
+}
+
 type WebhookRecord = {
   id:string; name:string; endpoint_url:string; events:string[]; enabled:boolean;
   signing_secret_hint?:string; created_at:string; updated_at:string;
@@ -883,6 +924,8 @@ export function NestedResource(){
   const detailId=params.tenantId??params.policyId??params.nodeId??params.deploymentId??params.runId??params.eventId??params.apiKeyId??params.webhookId;
   const base=detailId?pathname.replace(/\/[^/]+$/,""):pathname;
   const config=baseConfigs[base]??baseConfigs[pathname];
+  if(pathname === "/app/developer/api-keys/new" && config) return <ContextShell config={config}><ApiKeyCreatePage /></ContextShell>;
+  if(pathname === "/app/developer/service-accounts" && config) return <ContextShell config={config}><ServiceAccountsManager /></ContextShell>;
   if(pathname === "/app/developer/api-keys" && config) return <ContextShell config={config}><ApiKeysManager /></ContextShell>;
   if(pathname === "/app/developer/webhooks" && config) return <ContextShell config={config}><WebhooksManager /></ContextShell>;
   if(pathname === "/app/developer/environments" && config) return <ContextShell config={config}><EnvironmentManager /></ContextShell>;
