@@ -1834,15 +1834,38 @@ pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
         && template_login_alert && template_support_received && template_billing_update;
     let support_inbox = env::var("AGATA_SUPPORT_INBOX_EMAIL").map(|v| valid_public_support_email(v.trim())).unwrap_or(false);
     let base = configured("AGATA_PUBLIC_BASE_URL");
+    // A non-empty URL is not enough for production: reject HTTP origins and
+    // malformed HTTPS origins before the service can report launch readiness.
+    let public_base_url_https = env::var("AGATA_PUBLIC_BASE_URL")
+        .map(|value| {
+            let value = value.trim();
+            value.starts_with("https://")
+                && value["https://".len()..]
+                    .split('/')
+                    .next()
+                    .is_some_and(|host| !host.is_empty())
+        })
+        .unwrap_or(false);
+    // Secure cookies are mandatory for a public production session.
+    let secure_cookie = s.secure_cookie;
     let oidc_client_id = configured("PROXIMA_OIDC_CLIENT_ID");
     let oidc_client_secret = configured("PROXIMA_OIDC_CLIENT_SECRET");
     let oidc = oidc_client_id && oidc_client_secret;
     let email_ready = resend && sender_identities && templates_configured && support_inbox;
-    let all = db_ok && flutterwave_configured && flutterwave_plans_and_usd_amounts && email_ready && base && oidc;
+    let all = db_ok
+        && flutterwave_configured
+        && flutterwave_plans_and_usd_amounts
+        && email_ready
+        && base
+        && public_base_url_https
+        && secure_cookie
+        && oidc;
     Json(json!({
         "status": if all { "ready" } else { "needs_configuration" },
         "checks": {
             "database": db_ok,
+            "public_base_url_https": public_base_url_https,
+            "secure_cookie": secure_cookie,
             "flutterwave_configured": flutterwave_configured,
             "flutterwave_live_environment": flutterwave_live_environment,
             "flutterwave_plans_and_usd_amounts": flutterwave_plans_and_usd_amounts,
