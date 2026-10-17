@@ -268,7 +268,7 @@ const details: Record<string, Detail> = {
       { title: "Run the examples", code: "# Node.js 22+\nnode node/example.mjs\n\n# Bash smoke checks\n./cli/agata.sh\n\n# PowerShell smoke checks\n./cli/agata.ps1" },
       { title: "Use the right artifact", paragraphs: ["The download link serves the repository source ZIP; it is not a separately packaged SDK or a pre-connected third-party app. The ChatGPT/MCP, Supabase, Firebase, GitHub Actions and Vercel guides explain the integration contract. A live ChatGPT connector still requires a deployed MCP endpoint; external OAuth/app installations require their own credentials, callbacks and acceptance tests."] },
     ],
-    links: [{ label: "Download integration starter kit (.zip)", to: "https://github.com/Scarlet-Twinz/Agata-proxima/archive/refs/heads/main.zip", external: true }, { label: "API reference", to: "/developers/api-reference" }, { label: "Integration catalog", to: "/developers/integrations" }],
+    links: [{ label: "Download integration starter kit (.zip)", to: "/downloads/agata-proxima-integration-starter-kit.zip", external: true }, { label: "Integration catalog", to: "/developers/integrations" }, { label: "ChatGPT / MCP setup", to: "/developers/integrations/chatgpt" }, { label: "Supabase setup", to: "/developers/integrations/supabase" }, { label: "Firebase setup", to: "/developers/integrations/firebase" }, { label: "GitHub Actions setup", to: "/developers/integrations/github" }, { label: "Vercel setup", to: "/developers/integrations/vercel" }, { label: "API reference", to: "/developers/api-reference" }],
   },
   "/developers/nodejs": {
     eyebrow: "Developers · Node.js",
