@@ -391,6 +391,7 @@ const baseConfigs:Record<string,Config>={
  ]},
  "/app/developer/api-keys":{eyebrow:"DEVELOPER",title:"API keys",description:"Create, revoke and inspect organization-scoped machine credentials.",tabs:developerTabs,endpoint:"/api/v1/developer/api-keys",detailBase:"/app/developer/api-keys",createHref:"/app/developer/api-keys/new",createLabel:"Create API key"},
  "/app/developer/webhooks":{eyebrow:"DEVELOPER",title:"Webhooks",description:"Create endpoints, select events and inspect delivery history.",tabs:developerTabs,endpoint:"/api/v1/developer/webhooks",detailBase:"/app/developer/webhooks",createHref:"/app/developer/webhooks/new",createLabel:"Add webhook"},
+ "/app/developer/environments":{eyebrow:"DEVELOPER",title:"Environments",description:"Create and manage development, staging and production stages within the active organization.",tabs:developerTabs},
 };
 
 type BillingPlan = {
