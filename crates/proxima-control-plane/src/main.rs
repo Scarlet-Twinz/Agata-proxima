@@ -1036,9 +1036,15 @@ async fn create_api_key(
     }
     if let Some(service_account_id) = input.service_account_id {
         match sqlx::query("SELECT status FROM service_accounts WHERE id=$1 AND organization_id=$2")
-            .bind(service_account_id).bind(ctx.organization_id).fetch_optional(&s.db).await {
-            Ok(Some(row)) if row.get::<String,_>("status") == "active" => {}
-            Ok(_) => return bad("Choose an active service account belonging to this organization."),
+            .bind(service_account_id)
+            .bind(ctx.organization_id)
+            .fetch_optional(&s.db)
+            .await
+        {
+            Ok(Some(row)) if row.get::<String, _>("status") == "active" => {}
+            Ok(_) => {
+                return bad("Choose an active service account belonging to this organization.")
+            }
             Err(e) => return db_error(e),
         }
     }
@@ -1095,13 +1101,20 @@ async fn revoke_api_key(
 }
 
 async fn service_accounts(State(s): State<AppState>, headers: HeaderMap) -> Response {
-    let ctx = match authenticate(&s, &headers).await { Ok(v) => v, Err(c) => return c.into_response() };
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
     match sqlx::query(
         "SELECT sa.id,sa.name,sa.description,sa.environment_id,e.name AS environment_name,sa.status,sa.created_at,sa.updated_at,
                 (SELECT count(*) FROM api_keys k WHERE k.service_account_id=sa.id AND k.revoked_at IS NULL)::bigint AS active_key_count
          FROM service_accounts sa LEFT JOIN organization_environments e ON e.id=sa.environment_id
-         WHERE sa.organization_id=$1 ORDER BY sa.created_at DESC"
-    ).bind(ctx.organization_id).fetch_all(&s.db).await {
+         WHERE sa.organization_id=$1 ORDER BY sa.created_at DESC",
+    )
+    .bind(ctx.organization_id)
+    .fetch_all(&s.db)
+    .await
+    {
         Ok(rows) => Json(rows.iter().map(|r| json!({
             "id":r.get::<Uuid,_>("id"), "name":r.get::<String,_>("name"),
             "description":r.get::<String,_>("description"), "environment_id":r.get::<Option<Uuid>,_>("environment_id"),
@@ -1115,19 +1128,34 @@ async fn service_accounts(State(s): State<AppState>, headers: HeaderMap) -> Resp
 }
 
 async fn create_service_account(
-    State(s): State<AppState>, headers: HeaderMap, Json(input): Json<ServiceAccountInput>,
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<ServiceAccountInput>,
 ) -> Response {
-    let ctx = match authenticate(&s, &headers).await { Ok(v) => v, Err(c) => return c.into_response() };
-    if ctx.api_key { return StatusCode::FORBIDDEN.into_response(); }
-    if let Err(c) = require_write(&ctx, &headers) { return c.into_response(); }
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if ctx.api_key {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
     let name = input.name.trim();
     let description = input.description.as_deref().unwrap_or("").trim();
     if name.is_empty() || name.len() > 120 || description.len() > 500 {
-        return bad("Service account name must be 1–120 characters and description at most 500 characters.");
+        return bad(
+            "Service account name must be 1–120 characters and description at most 500 characters.",
+        );
     }
     if let Some(environment_id) = input.environment_id {
         match sqlx::query("SELECT 1 FROM organization_environments WHERE id=$1 AND organization_id=$2 AND status='active'")
-            .bind(environment_id).bind(ctx.organization_id).fetch_optional(&s.db).await {
+            .bind(environment_id)
+            .bind(ctx.organization_id)
+            .fetch_optional(&s.db)
+            .await
+        {
             Ok(Some(_)) => {}
             Ok(None) => return bad("Choose an active environment belonging to this organization."),
             Err(e) => return db_error(e),
@@ -1137,9 +1165,27 @@ async fn create_service_account(
     match sqlx::query(
         "INSERT INTO service_accounts(id,organization_id,name,description,environment_id,created_by)
          VALUES($1,$2,$3,$4,$5,$6) RETURNING created_at,updated_at"
-    ).bind(id).bind(ctx.organization_id).bind(name).bind(description).bind(input.environment_id).bind(ctx.user_id).fetch_one(&s.db).await {
+    )
+    .bind(id)
+    .bind(ctx.organization_id)
+    .bind(name)
+    .bind(description)
+    .bind(input.environment_id)
+    .bind(ctx.user_id)
+    .fetch_one(&s.db)
+    .await
+    {
         Ok(row) => {
-            audit(&s.db, ctx.organization_id, ctx.user_id, "developer.service_account.created", "service_account", Some(id), json!({"name":name,"environment_id":input.environment_id})).await;
+            audit(
+                &s.db,
+                ctx.organization_id,
+                ctx.user_id,
+                "developer.service_account.created",
+                "service_account",
+                Some(id),
+                json!({"name":name,"environment_id":input.environment_id}),
+            )
+            .await;
             Json(json!({"id":id,"name":name,"description":description,"environment_id":input.environment_id,"status":"active","active_key_count":0,"created_at":row.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),"updated_at":row.get::<chrono::DateTime<chrono::Utc>,_>("updated_at")})).into_response()
         }
         Err(e) => db_error(e),
@@ -1147,14 +1193,31 @@ async fn create_service_account(
 }
 
 async fn update_service_account(
-    State(s): State<AppState>, Path(id): Path<Uuid>, headers: HeaderMap, Json(input): Json<ServiceAccountPatchInput>,
+    State(s): State<AppState>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+    Json(input): Json<ServiceAccountPatchInput>,
 ) -> Response {
-    let ctx = match authenticate(&s, &headers).await { Ok(v) => v, Err(c) => return c.into_response() };
-    if ctx.api_key { return StatusCode::FORBIDDEN.into_response(); }
-    if let Err(c) = require_write(&ctx, &headers) { return c.into_response(); }
-    if input.name.as_ref().is_some_and(|v| v.trim().is_empty() || v.trim().len() > 120)
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if ctx.api_key {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
+    if input
+        .name
+        .as_ref()
+        .is_some_and(|v| v.trim().is_empty() || v.trim().len() > 120)
         || input.description.as_ref().is_some_and(|v| v.len() > 500)
-        || input.status.as_ref().is_some_and(|v| !["active","disabled"].contains(&v.as_str())) {
+        || input
+            .status
+            .as_ref()
+            .is_some_and(|v| !["active", "disabled"].contains(&v.as_str()))
+    {
         return bad("Invalid service account update. Status must be active or disabled; name and description are limited to 120 and 500 characters.");
     }
     if let Some(environment_id) = input.environment_id {
@@ -1170,13 +1233,33 @@ async fn update_service_account(
          status=COALESCE($5,status),environment_id=COALESCE($6,environment_id),updated_at=now()
          WHERE id=$1 AND organization_id=$2
          RETURNING id,name,description,environment_id,status,updated_at"
-    ).bind(id).bind(ctx.organization_id).bind(input.name.as_deref().map(str::trim))
-      .bind(input.description.as_deref().map(str::trim)).bind(input.status.as_deref()).bind(input.environment_id)
-      .fetch_optional(&s.db).await {
+    )
+    .bind(id)
+    .bind(ctx.organization_id)
+    .bind(input.name.as_deref().map(str::trim))
+    .bind(input.description.as_deref().map(str::trim))
+    .bind(input.status.as_deref())
+    .bind(input.environment_id)
+    .fetch_optional(&s.db)
+    .await
+    {
         Ok(Some(r)) => {
             let status: String = r.get("status");
-            let action = if status == "disabled" { "developer.service_account.disabled" } else { "developer.service_account.updated" };
-            audit(&s.db,ctx.organization_id,ctx.user_id,action,"service_account",Some(id),json!({})).await;
+            let action = if status == "disabled" {
+                "developer.service_account.disabled"
+            } else {
+                "developer.service_account.updated"
+            };
+            audit(
+                &s.db,
+                ctx.organization_id,
+                ctx.user_id,
+                action,
+                "service_account",
+                Some(id),
+                json!({}),
+            )
+            .await;
             Json(json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"description":r.get::<String,_>("description"),"environment_id":r.get::<Option<Uuid>,_>("environment_id"),"status":status,"updated_at":r.get::<chrono::DateTime<chrono::Utc>,_>("updated_at")})).into_response()
         }
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
@@ -1185,25 +1268,65 @@ async fn update_service_account(
 }
 
 async fn delete_service_account(
-    State(s): State<AppState>, Path(id): Path<Uuid>, headers: HeaderMap,
+    State(s): State<AppState>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
 ) -> Response {
-    let ctx = match authenticate(&s, &headers).await { Ok(v) => v, Err(c) => return c.into_response() };
-    if ctx.api_key { return StatusCode::FORBIDDEN.into_response(); }
-    if let Err(c) = require_write(&ctx, &headers) { return c.into_response(); }
-    let mut tx = match s.db.begin().await { Ok(tx) => tx, Err(e) => return db_error(e) };
-    let exists = sqlx::query("SELECT id FROM service_accounts WHERE id=$1 AND organization_id=$2 FOR UPDATE")
-        .bind(id).bind(ctx.organization_id).fetch_optional(&mut *tx).await;
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if ctx.api_key {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
+    let mut tx = match s.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => return db_error(e),
+    };
+    let exists = sqlx::query(
+        "SELECT id FROM service_accounts WHERE id=$1 AND organization_id=$2 FOR UPDATE",
+    )
+    .bind(id)
+    .bind(ctx.organization_id)
+    .fetch_optional(&mut *tx)
+    .await;
     match exists {
         Ok(Some(_)) => {}
         Ok(None) => return StatusCode::NOT_FOUND.into_response(),
         Err(e) => return db_error(e),
     }
     if let Err(e) = sqlx::query("UPDATE api_keys SET revoked_at=COALESCE(revoked_at,now()) WHERE service_account_id=$1 AND organization_id=$2")
-        .bind(id).bind(ctx.organization_id).execute(&mut *tx).await { return db_error(e); }
+        .bind(id)
+        .bind(ctx.organization_id)
+        .execute(&mut *tx)
+        .await
+    {
+        return db_error(e);
+    }
     if let Err(e) = sqlx::query("DELETE FROM service_accounts WHERE id=$1 AND organization_id=$2")
-        .bind(id).bind(ctx.organization_id).execute(&mut *tx).await { return db_error(e); }
-    if let Err(e) = tx.commit().await { return db_error(e); }
-    audit(&s.db,ctx.organization_id,ctx.user_id,"developer.service_account.deleted","service_account",Some(id),json!({"associated_keys_revoked":true})).await;
+        .bind(id)
+        .bind(ctx.organization_id)
+        .execute(&mut *tx)
+        .await
+    {
+        return db_error(e);
+    }
+    if let Err(e) = tx.commit().await {
+        return db_error(e);
+    }
+    audit(
+        &s.db,
+        ctx.organization_id,
+        ctx.user_id,
+        "developer.service_account.deleted",
+        "service_account",
+        Some(id),
+        json!({"associated_keys_revoked":true}),
+    )
+    .await;
     Json(json!({"ok":true,"message":"Service account deleted; all associated API keys were revoked."})).into_response()
 }
 
@@ -4759,7 +4882,11 @@ async fn authenticate(s: &AppState, headers: &HeaderMap) -> Result<AuthContext, 
 
         let key_id: Uuid = key.get("id");
         let organization_id: Uuid = key.get("organization_id");
-        if key.get::<Option<String>,_>("service_account_status").as_deref() == Some("disabled") {
+        if key
+            .get::<Option<String>, _>("service_account_status")
+            .as_deref()
+            == Some("disabled")
+        {
             return Err(StatusCode::UNAUTHORIZED);
         }
         let created_by: Option<Uuid> = key.get("created_by");
