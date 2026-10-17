@@ -33,6 +33,7 @@ export function Nodes() {
   const [created, setCreated] = useState<CreatedNode | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [resumingNodeId, setResumingNodeId] = useState("");
   const [copied, setCopied] = useState<"token" | "configuration" | "">("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -75,6 +76,27 @@ export function Nodes() {
       setError(e instanceof Error ? e.message : "Node creation failed.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function resumeEnrollment(node: NodeRecord) {
+    setResumingNodeId(node.id);
+    setError("");
+    setNotice("");
+    setCopied("");
+    setCreated(null);
+    try {
+      const result = await api.post<CreatedNode>(
+        `/api/v1/nodes/${encodeURIComponent(node.id)}/enrollment-token`,
+        {},
+      );
+      setCreated(result);
+      setNotice(`Fresh one-time enrollment credentials are ready for the existing node “${node.name}”. No node was created.`);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not resume enrollment for this node.");
+    } finally {
+      setResumingNodeId("");
     }
   }
 
@@ -176,8 +198,8 @@ export function Nodes() {
           <div className="settings-section-heading">
             <div>
               <span className="eyebrow">ONE-TIME CREDENTIAL</span>
-              <h2 id="node-created-heading">Node registered</h2>
-              <p>Copy the token or complete enrollment configuration now. The secret is only shown once.</p>
+              <h2 id="node-created-heading">Enrollment credentials</h2>
+              <p>Copy the token or complete enrollment configuration now. This one-time secret is shown only once.</p>
             </div>
             <ShieldCheck size={21} aria-hidden="true" />
           </div>
@@ -235,7 +257,7 @@ export function Nodes() {
         ) : (
           <div className="resource-table-wrap">
             <table className="resource-table">
-              <thead><tr>{["Name", "Environment", "Region", "Status", "Last seen", "Node ID"].map(label => <th key={label}>{label}</th>)}</tr></thead>
+              <thead><tr>{["Name", "Environment", "Region", "Status", "Last seen", "Node ID", "Actions"].map(label => <th key={label}>{label}</th>)}</tr></thead>
               <tbody>
                 {nodes.map(node => (
                   <tr key={node.id}>
@@ -245,6 +267,20 @@ export function Nodes() {
                     <td><span className={`console-status console-status--${node.status.toLowerCase()}`}>{node.status}</span></td>
                     <td>{node.last_seen_at ? new Date(node.last_seen_at).toLocaleString() : "Never"}</td>
                     <td><code>{node.id}</code></td>
+                    <td>
+                      {(node.status === "pending" || node.status === "enrolling") && (
+                        <button
+                          className="secondary-action"
+                          type="button"
+                          onClick={() => void resumeEnrollment(node)}
+                          disabled={loading || resumingNodeId !== ""}
+                          title="Issue a fresh one-time enrollment token for this existing node. Does not create another node."
+                        >
+                          <RefreshCw size={14} className={resumingNodeId === node.id ? "is-spinning" : ""} />
+                          {resumingNodeId === node.id ? "Preparing…" : "Resume enrollment"}
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
