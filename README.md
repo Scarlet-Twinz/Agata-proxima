@@ -2,7 +2,7 @@
 
 **Security infrastructure for multi-tenant applications.**
 
-Agata Proxima is being developed to make PostgreSQL tenant isolation an infrastructure boundary that can be enforced, tested, monitored, and audited. The core data plane is written in Rust; the repository also contains a management control plane, a React frontend, verification tooling, and operational documentation.
+Agata Proxima treats PostgreSQL tenant isolation as an infrastructure boundary that can be enforced, tested, monitored, and audited. The core data plane is written in Rust, alongside a management control plane, React frontend, verification tooling, and operational documentation.
 
 > **Project status:** Active development. Repository code and passing CI do not, by themselves, establish production readiness. Live-provider activation, deployed-environment testing, and final operational acceptance must be verified separately.
 
