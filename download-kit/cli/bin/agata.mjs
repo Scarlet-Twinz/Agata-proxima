@@ -14,6 +14,7 @@ Usage:
   agata verification list
   agata audit list
   agata webhooks list
+  agata environments list
 
 Configuration:
   AGATA_API_BASE_URL  Control Plane API origin
@@ -24,6 +25,7 @@ Examples:
   agata health
   agata tenants list
   agata verification list
+  agata environments list
 
 This CLI reads organization-scoped resources. It does not claim to execute
 runtime tenant-isolation tests; verification list shows recorded results.`;
@@ -44,6 +46,7 @@ const commands = {
   verification: ["list", (client) => client.listVerifications()],
   audit: ["list", (client) => client.listAuditEvents()],
   webhooks: ["list", (client) => client.listWebhooks()],
+  environments: ["list", (client) => client.listEnvironments()],
 };
 const command = commands[resource];
 if (!command || (resource === "health" && action !== undefined) || (resource === "whoami" && action !== undefined) || (resource !== "health" && resource !== "whoami" && action !== command[0])) {
