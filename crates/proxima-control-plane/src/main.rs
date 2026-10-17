@@ -4562,18 +4562,14 @@ async fn create_session(
     let csrf = Uuid::new_v4().to_string();
     sqlx::query(
         "INSERT INTO sessions(id,user_id,organization_id,token_hash,csrf_token,expires_at)
-         VALUES($1,$2,$3,$4,$5,now()+($6 * interval '1 second'))",
+         VALUES($1,$2,$3,$4,$5,CASE WHEN $6 THEN now()+interval '30 days' ELSE now()+interval '12 hours' END)",
     )
     .bind(Uuid::new_v4())
     .bind(user_id)
     .bind(organization_id)
     .bind(token_hash(&token))
     .bind(&csrf)
-    .bind(if remember_me {
-        30 * 24 * 60 * 60_i64
-    } else {
-        12 * 60 * 60_i64
-    })
+    .bind(remember_me)
     .execute(db)
     .await?;
     Ok((token, csrf))
