@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Check, Copy, RefreshCw, Server, ShieldCheck } from "lucide-react";
-import { api } from "../../api/client";
+import { API_BASE, api } from "../../api/client";
 import { getSession } from "../../api/auth";
 
 type NodeRecord = {
@@ -24,7 +24,7 @@ type CreatedNode = {
 // Keep copied engine credentials pointed at the same control plane as this dashboard.
 // Local Vite proxies API requests to the local Rust service; production rewrites to api.agataproxima.com.
 const enrollmentBaseUrl = (
-  import.meta.env.VITE_API_BASE_URL?.trim() ||
+  API_BASE ||
   (import.meta.env.DEV ? "http://127.0.0.1:8080" : "https://api.agataproxima.com")
 ).replace(/\/$/, "");
 const enrollmentUrl = `${enrollmentBaseUrl}/api/v1/nodes/enroll`;
