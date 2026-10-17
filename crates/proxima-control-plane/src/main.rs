@@ -2728,9 +2728,10 @@ async fn create_tenant(
         .isolation_mode
         .unwrap_or_else(|| "enforced-proxy".into());
     match sqlx::query(
-        "INSERT INTO tenants(id,project_id,name,slug,isolation_mode) VALUES($1,$2,$3,$4,$5)",
+        "INSERT INTO tenants(id,organization_id,project_id,name,slug,isolation_mode) VALUES($1,$2,$3,$4,$5,$6)",
     )
     .bind(id)
+    .bind(ctx.organization_id)
     .bind(project)
     .bind(&input.name)
     .bind(&input.slug)
