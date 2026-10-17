@@ -17,7 +17,9 @@ const developerAreas = [
   ["Webhooks", "Signed event delivery, attempt history and receiver verification.", "/developers/webhooks"],
   ["API reference", "The control-plane contract and authenticated request examples.", "/developers/api-reference"],
   ["Quickstart", "A step-by-step path to a controlled tenant-isolation test.", "/developers/quickstart"],
-  ["Events and audit", "Understand event scope, evidence and operational history.", "/developers/events"],\n  ["JavaScript SDK", "Use the server-side client from the integration starter kit.", "/developers/sdks"],\n  ["CLI", "Run health checks and list resources from a terminal or CI job.", "/developers/cli"],
+  ["Events and audit", "Understand event scope, evidence and operational history.", "/developers/events"],
+  ["JavaScript SDK", "Use the server-side client from the integration starter kit.", "/developers/sdks"],
+  ["CLI", "Run health checks and list resources from a terminal or CI job.", "/developers/cli"],
 ];
 
 export function Home() {
