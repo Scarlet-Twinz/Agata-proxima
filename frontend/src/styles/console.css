@@ -1909,3 +1909,20 @@ a {
 .node-status--healthy { color: var(--success); }
 .node-status--degraded { color: #a66a00; }
 .node-status--inactive { color: #64748b; }
+
+
+@media (max-width: 900px) {
+  .topology:has(.topology-links--connected) .topology-core::after {
+    right: auto;
+    left: 50%;
+    top: auto;
+    bottom: -16px;
+    width: 2px;
+    height: 16px;
+  }
+
+  .topology-links--connected::before,
+  .topology-links--connected .topology-node::before {
+    display: none;
+  }
+}
