@@ -138,6 +138,14 @@ export function PublicFooter() {
         <div className="public-footer-bottom">
           <span>© 2026 Agata Proxima. All rights reserved.</span>
           <span>Tenant isolation infrastructure.</span>
+          <button
+            className="agata-button agata-button-secondary"
+            type="button"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            aria-label="Scroll to the top of the page"
+          >
+            Back to top ↑
+          </button>
         </div>
       </div>
     </footer>
