@@ -16,9 +16,11 @@ const resources = [
   ["Audit and events", "Review security-relevant changes and integrate event delivery.", "/developers/events", "core"],
   ["Webhooks", "Configure signed events, verify signatures and operate delivery retries.", "/developers/webhooks", "core"],
   ["API reference", "Use the versioned `/api/v1` contract and inspect request/response schemas.", "/developers/api-reference", "core"],
-  ["SDK guide", "Build a typed client over the documented HTTP API, with error and retry handling.", "/developers/sdks", "tooling"],
-  ["CLI guide", "Automate API workflows from scripts and CI using secure environment configuration.", "/developers/cli", "tooling"],
-  ["Terraform guide", "Model infrastructure dependencies and provider acceptance requirements.", "/developers/terraform", "tooling"],
+  ["SDK guide", "Use the packaged server-side JavaScript SDK source, tests and controlled release workflow.", "/developers/sdks", "tooling"],
+  ["CLI guide", "Run checks and manage environments or webhooks from a terminal or CI.", "/developers/cli", "tooling"],
+  ["Terraform provider", "Use the source provider for named environments; registry publication is pending.", "/developers/terraform", "tooling"],
+  ["Service accounts", "Manage machine identities and revoke all linked credentials from one place.", "/developers/organizations", "core"],
+  ["Environments", "Name development, staging and production stages inside an organization.", "/developers/fleet", "core"],
 ];
 const integrations = [
   ["ChatGPT / MCP", "Connect an assistant through a scoped MCP server and explicit tool permissions.", "/developers/integrations/chatgpt", MessageSquare],
