@@ -30,6 +30,7 @@ const overview = read('pages/console/Overview.tsx');
 const resourceSurface = read('components/console/ResourceSurface.tsx');
 const nested = read('pages/console/NestedResource.tsx');
 const login = read('pages/auth/Login.tsx');
+const signup = read('pages/auth/Signup.tsx');
 const authApi = read('api/auth.ts');
 const recovery = read('pages/auth/Recovery.tsx');
 const resetPassword = read('pages/auth/ResetPassword.tsx');
@@ -112,6 +113,7 @@ addCheck('Security posture uses authenticated live control-plane signals', /api\
 addCheck('Verification UI and backend distinguish operator-reported evidence from executed tests', /operator_reported/.test(controlPlane) && /form\.status\|\|"review"/.test(actionPage) && /does not execute the test/.test(actionPage));
 addCheck('Activity chart labels a full daily series and handles zero activity', /generate_series\(/.test(controlPlane) && /interval '29 days'/.test(controlPlane) && /chart-axis-labels/.test(activityChart) && /No verification records in the last 30 days/.test(activityChart));
 addCheck('Homepage exposes the integration starter kit and footer includes requested social brands', /to="\/developers\/downloads"/.test(home) && ['GitHub','LinkedIn','Twitter','Hacker News'].every(label => footer.includes(label)));
+addCheck('Signup links Terms of Service and Privacy Policy directly', /to="\/terms"/.test(signup) && /to="\/privacy"/.test(signup));
 
 console.log('\nAgata Proxima public/dashboard static acceptance audit');
 for (const check of checks) {
