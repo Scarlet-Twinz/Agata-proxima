@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { ArrowLeft, ArrowUpRight, CheckCircle2, ChevronRight, ExternalLink, KeyRound, RefreshCw, Save, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, CheckCircle2, ChevronRight, Copy, ExternalLink, KeyRound, RefreshCw, Save, ShieldCheck } from "lucide-react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { ResourceSurface } from "../../components/console/ResourceSurface";
 import { api, type ApiError } from "../../api/client";
@@ -35,76 +35,95 @@ const developerTabs = [
 const developerDocs: Record<string,{title:string;intro:string;sections:{title:string;body:string;code?:string}[]}> = {
   "/app/developer/tenant-context": {
     title:"Tenant context",
-    intro:"Tenant identity is not ordinary metadata. It is part of the protected request path and must remain bound to the organization and enforcement boundary.",
+    intro:"A tenant ID identifies the customer boundary for an operation. Resolve it from trusted application state and keep it bound to authorization and the protected database request.",
     sections:[
-      {title:"The contract",body:"Authenticate the caller, resolve the organization boundary, resolve the tenant boundary, then let the enforcement layer decide whether protected database access is permitted."},
-      {title:"Recommended request flow",body:"Keep the application-side tenant selection explicit and auditable. Do not infer a tenant from arbitrary user-controlled data after the request has entered the protected database path.",code:"identity → organization → tenant → policy → Proxima → PostgreSQL"},
-      {title:"Verify it",body:"Use the Verification area to exercise both expected-allow and expected-block paths and inspect the resulting evidence."},
+      {title:"Request flow",body:"Authenticate the user or service first. Resolve the organization from the authenticated identity, then resolve the tenant from a trusted membership or account mapping. Authorize the operation against that membership and pass the verified tenant context into the configured Proxima request path.",code:"Authenticated identity → organization membership → tenant membership → policy decision → Proxima Engine → PostgreSQL"},
+      {title:"Never trust a raw tenant ID",body:"A tenant ID supplied by a browser, URL or request body is a selector, not proof of access. Check that the authenticated principal is permitted to act on that tenant on every request. Do not allow a caller to switch tenants merely by changing an ID."},
+      {title:"Test the boundary",body:"Use two synthetic tenants. Confirm tenant A can perform an allowed operation on A, then confirm reads and writes against B are rejected. Repeat with missing and invalid context. Test the real protected data path; a dashboard verification record is evidence storage and does not execute those application requests by itself."},
+      {title:"Record evidence",body:"When saving a verification record, select the tenant from the tenant dropdown. The tenant must belong to the active organization. Record the actual checks and observed outcomes in the evidence JSON; do not mark a test passed if it was not executed."}
     ],
   },
   "/app/developer/service-accounts": {
-    title:"Service accounts",
-    intro:"Machine identities should have explicit ownership, narrow credentials and an auditable lifecycle.",
+    title:"Service accounts and machine access",
+    intro:"Use organization-scoped API keys for server-to-server integrations. The current API exposes API keys as the machine-credential resource; it does not create a separate service-account object.",
     sections:[
-      {title:"Current contract",body:"Agata's API-key resource provides the first machine-credential surface. Service-account grouping remains the conceptual home for future non-human identity controls."},
-      {title:"Credential discipline",body:"Create credentials for a single integration purpose, store them outside source control, rotate them deliberately and revoke them immediately when no longer trusted."},
+      {title:"Create a machine credential",body:"Open Developer → API keys → Create API key. Give the key a purpose-specific name, copy the secret when it is shown, and store it in your deployment secret manager. The full key is only shown at creation time.",code:"AGATA_API_BASE_URL=https://api.agataproxima.com\nAGATA_API_KEY=aga_<your-key>"},
+      {title:"Use least privilege",body:"Create a different key for each integration or runtime. Restrict access to the organization that owns the resources, remove keys that are no longer used, and rotate credentials immediately after suspected exposure."},
+      {title:"Verify access",body:"Call the health endpoint and then a read endpoint such as the tenant list. A 401 means the credential is missing, invalid or revoked; a 403 means the authenticated identity lacks permission or entitlement. Never paste a key into browser code, issue trackers or logs.",code:"curl --fail-with-body -H \"Authorization: Bearer $AGATA_API_KEY\" \"$AGATA_API_BASE_URL/api/v1/tenants\""},
+      {title:"Credential lifecycle",body:"Use Developer → API keys to inspect and revoke credentials. Use this page as the service-account integration guide; it does not imply that a separate service-account database record or role-assignment workflow exists."}
     ],
   },
   "/app/developer/authentication": {
-    title:"Developer authentication",
-    intro:"Understand the browser session, CSRF contract and machine credential boundary before integrating automation.",
+    title:"API authentication",
+    intro:"Authenticate human users with dashboard sessions and server-side integrations with organization-scoped API keys.",
     sections:[
-      {title:"Browser sessions",body:"Human operators authenticate through the control plane and receive a secure session cookie plus a CSRF token for state-changing operations."},
-      {title:"API keys",body:"API keys are organization-scoped machine credentials. The full secret is returned only at creation time."},
-      {title:"Enterprise identity",body:"Microsoft Entra/OIDC is a separate enterprise identity path and remains deployment-gated until a real provider configuration is supplied."},
+      {title:"Server-to-server requests",body:"Create an API key in Developer → API keys and store it in a server-side secret manager. Send it as a Bearer token on API requests. Do not put it in VITE_ variables, browser bundles or source control.",code:"$env:AGATA_API_BASE_URL = \"https://api.agataproxima.com\"\n$env:AGATA_API_KEY = \"aga_LOAD_FROM_YOUR_SECRET_STORE\"\n$headers = @{ Authorization = \"Bearer $env:AGATA_API_KEY\"; Accept = \"application/json\" }\nInvoke-RestMethod \"$($env:AGATA_API_BASE_URL)/api/v1/health\" -Headers $headers"},
+      {title:"Browser sessions and CSRF",body:"Dashboard sign-in uses an HTTP-only session cookie. State-changing browser requests must include the CSRF token supplied by the session contract. Do not copy session cookies into scripts or use a human session as a machine credential."},
+      {title:"HTTP error handling",body:"Handle 401 as an authentication failure, 403 as a permission or entitlement failure, 404 as a missing or out-of-scope resource, 409 as a conflict, 429 as a quota/rate limit, and 5xx as a service-side failure. Preserve the request ID when present and retry only safe or idempotent operations."},
+      {title:"Microsoft Entra ID",body:"Enterprise OIDC is configured separately under Settings → Authentication. Confirm the provider registration, callback URL, organization mapping and deployment secrets before relying on SSO. A saved tenant mapping alone is not an end-to-end sign-in test."}
     ],
   },
   "/app/developer/events": {
-    title:"Events",
-    intro:"Treat security, verification and operational events as durable signals rather than UI notifications.",
+    title:"Events and audit delivery",
+    intro:"Use the audit log for organization-scoped history and webhooks to deliver selected audit events to systems you operate.",
     sections:[
-      {title:"Event families",body:"Verification outcomes, deployment changes, tenant changes, credential lifecycle and security activity should be represented as explicit event types."},
-      {title:"Delivery",body:"Use webhooks for external delivery and the Audit surface for organization-scoped history inside the control plane."},
+      {title:"Audit history",body:"The authenticated audit endpoint returns recent organization-scoped records. Use it to investigate resource changes and security-relevant actions; do not treat the audit log as a substitute for application-level business events.",code:"curl --fail-with-body -H \"Authorization: Bearer $AGATA_API_KEY\" \"$AGATA_API_BASE_URL/api/v1/audit\""},
+      {title:"Webhook subscriptions",body:"Open Developer → Webhooks, add an HTTPS endpoint and select * for all supported audit actions or enter exact action names separated by commas. Keep the signing secret in the receiver's secret store and verify the HMAC-SHA256 signature over the exact raw request body before parsing JSON."},
+      {title:"Receiver requirements",body:"Return a successful 2xx response only after the event has been durably accepted. Deduplicate repeated deliveries by event or delivery identifier, make processing idempotent, and log sanitized error details. Expect retries and handle duplicate delivery safely."},
+      {title:"Investigate delivery failures",body:"Open a webhook's Delivery history to inspect status, attempt count, HTTP response and last error. Retry only after correcting the receiver or transient failure. Rotate the signing secret if it may have been exposed, and update the receiver immediately."}
     ],
   },
   "/app/developer/environments": {
-    title:"Environments",
-    intro:"Environment boundaries keep production, staging and future isolated workloads understandable as the platform grows.",
+    title:"Environment configuration",
+    intro:"Keep development, staging and production credentials and data separate. Nodes and deployments carry environment metadata; the environment guide is not a separate environment-provisioning API.",
     sections:[
-      {title:"Production",body:"The current workspace exposes Production as the active environment. Future environment management belongs here rather than being hidden in unrelated pages."},
-      {title:"Deployment relationship",body:"Nodes and deployments carry environment information so desired state can be connected to an explicit operating boundary."},
+      {title:"Set the API origin per environment",body:"Point each runtime to the Control Plane origin for that environment. The hosted origin is shown below; for a local installation, use the API origin configured by your local Compose/Vite setup.",code:"$env:AGATA_API_BASE_URL = \"https://api.agataproxima.com\"\n# Set this to the actual local or staging API origin when testing those environments."},
+      {title:"Separate credentials and data",body:"Create a separate organization-scoped API key for each deployment environment. Use synthetic tenants and data in development, test denial paths in staging, and do not copy production credentials into a developer workstation."},
+      {title:"Node and deployment metadata",body:"Set the environment field when registering nodes and creating deployments, and verify the selected node and deployment before changing desired state. The environment label is metadata; network isolation, database access and secrets still need their own controls."},
+      {title:"Before release",body:"Check the target API origin, key ownership, tenant membership, policy version, node state and deployment result. Run positive and negative tenant-isolation tests against the intended environment before routing customer traffic."}
     ],
   },
   "/app/developer/sdks": {
-    title:"SDKs",
-    intro:"SDKs should make the API contract easier to consume without hiding the tenant-security model.",
+    title:"JavaScript SDK",
+    intro:"Use the server-side JavaScript client included in the Agata Proxima integration starter kit. It wraps the versioned HTTP API, attaches the organization API key, parses JSON responses and exposes HTTP errors with status codes. It is distributed as source in the kit, not as a published npm package.",
     sections:[
-      {title:"SDK design",body:"Generated or maintained SDKs should expose typed organizations, tenants, policies, nodes, deployments, verification, audit and developer resources."},
-      {title:"Source of truth",body:"The OpenAPI contract remains authoritative. SDKs should not invent semantics that the control-plane API does not provide."},
+      {title:"Requirements and installation",body:"Use Node.js 22 or newer. Download and extract the integration starter kit from Developer → Downloads, then install the kit dependencies from the extracted folder.",code:"cd download-kit\nnpm install\nnpm run check"},
+      {title:"Configure credentials",body:"Create an API key in Developer → API keys. Store it in a secret manager or local environment variable for development. Never include the key in frontend code or commit it to Git.",code:"$env:AGATA_API_BASE_URL = \"https://api.agataproxima.com\"\n$env:AGATA_API_KEY = \"aga_LOAD_FROM_A_SECRET_STORE\""},
+      {title:"Make your first request",body:"The client provides methods for health, plans, tenants, policies, nodes, deployments, verification records, audit events and webhooks. Read methods list the API records; createVerificationRecord stores a submitted record and does not execute a runtime isolation test.",code:"import { AgataClient } from \"./node/agata-client.mjs\";\n\nconst agata = new AgataClient();\nconst health = await agata.health();\nconst tenants = await agata.listTenants();\nconsole.log({ health, tenants });"},
+      {title:"Handle API errors",body:"Catch AgataApiError to inspect status, error code and request ID. Refresh credentials for 401, review roles and entitlements for 403, check the resource ID and organization for 404, and respect quota or rate-limit responses. Avoid blind retries for writes.",code:"import { AgataClient, AgataApiError } from \"./node/agata-client.mjs\";\n\ntry {\n  console.log(await new AgataClient().listTenants());\n} catch (error) {\n  if (error instanceof AgataApiError) {\n    console.error(error.status, error.code, error.requestId, error.message);\n  } else { throw error; }\n}"},
+      {title:"Client source and contract",body:"Review download-kit/node/agata-client.mjs for the implementation and download-kit/README.md for the starter-kit contract. Use the API reference and deployed OpenAPI document for exact request schemas; do not assume an undocumented method or response field exists."}
     ],
   },
   "/app/developer/cli": {
-    title:"CLI",
-    intro:"A serious infrastructure product needs a command-line path for engineers who work faster outside the browser.",
+    title:"Agata command-line interface",
+    intro:"The integration starter kit includes a working read-only Node.js CLI for common API checks and resource listings. It is not a separate preinstalled binary; install the kit and run the CLI from its source.",
     sections:[
-      {title:"Core workflow",body:"Authenticate → select organization → inspect resources → create/change resources → run verification → inspect evidence."},
-      {title:"Example",body:"The CLI follows the same authenticated resource model as the dashboard.",code:"agata login\nagata tenants list\nagata verification list\nagata verification run\nagata audit list"},
+      {title:"Install and configure",body:"Use Node.js 22 or newer. Extract the starter kit, install dependencies and set the API origin and organization-scoped API key in your terminal.",code:"cd download-kit\nnpm install\n$env:AGATA_API_BASE_URL = \"https://api.agataproxima.com\"\n$env:AGATA_API_KEY = \"aga_LOAD_FROM_A_SECRET_STORE\""},
+      {title:"Run the CLI",body:"Run the CLI through the npm script. These commands call the actual versioned API endpoints and print the JSON response. The verification command lists saved verification records; it does not execute a tenant-isolation test.",code:"npm run cli -- --help\nnpm run cli -- health\nnpm run cli -- tenants list\nnpm run cli -- policies list\nnpm run cli -- nodes list\nnpm run cli -- deployments list\nnpm run cli -- verification list\nnpm run cli -- audit list\nnpm run cli -- webhooks list"},
+      {title:"Install the agata command (optional)",body:"For a developer workstation where a local executable is useful, install the extracted package globally from its folder. The command uses the same environment variables and read-only command set.",code:"npm link\nagata health\nagata tenants list\nagata verification list"},
+      {title:"Exit codes and troubleshooting",body:"Exit code 0 means the request completed successfully. Invalid command or missing arguments return exit code 2. API/network/configuration failures return exit code 1 and print the HTTP status when available. A 401 usually means the key is missing, invalid or revoked; a 403 indicates access or entitlement; a 429 indicates a quota or rate limit."},
+      {title:"Command implementation",body:"The executable is download-kit/cli/bin/agata.mjs; its API calls use download-kit/node/agata-client.mjs. The CLI is deliberately read-only so a typo cannot unexpectedly create, change or delete customer resources. Use the dashboard or a reviewed API request for writes."}
     ],
   },
   "/app/developer/terraform": {
-    title:"Terraform",
-    intro:"Infrastructure-as-code should make Proxima configuration reviewable, repeatable and auditable.",
+    title:"Terraform and infrastructure as code",
+    intro:"Terraform automation must use a real provider with a published schema and versioned lifecycle behavior. This repository does not currently ship a published Agata Terraform provider, so do not add a fictitious provider block or resource names to production configuration.",
     sections:[
-      {title:"Provider direction",body:"The future provider should map explicit Proxima resources rather than becoming a generic database configuration wrapper."},
-      {title:"Resource candidates",body:"These are the initial resource candidates for the provider.",code:"agata_tenant\nagata_policy\nagata_node\nagata_deployment\nagata_webhook"},
+      {title:"What is available today",body:"Use the versioned Control Plane API and the CLI/SDK starter kit for supported resource operations. The Terraform guide is an integration design and acceptance checklist, not an installable provider package."},
+      {title:"Provider release requirements",body:"A provider release needs a published binary for supported operating systems, a versioned schema, import and refresh behavior, plan/apply/destroy tests, state sensitivity for credentials, organization-scope enforcement and signed/checksummed release artifacts."},
+      {title:"Safe automation boundary",body:"Keep API keys in the CI secret store and never put them in Terraform state, plan output or committed variables. Use a dedicated test organization and synthetic data for acceptance tests. Do not run destructive tests against the production organization."},
+      {title:"Acceptance checklist",body:"Before adopting a provider, verify create/read/update/delete behavior for every supported resource, import of existing resources, drift detection, API error mapping, retries, organization isolation and documented upgrade behavior. Until a provider is released, call the documented API from a controlled deployment step rather than declaring unsupported Terraform resources."}
     ],
   },
   "/app/developer/api-reference": {
-    title:"API reference",
-    intro:"The authenticated control-plane contract is the machine-readable interface behind the dashboard.",
+    title:"Control Plane API reference",
+    intro:"The dashboard and server integrations use the versioned /api/v1 HTTP API. Use the running service's OpenAPI document as the exact schema and response contract.",
     sections:[
-      {title:"Core resources",body:"Organizations, tenants, policies, nodes, deployments, verification, audit, support, billing and developer credentials/events are the core resource groups."},
-      {title:"OpenAPI",body:"Use the generated OpenAPI document as the detailed schema reference.",code:"GET /docs/openapi.json"},
+      {title:"Base URL and authentication",body:"Set the API origin for the environment you intend to use. Send an organization-scoped API key in the Authorization header for server-to-server requests. Keep keys out of browser bundles, source control and logs.",code:"$env:AGATA_API_BASE_URL = \"https://api.agataproxima.com\"\n$env:AGATA_API_KEY = \"aga_LOAD_FROM_A_SECRET_STORE\"\n$headers = @{ Authorization = \"Bearer $env:AGATA_API_KEY\"; Accept = \"application/json\" }"},
+      {title:"Inspect the OpenAPI schema",body:"Open the OpenAPI document served by the API environment you are using. It describes the routes and schemas exposed by that running build; do not copy an endpoint from another version without checking it.",code:"Invoke-RestMethod \"$($env:AGATA_API_BASE_URL)/docs/openapi.json\" | ConvertTo-Json -Depth 8"},
+      {title:"Common read endpoints",body:"Use these endpoints to check connectivity and inspect organization-scoped resources. The authenticated key and role determine which resources are visible.",code:"Invoke-RestMethod \"$($env:AGATA_API_BASE_URL)/api/v1/health\" -Headers $headers\nInvoke-RestMethod \"$($env:AGATA_API_BASE_URL)/api/v1/tenants\" -Headers $headers\nInvoke-RestMethod \"$($env:AGATA_API_BASE_URL)/api/v1/verifications\" -Headers $headers\nInvoke-RestMethod \"$($env:AGATA_API_BASE_URL)/api/v1/audit\" -Headers $headers"},
+      {title:"HTTP response handling",body:"Use HTTP status and response body to distinguish authentication, authorization, missing resources, validation, conflict, quota and server failures. Preserve any request ID for support. Retry safe GETs on transient failures with bounded backoff; do not blindly repeat writes after a timeout."},
+      {title:"Tenant isolation",body:"Every tenant-specific request must be authorized against the active organization and the tenant's ownership/membership. A tenant ID in a request is not proof of permission. Use two synthetic tenants to validate both allowed and denied access paths."}
     ],
   },
   "/app/settings/authentication": {
@@ -157,7 +176,25 @@ function ContextShell({config,children}:{config:Config;children:ReactNode}) {
 }
 
 function DeveloperDoc({config,doc}:{config:Config;doc:{title:string;intro:string;sections:{title:string;body:string;code?:string}[]}}){
-  return <ContextShell config={config}><div className="page-heading"><div><span className="eyebrow">{config.eyebrow}</span><h1>{doc.title}</h1><p>{doc.intro}</p></div></div>{doc.sections.map(section=><section className="surface context-doc-section" key={section.title}><h2>{section.title}</h2><p>{section.body}</p>{section.code&&<pre className="context-code">{section.code}</pre>}</section>)}<div className="context-next"><Link to="/app/developer/api-reference">Open API reference <ArrowUpRight size={15}/></Link><Link to="/docs">Open public documentation <ExternalLink size={15}/></Link></div></ContextShell>;
+  const [copied,setCopied]=useState("");
+  const [copyError,setCopyError]=useState("");
+  async function copyCode(title:string,code:string){
+    setCopyError("");
+    try{await navigator.clipboard.writeText(code);setCopied(title);}
+    catch{setCopyError("Clipboard access was blocked. Select the code and copy it manually.");}
+  }
+  return <ContextShell config={config}>
+    <div className="page-heading"><div><span className="eyebrow">{config.eyebrow}</span><h1>{doc.title}</h1><p>{doc.intro}</p></div></div>
+    {doc.sections.map(section=><section className="surface context-doc-section" key={section.title}>
+      <h2>{section.title}</h2><p>{section.body}</p>
+      {section.code&&<div className="context-code-panel">
+        <div className="context-code-toolbar"><span>Example</span><button type="button" className="console-refresh-button" onClick={()=>void copyCode(section.title,section.code!)}><Copy size={14}/>{copied===section.title?"Copied":"Copy code"}</button></div>
+        <pre className="context-code">{section.code}</pre>
+      </div>}
+    </section>)}
+    {copyError&&<p className="settings-banner settings-banner--error" role="status">{copyError}</p>}
+    <div className="context-next"><Link to="/app/developer/api-reference">Open API reference <ArrowUpRight size={15}/></Link><Link to="/app/developer/webhooks">Configure webhooks <ArrowUpRight size={15}/></Link><Link to="/docs">Open public documentation <ExternalLink size={15}/></Link></div>
+  </ContextShell>;
 }
 
 const identitySettingsConfig: Config = {
