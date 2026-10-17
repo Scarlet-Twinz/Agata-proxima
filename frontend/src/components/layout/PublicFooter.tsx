@@ -1,15 +1,31 @@
-import { Globe2 } from "lucide-react";
+import type { ComponentType } from "react";
+import { Github, Linkedin, Twitter } from "lucide-react";
 import { Link } from "react-router-dom";
 import { AgataLogo } from "../brand/AgataLogo";
+
+type SocialIcon = ComponentType<{ size?: number }>;
 
 type SocialProfile = {
   label: string;
   href?: string;
-  icon: typeof Globe2;
+  icon: SocialIcon;
 };
 
+function HackerNewsIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" role="img" aria-hidden="true">
+      <rect width="24" height="24" rx="3" fill="#F0652F" />
+      <path d="M5.2 5.2h2.4l4.4 6.6 4.4-6.6h2.4l-5.6 8.2v5.4h-2.4v-5.4z" fill="#fff" />
+    </svg>
+  );
+}
+
 const socialProfiles: SocialProfile[] = [
-  { label: "GitHub", href: "https://github.com/Scarlet-Twinz/Agata-proxima", icon: Globe2 },
+  { label: "GitHub", href: "https://github.com/Scarlet-Twinz/Agata-proxima", icon: Github },
+  // Add the official profile URLs when they are provided; never guess social accounts.
+  { label: "LinkedIn", icon: Linkedin },
+  { label: "Twitter", icon: Twitter },
+  { label: "Hacker News", icon: HackerNewsIcon },
 ];
 
 export function PublicFooter() {
@@ -26,16 +42,33 @@ export function PublicFooter() {
             <div className="public-social-links" aria-label="Agata Proxima social profiles">
               {socialProfiles.map(({ label, href, icon: Icon }) =>
                 href ? (
-                  <a key={label} className="public-social-icon" href={href} target="_blank" rel="noreferrer" aria-label={"Agata Proxima on " + label} title={label}>
+                  <a
+                    key={label}
+                    className="public-social-icon"
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={"Agata Proxima on " + label}
+                    title={label}
+                  >
                     <Icon size={18} />
                   </a>
                 ) : (
-                  <span key={label} className="public-social-icon public-social-icon-pending" aria-label={label + " profile URL not configured"} title={label + " profile URL not configured"} aria-disabled="true">
+                  <span
+                    key={label}
+                    className="public-social-icon public-social-icon-pending"
+                    aria-label={label + " profile URL not configured"}
+                    title={label + " profile URL not configured"}
+                    aria-disabled="true"
+                  >
                     <Icon size={18} />
                   </span>
                 ),
               )}
             </div>
+            <p className="public-social-note">
+              GitHub is linked. LinkedIn, Twitter and Hacker News will be enabled when their official profile URLs are added.
+            </p>
           </div>
 
           <div>
