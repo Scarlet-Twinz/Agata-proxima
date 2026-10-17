@@ -25,8 +25,8 @@ Do not put `AGATA_API_KEY` in a browser variable, commit it to Git, or include i
 - `cli/agata.ps1`: PowerShell API smoke commands.
 - `cli/agata.sh`: Bash API smoke commands.
 - `webhooks/receiver-example.mjs`: raw-body HMAC-SHA256 signature verification example.
-- `integrations/supabase-edge-function.example.ts`: server-side Supabase pattern.
-- `integrations/firebase-admin.example.ts`: Firebase ID-token verification pattern.
+- `integrations/supabase-edge-function.example.ts` and `integrations/supabase-membership.sql`: authenticated Edge Function with a trusted organization-membership check and the matching RLS-protected membership table.
+- `integrations/firebase-admin.example.ts` and `integrations/firebase-membership.rules`: Firebase ID-token verification, trusted organization-membership lookup and a server-side Agata API request.
 - `terraform/README.md`: provider design and acceptance checklist; no Terraform provider binary is included.
 - `chatgpt-mcp/server.mjs`: runnable Streamable HTTP MCP server example with three read-only tools; it must be deployed and protected before connecting to ChatGPT.
 - `github-actions/agata-smoke.yml`: copyable workflow template for running the API smoke checks from GitHub Actions.

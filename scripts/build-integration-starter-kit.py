@@ -11,7 +11,9 @@ required = [
     "cli/agata.sh", "cli/agata.ps1", "webhooks/receiver-example.mjs",
     "chatgpt-mcp/server.mjs", "chatgpt-mcp/README.md",
     "integrations/supabase-edge-function.example.ts",
+    "integrations/supabase-membership.sql",
     "integrations/firebase-admin.example.ts",
+    "integrations/firebase-membership.rules",
     "github-actions/agata-smoke.yml", "github-actions/README.md",
     "vercel/README.md", "terraform/README.md",
 ]

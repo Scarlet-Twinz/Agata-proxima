@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /agataOrganizationMemberships/{firebaseUid} {
+      // Membership grants are trusted server-side records. Firebase Admin SDK
+      // can read them; browser/mobile clients cannot read or mutate them.
+      allow read, write: if false;
+    }
+  }
+}
