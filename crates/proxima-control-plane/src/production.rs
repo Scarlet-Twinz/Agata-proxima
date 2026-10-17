@@ -1543,17 +1543,109 @@ pub(crate) async fn verify_email_code(
     }
 }
 pub(crate) async fn reset_password_page(Query(q): Query<VerifyInput>) -> Response {
-    let token = q.token.replace('"', "");
+    // Encode the untrusted query token as a JavaScript string, then escape HTML
+    // script delimiters so a crafted token cannot break out of the inline script.
+    let token_json = serde_json::to_string(&q.token)
+        .unwrap_or_else(|_| "\"\"".to_string())
+        .replace('<', "\\u003c")
+        .replace('>', "\\u003e")
+        .replace('&', "\\u0026");
     Html(format!(
-        "<!doctype html><html><body style=\"background:#05080c;color:#eef7f8;font-family:Arial;padding:60px\">
-        <h1>Reset your Agata Proxima password</h1>
-        <form id=\"f\"><input id=\"p\" type=\"password\" minlength=\"12\" placeholder=\"New password\" required style=\"padding:12px;width:320px\">
-        <button style=\"margin-left:8px;padding:12px\">Reset password</button></form>
-        <p id=\"m\"></p>
-        <script>
-        const token={token:?};
-        document.getElementById('f').onsubmit=async(e)=>{{e.preventDefault();const r=await fetch('/api/v1/auth/password-reset/confirm',{{method:'POST',headers:{{'content-type':'application/json'}},body:JSON.stringify({{token,password:document.getElementById('p').value}})}});const j=await r.json();document.getElementById('m').textContent=j.message||'Done';}};
-        </script></body></html>"
+        r#"<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Reset password · Agata Proxima</title>
+  <style>
+    :root {{ color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #08111f; color: #f3f7ff; }}
+    * {{ box-sizing: border-box; }}
+    body {{ min-height: 100vh; margin: 0; display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at 50% 0%, #16365a 0, #08111f 54%); }}
+    main {{ width: min(100%, 460px); padding: 32px; border: 1px solid #263b55; border-radius: 20px; background: rgba(12, 24, 41, .96); box-shadow: 0 24px 80px rgba(0,0,0,.28); }}
+    .eyebrow {{ color: #83baff; font-size: 12px; font-weight: 800; letter-spacing: .14em; }}
+    h1 {{ margin: 12px 0 8px; font-size: clamp(26px, 5vw, 34px); line-height: 1.15; }}
+    p {{ color: #b8c7da; line-height: 1.6; }}
+    label {{ display: block; margin: 18px 0 7px; color: #dce7f5; font-size: 13px; font-weight: 700; }}
+    input {{ width: 100%; min-height: 46px; padding: 12px 14px; border: 1px solid #344a66; border-radius: 10px; background: #07101d; color: #f3f7ff; font: inherit; }}
+    input:focus {{ outline: 2px solid #6fb2ff; outline-offset: 2px; }}
+    button {{ width: 100%; min-height: 46px; margin-top: 22px; border: 0; border-radius: 10px; background: #3b82f6; color: white; font: inherit; font-weight: 800; cursor: pointer; }}
+    button:disabled {{ opacity: .65; cursor: wait; }}
+    #message {{ min-height: 24px; overflow-wrap: anywhere; }}
+    #signin {{ display: inline-block; margin-top: 12px; color: #8ec3ff; font-weight: 700; }}
+    .hint {{ font-size: 12px; }}
+  </style>
+</head>
+<body>
+  <main>
+    <span class="eyebrow">ACCOUNT SECURITY</span>
+    <h1>Choose a new password.</h1>
+    <p>Use at least 12 characters. After a successful reset, all existing sessions are revoked.</p>
+    <form id="reset-form">
+      <label for="password">New password</label>
+      <input id="password" name="password" type="password" autocomplete="new-password" minlength="12" required>
+      <label for="confirmation">Confirm new password</label>
+      <input id="confirmation" name="confirmation" type="password" autocomplete="new-password" minlength="12" required>
+      <button id="submit" type="submit">Update password</button>
+    </form>
+    <p id="message" role="status" aria-live="polite"></p>
+    <a id="signin" href="/login" hidden>Return to sign in</a>
+    <p class="hint">Reset links expire after 30 minutes. If this link has expired, request a new one from the sign-in page.</p>
+  </main>
+  <script>
+    const token = {token_json};
+    const form = document.getElementById('reset-form');
+    const password = document.getElementById('password');
+    const confirmation = document.getElementById('confirmation');
+    const button = document.getElementById('submit');
+    const message = document.getElementById('message');
+    const signIn = document.getElementById('signin');
+
+    if (!token) {{
+      form.hidden = true;
+      message.textContent = 'This reset link is missing its token. Request a new password reset link.';
+    }}
+
+    form.addEventListener('submit', async (event) => {{
+      event.preventDefault();
+      message.textContent = '';
+      if (password.value.length < 12) {{
+        message.textContent = 'Use a password with at least 12 characters.';
+        return;
+      }}
+      if (password.value !== confirmation.value) {{
+        message.textContent = 'The passwords do not match.';
+        confirmation.focus();
+        return;
+      }}
+
+      button.disabled = true;
+      button.textContent = 'Updating password…';
+      try {{
+        const response = await fetch('/api/v1/auth/password-reset/confirm', {{
+          method: 'POST',
+          credentials: 'include',
+          headers: {{ 'Content-Type': 'application/json', 'Accept': 'application/json' }},
+          body: JSON.stringify({{ token, password: password.value }})
+        }});
+        const result = await response.json().catch(() => ({{}}));
+        if (!response.ok) {{
+          throw new Error(result.message || 'This reset link is invalid or expired. Request a new link.');
+        }}
+        message.textContent = result.message || 'Password updated. Sign in with your new password.';
+        form.hidden = true;
+        signIn.hidden = false;
+        window.history.replaceState(null, '', window.location.pathname);
+      }} catch (error) {{
+        message.textContent = error instanceof Error ? error.message : 'Unable to reset the password. Request a new link and try again.';
+      }} finally {{
+        button.disabled = false;
+        button.textContent = 'Update password';
+      }}
+    }});
+  </script>
+</body>
+</html>"#
     ))
     .into_response()
 }
