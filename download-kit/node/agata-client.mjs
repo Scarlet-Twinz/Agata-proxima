@@ -73,6 +73,13 @@ export class AgataClient {
   revokeApiKey(id, options) { return this.request(`/api/v1/developer/api-keys/${encodeURIComponent(id)}`, { ...options, method: "DELETE" }); }
   listWebhooks(options) { return this.request("/api/v1/developer/webhooks", options); }
   getWebhook(id, options) { return this.request(`/api/v1/developer/webhooks/${encodeURIComponent(id)}`, options); }
+  createWebhook(input, options) { return this.request("/api/v1/developer/webhooks", { ...options, method: "POST", body: input }); }
+  deleteWebhook(id, options) { return this.request(`/api/v1/developer/webhooks/${encodeURIComponent(id)}`, { ...options, method: "DELETE" }); }
+  listWebhookDeliveries(id, options) { return this.request(`/api/v1/developer/webhooks/${encodeURIComponent(id)}/deliveries`, options); }
+  retryWebhookDelivery(id, deliveryId, options) { return this.request(`/api/v1/developer/webhooks/${encodeURIComponent(id)}/deliveries/${encodeURIComponent(deliveryId)}/retry`, { ...options, method: "POST" }); }
+  rotateWebhookSecret(id, options) { return this.request(`/api/v1/developer/webhooks/${encodeURIComponent(id)}/rotate-secret`, { ...options, method: "POST" }); }
+  setWebhookEnabled(id, enabled, options) { return this.request(`/api/v1/developer/webhooks/${encodeURIComponent(id)}/enabled`, { ...options, method: "POST", body: { enabled: Boolean(enabled) } }); }
+  getWebhook(id, options) { return this.request(`/api/v1/developer/webhooks/${encodeURIComponent(id)}`, options); }
   listWebhookDeliveries(id, options) { return this.request(`/api/v1/developer/webhooks/${encodeURIComponent(id)}/deliveries`, options); }
   retryWebhookDelivery(id, deliveryId, options) { return this.request(`/api/v1/developer/webhooks/${encodeURIComponent(id)}/deliveries/${encodeURIComponent(deliveryId)}/retry`, { ...options, method: "POST", body: {} }); }
   rotateWebhookSecret(id, options) { return this.request(`/api/v1/developer/webhooks/${encodeURIComponent(id)}/rotate-secret`, { ...options, method: "POST", body: {} }); }
