@@ -699,6 +699,11 @@ function WebhooksManager() {
 
   return <div className="webhooks-manager">
     <div className="page-heading"><div><span className="eyebrow">DEVELOPER · WEBHOOKS</span><h1>Webhooks</h1><p>Subscribe to real Agata audit events, deliver signed payloads, and inspect recorded attempts.</p></div><button className="console-refresh-button" onClick={()=>void load()} disabled={loading}><RefreshCw size={15}/> Refresh</button></div>
+    <section className="surface environment-capacity-summary">
+      <div><span className="eyebrow">PLAN CAPACITY</span><h2>{activeCount} / {environmentLimit===null?"—":environmentLimit} active environments</h2><p>{planName ? "Current plan: "+planName+". " : ""}An environment is a named stage within this organization. Node registration may have already created the stage used by your existing node.</p></div>
+      <Link className="table-detail-link" to="/app/billing/plans">Review plan limits <ArrowUpRight size={14}/></Link>
+    </section>
+    {limitReached&&<div className="system-notice system-notice--warning" role="status"><strong>Environment limit reached.</strong><span>This organization has used its active environment allowance. You can edit or disable the existing environment; creating another requires available plan capacity.</span></div>}
     {notice&&<div className="settings-banner settings-banner--success" role="status">{notice}</div>}
     {error&&<div className="settings-banner settings-banner--error" role="alert">{error}</div>}
     {oneTimeSecret&&<section className="surface webhook-secret-notice"><strong>Signing secret — shown once</strong><p>Copy this into your receiving service's secret store now. It will not be displayed again.</p><code>{oneTimeSecret}</code><button type="button" className="console-refresh-button" onClick={()=>void navigator.clipboard?.writeText(oneTimeSecret)}>Copy secret</button></section>}
@@ -764,17 +769,31 @@ function EnvironmentManager(){
   const [busy,setBusy]=useState("");
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
+  const [environmentLimit,setEnvironmentLimit]=useState<number|null>(null);
+  const [planName,setPlanName]=useState("");
   const [editing,setEditing]=useState<EnvironmentRecord|null>(null);
   const [editName,setEditName]=useState("");
   const [editDescription,setEditDescription]=useState("");
 
   const load=useCallback(async()=>{
     setLoading(true);setError("");
-    try{setItems(await api.get<EnvironmentRecord[]>("/api/v1/developer/environments"));}
-    catch(e){setError(e instanceof Error?e.message:"Unable to load environments.");}
+    try{
+      const records=await api.get<EnvironmentRecord[]>("/api/v1/developer/environments");
+      setItems(records);
+      try{
+        const entitlement=await api.get<{plan?:string;limits?:{environments?:number}}>("/api/v1/entitlements");
+        setPlanName(entitlement.plan??"");
+        setEnvironmentLimit(typeof entitlement.limits?.environments==="number"?entitlement.limits.environments:null);
+      }catch{
+        setPlanName("");
+        setEnvironmentLimit(null);
+      }
+    }catch(e){setError(e instanceof Error?e.message:"Unable to load environments.");}
     finally{setLoading(false);}
   },[]);
   useEffect(()=>{void load();},[load]);
+  const activeCount=items.filter(item=>item.status==="active").length;
+  const limitReached=environmentLimit!==null&&activeCount>=environmentLimit;
 
   function changeName(value:string){
     setName(value);
@@ -835,7 +854,7 @@ function EnvironmentManager(){
       <label>Display name<input value={name} onChange={e=>changeName(e.target.value)} required maxLength={100} placeholder="Staging"/></label>
       <label>Environment slug<input value={slug} onChange={e=>{setSlugTouched(true);setSlug(e.target.value.toLowerCase().trim().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,""));}} required maxLength={100} pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="staging"/><small>Lowercase letters and numbers, separated by single hyphens.</small></label>
       <label>Description (optional)<textarea value={description} onChange={e=>setDescription(e.target.value)} maxLength={500} rows={3} placeholder="Pre-release acceptance testing with synthetic customer data."/></label>
-      <button className="primary-action" type="submit" disabled={busy==="create"||!name.trim()||!slug.trim()}>{busy==="create"?"Creating…":"Create environment"}</button>
+      <button className="primary-action" type="submit" disabled={busy==="create"||!name.trim()||!slug.trim()||limitReached}>{busy==="create"?"Creating…":limitReached?"Environment limit reached":"Create environment"}</button>
     </form>
     <div className="environment-record-list">
       {loading?<div className="surface empty-state"><strong>Loading environments…</strong><span>Reading environment records from the control plane.</span></div>:
