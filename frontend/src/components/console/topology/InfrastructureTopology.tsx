@@ -10,6 +10,13 @@ type Props = {
   nodes: NodeRecord[];
 };
 
+function nodeState(status?: string) {
+  const normalized = status?.toLowerCase() ?? "unknown";
+  if (["healthy", "online", "active", "ready", "connected"].some((value) => normalized.includes(value))) return "healthy";
+  if (["degraded", "warning", "pending", "provisioning"].some((value) => normalized.includes(value))) return "degraded";
+  return "inactive";
+}
+
 export function InfrastructureTopology({ nodes }: Props) {
   return (
     <div className="topology">
@@ -19,10 +26,10 @@ export function InfrastructureTopology({ nodes }: Props) {
         <small>enforcement boundary</small>
       </div>
 
-      <div className="topology-links" aria-label="Registered infrastructure nodes">
+      <div className={`topology-links${nodes.length ? " topology-links--connected" : ""}`} aria-label="Registered infrastructure nodes">
         {nodes.length ? nodes.map((node) => (
           <div className="topology-node" key={node.id}>
-            <span className="node-dot" />
+            <span className={`node-dot node-dot--${nodeState(node.status)}`} aria-hidden="true" />
             <div>
               <strong>{node.name ?? node.id}</strong>
               <small>
