@@ -164,7 +164,7 @@ const details: Record<string, Detail> = {
       { title: "Security controls", bullets: ["Production destinations must use HTTPS and resolve to public IP addresses; private/reserved address resolution is rejected.", "Redirects are not followed, reducing the risk of redirect-based access to internal services.", "Signing secrets are encrypted at rest and returned only when first created or rotated.", "Endpoint creation, secret rotation, enable/disable and retry actions must be checked against organization permissions."] },
       { title: "Acceptance checklist", bullets: ["Deliver a real audit event to a controlled HTTPS receiver.", "Verify a valid signature and reject an altered body or invalid signature.", "Test 2xx, 4xx/5xx and timeout responses.", "Confirm retry scheduling and dead-letter behavior.", "Rotate the secret and confirm the new secret works while the old secret does not.", "Disable the endpoint and confirm no further delivery occurs.", "Attempt cross-organization access to endpoint and delivery IDs and confirm rejection.", "Confirm `AGATA_WEBHOOK_ENCRYPTION_KEY` is configured independently in each target environment."] },
     ],
-    links: [{ label: "Download receiver examples (.zip)", to: "/downloads/agata-proxima-integration-starter-kit.zip", external: true }, { label: "API reference", to: "/docs/api-reference" }, { label: "Troubleshooting", to: "/docs/troubleshooting" }, { label: "Operations guide", to: "/docs/operations" }],
+    links: [{ label: "Download receiver examples (.zip)", to: "https://github.com/Scarlet-Twinz/Agata-proxima/archive/refs/heads/main.zip", external: true }, { label: "API reference", to: "/docs/api-reference" }, { label: "Troubleshooting", to: "/docs/troubleshooting" }, { label: "Operations guide", to: "/docs/operations" }],
   },
   "/developers/events": {
     eyebrow: "Developers · Events",
@@ -180,7 +180,7 @@ const details: Record<string, Detail> = {
   "/developers/integrations": {
     eyebrow: "Developers · Integration catalog",
     title: "Connect Agata Proxima to your engineering stack.",
-    description: "Use the control-plane API, signed event delivery and explicit identity boundaries to connect the systems around a multi-tenant application.",
+    description: "Use the versioned control-plane API and organization-scoped authorization to connect external services. Each guide includes the trust boundary, setup pattern and acceptance checks; the source archive is available from Downloads.",
     sections: [
       { title: "Choose an integration path", bullets: ["ChatGPT / MCP — expose explicitly authorized Agata operations through a dedicated MCP server.", "Supabase — keep PostgreSQL RLS enabled and perform privileged Agata calls from trusted server-side code.", "Firebase — verify Firebase ID tokens on the backend before resolving organization and tenant scope.", "GitHub Actions — run API contract, integration and tenant-isolation checks in CI with environment-scoped secrets.", "Vercel — configure the API origin and secrets in server-side environment settings and run post-deployment checks.", "PostgreSQL + RLS — use least-privilege roles and independently test tenant-scoped database behavior."] },
       { title: "Integration contract", paragraphs: ["The common integration surface is the versioned `/api/v1` HTTP API and configured outbound webhook workflow. Each system must preserve authenticated identity, organization authorization and tenant scope."], code: "GET /api/v1/health\nGET /api/v1/billing/plans\nGET /api/v1/tenants  # authenticated request" },
@@ -261,12 +261,12 @@ const details: Record<string, Detail> = {
   "/developers/downloads": {
     eyebrow: "Developers · Downloads",
     title: "Download the Agata Proxima integration starter kit.",
-    description: "Get practical source examples for API access, Node.js, shell automation, webhook delivery and common application integration patterns.",
+    description: "Download the repository source archive and use the existing integration guides for ChatGPT/MCP, Supabase, Firebase, GitHub Actions, Vercel and PostgreSQL.",
     sections: [
-      { title: "Integration starter kit", paragraphs: ["Download the source bundle for a server-side Node.js client, a working API example, PowerShell and Bash smoke scripts, a webhook receiver example, and Supabase/Firebase integration samples."], code: "AGATA_API_BASE_URL=https://api.example.com\nAGATA_API_KEY=aga_<your-api-key>" },
+      { title: "Integration starter kit", paragraphs: ["Download the complete Agata Proxima source archive. It contains the application source, API contract, Docker Compose configuration, migrations, tests and documentation. The integration guides provide setup patterns and acceptance checks for each supported external system."], code: "AGATA_API_BASE_URL=https://api.example.com\nAGATA_API_KEY=aga_<your-api-key>" },
       { title: "Included files", bullets: ["Node.js fetch client with status-code errors.", "Node.js example for health, plan catalogue and organization-scoped tenants.", "PowerShell and Bash API smoke scripts.", "Webhook receiver example with raw-body HMAC-SHA256 verification and delivery-ID handling notes.", "Supabase Edge Function and Firebase Admin SDK patterns.", "ChatGPT/MCP connector design checklist and Terraform provider acceptance checklist."] },
       { title: "Run the examples", code: "# Node.js 22+\nnode node/example.mjs\n\n# Bash smoke checks\n./cli/agata.sh\n\n# PowerShell smoke checks\n./cli/agata.ps1" },
-      { title: "Use the right artifact", paragraphs: ["The starter kit is an example bundle for implementation work. A separately versioned npm SDK, standalone CLI binary, Terraform provider and deployed ChatGPT/MCP server require their own source, release process and acceptance tests. Use the included API examples now and publish standalone artifacts only with a tested release."] },
+      { title: "Use the right artifact", paragraphs: ["The download link serves the repository source ZIP; it is not a separately packaged SDK or a pre-connected third-party app. The ChatGPT/MCP, Supabase, Firebase, GitHub Actions and Vercel guides explain the integration contract. A live ChatGPT connector still requires a deployed MCP endpoint; external OAuth/app installations require their own credentials, callbacks and acceptance tests."] },
     ],
     links: [{ label: "Download integration starter kit (.zip)", to: "/downloads/agata-proxima-integration-starter-kit.zip", external: true }, { label: "API reference", to: "/developers/api-reference" }, { label: "Integration catalog", to: "/developers/integrations" }],
   },
