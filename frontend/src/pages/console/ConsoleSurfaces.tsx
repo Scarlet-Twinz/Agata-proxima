@@ -40,7 +40,7 @@ export function Security() {
       <div className="surface-heading"><div><span className="eyebrow">AUDIT</span><h2>Recent security activity</h2></div><Link className="table-detail-link" to="/app/audit">Open audit</Link></div>
       <ActivityStream items={data?.recentActivity ?? []}/>
     </section>
-    <div className="resource-links surface"><span className="eyebrow">RELATED WORKFLOWS</span><Link to="/app/verification">Verification evidence</Link><Link to="/app/audit">Audit explorer</Link><Link to="/app/tenants">Tenant registry</Link><Link to="/app/policies">Policy control</Link><Link to="/docs/security">Security documentation</Link></div>
+    <div className="resource-links surface"><span className="eyebrow">RELATED SECURITY WORKFLOWS</span><Link to="/app/verification">Verification evidence</Link><Link to="/app/attestations">Signed attestations</Link><Link to="/app/audit">Audit explorer</Link><Link to="/app/security/events">Security events</Link><Link to="/app/security/tenant-isolation">Tenant isolation</Link><Link to="/app/tenants">Tenant registry</Link><Link to="/app/policies">Policy control</Link><Link to="/app/settings/authentication">Authentication and SSO</Link><Link to="/app/developer/api-keys">API key management</Link><Link to="/app/developer/webhooks">Webhook security</Link><Link to="/docs/security">Security documentation</Link></div>
   </div>;
 }
 
