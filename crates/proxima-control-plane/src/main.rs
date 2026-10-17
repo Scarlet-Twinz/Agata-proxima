@@ -45,6 +45,8 @@ struct AuthContext {
 struct AuthInput {
     email: String,
     password: String,
+    #[serde(default)]
+    remember_me: bool,
     name: Option<String>,
     organization: Option<String>,
 }
@@ -861,8 +863,8 @@ async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Respo
     )
     .await;
 
-    let response = match create_session(&s.db, user_id, organization_id).await {
-        Ok((token, csrf)) => auth_response(&s, user_id, organization_id, csrf, token),
+    let response = match create_session(&s.db, user_id, organization_id, input.remember_me).await {
+        Ok((token, csrf)) => auth_response(&s, user_id, organization_id, csrf, token, input.remember_me),
         Err(e) => return db_error(e),
     };
 
@@ -1603,7 +1605,7 @@ async fn control_plane_overview(State(s): State<AppState>, headers: HeaderMap) -
     .await;
     let active_deployments = scalar_count(&s.db, "SELECT count(*) FROM deployments WHERE organization_id=$1 AND status NOT IN ('healthy','rolled_back')", ctx.organization_id).await;
     let latest_verification = sqlx::query("SELECT status FROM verification_results WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 1").bind(ctx.organization_id).fetch_optional(&s.db).await.ok().flatten();
-    let trend_rows = sqlx::query("SELECT date_trunc('day',created_at) AS timestamp,count(*)::bigint AS value FROM verification_results WHERE organization_id=$1 GROUP BY 1 ORDER BY 1 DESC LIMIT 30").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
+    let trend_rows = sqlx::query("SELECT days.day AS timestamp,count(v.id)::bigint AS value FROM generate_series(date_trunc('day',now())-interval '29 days',date_trunc('day',now()),interval '1 day') AS days(day) LEFT JOIN verification_results v ON v.organization_id=$1 AND date_trunc('day',v.created_at)=days.day GROUP BY days.day ORDER BY days.day DESC LIMIT 30").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
     let tenant_rows = sqlx::query("SELECT t.id,t.name,t.status FROM tenants t JOIN projects p ON p.id=t.project_id WHERE p.organization_id=$1 ORDER BY t.created_at DESC LIMIT 12").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
     let node_rows = sqlx::query("SELECT id,name,region,environment,status,version FROM nodes WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 12").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
     let audit_rows = sqlx::query("SELECT id,action,resource_type,resource_id,created_at FROM audit_events WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 10").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
@@ -4138,18 +4140,20 @@ async fn create_session(
     db: &PgPool,
     user_id: Uuid,
     organization_id: Uuid,
+    remember_me: bool,
 ) -> Result<(String, String), sqlx::Error> {
     let token = format!("{}.{}", Uuid::new_v4(), Uuid::new_v4());
     let csrf = Uuid::new_v4().to_string();
     sqlx::query(
         "INSERT INTO sessions(id,user_id,organization_id,token_hash,csrf_token,expires_at)
-         VALUES($1,$2,$3,$4,$5,now()+interval '12 hours')",
+         VALUES($1,$2,$3,$4,$5,now()+($6 * interval '1 second'))",
     )
     .bind(Uuid::new_v4())
     .bind(user_id)
     .bind(organization_id)
     .bind(token_hash(&token))
     .bind(&csrf)
+    .bind(if remember_me { 30 * 24 * 60 * 60_i64 } else { 12 * 60 * 60_i64 })
     .execute(db)
     .await?;
     Ok((token, csrf))
@@ -4324,10 +4328,12 @@ fn auth_response(
     organization: Uuid,
     csrf: String,
     token: String,
+    remember_me: bool,
 ) -> Response {
     let secure = if s.secure_cookie { "; Secure" } else { "" };
+    let cookie_max_age = if remember_me { 30 * 24 * 60 * 60_i64 } else { 12 * 60 * 60_i64 };
     let cookie = format!(
-        "proxima_session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=43200{secure}"
+        "proxima_session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={cookie_max_age}{secure}"
     );
     let mut headers = HeaderMap::new();
     headers.insert(
