@@ -3094,17 +3094,76 @@ async fn create_node(
         return response;
     }
 
-    let environment = input
+    let environment_label = input
         .environment
         .clone()
-        .unwrap_or_else(|| "production".into());
-    if environment.eq_ignore_ascii_case("private") {
+        .unwrap_or_else(|| "production".into())
+        .trim()
+        .to_string();
+    if environment_label.is_empty() || environment_label.len() > 100 {
+        return bad("Environment name must contain 1–100 characters.");
+    }
+    if environment_label.eq_ignore_ascii_case("private") {
         if let Err(response) =
             production::require_feature(&s.db, ctx.organization_id, "private_deployment").await
         {
             return response;
         }
     }
+
+    // A node's environment is backed by the organization environment registry.
+    // For existing workflows, first node registration creates the stage if needed.
+    let environment_slug = normalize_environment_slug(&environment_label);
+    if environment_slug.is_empty() {
+        return bad("Environment name must contain letters or numbers.");
+    }
+    let known_environment = match sqlx::query_scalar::<_, String>(
+        "SELECT status FROM organization_environments WHERE organization_id=$1 AND slug=$2",
+    )
+    .bind(ctx.organization_id)
+    .bind(&environment_slug)
+    .fetch_optional(&s.db)
+    .await
+    {
+        Ok(value) => value,
+        Err(e) => return db_error(e),
+    };
+    let environment = match known_environment.as_deref() {
+        Some("active") => environment_slug,
+        Some(_) => {
+            return (
+                StatusCode::CONFLICT,
+                Json(json!({
+                    "ok":false,"error":"environment_disabled",
+                    "message":"This environment is disabled. Enable it in Developer → Environments before registering nodes."
+                })),
+            ).into_response();
+        }
+        None => {
+            if let Err(response) = production::enforce_capacity(&s.db, ctx.organization_id, "environments").await {
+                return response;
+            }
+            let environment_id = Uuid::new_v4();
+            match sqlx::query(
+                "INSERT INTO organization_environments(id,organization_id,name,slug,description,status,created_by)
+                 VALUES($1,$2,$3,$4,'Created when registering a node.','active',$5)",
+            )
+            .bind(environment_id)
+            .bind(ctx.organization_id)
+            .bind(&environment_label)
+            .bind(&environment_slug)
+            .bind(ctx.user_id)
+            .execute(&s.db)
+            .await
+            {
+                Ok(_) => {
+                    audit(&s.db, ctx.organization_id, ctx.user_id, "developer.environment.created", "environment", Some(environment_id), json!({"slug":environment_slug,"source":"node_registration"})).await;
+                    environment_slug
+                }
+                Err(e) => return unique_error(e),
+            }
+        }
+    };
     if let Err(response) =
         production::enforce_environment_capacity(&s.db, ctx.organization_id, &environment).await
     {
