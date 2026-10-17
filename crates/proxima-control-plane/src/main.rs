@@ -13,7 +13,7 @@ use axum::{
     extract::{Path, State},
     http::{header, HeaderMap, HeaderName, HeaderValue, StatusCode},
     response::{Html, IntoResponse, Response},
-    routing::{delete, get, post},
+    routing::{delete, get, patch, post},
     Json, Router,
 };
 use hmac::Mac;
