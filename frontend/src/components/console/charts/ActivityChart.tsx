@@ -10,17 +10,35 @@ export function ActivityChart({ points, height = 250 }: Props) {
   const plotted = useMemo(() => {
     const width = 900;
     const padding = 28;
-    const values = points.map((point) => point.value);
-    const min = values.length ? Math.min(...values) : 0;
-    const max = values.length ? Math.max(...values) : 0;
-    const range = max - min || 1;
     const usableWidth = width - padding * 2;
     const usableHeight = height - padding * 2;
 
-    const coordinates = points.map((point, index) => ({
-      x: points.length === 1
-        ? width / 2
-        : padding + (index / (points.length - 1)) * usableWidth,
+    // Normalize sparse API results to the full 30-day window. Missing dates
+    // are genuine zero-activity days, not synthetic verification records.
+    const today = new Date();
+    const end = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+    const start = new Date(end);
+    start.setUTCDate(start.getUTCDate() - 29);
+    const byDay = new Map<string, number>();
+    for (const point of points) {
+      const timestamp = new Date(point.timestamp);
+      if (Number.isNaN(timestamp.getTime())) continue;
+      const key = timestamp.toISOString().slice(0, 10);
+      byDay.set(key, (byDay.get(key) ?? 0) + Math.max(0, Number(point.value) || 0));
+    }
+    const dailyPoints = points.length === 0 ? [] : Array.from({ length: 30 }, (_, index) => {
+      const day = new Date(start);
+      day.setUTCDate(start.getUTCDate() + index);
+      const timestamp = day.toISOString();
+      return { timestamp, value: byDay.get(timestamp.slice(0, 10)) ?? 0 };
+    });
+
+    const values = dailyPoints.map((point) => point.value);
+    const min = values.length ? Math.min(...values) : 0;
+    const max = values.length ? Math.max(...values) : 0;
+    const range = max - min || 1;
+    const coordinates = dailyPoints.map((point, index) => ({
+      x: padding + (index / Math.max(1, dailyPoints.length - 1)) * usableWidth,
       y: max === min ? (max === 0 ? height - padding : height / 2) : height - padding - ((point.value - min) / range) * usableHeight,
       value: point.value,
       timestamp: point.timestamp,
@@ -30,17 +48,17 @@ export function ActivityChart({ points, height = 250 }: Props) {
       .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
       .join(" ");
 
-    return { coordinates, path, min, max };
+    return { coordinates, path, dailyPoints };
   }, [points, height]);
 
   return (
-    <div className={points.length === 0 ? "chart-shell chart-shell--empty" : "chart-shell"}>
+    <div className={plotted.dailyPoints.length === 0 ? "chart-shell chart-shell--empty" : "chart-shell"}>
       <svg
         className="activity-chart"
         viewBox={`0 0 900 ${height}`}
         preserveAspectRatio="none"
         role="img"
-        aria-label="Verification activity trend"
+        aria-label="Daily verification records over the last 30 days"
       >
         <defs>
           <linearGradient id="agata-chart-fill" x1="0" x2="0" y1="0" y2="1">
@@ -51,13 +69,7 @@ export function ActivityChart({ points, height = 250 }: Props) {
 
         {[0, 1, 2, 3].map((step) => {
           const y = 28 + (step / 3) * (height - 56);
-          const label = plotted.max === plotted.min ? plotted.max : Math.round(plotted.max - (step / 3) * (plotted.max - plotted.min));
-          return (
-            <g key={step}>
-              <line x1="28" x2="872" y1={y} y2={y} className="chart-gridline" />
-              <text x="8" y={y + 4} className="chart-axis-label">{label}</text>
-            </g>
-          );
+          return <line key={step} x1="28" x2="872" y1={y} y2={y} className="chart-gridline" />;
         })}
         <line
           x1="28"
@@ -78,14 +90,6 @@ export function ActivityChart({ points, height = 250 }: Props) {
           <path d={plotted.path} className="chart-line" />
         )}
 
-        {points.length > 0 && [0, Math.floor((points.length - 1) / 2), points.length - 1].filter((index, position, all) => all.indexOf(index) === position).map((index, position, labels) => {
-          const point = points[index];
-          const x = points.length === 1 ? 450 : 28 + (index / (points.length - 1)) * 844;
-          const label = new Date(point.timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-          const anchor = position === 0 ? "start" : position === labels.length - 1 ? "end" : "middle";
-          return <text key={point.timestamp} x={x} y={height - 7} textAnchor={anchor} className="chart-axis-label">{label}</text>;
-        })}
-
         {plotted.coordinates.map((point) => (
           <circle
             key={point.timestamp}
@@ -94,21 +98,25 @@ export function ActivityChart({ points, height = 250 }: Props) {
             r={plotted.coordinates.length === 1 ? 6 : 3.5}
             className="chart-point"
           >
-            <title>{`${point.timestamp}: ${point.value} verification run(s)`}</title>
+            <title>{`${point.timestamp}: ${point.value} verification record(s)`}</title>
           </circle>
         ))}
       </svg>
-      {points.length === 0 && (
+      {plotted.dailyPoints.length === 0 && (
         <div className="chart-empty-overlay" role="status">
           <strong>No verification history yet</strong>
-          <span>Run a verification to populate this graph. No sample telemetry is being invented.</span>
+          <span>Record a verification result with completed test evidence to populate this graph.</span>
         </div>
       )}
-      {points.length === 1 && (
-        <p className="chart-caption">
-          First recorded verification · {points[0].value} run
-          {points[0].value === 1 ? "" : "s"} on this day
-        </p>
+      {plotted.dailyPoints.length > 0 && plotted.dailyPoints.every((point) => point.value === 0) && (
+        <p className="chart-caption">No verification records in the last 30 days.</p>
+      )}
+      {plotted.dailyPoints.length > 0 && (
+        <div className="chart-axis-labels" aria-hidden="true">
+          <span>{new Date(plotted.dailyPoints[0].timestamp).toLocaleDateString(undefined, { timeZone: "UTC" })}</span>
+          <span>Verification records · last 30 days</span>
+          <span>{new Date(plotted.dailyPoints[plotted.dailyPoints.length - 1].timestamp).toLocaleDateString(undefined, { timeZone: "UTC" })}</span>
+        </div>
       )}
     </div>
   );

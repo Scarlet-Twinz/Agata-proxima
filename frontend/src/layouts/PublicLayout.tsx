@@ -1,17 +1,22 @@
-import { Outlet, useLocation } from "react-router-dom";
 import { useEffect } from "react";
+import { Outlet, useLocation } from "react-router-dom";
 import { PublicNavigation } from "../components/navigation/PublicNavigation";
 import { PublicFooter } from "../components/layout/PublicFooter";
 
 export function PublicLayout() {
   const { pathname, hash } = useLocation();
+
   useEffect(() => {
     if (hash) {
-      document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView({ behavior: "auto", block: "start" });
-      return;
+      const target = document.getElementById(decodeURIComponent(hash.slice(1)));
+      if (target) {
+        target.scrollIntoView({ block: "start" });
+        return;
+      }
     }
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    window.scrollTo(0, 0);
   }, [pathname, hash]);
+
   return (
     <div className="public-shell">
       <PublicNavigation />

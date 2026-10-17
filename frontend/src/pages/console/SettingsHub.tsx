@@ -232,7 +232,7 @@ export function SettingsHub(){
         <button className="settings-action" onClick={()=>navigate("/app/settings/authentication")}><span><strong>Authentication</strong><small>Email verification, password recovery and session behavior.</small></span></button>
         <button className="settings-action" onClick={()=>navigate("/app/settings/identity")}><span><strong>Enterprise identity</strong><small>Microsoft Entra/OIDC configuration and readiness.</small></span></button>
         <button className="settings-action" onClick={()=>navigate("/app/settings/security")}><span><strong>Security controls</strong><small>CSRF, enforcement authority and protection boundaries.</small></span></button>
-        <button className="settings-action" onClick={()=>navigate("/app/settings/environments")}><span><strong>Environments</strong><small>Production and future environment boundaries.</small></span></button>
+        <button className="settings-action" onClick={()=>navigate("/app/settings/environments")}><span><strong>Environments</strong><small>Review environment assignments for nodes and deployments.</small></span></button>
         <button className="settings-action" onClick={signOut}><span><strong>Sign out</strong><small>End this browser session immediately.</small></span><LogOut size={17}/></button>
         <button className="settings-action settings-action--danger" onClick={deleteAccount}><span><strong>Delete account</strong><small>Permanently remove the account when ownership constraints allow it.</small></span><Trash2 size={17}/></button>
       </div>

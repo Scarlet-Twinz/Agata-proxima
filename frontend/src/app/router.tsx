@@ -27,11 +27,11 @@ import { SupportRequest } from "../pages/public/SupportRequest";
 import Login from "../pages/auth/Login";
 import Signup from "../pages/auth/Signup";
 import Recovery from "../pages/auth/Recovery";
+import ResetPassword from "../pages/auth/ResetPassword";
 
 import { Overview } from "../pages/console/Overview";
 import { Attestations } from "../pages/console/Attestations";
 import {
-  Access,
   Audit,
   Billing,
   Deployments,
@@ -79,7 +79,6 @@ const consoleResourceRoutes = [
   { path: "settings", element: <SettingsHub /> },
   { path: "developer", element: <Developer /> },
   { path: "support", element: <ConsoleSupport /> },
-  { path: "settings/members", element: <Access /> },
 ];
 
 const nestedConsoleRoutes = [
@@ -110,6 +109,7 @@ const nestedConsoleRoutes = [
   "developer/sdks",
   "developer/cli",
   "developer/terraform",
+  "settings/members",
   "settings/authentication",
   "settings/identity",
   "settings/security",
@@ -153,6 +153,7 @@ export const router = createBrowserRouter([
       { path: "/login", element: <Login /> },
       { path: "/signup", element: <Signup /> },
       { path: "/recovery", element: <Recovery /> },
+      { path: "/reset-password", element: <ResetPassword /> },
     ],
   },
   {

@@ -1,32 +1,51 @@
-# React + TypeScript + Vite
+# Agata Proxima Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+The frontend is the React and TypeScript workspace for the Agata Proxima public site, authentication flows and customer dashboard. It uses Vite for local development and production builds.
 
-Currently, two official plugins are available:
+## Requirements
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Node.js 24
+- npm
+- A running Agata Proxima Control Plane, or the configured API origin for the environment you are testing
 
-## React Compiler
+## Install and run
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+From this directory:
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm ci
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+The local Vite server serves the frontend. For a local Control Plane on `http://127.0.0.1:8080`, set `VITE_API_BASE_URL=http://127.0.0.1:8080` in `.env.local` when using a separate API origin. Leave the variable empty when the frontend is served through a same-origin API proxy.
+
+## Quality checks
+
+```bash
+npm run build
+npm run lint
+```
+
+From the repository root, run the public content, route and dashboard acceptance checks:
+
+```bash
+node scripts/verify-public-content.mjs
+node scripts/verify-public-dashboard.mjs
+```
+
+## Authentication and secrets
+
+Human sign-in uses the HTTP-only `proxima_session` cookie and a CSRF token for state-changing requests. The “Keep me signed in” choice controls the server session lifetime. Do not put API keys, database passwords, webhook secrets or OAuth client secrets in `VITE_*` variables: Vite bundles those values into browser-accessible code.
+
+## Local Docker troubleshooting
+
+Run these commands from the repository root:
+
+```bash
+docker compose ps -a
+docker compose logs --tail=200 proxima-control control-postgres
+docker compose exec control-postgres pg_isready -U proxima_control -d proxima_control
+curl -fsS http://127.0.0.1:8080/api/v1/health
+```
+
+The Control Plane database is exposed on host port `55443` by default. If logs are empty, inspect `docker compose ps -a` first; a service that never created a container has no logs. See [the usage guide](../docs/usage.md) for the complete operating workflow.
