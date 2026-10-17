@@ -31,7 +31,7 @@ export function Security() {
   const protection = data?.protection;
   const signals = [
     { label: "Tenant boundary", value: protection?.tenantIsolation ?? "NO DATA", detail: "Tenant inventory is configuration state; runtime behavior is shown by verification evidence." },
-    { label: "Policy coverage", value: protection?.policyEnforcement ?? "NO DATA", detail: "Versioned policy configuration for the active organization." },
+    { label: "Policy inventory", value: protection?.policyEnforcement ?? "NO DATA", detail: "Versioned policy records available for deployment and verification." },
     { label: "Latest verification", value: protection?.verification ?? "NO DATA", detail: "Most recent recorded verification result for the active organization." },
     { label: "Control-plane database", value: protection?.databaseProtection ?? "NO DATA", detail: "Live database connectivity signal from the authenticated overview endpoint." },
   ];
