@@ -20,7 +20,7 @@ const configs:Record<string,{eyebrow:string;title:string;description:string;kind
 export function ActionPage(){
  const {pathname}=useLocation(); const navigate=useNavigate(); const config=configs[pathname]??configs["/app/tenants/new"];
  const [session,setSession]=useState<Session|null>(null); const [options,setOptions]=useState<Option[]>([]); const [form,setForm]=useState<Record<string,string>>({}); const [busy,setBusy]=useState(false); const [error,setError]=useState(""); const [result,setResult]=useState<Record<string,unknown>|null>(null);
- const [secretCopied,setSecretCopied]=useState(false); const [secretConfirmed,setSecretConfirmed]=useState(false); const [copyError,setCopyError]=useState(""); const [guideCopied,setGuideCopied]=useState(false);
+ const [secretCopied,setSecretCopied]=useState(false); const [secretConfirmed,setSecretConfirmed]=useState(false); const [copyError,setCopyError]=useState(""); const [guideCopied,setGuideCopied]=useState(false); const [testCopied,setTestCopied]=useState(false);
  useEffect(()=>{let active=true;(async()=>{try{const s=await api.get<Session>("/api/v1/session");if(active)setSession(s);if(config.kind==="deployment"){const n=await api.get<Option[]>("/api/v1/nodes");if(active)setOptions(n)}if(config.kind==="verification"){const t=await api.get<Array<Option&{slug?:string}>>("/api/v1/tenants");if(active)setOptions(t)}}catch(e){if(active)setError((e as ApiError)?.message??"Unable to load the workspace session.")}})();return()=>{active=false}},[config.kind]);
  function set(key:string,value:string){setForm(v=>({...v,[key]:value}))}
  async function submit(e:FormEvent){e.preventDefault();if(!session)return;setBusy(true);setError("");
@@ -83,6 +83,38 @@ export function ActionPage(){
  const maskedSecret=secret?secret.slice(0,Math.min(8,secret.length))+"••••••••":"";
  const verificationEvidenceExample=JSON.stringify({environment:"staging",test_run_id:"replace-with-your-test-run-id",checks:[{name:"tenant_a_reads_own_record",expected:"allow",observed:"allowed",passed:true},{name:"tenant_a_reads_tenant_b_record",expected:"deny",observed:"denied",passed:true}]},null,2);
  async function copyVerificationEvidence(){try{await navigator.clipboard.writeText(verificationEvidenceExample);setGuideCopied(true)}catch{setGuideCopied(false)}}
+ const verificationTestScript=String.raw`const token = process.env.AGATA_TEST_TENANT_A_TOKEN;
+const ownUrl = process.env.AGATA_TEST_TENANT_A_OWN_URL;
+const otherTenantUrl = process.env.AGATA_TEST_TENANT_B_RECORD_URL;
+
+if (!token || !ownUrl || !otherTenantUrl) {
+  throw new Error("Set AGATA_TEST_TENANT_A_TOKEN, AGATA_TEST_TENANT_A_OWN_URL and AGATA_TEST_TENANT_B_RECORD_URL.");
+}
+
+async function getStatus(url) {
+  const response = await fetch(url, {
+    headers: { Authorization: "Bearer " + token, Accept: "application/json" },
+    signal: AbortSignal.timeout(10000),
+    redirect: "manual"
+  });
+  return response.status;
+}
+
+const ownStatus = await getStatus(ownUrl);
+if (ownStatus < 200 || ownStatus >= 300) {
+  throw new Error("Tenant A's own-record request should succeed; received HTTP " + ownStatus);
+}
+
+const crossStatus = await getStatus(otherTenantUrl);
+if (![403, 404].includes(crossStatus)) {
+  throw new Error("Cross-tenant request should be denied with HTTP 403 or 404; received HTTP " + crossStatus);
+}
+
+console.log(JSON.stringify({
+  tenant_a_own_record: { expected: "allow", observed_status: ownStatus, passed: true },
+  tenant_a_to_tenant_b: { expected: "deny", observed_status: crossStatus, passed: true }
+}, null, 2));`;
+ async function copyVerificationTest(){try{await navigator.clipboard.writeText(verificationTestScript);setTestCopied(true)}catch{setTestCopied(false)}}
  if(result) return <div className="resource-page"><Link className="back-link" to="/app"><ArrowLeft size={16}/> Command Center</Link><div className="page-heading"><div><span className="eyebrow">{config.eyebrow}</span><h1>{config.kind==="api-key"?"API key created":config.kind==="webhook"?"Webhook created":config.kind==="support"?"Support request sent":config.kind==="verification"?"Verification record saved":"Operation completed"}</h1><p>{config.kind==="verification"?"The control plane saved the status and evidence you submitted. It did not execute the isolation test.":"The control plane accepted the request and returned the created resource."}</p></div></div><section className="surface success-panel"><CheckCircle2 size={28}/><h2>{config.kind==="support"?"Support request sent successfully.":config.kind==="verification"?"Verification record saved.":"Created successfully."}</h2><p>{String(result.message??(config.kind==="verification"?"Open Verification evidence to review the saved record.":"The resource is now available in the workspace."))}</p>{secret&&<div className="secret-reveal"><span>{secretConfirmed?"Secret hidden after confirmation":"Save this secret now. It cannot be retrieved again after you confirm."}</span><code>{secretConfirmed?maskedSecret:secret}</code>{!secretConfirmed&&<><button type="button" className={secretCopied?"is-copied":""} onClick={()=>void copySecret()} aria-label={secretCopied?`${secretLabel} copied to clipboard`:`Copy ${secretLabel}`}>{secretCopied?<CheckCircle2 size={15}/>:<Copy size={15} />}{secretCopied?"Copied!":"Copy"}</button>{config.kind==="api-key"&&<button type="button" className="secondary-action" disabled={!secretCopied&&!copyError} onClick={()=>setSecretConfirmed(true)}>I have copied it</button>}</>}{secretCopied&&!secretConfirmed&&<div className="secret-copy-confirmation" role="status" aria-live="polite"><CheckCircle2 size={15}/> {secretLabel} copied to clipboard successfully.</div>}{copyError&&!secretConfirmed&&<span role="alert">{copyError}</span>}</div>}{secretConfirmed&&config.kind==="api-key"&&<p role="status">The full API key is now hidden. This page will not reveal it again.</p>}<div className="context-next"><button className="primary-action" disabled={config.kind==="api-key"&&!!secret&&!secretConfirmed} onClick={()=>navigate(config.kind==="api-key"?"/app/developer/api-keys":config.kind==="webhook"?"/app/developer/webhooks":pathname.replace("/new",""))}>Open resource</button><button className="secondary-action" disabled={config.kind==="api-key"&&!!secret&&!secretConfirmed} onClick={createAnother}>Create another</button></div></section></div>;
  const field=(label:string,key:string,placeholder:string,opts?:{type?:string})=><label className="action-field"><span>{label}</span><input type={opts?.type??"text"} value={form[key]??""} onChange={e=>set(key,e.target.value)} placeholder={placeholder} required /></label>;
  return <div className="resource-page"><Link className="back-link" to="/app"><ArrowLeft size={16}/> Command Center</Link><div className="page-heading"><div><span className="eyebrow">{config.eyebrow}</span><h1>{config.title}</h1><p>{config.description}</p></div></div>
@@ -95,6 +127,10 @@ export function ActionPage(){
    <li><strong>Submit the evidence below.</strong><span>Select Tenant A in the dropdown to associate this record with that tenant. Choose Pass only when the required checks actually passed; use Review when you have not run them yet.</span></li>
   </ol>
   <div className="verification-guide-code"><div className="context-code-toolbar"><span>Example evidence JSON — replace with your real test results</span><button type="button" className="console-refresh-button" onClick={()=>void copyVerificationEvidence()}><Copy size={14}/>{guideCopied?"Copied":"Copy JSON"}</button></div><pre className="context-code">{verificationEvidenceExample}</pre><p>This JSON is a record of results, not executable test code. The names and outcomes above are examples; replace them with checks you actually performed.</p></div>
+  <div className="verification-guide-code"><div className="context-code-toolbar"><span>Runnable Node.js HTTP test template (Node.js 22+)</span><button type="button" className="console-refresh-button" onClick={()=>void copyVerificationTest()}><Copy size={14}/>{testCopied?"Copied":"Copy test script"}</button></div><pre className="context-code">{verificationTestScript}</pre><p>Save this as verify-tenant-isolation.mjs in your application project. It assumes the token belongs to a Tenant A test user and that the two URLs identify an A-owned record and a B-owned record. Set the URLs to your real protected application endpoints; if your app uses a tenant-context header, add its documented header to the script. This template does not call the Agata verification-record endpoint.</p><div className="context-code-toolbar"><span>PowerShell — set your test values, then run the script</span></div><pre className="context-code">{String.raw`$env:AGATA_TEST_TENANT_A_TOKEN = "<tenant-A-test-token>"
+$env:AGATA_TEST_TENANT_A_OWN_URL = "https://your-app.example/api/records/<tenant-A-record-id>"
+$env:AGATA_TEST_TENANT_B_RECORD_URL = "https://your-app.example/api/records/<tenant-B-record-id>"
+node .\verify-tenant-isolation.mjs`}</pre></div>
   <div className="verification-guide-next"><Link to="/app/tenants">Open tenant registry <ArrowUpRight size={14}/></Link><Link to="/app/verification">Review verification records <ArrowUpRight size={14}/></Link><Link to="/app/audit">Inspect audit events <ArrowUpRight size={14}/></Link></div>
  </section>}
  <section className="surface action-card">{error&&<div className="console-inline-error">{error}</div>}<form onSubmit={submit} className="action-form">
