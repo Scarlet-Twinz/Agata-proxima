@@ -32,6 +32,7 @@ export function Home() {
             <Link to="/signup" className="agata-button agata-button-primary">Start building <ArrowRight size={17}/></Link>
             <Link to="/product" className="agata-button agata-button-secondary">Explore Proxima</Link>
             <Link to="/docs/getting-started" className="agata-button agata-button-secondary">Read the docs</Link>
+            <Link to="/downloads" className="agata-button agata-button-secondary">Download starter kit</Link>
           </div>
           <div className="home-proof-links"><Link to="/security">Security model <ChevronRight size={14}/></Link><Link to="/trust">Trust center <ChevronRight size={14}/></Link><Link to="/status">Service status <ChevronRight size={14}/></Link></div>
         </div>
