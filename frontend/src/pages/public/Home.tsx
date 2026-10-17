@@ -73,7 +73,7 @@ export function Home() {
       <div className="agata-container">
         <div className="public-section-header"><div className="public-eyebrow">Developer experience</div><h2>Developer guides for APIs, webhooks and integrations.</h2><p>Explore authentication, API requests, webhook delivery, SDK implementation, CLI workflows, Terraform provider requirements and integration recipes for your stack.</p></div>
         <div className="home-developer-grid">{developerAreas.map(([title,text,to])=><Link key={title} to={to}><span className="home-dev-icon">{title==="Webhooks"?<Webhook size={18}/>:title==="API reference"?<Database size={18}/>:title==="Events and audit"?<ShieldCheck size={18}/>:<Terminal size={18}/>}</span><span><strong>{title}</strong><small>{text}</small></span><ArrowRight size={15}/></Link>)}</div>
-        <div className="home-doc-strip"><div><strong>Need the complete engineering reference?</strong><span>Open the documentation tree, then drill into a specific concept without losing the navigation context.</span></div><Link to="/docs" className="agata-button agata-button-primary">Open documentation <ArrowRight size={16}/></Link></div>
+        <div className="home-doc-strip"><div><strong>Need the complete engineering reference?</strong><span>Open the documentation tree, then drill into a specific concept without losing the navigation context.</span></div><div className="public-hero-actions"><Link to="/docs" className="agata-button agata-button-primary">Open documentation <ArrowRight size={16}/></Link><Link to="/developers/downloads" className="agata-button agata-button-secondary">Download starter kit <ArrowRight size={16}/></Link></div></div>
       </div>
     </section>
 
@@ -115,7 +115,7 @@ export function Home() {
     </section>
 
     <section className="public-section public-section-dark">
-      <div className="agata-container home-final-cta"><div><div className="public-eyebrow">Ready to inspect the platform?</div><h2>Understand the model. Configure a test environment. Verify the boundary.</h2><p>Follow the step-by-step guide, use controlled test tenants and retain the evidence from the environment you actually tested.</p></div><div className="public-hero-actions"><Link to="/docs/getting-started" className="agata-button agata-button-secondary">Getting started <ArrowRight size={16}/></Link><Link to="/signup" className="agata-button agata-button-primary">Create workspace <ArrowRight size={16}/></Link></div></div>
+      <div className="agata-container home-final-cta"><div><div className="public-eyebrow">Ready to inspect the platform?</div><h2>Understand the model. Configure a test environment. Verify the boundary.</h2><p>Follow the step-by-step guide, use controlled test tenants and retain the evidence from the environment you actually tested.</p></div><div className="public-hero-actions"><Link to="/docs/getting-started" className="agata-button agata-button-secondary">Getting started <ArrowRight size={16}/></Link><Link to="/developers/downloads" className="agata-button agata-button-secondary">Download starter kit <ArrowRight size={16}/></Link><Link to="/signup" className="agata-button agata-button-primary">Create workspace <ArrowRight size={16}/></Link></div></div>
     </section>
   </div>;
 }
