@@ -13,18 +13,18 @@ trap 'rm -f "$COOKIE_JAR"' EXIT
 
 curl -fsS "${BASE_URL}/healthz" >/dev/null
 
-python -c 'import json,os; print(json.dumps({"email":os.environ["PROXIMA_SMOKE_EMAIL"],"password":os.environ["PROXIMA_SMOKE_PASSWORD"],"remember_me":False}))' |
+python3 -c 'import json,os; print(json.dumps({"email":os.environ["PROXIMA_SMOKE_EMAIL"],"password":os.environ["PROXIMA_SMOKE_PASSWORD"],"remember_me":False}))' |
   curl -fsS -c "$COOKIE_JAR" -H 'content-type: application/json' --data-binary @- "${BASE_URL}/api/v1/auth/login" >/dev/null
 SESSION="$(curl -fsS -b "$COOKIE_JAR" "${BASE_URL}/api/v1/session")"
-python -c 'import json,sys; data=json.load(sys.stdin); assert data.get("authenticated") is True, "session is not authenticated"' <<<"$SESSION"
+python3 -c 'import json,sys; data=json.load(sys.stdin); assert data.get("authenticated") is True, "session is not authenticated"' <<<"$SESSION"
 
-CSRF="$(python -c 'import json,sys; print(json.load(sys.stdin)["csrf_token"])' <<<"$SESSION")"
-ORG_ID="$(python -c 'import json,sys; print(json.load(sys.stdin)["organization_id"])' <<<"$SESSION")"
+CSRF="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["csrf_token"])' <<<"$SESSION")"
+ORG_ID="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["organization_id"])' <<<"$SESSION")"
 SLUG="smoke-tenant-$(date +%s)-$$"
 
 curl -fsS -b "$COOKIE_JAR" "${BASE_URL}/api/v1/platform/status" >/dev/null
 
-TENANT_PAYLOAD="$(python -c 'import json,sys; print(json.dumps({"organization_id":sys.argv[1],"name":"Smoke tenant","slug":sys.argv[2],"isolation_mode":"enforced-proxy"}))' "$ORG_ID" "$SLUG")"
+TENANT_PAYLOAD="$(python3 -c 'import json,sys; print(json.dumps({"organization_id":sys.argv[1],"name":"Smoke tenant","slug":sys.argv[2],"isolation_mode":"enforced-proxy"}))' "$ORG_ID" "$SLUG")"
 curl -fsS -b "$COOKIE_JAR" -H "x-csrf-token: ${CSRF}" -H 'content-type: application/json' --data "$TENANT_PAYLOAD" "${BASE_URL}/api/v1/tenants" >/dev/null
 
 echo "Agata Proxima Control Plane smoke test: PASS"
