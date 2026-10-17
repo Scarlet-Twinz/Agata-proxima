@@ -1956,3 +1956,20 @@ a {
 .webhook-guide-code .context-code { margin:8px 0 0; overflow:auto; white-space:pre; }
 .webhook-guide-note { padding-top:12px; border-top:1px solid var(--console-border, var(--agata-border)); }
 @media (max-width:800px) { .webhook-guide-grid { grid-template-columns:1fr; } .webhook-guide { padding:16px; } }
+
+
+/* Developer environment registry */
+.environment-manager{display:grid;gap:1rem}
+.environment-boundary-note{padding:1.25rem 1.4rem;border:1px solid var(--line,#263b4a);border-radius:1rem;background:linear-gradient(135deg,rgba(36,111,160,.12),rgba(7,17,26,.7))}
+.environment-boundary-note h2{margin:.45rem 0 .65rem;font-size:1.1rem}
+.environment-boundary-note p{max-width:78ch;color:var(--muted,#a6b5c0);line-height:1.65;margin:.45rem 0}
+.environment-create-form,.environment-edit-form{display:grid;gap:.9rem}
+.environment-create-form>div:first-child h2{margin:.35rem 0}
+.environment-create-form>label,.environment-edit-form>label{display:grid;gap:.4rem;font-weight:600}
+.environment-create-form input,.environment-create-form textarea,.environment-edit-form input,.environment-edit-form textarea{width:100%;min-width:0;border:1px solid var(--line,#2a3c4a);border-radius:.65rem;background:rgba(3,10,16,.75);color:inherit;padding:.75rem .85rem;font:inherit}
+.environment-create-form small{font-weight:400;color:var(--muted,#a6b5c0)}
+.environment-record-list{display:grid;gap:.85rem}
+.environment-record-card{padding:1rem 1.15rem;display:grid;gap:.8rem}
+.environment-record-card>p{margin:0;color:var(--muted,#a6b5c0);line-height:1.55}
+.environment-record-card .webhook-endpoint-meta{font-size:.85rem}
+.environment-record-card .environment-edit-form{width:100%}
