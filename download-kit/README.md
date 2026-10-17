@@ -1,6 +1,6 @@
 # Agata Proxima Integration Starter Kit
 
-This integration kit contains a server-side JavaScript API client, a read-only Node.js CLI, request examples and integration templates for the Agata Proxima Control Plane. The JavaScript client and CLI run from this source bundle; they are not a published npm SDK or a precompiled standalone binary. A Terraform provider and hosted ChatGPT/MCP service are not included.
+This integration kit contains a server-side JavaScript API client, a Node.js CLI, request examples and integration templates for the Agata Proxima Control Plane. The client source is also suitable for packaging as an npm SDK; the CLI is installable from this package source, but it is not a precompiled standalone binary. A Terraform provider and hosted ChatGPT/MCP service are not included.
 
 ## Requirements
 
