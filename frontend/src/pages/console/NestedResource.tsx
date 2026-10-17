@@ -93,10 +93,10 @@ const developerDocs: Record<string,{title:string;intro:string;sections:{title:st
   },
   "/app/developer/terraform": {
     title:"Terraform",
-    intro:"Infrastructure-as-code should make Proxima configuration reviewable, repeatable and auditable.",
+    intro:"Use reviewed, repeatable infrastructure workflows while preserving organization scope and least-privilege access.",
     sections:[
-      {title:"Provider direction",body:"The future provider should map explicit Proxima resources rather than becoming a generic database configuration wrapper."},
-      {title:"Resource candidates",body:"These are the initial resource candidates for the provider.",code:"agata_tenant\nagata_policy\nagata_node\nagata_deployment\nagata_webhook"},
+      {title:"Supported automation path",body:"Use the documented HTTP API from an existing deployment pipeline and keep credentials in the CI secret store. Protect Terraform state and plan output as sensitive data."},
+      {title:"Provider resource model",body:"A provider implementation maps explicit resource lifecycles to the API, including create, read, update, import, drift detection and safe deletion. Validate organization isolation and permission denial in its acceptance suite.",code:"agata_tenant\nagata_policy\nagata_node\nagata_deployment\nagata_webhook"},
     ],
   },
   "/app/developer/api-reference": {
@@ -118,10 +118,10 @@ const developerDocs: Record<string,{title:string;intro:string;sections:{title:st
   },
   "/app/settings/identity": {
     title:"Enterprise identity",
-    intro:"Configure Microsoft Entra/OIDC when the production identity-provider contract is ready.",
+    intro:"Connect Microsoft Entra through the organization's OpenID Connect configuration and approved callback URL.",
     sections:[
-      {title:"Connection state",body:"The backend has issuer, client and organization mapping support. A real public callback, provider registration and production credentials are still required before this can be marked live."},
-      {title:"JIT provisioning",body:"Just-in-time provisioning can map an accepted enterprise identity into the organization boundary according to the configured policy."},
+      {title:"Required configuration",body:"Register the public callback URL with Microsoft Entra, configure the issuer, client ID and client secret in the deployment environment, and validate the organization slug mapping. The sign-in flow checks the organization's provider configuration before redirecting to Microsoft."},
+      {title:"Organization access",body:"Map the authenticated identity to an existing organization membership or an explicitly approved provisioning policy. Verify both successful sign-in and denied access for an identity without the required organization access."},
     ],
   },
   "/app/settings/security": {
@@ -134,13 +134,13 @@ const developerDocs: Record<string,{title:string;intro:string;sections:{title:st
   },
   "/app/settings/environments": {
     title:"Environments",
-    intro:"Keep environment state explicit as production operations expand.",
-    sections:[{title:"Current environment",body:"Production is the active local control-plane environment. Environment-aware node and deployment records are already part of the backend contract."}],
+    intro:"Review the environment assignments used by node registration and deployment operations.",
+    sections:[{title:"Active environment",body:"Production is the default environment for new node registrations. Node and deployment records retain environment labels so operators can verify the target before rollout."}],
   },
   "/app/settings/notifications": {
     title:"Notifications",
-    intro:"Notification preferences belong in one place so operational and security signals do not become scattered across resource pages.",
-    sections:[{title:"Current delivery boundary",body:"Transactional verification, reset and invitation emails are delivered through the configured Resend integration. Operational notification preferences can be expanded here without changing the security boundary."}],
+    intro:"Manage notification preferences and understand which messages are delivered through the configured email service.",
+    sections:[{title:"Delivery and preferences",body:"Account Settings stores security, product and billing notification preferences. Transactional verification, password-reset and organization-invitation messages use the configured Resend templates; delivery failures are recorded by the Control Plane for operations review."}],
   },
 };
 
