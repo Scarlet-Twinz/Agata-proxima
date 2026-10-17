@@ -5,7 +5,7 @@ export function Company() {
   return <PublicPage eyebrow="About Agata Proxima" title="Infrastructure for trustworthy multi-tenant software." description="Agata Proxima helps SaaS teams manage tenant boundaries through explicit control-plane resources, runtime enforcement, verification and audit evidence.">
     <section className="public-content"><div className="agata-container">
       <article className="public-prose">
-        <h2>The problem</h2>
+        <h2>The problem we are focused on</h2>
         <p>Multi-tenant software allows many customer organizations to use one application and shared infrastructure. That model can be efficient, but it creates a serious responsibility: every protected request must stay within the right customer's boundary. A missing filter, confused identity, overly broad database privilege or incorrect tenant context can turn a small defect into a cross-customer data exposure.</p>
         <p>Agata Proxima brings that boundary into the infrastructure model. The control plane manages the resources and operational intent around tenant isolation; the protected request path connects trusted identity and tenant context to enforcement and PostgreSQL controls. Verification and audit information help teams review configuration, tests and operational changes.</p>
         <h2>What teams use Agata Proxima to do</h2>
@@ -24,6 +24,16 @@ export function Company() {
           <li>Your identity provider continues to authenticate users and services.</li>
           <li>Verification should exercise the actual application-to-database path.</li>
           <li>Formal certifications and contractual service commitments are separate assurance artifacts.</li>
+        </ul>
+        <h2>What Agata Proxima is not</h2>
+        <p>Agata Proxima does not replace your identity provider, PostgreSQL, database permissions, row-level security or application authorization. It adds an explicit tenant-isolation operating model around those controls. A configured resource or dashboard status is not a substitute for testing the actual protected request path.</p>
+        <h2>How we measure progress</h2>
+        <ul>
+          <li>Protected tenant-local requests succeed when policy allows them.</li>
+          <li>Cross-tenant reads and writes are rejected and leave prohibited data unchanged.</li>
+          <li>Verification records identify the environment, checks and observed outcomes.</li>
+          <li>Administrative changes and credential lifecycle events are traceable in organization-scoped audit history.</li>
+          <li>Engineering changes pass automated checks and environment-level acceptance before release.</li>
         </ul>
         <h2>How we approach engineering</h2>
         <p>We build around explicit contracts, least-privilege access, repeatable tests and inspectable operational evidence. Engineering changes are evaluated through code review, automated checks and environment-level acceptance.</p>
