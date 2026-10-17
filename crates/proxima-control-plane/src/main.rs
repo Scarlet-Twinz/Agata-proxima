@@ -864,7 +864,9 @@ async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Respo
     .await;
 
     let response = match create_session(&s.db, user_id, organization_id, input.remember_me).await {
-        Ok((token, csrf)) => auth_response(&s, user_id, organization_id, csrf, token, input.remember_me),
+        Ok((token, csrf)) => {
+            auth_response(&s, user_id, organization_id, csrf, token, input.remember_me)
+        }
         Err(e) => return db_error(e),
     };
 
@@ -4153,7 +4155,11 @@ async fn create_session(
     .bind(organization_id)
     .bind(token_hash(&token))
     .bind(&csrf)
-    .bind(if remember_me { 30 * 24 * 60 * 60_i64 } else { 12 * 60 * 60_i64 })
+    .bind(if remember_me {
+        30 * 24 * 60 * 60_i64
+    } else {
+        12 * 60 * 60_i64
+    })
     .execute(db)
     .await?;
     Ok((token, csrf))
@@ -4331,7 +4337,11 @@ fn auth_response(
     remember_me: bool,
 ) -> Response {
     let secure = if s.secure_cookie { "; Secure" } else { "" };
-    let cookie_max_age = if remember_me { 30 * 24 * 60 * 60_i64 } else { 12 * 60 * 60_i64 };
+    let cookie_max_age = if remember_me {
+        30 * 24 * 60 * 60_i64
+    } else {
+        12 * 60 * 60_i64
+    };
     let cookie = format!(
         "proxima_session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={cookie_max_age}{secure}"
     );
