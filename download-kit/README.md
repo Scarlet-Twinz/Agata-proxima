@@ -24,7 +24,7 @@ Do not put `AGATA_API_KEY` in a browser variable, commit it to Git, or include i
 - `node/example.mjs`: health, plan catalogue and tenant-list example.
 - `cli/agata.ps1`: PowerShell API smoke commands.
 - `cli/agata.sh`: Bash API smoke commands.
-- `webhooks/receiver-example.mjs`: raw-body HMAC-SHA256 signature verification example.
+- `webhooks/receiver-example.mjs`: raw-body HMAC-SHA256 signature verification, timestamp checks, a 1 MiB request limit and process-local duplicate suppression. Its in-memory deduplication resets on restart; use a durable unique delivery record before production business processing.
 - `integrations/supabase-edge-function.example.ts` and `integrations/supabase-membership.sql`: authenticated Edge Function with a trusted organization-membership check and the matching RLS-protected membership table.
 - `integrations/firebase-admin.example.ts` and `integrations/firebase-membership.rules`: Firebase ID-token verification, trusted organization-membership lookup and a server-side Agata API request.
 - `terraform/README.md`: provider design and acceptance checklist; no Terraform provider binary is included.
