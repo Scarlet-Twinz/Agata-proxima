@@ -45,6 +45,8 @@ struct AuthContext {
 struct AuthInput {
     email: String,
     password: String,
+    #[serde(default)]
+    remember_me: bool,
     name: Option<String>,
     organization: Option<String>,
 }
@@ -861,8 +863,9 @@ async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Respo
     )
     .await;
 
-    let response = match create_session(&s.db, user_id, organization_id).await {
-        Ok((token, csrf)) => auth_response(&s, user_id, organization_id, csrf, token),
+    let remember_me = input.remember_me;
+    let response = match create_session(&s.db, user_id, organization_id, remember_me).await {
+        Ok((token, csrf)) => auth_response(&s, user_id, organization_id, csrf, token, remember_me),
         Err(e) => return db_error(e),
     };
 
@@ -4138,18 +4141,20 @@ async fn create_session(
     db: &PgPool,
     user_id: Uuid,
     organization_id: Uuid,
+    remember_me: bool,
 ) -> Result<(String, String), sqlx::Error> {
     let token = format!("{}.{}", Uuid::new_v4(), Uuid::new_v4());
     let csrf = Uuid::new_v4().to_string();
     sqlx::query(
         "INSERT INTO sessions(id,user_id,organization_id,token_hash,csrf_token,expires_at)
-         VALUES($1,$2,$3,$4,$5,now()+interval '12 hours')",
+         VALUES($1,$2,$3,$4,$5,CASE WHEN $6 THEN now()+interval '30 days' ELSE now()+interval '12 hours' END)",
     )
     .bind(Uuid::new_v4())
     .bind(user_id)
     .bind(organization_id)
     .bind(token_hash(&token))
     .bind(&csrf)
+    .bind(remember_me)
     .execute(db)
     .await?;
     Ok((token, csrf))
@@ -4324,10 +4329,12 @@ fn auth_response(
     organization: Uuid,
     csrf: String,
     token: String,
+    remember_me: bool,
 ) -> Response {
     let secure = if s.secure_cookie { "; Secure" } else { "" };
+    let max_age = if remember_me { 2_592_000 } else { 43_200 };
     let cookie = format!(
-        "proxima_session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=43200{secure}"
+        "proxima_session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={max_age}{secure}"
     );
     let mut headers = HeaderMap::new();
     headers.insert(
