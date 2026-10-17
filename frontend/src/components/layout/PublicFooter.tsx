@@ -89,9 +89,6 @@ export function PublicFooter() {
                 ),
               )}
             </div>
-            <p className="public-social-note">
-              GitHub is linked. LinkedIn, Twitter and Hacker News will be enabled when their official profile URLs are added.
-            </p>
           </div>
 
           <div>
