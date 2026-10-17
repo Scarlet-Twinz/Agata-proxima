@@ -1109,54 +1109,103 @@ async fn revoke_api_key(
     }
 }
 
-async fn developer_event_catalog(
-    State(s): State<AppState>,
-    headers: HeaderMap,
-) -> Response {
+async fn developer_event_catalog(State(s): State<AppState>, headers: HeaderMap) -> Response {
     let _ctx = match authenticate(&s, &headers).await {
         Ok(v) => v,
         Err(c) => return c.into_response(),
     };
     let events = [
-        ("attestation.ingested", "A signed engine attestation was ingested."),
-        ("auth.email_change.requested", "A user requested an email change."),
+        (
+            "attestation.ingested",
+            "A signed engine attestation was ingested.",
+        ),
+        (
+            "auth.email_change.requested",
+            "A user requested an email change.",
+        ),
         ("auth.email_changed", "A user email change was confirmed."),
         ("auth.login", "A user signed in."),
         ("auth.password.changed", "A user changed their password."),
         ("deployment.created", "A deployment record was created."),
         ("developer.api_key.created", "An API key was created."),
         ("developer.api_key.revoked", "An API key was revoked."),
-        ("developer.environment.created", "An environment stage was created."),
-        ("developer.environment.updated", "An environment stage was updated."),
-        ("developer.environment.deleted", "An environment stage was deleted."),
-        ("developer.service_account.created", "A machine service account was created."),
-        ("developer.service_account.updated", "A machine service account was updated."),
-        ("developer.service_account.disabled", "A machine service account was disabled."),
-        ("developer.service_account.deleted", "A service account was deleted and linked keys were revoked."),
-        ("developer.webhook.created", "A webhook subscription was created."),
-        ("developer.webhook.deleted", "A webhook subscription was deleted."),
-        ("developer.webhook.delivery.retried", "A webhook delivery was queued for retry."),
-        ("developer.webhook.secret.rotated", "A webhook signing secret was rotated."),
+        (
+            "developer.environment.created",
+            "An environment stage was created.",
+        ),
+        (
+            "developer.environment.updated",
+            "An environment stage was updated.",
+        ),
+        (
+            "developer.environment.deleted",
+            "An environment stage was deleted.",
+        ),
+        (
+            "developer.service_account.created",
+            "A machine service account was created.",
+        ),
+        (
+            "developer.service_account.updated",
+            "A machine service account was updated.",
+        ),
+        (
+            "developer.service_account.disabled",
+            "A machine service account was disabled.",
+        ),
+        (
+            "developer.service_account.deleted",
+            "A service account was deleted and linked keys were revoked.",
+        ),
+        (
+            "developer.webhook.created",
+            "A webhook subscription was created.",
+        ),
+        (
+            "developer.webhook.deleted",
+            "A webhook subscription was deleted.",
+        ),
+        (
+            "developer.webhook.delivery.retried",
+            "A webhook delivery was queued for retry.",
+        ),
+        (
+            "developer.webhook.secret.rotated",
+            "A webhook signing secret was rotated.",
+        ),
         ("node.created", "A node was registered."),
         ("node.enrollment.started", "A node enrollment flow started."),
-        ("node.enrollment_token.rotated", "A node enrollment token was rotated."),
+        (
+            "node.enrollment_token.rotated",
+            "A node enrollment token was rotated.",
+        ),
         ("organization.created", "An organization was created."),
-        ("organization.invite.revoked", "An organization invitation was revoked."),
+        (
+            "organization.invite.revoked",
+            "An organization invitation was revoked.",
+        ),
         ("organization.switched", "A user switched organizations."),
-        ("organization.updated", "Organization settings were updated."),
+        (
+            "organization.updated",
+            "Organization settings were updated.",
+        ),
         ("policy.created", "A policy record was created."),
         ("security.breaker.tripped", "A security breaker tripped."),
         ("settings.updated", "User settings were updated."),
         ("support.requested", "A support request was submitted."),
         ("tenant.created", "A tenant was created."),
-        ("verification.recorded", "A verification result was recorded."),
+        (
+            "verification.recorded",
+            "A verification result was recorded.",
+        ),
     ];
     Json(json!({
         "events": events.iter().map(|(event_type, description)| json!({
             "type": event_type,
             "description": description,
         })).collect::<Vec<_>>()
-    })).into_response()
+    }))
+    .into_response()
 }
 
 async fn service_accounts(State(s): State<AppState>, headers: HeaderMap) -> Response {
@@ -1391,10 +1440,7 @@ async fn delete_service_account(
     Json(json!({"ok":true,"message":"Service account deleted; all associated API keys were revoked."})).into_response()
 }
 
-async fn webhook_configuration(
-    State(s): State<AppState>,
-    headers: HeaderMap,
-) -> Response {
+async fn webhook_configuration(State(s): State<AppState>, headers: HeaderMap) -> Response {
     let _ctx = match authenticate(&s, &headers).await {
         Ok(v) => v,
         Err(c) => return c.into_response(),
