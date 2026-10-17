@@ -686,6 +686,7 @@ function ApiKeyCreatePage(){
   </div>;
 }
 
+type WebhookEventCatalogItem = {type:string;description:string};
 type WebhookRecord = {
   id:string; name:string; endpoint_url:string; events:string[]; enabled:boolean;
   signing_secret_hint?:string; created_at:string; updated_at:string;
@@ -704,6 +705,7 @@ function WebhooksManager() {
   const [name,setName]=useState("");
   const [endpoint,setEndpoint]=useState("");
   const [events,setEvents]=useState("*");
+  const [eventCatalog,setEventCatalog]=useState<WebhookEventCatalogItem[]>([]);
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState("");
   const [error,setError]=useState("");
@@ -718,6 +720,16 @@ function WebhooksManager() {
     finally{setLoading(false);}
   },[]);
   useEffect(()=>{void load();},[load]);
+
+  function addEventType(type:string){
+    setEvents(current=>{
+      let selected=current.split(",").map(v=>v.trim()).filter(Boolean);
+      if(selected.includes("*")) selected=[];
+      if(selected.includes(type)) return current;
+      selected=[...selected,type];
+      return selected.join(",");
+    });
+  }
 
   async function createWebhook(e:FormEvent<HTMLFormElement>){
     e.preventDefault(); setBusy("create"); setError(""); setNotice(""); setOneTimeSecret("");
@@ -790,6 +802,7 @@ X-Agata-Signature: t=&lt;unix-seconds&gt;,v1=&lt;hex-hmac-sha256&gt;</pre></div>
       <label>Endpoint name<input value={name} onChange={e=>setName(e.target.value)} required maxLength={120} placeholder="Production event receiver"/></label>
       <label>HTTPS endpoint URL<input value={endpoint} onChange={e=>setEndpoint(e.target.value)} type="url" required placeholder="https://example.com/agata/events"/></label>
       <label>Event types<input value={events} onChange={e=>setEvents(e.target.value)} required placeholder="* or developer.api_key.created,tenant.created"/><small>Enter exact audit action names separated by commas, or * to receive all audit events.</small></label>
+       <details className="webhook-event-catalog"><summary>Browse supported event types ({eventCatalog.length})</summary><div className="webhook-event-catalog-list">{eventCatalog.map(event=><button type="button" key={event.type} title={event.description} onClick={()=>addEventType(event.type)}><code>{event.type}</code><span>{event.description}</span></button>)}</div></details>
       <button className="primary-action" type="submit" disabled={busy==="create"}>{busy==="create"?"Creating…":"Create endpoint"}</button>
     </form>
     <div className="webhook-endpoint-list">
