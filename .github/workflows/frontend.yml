@@ -30,6 +30,11 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install
         run: npm ci
+      - name: Validate public content and dashboard routes
+        working-directory: .
+        run: |
+          node scripts/verify-public-content.mjs
+          node scripts/verify-public-dashboard.mjs
       - name: Validate Vercel production routing
         run: |
           node --input-type=module -e '
