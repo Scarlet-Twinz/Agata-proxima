@@ -16,6 +16,7 @@ import { UsageGuide } from "../pages/public/UsageGuide";
 import { Changelog } from "../pages/public/Changelog";
 import { Status } from "../pages/public/Status";
 import { FAQ } from "../pages/public/FAQ";
+import { Downloads } from "../pages/public/Downloads";
 import { Support } from "../pages/public/Support";
 import { Contact } from "../pages/public/Contact";
 import { Legal } from "../pages/public/Legal";
@@ -134,6 +135,7 @@ export const router = createBrowserRouter([
       { path: "/changelog", element: <Changelog /> },
       { path: "/status", element: <Status /> },
       { path: "/faq", element: <FAQ /> },
+      { path: "/downloads", element: <Downloads /> },
       { path: "/support", element: <Support /> },
       { path: "/contact", element: <Contact /> },
       { path: "/support/request", element: <SupportRequest /> },

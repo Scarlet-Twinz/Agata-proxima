@@ -9,11 +9,11 @@ const resources=[
 ["API reference","Authenticated control-plane contracts and the OpenAPI surface.","/docs/api-reference"],
 ["Security","The enforcement boundary, database controls and verification model.","/docs/security"],
 ["Operations","Desired state, observed state, verification and audit workflows.","/docs/operations"],
-["Troubleshooting","A systematic path through authentication, policy, fleet and integration failures.","/docs/troubleshooting"],
+["Troubleshooting","Docker Desktop, Compose, database, HTTP, authentication, policy, fleet and integration diagnostics.","/docs/troubleshooting"],
 ["Verification","Expected allows, expected blocks and inspectable evidence.","/docs/verification"],
 ];
 
-const side=[["Documentation home","/docs"],["Usage guide","/docs/usage"],["Getting started","/docs/getting-started"],["Core concepts","/docs/core-concepts"],["API reference","/docs/api-reference"],["Security","/docs/security"],["Operations","/docs/operations"],["Troubleshooting","/docs/troubleshooting"],["Verification","/docs/verification"]];
+const side=[["Documentation home","/docs"],["Usage guide","/docs/usage"],["Getting started","/docs/getting-started"],["Core concepts","/docs/core-concepts"],["API reference","/docs/api-reference"],["Security","/docs/security"],["Operations","/docs/operations"],["Troubleshooting","/docs/troubleshooting"],["Verification","/docs/verification"],["Downloads & integrations","/downloads"]];
 
 export function Docs(){return <PublicPage eyebrow="Documentation" title="The engineering reference for Agata Proxima." description="A deep documentation tree for architecture, API contracts, operations, security and verification. Every concept has a destination and every destination points to the next useful action."><section className="public-content"><div className="agata-container"><div className="public-detail-layout"><aside className="public-detail-sidebar"><div className="public-detail-sidebar-title">Documentation</div>{side.map(([label,to])=><Link key={to} to={to}>{label}<ChevronRight size={13}/></Link>)}</aside><div><div className="public-prose"><h2>Start with the operating model.</h2><p>Agata Proxima establishes a dedicated boundary between application identity, tenant context and protected PostgreSQL operations. The management layer records intent and evidence; the Proxima Engine remains the runtime authority.</p><pre className="public-code">{`Application identity
         ↓

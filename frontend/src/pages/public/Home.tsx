@@ -32,6 +32,7 @@ export function Home() {
             <Link to="/signup" className="agata-button agata-button-primary">Start building <ArrowRight size={17}/></Link>
             <Link to="/product" className="agata-button agata-button-secondary">Explore Proxima</Link>
             <Link to="/docs/getting-started" className="agata-button agata-button-secondary">Read the docs</Link>
+            <Link to="/downloads" className="agata-button agata-button-secondary">Download starter kit</Link>
           </div>
           <div className="home-proof-links"><Link to="/security">Security model <ChevronRight size={14}/></Link><Link to="/trust">Trust center <ChevronRight size={14}/></Link><Link to="/status">Service status <ChevronRight size={14}/></Link></div>
         </div>
@@ -73,7 +74,7 @@ export function Home() {
       <div className="agata-container">
         <div className="public-section-header"><div className="public-eyebrow">Developer experience</div><h2>Go from documentation to an actual integration workflow.</h2><p>Developer resources have their own navigation, detail pages and operational destinations.</p></div>
         <div className="home-developer-grid">{developerAreas.map(([title,text,to])=><Link key={title} to={to}><span className="home-dev-icon">{title==="Webhooks"?<Webhook size={18}/>:title==="API reference"?<Database size={18}/>:<Terminal size={18}/>}</span><span><strong>{title}</strong><small>{text}</small></span><ArrowRight size={15}/></Link>)}</div>
-        <div className="home-doc-strip"><div><strong>Need the complete engineering reference?</strong><span>Open the documentation tree, then drill into a specific concept without losing the navigation context.</span></div><Link to="/docs" className="agata-button agata-button-primary">Open documentation <ArrowRight size={16}/></Link></div>
+        <div className="home-doc-strip"><div><strong>Need the complete engineering reference?</strong><span>Open the documentation tree, then drill into a specific concept without losing the navigation context.</span></div><div className="public-hero-actions"><Link to="/docs" className="agata-button agata-button-primary">Open documentation <ArrowRight size={16}/></Link><Link to="/downloads" className="agata-button agata-button-secondary">Downloads & integrations <ArrowRight size={16}/></Link></div></div>
       </div>
     </section>
 

@@ -59,6 +59,7 @@ export function PublicFooter() {
             <Link to="/developers">Developer platform</Link>
             <Link to="/developers/quickstart">Quickstart</Link>
             <Link to="/docs">Documentation</Link>
+            <Link to="/downloads">Downloads & integrations</Link>
             <Link to="/developers/webhooks">Webhooks</Link>
             <Link to="/developers/terraform">Terraform</Link>
           </div>
