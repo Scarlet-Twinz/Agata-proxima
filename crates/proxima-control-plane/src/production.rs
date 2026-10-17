@@ -1554,6 +1554,11 @@ pub(crate) async fn reset_password_page(Query(q): Query<VerifyInput>) -> Respons
     // Encode the untrusted query token and escape HTML script delimiters so a
     // crafted query cannot break out of the inline script.
     let token_json = safe_inline_json_string(&q.token);
+    let public_base = env::var("AGATA_PUBLIC_BASE_URL")
+        .unwrap_or_default()
+        .trim_end_matches('/')
+        .to_string();
+    let public_base_json = safe_inline_json_string(&public_base);
     Html(format!(
         r#"<!doctype html>
 <html lang="en">
@@ -1576,7 +1581,9 @@ pub(crate) async fn reset_password_page(Query(q): Query<VerifyInput>) -> Respons
     button {{ width: 100%; min-height: 46px; margin-top: 22px; border: 0; border-radius: 10px; background: #3b82f6; color: white; font: inherit; font-weight: 800; cursor: pointer; }}
     button:disabled {{ opacity: .65; cursor: wait; }}
     #message {{ min-height: 24px; overflow-wrap: anywhere; }}
-    #signin {{ display: inline-block; margin-top: 12px; color: #8ec3ff; font-weight: 700; }}
+    .actions {{ display: flex; flex-wrap: wrap; gap: 14px; margin-top: 14px; }}
+    .actions a {{ color: #8ec3ff; font-weight: 700; }}
+    .actions a[hidden] {{ display: none; }}
     .hint {{ font-size: 12px; }}
   </style>
 </head>
@@ -1593,17 +1600,25 @@ pub(crate) async fn reset_password_page(Query(q): Query<VerifyInput>) -> Respons
       <button id="submit" type="submit">Update password</button>
     </form>
     <p id="message" role="status" aria-live="polite"></p>
-    <a id="signin" href="/login" hidden>Return to sign in</a>
+    <div class="actions">
+      <a id="recovery" href="/recovery">Request a new reset link</a>
+      <a id="signin" href="/login" hidden>Return to sign in</a>
+    </div>
     <p class="hint">Reset links expire after 30 minutes. If this link has expired, request a new one from the sign-in page.</p>
   </main>
   <script>
     const token = {token_json};
+    const publicBase = {public_base_json};
+    const publicOrigin = publicBase || window.location.origin;
+    const recoveryLink = document.getElementById('recovery');
+    recoveryLink.href = publicOrigin + '/recovery';
+    const signIn = document.getElementById('signin');
+    signIn.href = publicOrigin + '/login';
     const form = document.getElementById('reset-form');
     const password = document.getElementById('password');
     const confirmation = document.getElementById('confirmation');
     const button = document.getElementById('submit');
     const message = document.getElementById('message');
-    const signIn = document.getElementById('signin');
 
     if (!token) {{
       form.hidden = true;
@@ -1638,6 +1653,7 @@ pub(crate) async fn reset_password_page(Query(q): Query<VerifyInput>) -> Respons
         }}
         message.textContent = result.message || 'Password updated. Sign in with your new password.';
         form.hidden = true;
+        recoveryLink.hidden = true;
         signIn.hidden = false;
         window.history.replaceState(null, '', window.location.pathname);
       }} catch (error) {{
