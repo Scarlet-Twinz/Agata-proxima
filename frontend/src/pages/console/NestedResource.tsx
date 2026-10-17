@@ -636,6 +636,7 @@ function ApiReferenceExplorer(){
   return <div className="resource-page"><div className="page-heading"><div><span className="eyebrow">DEVELOPER · LIVE SPECIFICATION</span><h1>API reference</h1><p>Endpoint inventory is loaded from the repository's OpenAPI document served by the control plane, not hard-coded into this screen.</p></div><a className="console-refresh-button" href="/api/v1/openapi.json" target="_blank" rel="noreferrer">Open raw OpenAPI JSON</a></div>
     {loading&&<div className="surface empty-state"><strong>Loading OpenAPI specification…</strong></div>}
     {error&&<div className="settings-banner settings-banner--error" role="alert">{error}</div>}
+    {encryptionReady===false&&<div className="settings-banner settings-banner--error" role="alert">{encryptionMessage} <Link to="/developers/webhooks">Read setup instructions</Link>.</div>
     {spec&&<><section className="surface environment-boundary-note"><span className="eyebrow">{spec.info?.title??"OpenAPI"}</span><h2>Version {spec.info?.version??"unknown"} · {operations.length} matching operations</h2><p>{spec.info?.description??"API specification loaded from the running control plane."}</p></section>
       <label className="resource-search"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search method, endpoint or description" aria-label="Search API operations"/></label>
       <div className="environment-record-list">{operations.map((op)=><article className="surface environment-record-card" key={op.method+" "+op.path}><div className="webhook-endpoint-heading"><div><span className="eyebrow">{op.method}</span><h2><code>{op.path}</code></h2></div></div><p><strong>{op.summary??"Endpoint"}</strong></p>{op.description&&<p>{op.description}</p>}<p className="webhook-endpoint-meta">Responses: {Object.entries(op.responses??{}).map(([status,value])=>status+" "+(value.description??"")).join(" · ")||"See API response schema"}</p></article>)}</div>
@@ -706,6 +707,7 @@ function WebhooksManager() {
   const [endpoint,setEndpoint]=useState("");
   const [events,setEvents]=useState("*");
   const [eventCatalog,setEventCatalog]=useState<WebhookEventCatalogItem[]>([]);
+  const [encryptionReady,setEncryptionReady]=useState<boolean|null>(null);const [encryptionMessage,setEncryptionMessage]=useState("");
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState("");
   const [error,setError]=useState("");
@@ -715,7 +717,7 @@ function WebhooksManager() {
 
   const load=useCallback(async()=>{
     setLoading(true); setError("");
-    try { setItems(await api.get<WebhookRecord[]>("/api/v1/developer/webhooks")); }
+    try { setItems(await api.get<WebhookRecord[]>("/api/v1/developer/webhooks")); const catalog=await api.get<{events:WebhookEventCatalogItem[]}>("/api/v1/developer/events/catalog"); setEventCatalog(catalog.events); const status=await api.get<{encryption_key_configured:boolean;message:string}>("/api/v1/developer/webhooks/configuration"); setEncryptionReady(status.encryption_key_configured); setEncryptionMessage(status.message); }
     catch(e){setError(e instanceof Error?e.message:"Unable to load webhook endpoints.");}
     finally{setLoading(false);}
   },[]);
