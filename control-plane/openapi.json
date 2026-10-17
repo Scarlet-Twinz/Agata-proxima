@@ -1762,6 +1762,20 @@
           }
         }
       }
+    },
+    "/api/v1/developer/events/catalog": {
+      "get": {
+        "summary": "List supported webhook event types",
+        "description": "Returns event names emitted by the current audit/event workflows. Subscribe using an exact event name or * for all audit events.",
+        "responses": {
+          "200": {
+            "description": "Supported event type catalogue"
+          },
+          "401": {
+            "description": "Authentication required"
+          }
+        }
+      }
     }
   },
   "components": {
