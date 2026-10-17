@@ -451,6 +451,7 @@ async fn main() -> Result<()> {
         .route("/app", get(app_page))
         .route("/logo.svg", get(logo))
         .route("/docs/openapi.json", get(openapi))
+        .route("/api/v1/openapi.json", get(openapi))
         .route("/healthz", get(healthz))
         .route("/api/v1/health", get(healthz))
         .route("/api/v1/auth/signup", post(signup))
