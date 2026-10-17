@@ -48,18 +48,18 @@ export class AgataClient {
       signal?.removeEventListener("abort", abort);
     }
   }
-  health(options) { return this.request("/api/v1/health", options); }
+  session(options) { return this.request("/api/v1/session", options); }\n  health(options) { return this.request("/api/v1/health", options); }
   listPlans(options) { return this.request("/api/v1/billing/plans", options); }
   listTenants(options) { return this.request("/api/v1/tenants", options); }
-  createTenant(input, options) { return this.request("/api/v1/tenants", { ...options, method: "POST", body: input }); }
+  async organizationScopedInput(input, options) {\n    if (input.organization_id) return input;\n    const context = await this.session(options);\n    if (!context?.organization_id) throw new Error("The authenticated session did not return an organization_id.");\n    return { ...input, organization_id: context.organization_id };\n  }\n  async createTenant(input, options) { return this.request("/api/v1/tenants", { ...options, method: "POST", body: await this.organizationScopedInput(input, options) }); }
   listPolicies(options) { return this.request("/api/v1/policies", options); }
-  createPolicy(input, options) { return this.request("/api/v1/policies", { ...options, method: "POST", body: input }); }
+  async createPolicy(input, options) { return this.request("/api/v1/policies", { ...options, method: "POST", body: await this.organizationScopedInput(input, options) }); }
   listNodes(options) { return this.request("/api/v1/nodes", options); }
-  createNode(input, options) { return this.request("/api/v1/nodes", { ...options, method: "POST", body: input }); }
+  async createNode(input, options) { return this.request("/api/v1/nodes", { ...options, method: "POST", body: await this.organizationScopedInput(input, options) }); }
   listDeployments(options) { return this.request("/api/v1/deployments", options); }
-  createDeployment(input, options) { return this.request("/api/v1/deployments", { ...options, method: "POST", body: input }); }
+  async createDeployment(input, options) { return this.request("/api/v1/deployments", { ...options, method: "POST", body: await this.organizationScopedInput(input, options) }); }
   listVerifications(options) { return this.request("/api/v1/verifications", options); }
-  createVerificationRecord(input, options) { return this.request("/api/v1/verifications", { ...options, method: "POST", body: input }); }
+  async createVerificationRecord(input, options) { return this.request("/api/v1/verifications", { ...options, method: "POST", body: await this.organizationScopedInput(input, options) }); }
   listAuditEvents(options) { return this.request("/api/v1/audit", options); }
   listWebhooks(options) { return this.request("/api/v1/developer/webhooks", options); }
 }
