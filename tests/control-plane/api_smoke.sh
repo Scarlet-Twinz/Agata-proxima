@@ -13,8 +13,8 @@ trap 'rm -f "$COOKIE_JAR"' EXIT
 
 curl -fsS "${BASE_URL}/healthz" >/dev/null
 
-LOGIN_PAYLOAD="$(python -c 'import json,sys; print(json.dumps({"email":sys.argv[1],"password":sys.argv[2],"remember_me":False}))' "$PROXIMA_SMOKE_EMAIL" "$PROXIMA_SMOKE_PASSWORD")"
-curl -fsS -c "$COOKIE_JAR" -H 'content-type: application/json' --data "$LOGIN_PAYLOAD" "${BASE_URL}/api/v1/auth/login" >/dev/null
+python -c 'import json,os; print(json.dumps({"email":os.environ["PROXIMA_SMOKE_EMAIL"],"password":os.environ["PROXIMA_SMOKE_PASSWORD"],"remember_me":False}))' |
+  curl -fsS -c "$COOKIE_JAR" -H 'content-type: application/json' --data-binary @- "${BASE_URL}/api/v1/auth/login" >/dev/null
 SESSION="$(curl -fsS -b "$COOKIE_JAR" "${BASE_URL}/api/v1/session")"
 python -c 'import json,sys; data=json.load(sys.stdin); assert data.get("authenticated") is True, "session is not authenticated"' <<<"$SESSION"
 
