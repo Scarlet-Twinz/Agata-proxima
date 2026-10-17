@@ -48,4 +48,4 @@ docker compose exec control-postgres pg_isready -U proxima_control -d proxima_co
 curl -fsS http://127.0.0.1:8080/api/v1/health
 ```
 
-The Control Plane database is exposed on host port `55443` by default. If logs are empty, inspect `docker compose ps -a` first; a service that never created a container has no logs. See [the usage guide](../docs/usage.md) and [the troubleshooting guide](../frontend/src/pages/public/PublicDetail.tsx) for the complete operating workflow.
+The Control Plane database is exposed on host port `55443` by default. If logs are empty, inspect `docker compose ps -a` first; a service that never created a container has no logs. See [the usage guide](../docs/usage.md) for the complete operating workflow.
