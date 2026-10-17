@@ -79,7 +79,7 @@ export function Deployments() {
 }
 
 export function Verification() {
-  return <ResourceSurface endpoint="/api/v1/verifications" detailBase="/app/verification" createHref="/app/verification/new" createLabel="Record verification" eyebrow="VERIFICATION" title="Verification evidence" description="Review saved test outcomes and evidence. To perform an isolation test, run it through your protected application path first, then record the actual results here." links={[
+  return <ResourceSurface endpoint="/api/v1/verifications" detailBase="/app/verification" createHref="/app/verification/new" createLabel="Record result" eyebrow="VERIFICATION" title="Verification evidence" description="Review saved test outcomes and evidence. To perform an isolation test, run it through your protected application path first, then record the actual results here." links={[
     {label:"Security posture",href:"/app/security"},{label:"Audit",href:"/app/audit"},{label:"Verification documentation",href:"/docs/verification"},
   ]}/>;
 }
