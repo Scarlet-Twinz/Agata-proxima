@@ -3185,6 +3185,24 @@ async fn create_verification(
         return c.into_response();
     }
 
+    let status = input.status.trim().to_ascii_lowercase();
+    if !matches!(status.as_str(), "pass" | "fail" | "review") {
+        return bad("Verification outcome must be pass, fail, or review.");
+    }
+    let Some(evidence_object) = input.evidence.as_object() else {
+        return bad("Verification evidence must be a JSON object with completed test details.");
+    };
+    if evidence_object.is_empty()
+        || input.evidence.get("checks").and_then(Value::as_array).is_some_and(|checks| checks.is_empty())
+    {
+        return bad("Add actual test evidence and at least one completed check before recording a result.");
+    }
+    let mut evidence = input.evidence;
+    if let Some(object) = evidence.as_object_mut() {
+        object.insert("recording_mode".into(), json!("operator_reported"));
+        object.insert("recorded_at".into(), json!(chrono::Utc::now()));
+    }
+
     if input.kind.starts_with("advanced") {
         if let Err(response) =
             production::require_feature(&s.db, ctx.organization_id, "advanced_verification").await
@@ -3224,10 +3242,10 @@ async fn create_verification(
         "INSERT INTO verification_results(id,organization_id,tenant_id,kind,status,evidence,created_by)
          VALUES($1,$2,$3,$4,$5,$6,$7)"
     ).bind(id).bind(ctx.organization_id).bind(input.tenant_id).bind(&input.kind)
-    .bind(&input.status).bind(&input.evidence).bind(ctx.user_id).execute(&s.db).await {
+    .bind(&status).bind(&evidence).bind(ctx.user_id).execute(&s.db).await {
         Ok(_) => {
-            audit(&s.db, ctx.organization_id, ctx.user_id, "verification.recorded", "verification", Some(id), json!({"kind":input.kind,"status":input.status})).await;
-            Json(json!({"id":id,"status":input.status})).into_response()
+            audit(&s.db, ctx.organization_id, ctx.user_id, "verification.recorded", "verification", Some(id), json!({"kind":input.kind,"status":status,"recording_mode":"operator_reported"})).await;
+            Json(json!({"id":id,"status":status,"recording_mode":"operator_reported","message":"Verification result recorded with operator-submitted evidence."})).into_response()
         }
         Err(e) => db_error(e),
     }
