@@ -1625,7 +1625,7 @@ async fn control_plane_overview(State(s): State<AppState>, headers: HeaderMap) -
             "verification": verification_state,
             "databaseProtection": "CONNECTED"
         },
-        "verificationTrend": trend_rows.iter().rev().map(|r| json!({"timestamp":r.get::<chrono::DateTime<chrono::Utc>,_>("timestamp"),"value":r.get::<i64,_>("value")})).collect::<Vec<_>>(),
+        "verificationTrend": trend_rows.iter().map(|r| json!({"timestamp":r.get::<chrono::DateTime<chrono::Utc>,_>("timestamp"),"value":r.get::<i64,_>("value")})).collect::<Vec<_>>(),
         "tenants": tenant_rows.iter().map(|r| json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"status":r.get::<String,_>("status")})).collect::<Vec<_>>(),
         "nodes": node_rows.iter().map(|r| json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"region":r.get::<String,_>("region"),"environment":r.get::<String,_>("environment"),"status":r.get::<String,_>("status"),"version":r.get::<String,_>("version")})).collect::<Vec<_>>(),
         "recentActivity": audit_rows.iter().map(|r| json!({"id":r.get::<Uuid,_>("id"),"type":r.get::<String,_>("action"),"message":format!("{} {}",r.get::<String,_>("resource_type"),r.get::<Option<Uuid>,_>("resource_id").map(|v|v.to_string()).unwrap_or_default()),"timestamp":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),"href":"/app/audit"})).collect::<Vec<_>>()
