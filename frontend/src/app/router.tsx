@@ -27,6 +27,7 @@ import { SupportRequest } from "../pages/public/SupportRequest";
 import Login from "../pages/auth/Login";
 import Signup from "../pages/auth/Signup";
 import Recovery from "../pages/auth/Recovery";
+import ResetPassword from "../pages/auth/ResetPassword";
 
 import { Overview } from "../pages/console/Overview";
 import { Attestations } from "../pages/console/Attestations";
@@ -152,6 +153,7 @@ export const router = createBrowserRouter([
       { path: "/login", element: <Login /> },
       { path: "/signup", element: <Signup /> },
       { path: "/recovery", element: <Recovery /> },
+      { path: "/reset-password", element: <ResetPassword /> },
     ],
   },
   {

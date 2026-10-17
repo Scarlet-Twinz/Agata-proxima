@@ -1,39 +1,43 @@
-# Proxima Cloud Control Plane
+# Proxima Cloud Control Plane Architecture
 
-Proxima Cloud is the future hosted control plane for Proxima Engine fleets.
+This document defines the hosted control-plane architecture for Proxima Engine fleets and the acceptance requirements for a customer-facing deployment.
 
-## Boundary
+## Responsibility boundary
 
+```text
+Hosted Control Plane
+  ├── authenticated control channel
+  ├── fleet identity and enrollment
+  ├── policy distribution
+  ├── verification history
+  ├── audit events
+  ├── deployment state
+  └── organization and team access
+          |
+          v
+     Proxima Engine
+          |
+          v
+      PostgreSQL
 ```
-Proxima Cloud
-  | authenticated control channel
-  +--> fleet identity
-  +--> policy distribution
-  +--> verification history
-  +--> audit events
-  +--> deployment state
-  +--> organization/team access
-        |
-        v
-   Proxima Engine
-        |
-        v
-   PostgreSQL
-```
 
-## Required production components
+## Required service capabilities
 
-1. Organization and project identity.
-2. Engine enrollment with short-lived credentials.
-3. Signed policy/configuration bundles.
+1. Organization and project identity with enforced tenant scope.
+2. Engine enrollment using short-lived, single-use credentials.
+3. Signed policy and configuration bundles.
 4. Durable verification results.
-5. Append-only audit records.
-6. Role-based access control.
-7. Secret rotation and revocation.
+5. Append-only, organization-scoped audit records.
+6. Role-based access control and session protection.
+7. Credential rotation and revocation.
 8. Fleet health and version reporting.
-9. Deployment/rollback state.
-10. API and UI authentication.
+9. Deployment and rollback state.
+10. API and dashboard authentication.
+11. Database migrations, backups and recovery procedures.
+12. Operational health, readiness and alerting.
 
-## Current status
+## Deployment acceptance
 
-This repository contains the contract and local dashboard surface, but does not claim a hosted cloud deployment. Cloud completion requires an authenticated, durable service and a real deployed control plane.
+Before exposing a hosted endpoint to customers, verify authentication and authorization, persistent storage, organization isolation, secure cookie and TLS configuration, credential lifecycle, migration recovery, engine enrollment, and denied cross-organization access. Record the tested environment and evidence for each check.
+
+The Control Plane manages intent and operations. The Proxima Engine remains the data-plane enforcement authority; control-plane availability must never weaken an already-running Engine's tenant enforcement.

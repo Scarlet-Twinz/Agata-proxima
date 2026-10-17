@@ -1365,6 +1365,20 @@ a {
   text-align: center;
 }
 
+.chart-axis-labels {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.chart-axis-labels span:nth-child(2) {
+  text-align: center;
+}
+
 @media (max-width: 900px) {
   .topology {
     grid-template-columns: minmax(0, 1fr);

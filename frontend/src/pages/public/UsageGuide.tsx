@@ -10,7 +10,7 @@ const localCommand = [
 ].join("\n");
 
 const sections = [
-  { title: "Create a workspace", body: "Create an account at /signup. The first account owns the organization. Signup requires working email verification through Resend; if email delivery fails, workspace creation may be rolled back. Use the organization ID returned by the authenticated API for subsequent resource requests. Keep your session cookie and CSRF token private." },
+  { title: "Create a workspace", body: "Create an account at /signup. The first account owns the organization. Email verification is required before sign-in; if the verification email does not arrive, the workspace remains created and you can request the code again from the sign-in page. Use the organization ID returned by the authenticated API for subsequent resource requests. Keep your session cookie and CSRF token private." },
   { title: "Add tenants, policies and nodes", body: "Create tenant records, versioned policies and nodes in the organization context. Store any one-time node enrollment token in a secret store. Configure PostgreSQL roles and RLS alongside the Engine; dashboard records do not replace database enforcement." },
   { title: "Deploy and verify", body: "Record a desired deployment state, then run tenant-local and cross-tenant negative tests. Inspect verification evidence and audit events. Run the tests against the actual protected application-to-database path and inspect the recorded outcomes." },
   { title: "Invite your team", body: "Invite people by email and assign the least-privileged role that fits. Invitations expire after seven days. Active memberships and unexpired invitations reserve seats; accepting an invitation must not bypass the plan limit." },
@@ -26,6 +26,7 @@ export function UsageGuide() {
             <aside className="public-detail-sidebar">
               <div className="public-detail-sidebar-title">Usage guide</div>
               <a href="#local">Local setup</a>
+              <a href="#docker">Docker troubleshooting</a>
               <a href="#resources">Resources</a>
               <a href="#billing">Plans and access</a>
               <a href="#sso">Microsoft Entra SSO</a>
@@ -37,6 +38,18 @@ export function UsageGuide() {
                 <p>The local Compose setup has separate Engine and Control Plane PostgreSQL services. The Control Plane database is exposed on host port 55443 by default. A database running in Docker on your laptop is local development data, not the production database.</p>
                 <pre className="public-code">{localCommand}</pre>
                 <p>Local service URLs: <code>http://127.0.0.1:8080</code>, health <code>/api/v1/health</code>, readiness <code>/api/v1/production/readiness</code>, and OpenAPI <code>/docs/openapi.json</code>.</p>
+                <h2 id="docker">Docker Desktop and Compose troubleshooting</h2>
+                <p>Run these checks from the repository root in PowerShell. Docker Desktop must be running before Compose can create or inspect containers.</p>
+                <pre className="public-code">{'docker version\ndocker compose version\ndocker compose ps -a\ndocker compose logs --tail=200 proxima-control control-postgres\ndocker compose exec control-postgres pg_isready -U proxima_control -d proxima_control'}</pre>
+                <ul>
+                  <li>Use the Compose service names <code>proxima</code>, <code>postgres</code>, <code>proxima-control</code> and <code>control-postgres</code>.</li>
+                  <li>If logs are empty, inspect <code>docker compose ps -a</code>; a container that never started may have no logs.</li>
+                  <li>Check the root <code>.env</code> for required configuration before starting the full stack. Keep real keys out of Git and support messages.</li>
+                  <li>Control Plane PostgreSQL uses host port <code>55443</code> by default and the API uses <code>8080</code>. Resolve port conflicts before changing the Compose file.</li>
+                  <li>Read the first migration or startup error. “Already exists” does not prove that every required column and constraint exists.</li>
+                </ul>
+                <p>After startup, check <code>http://127.0.0.1:8080/api/v1/health</code> and <code>http://127.0.0.1:8080/api/v1/production/readiness</code>. The readiness response identifies the configuration checks that must pass.</p>
+                <p>For the complete failure checklist, open <Link to="/docs/troubleshooting">Docker and service troubleshooting</Link>.</p>
                 <h2 id="resources">The operating workflow</h2>
                 {sections.map((section) => (
                   <section className="public-detail-section" key={section.title}>
@@ -56,7 +69,7 @@ export function UsageGuide() {
                 <ul>
                   <li>Health and readiness probes must be configured in the hosting environment.</li>
                   <li>Database backups must be encrypted and a restore must be tested against an isolated database.</li>
-                  <li>Alerts must cover database health, API failures, API failures, email delivery and backup age.</li>
+                  <li>Alerts must cover database health, API failures, email delivery and backup age.</li>
                   <li>Never restore over the live database as a test.</li>
                 </ul>
                 <div className="public-detail-links">

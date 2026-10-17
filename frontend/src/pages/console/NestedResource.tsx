@@ -44,10 +44,10 @@ const developerDocs: Record<string,{title:string;intro:string;sections:{title:st
   },
   "/app/developer/service-accounts": {
     title:"Service accounts",
-    intro:"Machine identities should have explicit ownership, narrow credentials and an auditable lifecycle.",
+    intro:"Manage non-human access for automation and integrations with organization-scoped machine credentials.",
     sections:[
-      {title:"Current contract",body:"Agata's API-key resource provides the first machine-credential surface. Service-account grouping remains the conceptual home for future non-human identity controls."},
-      {title:"Credential discipline",body:"Create credentials for a single integration purpose, store them outside source control, rotate them deliberately and revoke them immediately when no longer trusted."},
+      {title:"Machine credential management",body:"Create and revoke organization-scoped API keys in Developer → API keys. Each key has a visible prefix, creation time, last-use timestamp and revocation state; the full secret is shown once when the key is created."},
+      {title:"Credential lifecycle",body:"Create a separate key for each integration, grant only the required permissions, store the secret in a server-side secret manager, rotate it on a defined schedule and revoke it immediately when it is no longer trusted."},
     ],
   },
   "/app/developer/authentication": {
@@ -69,34 +69,34 @@ const developerDocs: Record<string,{title:string;intro:string;sections:{title:st
   },
   "/app/developer/environments": {
     title:"Environments",
-    intro:"Environment boundaries keep production, staging and future isolated workloads understandable as the platform grows.",
+    intro:"Use explicit environment labels to keep node registration and deployment targets aligned.",
     sections:[
-      {title:"Production",body:"The current workspace exposes Production as the active environment. Future environment management belongs here rather than being hidden in unrelated pages."},
-      {title:"Deployment relationship",body:"Nodes and deployments carry environment information so desired state can be connected to an explicit operating boundary."},
+      {title:"Production",body:"Production is the default environment for new node registrations. Confirm the environment label before enrolling a node or creating a deployment."},
+      {title:"Deployment relationship",body:"Nodes and deployments carry environment information. Review the target node, environment and desired state together before initiating a rollout."},
     ],
   },
   "/app/developer/sdks": {
     title:"SDKs",
-    intro:"SDKs should make the API contract easier to consume without hiding the tenant-security model.",
+    intro:"Build typed clients around the versioned Agata Proxima HTTP API without weakening organization and tenant authorization.",
     sections:[
-      {title:"SDK design",body:"Generated or maintained SDKs should expose typed organizations, tenants, policies, nodes, deployments, verification, audit and developer resources."},
-      {title:"Source of truth",body:"The OpenAPI contract remains authoritative. SDKs should not invent semantics that the control-plane API does not provide."},
+      {title:"Available client example",body:"Use the Node.js client example in the integration starter kit as a working reference for authenticated requests, response handling and organization-scoped resources. The same HTTP contract can be consumed from TypeScript, Python, PowerShell or other server-side runtimes."},
+      {title:"API contract",body:"Use the generated OpenAPI document as the source of truth for request fields, response shapes and status codes. Keep credentials server-side, preserve organization scope, handle authorization failures explicitly and never log bearer tokens."},
     ],
   },
   "/app/developer/cli": {
-    title:"CLI",
-    intro:"A serious infrastructure product needs a command-line path for engineers who work faster outside the browser.",
+    title:"CLI workflows",
+    intro:"Run repeatable Agata operations from PowerShell or Bash using the documented HTTP API and the included starter-kit scripts.",
     sections:[
-      {title:"Core workflow",body:"Authenticate → select organization → inspect resources → create/change resources → run verification → inspect evidence."},
-      {title:"Example",body:"The CLI follows the same authenticated resource model as the dashboard.",code:"agata login\nagata tenants list\nagata verification list\nagata verification run\nagata audit list"},
+      {title:"Core workflow",body:"Load a scoped API credential from a secret store, select the intended API origin, inspect resources, perform an explicitly authorized change, then review verification and audit evidence."},
+      {title:"Available commands",body:"The integration starter kit includes runnable PowerShell and Bash smoke scripts. Use the HTTP API examples for custom automation and check each response before continuing.",code:"./cli/agata.sh\n./cli/agata.ps1\ncurl --fail --silent --show-error \"$AGATA_API_BASE_URL/api/v1/health\""},
     ],
   },
   "/app/developer/terraform": {
     title:"Terraform",
-    intro:"Infrastructure-as-code should make Proxima configuration reviewable, repeatable and auditable.",
+    intro:"Use reviewed, repeatable infrastructure workflows while preserving organization scope and least-privilege access.",
     sections:[
-      {title:"Provider direction",body:"The future provider should map explicit Proxima resources rather than becoming a generic database configuration wrapper."},
-      {title:"Resource candidates",body:"These are the initial resource candidates for the provider.",code:"agata_tenant\nagata_policy\nagata_node\nagata_deployment\nagata_webhook"},
+      {title:"Supported automation path",body:"Use the documented HTTP API from an existing deployment pipeline and keep credentials in the CI secret store. Protect Terraform state and plan output as sensitive data."},
+      {title:"Provider resource model",body:"A provider implementation maps explicit resource lifecycles to the API, including create, read, update, import, drift detection and safe deletion. Validate organization isolation and permission denial in its acceptance suite.",code:"agata_tenant\nagata_policy\nagata_node\nagata_deployment\nagata_webhook"},
     ],
   },
   "/app/developer/api-reference": {
@@ -118,10 +118,10 @@ const developerDocs: Record<string,{title:string;intro:string;sections:{title:st
   },
   "/app/settings/identity": {
     title:"Enterprise identity",
-    intro:"Configure Microsoft Entra/OIDC when the production identity-provider contract is ready.",
+    intro:"Connect Microsoft Entra through the organization's OpenID Connect configuration and approved callback URL.",
     sections:[
-      {title:"Connection state",body:"The backend has issuer, client and organization mapping support. A real public callback, provider registration and production credentials are still required before this can be marked live."},
-      {title:"JIT provisioning",body:"Just-in-time provisioning can map an accepted enterprise identity into the organization boundary according to the configured policy."},
+      {title:"Required configuration",body:"Register the public callback URL with Microsoft Entra, configure the issuer, client ID and client secret in the deployment environment, and validate the organization slug mapping. The sign-in flow checks the organization's provider configuration before redirecting to Microsoft."},
+      {title:"Organization access",body:"Map the authenticated identity to an existing organization membership or an explicitly approved provisioning policy. Verify both successful sign-in and denied access for an identity without the required organization access."},
     ],
   },
   "/app/settings/security": {
@@ -134,13 +134,13 @@ const developerDocs: Record<string,{title:string;intro:string;sections:{title:st
   },
   "/app/settings/environments": {
     title:"Environments",
-    intro:"Keep environment state explicit as production operations expand.",
-    sections:[{title:"Current environment",body:"Production is the active local control-plane environment. Environment-aware node and deployment records are already part of the backend contract."}],
+    intro:"Review the environment assignments used by node registration and deployment operations.",
+    sections:[{title:"Active environment",body:"Production is the default environment for new node registrations. Node and deployment records retain environment labels so operators can verify the target before rollout."}],
   },
   "/app/settings/notifications": {
     title:"Notifications",
-    intro:"Notification preferences belong in one place so operational and security signals do not become scattered across resource pages.",
-    sections:[{title:"Current delivery boundary",body:"Transactional verification, reset and invitation emails are delivered through the configured Resend integration. Operational notification preferences can be expanded here without changing the security boundary."}],
+    intro:"Manage notification preferences and understand which messages are delivered through the configured email service.",
+    sections:[{title:"Delivery and preferences",body:"Account Settings stores security, product and billing notification preferences. Transactional verification, password-reset and organization-invitation messages use the configured Resend templates; delivery failures are recorded by the Control Plane for operations review."}],
   },
 };
 

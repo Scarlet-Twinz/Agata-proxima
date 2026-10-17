@@ -2,9 +2,9 @@
 
 **Security infrastructure for multi-tenant applications.**
 
-Agata Proxima is being developed to make PostgreSQL tenant isolation an infrastructure boundary that can be enforced, tested, monitored, and audited. The core data plane is written in Rust; the repository also contains a management control plane, a React frontend, verification tooling, and operational documentation.
+Agata Proxima treats PostgreSQL tenant isolation as an infrastructure boundary that can be enforced, tested, monitored, and audited. The core data plane is written in Rust, alongside a management control plane, React frontend, verification tooling, and operational documentation.
 
-> **Project status:** Active development. Repository code and passing CI do not, by themselves, establish production readiness. Live-provider activation, deployed-environment testing, and final operational acceptance must be verified separately.
+> **Release acceptance:** Automated CI validates repository behavior and code contracts. Deployment acceptance verifies live-provider configuration, deployed-environment behavior, and operational controls against the target environment.
 
 ## Product capabilities
 
@@ -22,36 +22,39 @@ Capability names describe the product architecture. See the implementation and a
 ### Prerequisites
 
 - Rust toolchain compatible with the workspace
-- Docker with Docker Compose
-- Node.js and npm for frontend work
-- PostgreSQL for database integration and verification tests
+- Docker Desktop with Docker Compose
+- Node.js 24 and npm for frontend work
+- OpenSSL for generating the node-enrollment encryption key when enrolling nodes, or use the PowerShell instructions in the node-enrollment runbook
 
 ### Run the control plane locally
 
-From the repository root:
+From the repository root, start PostgreSQL and configure the local-only environment:
 
 ```bash
 docker compose up -d control-postgres
+export PROXIMA_CONTROL_DATABASE_URL="postgres://proxima_control:proxima-control-dev@127.0.0.1:55443/proxima_control"
+export PROXIMA_CONTROL_BIND="127.0.0.1:8080"
+export PROXIMA_COOKIE_SECURE="false"
 cargo run -p proxima-control-plane
 ```
 
-By default, the Command Center listens at `http://127.0.0.1:8080`. The actual address can be changed through `PROXIMA_CONTROL_BIND`.
+These values are for local development only. Keep the database port bound to localhost and never expose the local password. Before enrolling nodes, generate a 64-character key once with `openssl rand -hex 32`, store it in an untracked local secret file, and reuse that same value as `PROXIMA_NODE_ENROLLMENT_ENCRYPTION_KEY` whenever the Control Plane starts. Do not generate a new key on every restart. Use the [usage guide](docs/usage.md) for Windows PowerShell setup and the [node-enrollment runbook](docs/node-enrollment.md) for the exact enrollment flow. The Command Center listens at `http://127.0.0.1:8080`.
 
 ### Run the engine
 
 In a separate terminal:
 
 ```bash
-cargo run
+cargo run -p proxima-engine
 ```
 
-The local operator dashboard, when enabled, defaults to `http://127.0.0.1:9080`. Configure the required database and security environment variables for your setup before connecting real workloads.
+Configure the Engine's PostgreSQL upstream, enrollment URL and one-time enrollment token before starting it. Follow the [node enrollment runbook](docs/node-enrollment.md) and [usage guide](docs/usage.md) before connecting a workload.
 
 ### Run the frontend
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 

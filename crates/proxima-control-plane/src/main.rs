@@ -45,6 +45,8 @@ struct AuthContext {
 struct AuthInput {
     email: String,
     password: String,
+    #[serde(default)]
+    remember_me: bool,
     name: Option<String>,
     organization: Option<String>,
 }
@@ -327,6 +329,11 @@ async fn main() -> Result<()> {
         .await?;
     sqlx::raw_sql(include_str!(
         "../migrations/0024_secure_node_enrollment.sql"
+    ))
+    .execute(&db)
+    .await?;
+    sqlx::raw_sql(include_str!(
+        "../migrations/0025_tenant_organization_boundary.sql"
     ))
     .execute(&db)
     .await?;
@@ -861,8 +868,9 @@ async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Respo
     )
     .await;
 
-    let response = match create_session(&s.db, user_id, organization_id).await {
-        Ok((token, csrf)) => auth_response(&s, user_id, organization_id, csrf, token),
+    let remember_me = input.remember_me;
+    let response = match create_session(&s.db, user_id, organization_id, remember_me).await {
+        Ok((token, csrf)) => auth_response(&s, user_id, organization_id, csrf, token, remember_me),
         Err(e) => return db_error(e),
     };
 
@@ -1602,24 +1610,52 @@ async fn control_plane_overview(State(s): State<AppState>, headers: HeaderMap) -
     )
     .await;
     let active_deployments = scalar_count(&s.db, "SELECT count(*) FROM deployments WHERE organization_id=$1 AND status NOT IN ('healthy','rolled_back')", ctx.organization_id).await;
-    let latest_verification = sqlx::query("SELECT status FROM verification_results WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 1").bind(ctx.organization_id).fetch_optional(&s.db).await.ok().flatten();
-    let trend_rows = sqlx::query("SELECT date_trunc('day',created_at) AS timestamp,count(*)::bigint AS value FROM verification_results WHERE organization_id=$1 GROUP BY 1 ORDER BY 1 DESC LIMIT 30").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
+    let latest_verification = sqlx::query("SELECT status,evidence FROM verification_results WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 1").bind(ctx.organization_id).fetch_optional(&s.db).await.ok().flatten();
+    // Return a complete 30-day series, including genuine zero-activity days.
+    // This gives the chart a useful time axis without inventing verification runs.
+    let trend_rows = sqlx::query(
+        "SELECT days.timestamp AS timestamp, count(vr.created_at)::bigint AS value
+         FROM generate_series(
+             date_trunc('day', now()) - interval '29 days',
+             date_trunc('day', now()),
+             interval '1 day'
+         ) AS days(timestamp)
+         LEFT JOIN verification_results vr
+           ON vr.organization_id=$1
+          AND vr.created_at >= days.timestamp
+          AND vr.created_at < days.timestamp + interval '1 day'
+         GROUP BY days.timestamp
+         ORDER BY days.timestamp DESC",
+    )
+    .bind(ctx.organization_id)
+    .fetch_all(&s.db)
+    .await
+    .unwrap_or_default();
     let tenant_rows = sqlx::query("SELECT t.id,t.name,t.status FROM tenants t JOIN projects p ON p.id=t.project_id WHERE p.organization_id=$1 ORDER BY t.created_at DESC LIMIT 12").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
     let node_rows = sqlx::query("SELECT id,name,region,environment,status,version FROM nodes WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 12").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
     let audit_rows = sqlx::query("SELECT id,action,resource_type,resource_id,created_at FROM audit_events WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 10").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
     let verification_state = latest_verification
         .as_ref()
-        .map(|r| r.get::<String, _>("status").to_uppercase())
-        .unwrap_or_else(|| "NO RUNS".into());
+        .map(|r| {
+            let status = r.get::<String, _>("status").to_uppercase();
+            let evidence = r.get::<Value, _>("evidence");
+            if evidence.get("recording_mode").and_then(Value::as_str) == Some("operator_reported") {
+                format!("REPORTED {status}")
+            } else {
+                format!("RECORDED {status}")
+            }
+        })
+        .unwrap_or_else(|| "NO RECORDS".into());
+    let database_connected = sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
     Json(json!({
         "organization_id": ctx.organization_id,
         "role": ctx.role,
         "metrics": {"tenants":tenant_count,"policies":policy_count,"nodes":node_count,"active_deployments":active_deployments},
         "protection": {
-            "tenantIsolation": if tenant_count > 0 {"ENFORCED"} else {"READY"},
-            "policyEnforcement": if policy_count > 0 {"CONFIGURED"} else {"READY"},
+            "tenantIsolation": if tenant_count > 0 {"TENANTS PRESENT"} else {"NO TENANTS"},
+            "policyEnforcement": if policy_count > 0 {"POLICIES PRESENT"} else {"NO POLICIES"},
             "verification": verification_state,
-            "databaseProtection": "CONNECTED"
+            "databaseProtection": if database_connected {"CONNECTED"} else {"UNAVAILABLE"}
         },
         "verificationTrend": trend_rows.iter().rev().map(|r| json!({"timestamp":r.get::<chrono::DateTime<chrono::Utc>,_>("timestamp"),"value":r.get::<i64,_>("value")})).collect::<Vec<_>>(),
         "tenants": tenant_rows.iter().map(|r| json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"status":r.get::<String,_>("status")})).collect::<Vec<_>>(),
@@ -2692,9 +2728,10 @@ async fn create_tenant(
         .isolation_mode
         .unwrap_or_else(|| "enforced-proxy".into());
     match sqlx::query(
-        "INSERT INTO tenants(id,project_id,name,slug,isolation_mode) VALUES($1,$2,$3,$4,$5)",
+        "INSERT INTO tenants(id,organization_id,project_id,name,slug,isolation_mode) VALUES($1,$2,$3,$4,$5,$6)",
     )
     .bind(id)
+    .bind(ctx.organization_id)
     .bind(project)
     .bind(&input.name)
     .bind(&input.slug)
@@ -3162,6 +3199,30 @@ async fn create_verification(
         return c.into_response();
     }
 
+    let status = input.status.trim().to_ascii_lowercase();
+    if !matches!(status.as_str(), "pass" | "fail" | "review") {
+        return bad("Verification outcome must be pass, fail, or review.");
+    }
+    let Some(evidence_object) = input.evidence.as_object() else {
+        return bad("Verification evidence must be a JSON object with completed test details.");
+    };
+    if evidence_object.is_empty()
+        || input
+            .evidence
+            .get("checks")
+            .and_then(Value::as_array)
+            .is_some_and(|checks| checks.is_empty())
+    {
+        return bad(
+            "Add actual test evidence and at least one completed check before recording a result.",
+        );
+    }
+    let mut evidence = input.evidence;
+    if let Some(object) = evidence.as_object_mut() {
+        object.insert("recording_mode".into(), json!("operator_reported"));
+        object.insert("recorded_at".into(), json!(chrono::Utc::now()));
+    }
+
     if input.kind.starts_with("advanced") {
         if let Err(response) =
             production::require_feature(&s.db, ctx.organization_id, "advanced_verification").await
@@ -3201,10 +3262,10 @@ async fn create_verification(
         "INSERT INTO verification_results(id,organization_id,tenant_id,kind,status,evidence,created_by)
          VALUES($1,$2,$3,$4,$5,$6,$7)"
     ).bind(id).bind(ctx.organization_id).bind(input.tenant_id).bind(&input.kind)
-    .bind(&input.status).bind(&input.evidence).bind(ctx.user_id).execute(&s.db).await {
+    .bind(&status).bind(&evidence).bind(ctx.user_id).execute(&s.db).await {
         Ok(_) => {
-            audit(&s.db, ctx.organization_id, ctx.user_id, "verification.recorded", "verification", Some(id), json!({"kind":input.kind,"status":input.status})).await;
-            Json(json!({"id":id,"status":input.status})).into_response()
+            audit(&s.db, ctx.organization_id, ctx.user_id, "verification.recorded", "verification", Some(id), json!({"kind":input.kind,"status":status,"recording_mode":"operator_reported"})).await;
+            Json(json!({"id":id,"status":status,"recording_mode":"operator_reported","message":"Verification result recorded with operator-submitted evidence."})).into_response()
         }
         Err(e) => db_error(e),
     }
@@ -4138,18 +4199,20 @@ async fn create_session(
     db: &PgPool,
     user_id: Uuid,
     organization_id: Uuid,
+    remember_me: bool,
 ) -> Result<(String, String), sqlx::Error> {
     let token = format!("{}.{}", Uuid::new_v4(), Uuid::new_v4());
     let csrf = Uuid::new_v4().to_string();
     sqlx::query(
         "INSERT INTO sessions(id,user_id,organization_id,token_hash,csrf_token,expires_at)
-         VALUES($1,$2,$3,$4,$5,now()+interval '12 hours')",
+         VALUES($1,$2,$3,$4,$5,CASE WHEN $6 THEN now()+interval '30 days' ELSE now()+interval '12 hours' END)",
     )
     .bind(Uuid::new_v4())
     .bind(user_id)
     .bind(organization_id)
     .bind(token_hash(&token))
     .bind(&csrf)
+    .bind(remember_me)
     .execute(db)
     .await?;
     Ok((token, csrf))
@@ -4318,16 +4381,26 @@ fn require_write(ctx: &AuthContext, headers: &HeaderMap) -> Result<(), StatusCod
     }
 }
 
+fn session_max_age_seconds(remember_me: bool) -> i64 {
+    if remember_me {
+        2_592_000
+    } else {
+        43_200
+    }
+}
+
 fn auth_response(
     s: &AppState,
     user: Uuid,
     organization: Uuid,
     csrf: String,
     token: String,
+    remember_me: bool,
 ) -> Response {
     let secure = if s.secure_cookie { "; Secure" } else { "" };
+    let max_age = session_max_age_seconds(remember_me);
     let cookie = format!(
-        "proxima_session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=43200{secure}"
+        "proxima_session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={max_age}{secure}"
     );
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -4634,6 +4707,12 @@ fn unique_error(e: sqlx::Error) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn remember_me_selects_the_expected_session_lifetime() {
+        assert_eq!(session_max_age_seconds(false), 43_200);
+        assert_eq!(session_max_age_seconds(true), 2_592_000);
+    }
 
     #[test]
     fn slugify_is_stable() {

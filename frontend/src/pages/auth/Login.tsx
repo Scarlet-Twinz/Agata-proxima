@@ -10,6 +10,7 @@ export default function Login() {
   const [password,setPassword]=useState("");
   const [code,setCode]=useState("");
   const [showPassword,setShowPassword]=useState(false);
+  const [rememberMe,setRememberMe]=useState(false);
   const [error,setError]=useState("");
   const [busy,setBusy]=useState(false);
   const [verificationRequired,setVerificationRequired]=useState(false);
@@ -25,7 +26,7 @@ export default function Login() {
     event.preventDefault();
     setError(""); setVerificationRequired(false); setResendMessage(""); setBusy(true);
     try {
-      await login(email,password);
+      await login(email,password,rememberMe);
       const from=(location.state as {from?:string}|null)?.from;
       navigate(from || "/app",{replace:true});
     } catch (err) {
@@ -112,7 +113,7 @@ export default function Login() {
         <div className="agata-field-label-row"><label htmlFor="login-password">Password</label><Link to="/recovery">Forgot password?</Link></div>
         <div className="auth-password-field"><input id="login-password" name="password" required type={showPassword?"text":"password"} value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" placeholder="Enter your password"/><button type="button" className="auth-password-toggle" onClick={()=>setShowPassword(v=>!v)} aria-label={showPassword?"Hide password":"Show password"}>{showPassword?<EyeOff size={17}/>:<Eye size={17}/>}</button></div>
       </div>
-      <label className="auth-check"><input type="checkbox"/><span>Keep me signed in on this device</span></label>
+        <label className="auth-check"><input id="remember-me" name="remember_me" type="checkbox" checked={rememberMe} onChange={event=>setRememberMe(event.target.checked)}/><span>Keep me signed in on this device (30 days)</span></label>
       <button className="auth-submit" type="submit" disabled={busy}><span>{busy?"Signing in…":"Sign in to Proxima"}</span><ArrowRight size={17}/></button>
     </form>
     {verificationRequired && <div className="auth-security-callout"><ShieldCheck size={18}/><div><strong>Email verification required</strong><span>Your password is correct, but your email address must be verified. Enter the 6-digit code from your latest email.</span><div className="auth-code-row"><input aria-label="Verification code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,"").slice(0,6))} placeholder="000000"/><button className="auth-inline-action" type="button" disabled={busy || code.length!==6} onClick={handleVerifyCode}>Verify</button></div><button className="auth-inline-action" type="button" disabled={resendBusy || !email} onClick={handleResendVerification}>{resendBusy ? "Sending verification code…" : "Resend verification code"}</button>{resendMessage && <small>{resendMessage}</small>}</div></div>}

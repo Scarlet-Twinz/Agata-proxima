@@ -26,7 +26,7 @@ check('Getting-started guide includes step-by-step acceptance', details.includes
 check('Troubleshooting covers authentication, API, resources, data path, webhooks, email, billing and migrations', ['Sign-in fails', 'API returns 401', 'A list or detail page is empty', 'Tenant, policy, node or deployment', 'Webhook endpoint exists', 'Email verification', 'Billing or plan features', 'Database migration'].every(s => troubleshooting.includes(s)));
 check('Webhook guide documents signature, retry and acceptance procedure', details.includes('HMAC-SHA256 input') && details.includes('Acceptance checklist'));
 check('API guide includes authenticated request example without a hardcoded API key', details.includes('AGATA_API_KEY is not set') && !details.includes('Bearer aga_'));
-check('SDK/CLI/Terraform guides do not imply released tooling without evidence', details.includes('official Agata Proxima CLI binary or package is actually published') && details.includes('official Agata Proxima Terraform provider is currently published'));
+check('SDK/CLI/Terraform guides describe release verification without implying an unverified artifact', details.includes('Versioned source and documented command contract') && details.includes('must be published under a verified registry namespace') && details.includes('Install a versioned package or binary only from its verified release source'));
 
 let failed = 0;
 for (const item of checks) {

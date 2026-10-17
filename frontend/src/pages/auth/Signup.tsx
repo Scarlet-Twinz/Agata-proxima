@@ -109,7 +109,7 @@ export default function Signup() {
       </div>
       <div className="agata-field"><label htmlFor="signup-email">Work email</label><input id="signup-email" name="email" required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@company.com" autoComplete="email"/></div>
       <div className="agata-field"><label htmlFor="signup-password">Password</label><div className="auth-password-field"><input id="signup-password" name="password" required minLength={12} type={showPassword?"text":"password"} value={password} onChange={e=>setPassword(e.target.value)} placeholder="Create a strong password" autoComplete="new-password"/><button type="button" className="auth-password-toggle" onClick={()=>setShowPassword(v=>!v)} aria-label={showPassword?"Hide password":"Show password"}>{showPassword?<EyeOff size={17}/>:<Eye size={17}/>}</button></div></div>
-      <label className="auth-check"><input type="checkbox" required/><span>I agree to the Agata Proxima terms and acknowledge the privacy policy.</span></label>
+      <label className="auth-check"><input type="checkbox" required/><span>I agree to the <Link to="/terms">Terms of Service</Link> and acknowledge the <Link to="/privacy">Privacy Policy</Link>.</span></label>
       <button className="auth-submit" type="submit" disabled={busy}><span>{busy?"Creating workspace…":"Create Proxima workspace"}</span><ArrowRight size={17}/></button>
     </form>
     <div className="auth-sso-divider"><span>OR</span></div>
