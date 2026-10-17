@@ -32,9 +32,18 @@ async function readResponse<T>(response: Response): Promise<T> {
 }
 
 export async function getSession(): Promise<Session | null> {
-  const response = await fetch(`${API_BASE}/api/v1/session`, { method:"GET", credentials:"include", headers:{Accept:"application/json"} });
-  if (response.status === 401) return null;
-  return readResponse<Session>(response);
+  const response = await fetch(`${API_BASE}/api/v1/session`, { method:"GET", credentials:"include", headers:{Accept:"application/json"}, cache:"no-store" });
+  if (response.status === 401) {
+    sessionStorage.removeItem("proxima_csrf");
+    return null;
+  }
+  const session = await readResponse<Session>(response);
+  // Rehydrate the CSRF token from the server-verified session after a browser
+  // restart so a remembered sign-in can perform protected actions and logout.
+  if (session.authenticated && session.csrf_token) {
+    sessionStorage.setItem("proxima_csrf", session.csrf_token);
+  }
+  return session;
 }
 
 export async function login(email: string, password: string, rememberMe = false): Promise<AuthResponse> {
