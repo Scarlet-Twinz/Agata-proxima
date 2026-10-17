@@ -1620,7 +1620,7 @@ async fn control_plane_overview(State(s): State<AppState>, headers: HeaderMap) -
           AND vr.created_at >= days.timestamp
           AND vr.created_at < days.timestamp + interval '1 day'
          GROUP BY days.timestamp
-         ORDER BY days.timestamp DESC"
+         ORDER BY days.timestamp DESC",
     )
     .bind(ctx.organization_id)
     .fetch_all(&s.db)
@@ -3201,9 +3201,15 @@ async fn create_verification(
         return bad("Verification evidence must be a JSON object with completed test details.");
     };
     if evidence_object.is_empty()
-        || input.evidence.get("checks").and_then(Value::as_array).is_some_and(|checks| checks.is_empty())
+        || input
+            .evidence
+            .get("checks")
+            .and_then(Value::as_array)
+            .is_some_and(|checks| checks.is_empty())
     {
-        return bad("Add actual test evidence and at least one completed check before recording a result.");
+        return bad(
+            "Add actual test evidence and at least one completed check before recording a result.",
+        );
     }
     let mut evidence = input.evidence;
     if let Some(object) = evidence.as_object_mut() {
@@ -4370,7 +4376,11 @@ fn require_write(ctx: &AuthContext, headers: &HeaderMap) -> Result<(), StatusCod
 }
 
 fn session_max_age_seconds(remember_me: bool) -> i64 {
-    if remember_me { 2_592_000 } else { 43_200 }
+    if remember_me {
+        2_592_000
+    } else {
+        43_200
+    }
 }
 
 fn auth_response(
