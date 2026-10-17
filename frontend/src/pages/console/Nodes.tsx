@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Check, Copy, RefreshCw, Server, ShieldCheck } from "lucide-react";
-import { api } from "../../api/client";
+import { API_BASE, api } from "../../api/client";
 import { getSession } from "../../api/auth";
 
 type NodeRecord = {
@@ -21,8 +21,13 @@ type CreatedNode = {
   warning: string;
 };
 
-const enrollmentUrl =
-  `${(import.meta.env.VITE_API_BASE_URL ?? window.location.origin).replace(/\/$/, "")}/api/v1/nodes/enroll`;
+// Keep copied engine credentials pointed at the same control plane as this dashboard.
+// Local Vite proxies API requests to the local Rust service; production rewrites to api.agataproxima.com.
+const enrollmentBaseUrl = (
+  API_BASE ||
+  (import.meta.env.DEV ? "http://127.0.0.1:8080" : "https://api.agataproxima.com")
+).replace(/\/$/, "");
+const enrollmentUrl = `${enrollmentBaseUrl}/api/v1/nodes/enroll`;
 
 export function Nodes() {
   const [nodes, setNodes] = useState<NodeRecord[]>([]);
@@ -156,6 +161,7 @@ export function Nodes() {
 
       {error && <div className="settings-banner settings-banner--error" role="alert">{error}</div>}
       {notice && <div className="settings-banner settings-banner--success" role="status">{notice}</div>}
+      <div className="action-note"><ShieldCheck size={16} /> Control plane for this dashboard: <code>{enrollmentBaseUrl}</code>. Enrollment credentials target this same control plane.</div>
 
       <section className="surface settings-section">
         <div className="settings-section-heading">

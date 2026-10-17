@@ -1,3 +1,5 @@
+import { API_BASE } from "./client";
+
 export type Session = {
   authenticated: boolean;
   user_id: string;
@@ -30,13 +32,13 @@ async function readResponse<T>(response: Response): Promise<T> {
 }
 
 export async function getSession(): Promise<Session | null> {
-  const response = await fetch("/api/v1/session", { method:"GET", credentials:"include", headers:{Accept:"application/json"} });
+  const response = await fetch(`${API_BASE}/api/v1/session`, { method:"GET", credentials:"include", headers:{Accept:"application/json"} });
   if (response.status === 401) return null;
   return readResponse<Session>(response);
 }
 
 export async function login(email: string, password: string): Promise<AuthResponse> {
-  const response = await fetch("/api/v1/auth/login", {
+  const response = await fetch(`${API_BASE}/api/v1/auth/login`, {
     method:"POST", credentials:"include",
     headers:{"Content-Type":"application/json"},
     body:JSON.stringify({email,password}),
@@ -47,7 +49,7 @@ export async function login(email: string, password: string): Promise<AuthRespon
 }
 
 export async function signup(input: {name:string;organization:string;email:string;password:string}): Promise<SignupResponse> {
-  const response = await fetch("/api/v1/auth/signup", {
+  const response = await fetch(`${API_BASE}/api/v1/auth/signup`, {
     method:"POST", credentials:"include",
     headers:{"Content-Type":"application/json"},
     body:JSON.stringify(input),
@@ -56,7 +58,7 @@ export async function signup(input: {name:string;organization:string;email:strin
 }
 
 export async function verifyEmailCode(email: string, code: string): Promise<{ok:boolean;verified:boolean;message:string}> {
-  const response = await fetch("/api/v1/auth/verification/confirm", {
+  const response = await fetch(`${API_BASE}/api/v1/auth/verification/confirm`, {
     method:"POST", credentials:"include",
     headers:{"Content-Type":"application/json"},
     body:JSON.stringify({email,code}),
@@ -65,7 +67,7 @@ export async function verifyEmailCode(email: string, code: string): Promise<{ok:
 }
 
 export async function resendVerification(email: string): Promise<{ok:boolean;message:string}> {
-  const response = await fetch("/api/v1/auth/verification/resend", {
+  const response = await fetch(`${API_BASE}/api/v1/auth/verification/resend`, {
     method:"POST", credentials:"include",
     headers:{"Content-Type":"application/json"},
     body:JSON.stringify({email}),
@@ -75,7 +77,7 @@ export async function resendVerification(email: string): Promise<{ok:boolean;mes
 
 export async function logout(): Promise<void> {
   const csrf = sessionStorage.getItem("proxima_csrf") ?? "";
-  await fetch("/api/v1/auth/logout", {
+  await fetch(`${API_BASE}/api/v1/auth/logout`, {
     method:"POST", credentials:"include",
     headers:{"x-csrf-token":csrf},
   });
