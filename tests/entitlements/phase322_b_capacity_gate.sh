@@ -79,16 +79,16 @@ SQL
 pass "environment capacity is enforced in the database"
 
 psql -v ON_ERROR_STOP=1 -d "${test_db}" <<'SQL'
-INSERT INTO tenants(id,project_id,name,slug)
+INSERT INTO tenants(id,project_id,organization_id,name,slug)
 VALUES ('d0000000-0000-4000-8000-000000000001',
-        'b0000000-0000-4000-8000-000000000001','tenant-1','tenant-1');
+        'b0000000-0000-4000-8000-000000000001','a0000000-0000-4000-8000-000000000001','tenant-1','tenant-1');
 DO $$
 DECLARE message_text text;
 BEGIN
   BEGIN
-    INSERT INTO tenants(id,project_id,name,slug)
+    INSERT INTO tenants(id,project_id,organization_id,name,slug)
     VALUES ('d0000000-0000-4000-8000-000000000002',
-            'b0000000-0000-4000-8000-000000000001','tenant-2','tenant-2');
+            'b0000000-0000-4000-8000-000000000001','a0000000-0000-4000-8000-000000000001','tenant-2','tenant-2');
   EXCEPTION WHEN SQLSTATE 'P0001' THEN
     GET STACKED DIAGNOSTICS message_text = MESSAGE_TEXT;
   END;
