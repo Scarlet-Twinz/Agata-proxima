@@ -1,0 +1,26 @@
+{
+  "name": "@agata-proxima/sdk",
+  "version": "0.1.0",
+  "description": "Typed-friendly server-side JavaScript SDK for the Agata Proxima Control Plane API.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check src/index.js && node --test"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT"
+}
