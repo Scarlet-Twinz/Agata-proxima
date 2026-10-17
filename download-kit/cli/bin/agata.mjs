@@ -32,7 +32,7 @@ if (!resource || resource === "--help" || resource === "-h" || resource === "hel
   process.exit(resource ? 0 : 2);
 }
 const commands = {
-  health: ["health", (client) => client.health()],
+  whoami: [undefined, (client) => client.session()],\n  health: ["health", (client) => client.health()],
   plans: ["list", (client) => client.listPlans()],
   tenants: ["list", (client) => client.listTenants()],
   policies: ["list", (client) => client.listPolicies()],
@@ -43,7 +43,7 @@ const commands = {
   webhooks: ["list", (client) => client.listWebhooks()],
 };
 const command = commands[resource];
-if (!command || (resource !== "health" && action !== command[0]) || (resource === "health" && action !== undefined)) {
+if (!command || (resource === "health" && action !== undefined) || (resource === "whoami" && action !== undefined) || (resource !== "health" && resource !== "whoami" && action !== command[0])) {
   console.error(usage);
   process.exit(2);
 }
