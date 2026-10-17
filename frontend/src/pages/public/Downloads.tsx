@@ -1,4 +1,4 @@
-import { ArrowDownToLine, BookOpen, Code2, Container, ExternalLink, FileJson, ShieldCheck } from "lucide-react";
+import { ArrowDownToLine, BookOpen, Code2, Container, Database, ExternalLink, FileJson, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PublicPage } from "../../components/layout/PublicPage";
 
