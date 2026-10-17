@@ -1810,6 +1810,43 @@ pub(crate) async fn purge_expired_audit_events(db: &sqlx::PgPool) -> Result<i64,
         .await
 }
 
+fn is_valid_https_origin(value: &str) -> bool {
+    let value = value.trim();
+    let Some(authority_and_path) = value.strip_prefix("https://") else {
+        return false;
+    };
+    // URL parsers may normalize an empty authority (for example,
+    // "https:///path") into a host. Validate the original authority first.
+    if authority_and_path.starts_with('/') 
+        || authority_and_path.starts_with('?')
+        || authority_and_path.starts_with('#')
+    {
+        return false;
+    }
+    let authority_end = authority_and_path
+        .find(['/', '?', '#'])
+        .unwrap_or(authority_and_path.len());
+    let authority = &authority_and_path[..authority_end];
+    if authority.is_empty()
+        || authority.contains('@')
+        || authority.chars().any(char::is_whitespace)
+    {
+        return false;
+    }
+
+    let Ok(url) = reqwest::Url::parse(value) else {
+        return false;
+    };
+
+    url.scheme() == "https"
+        && url.host_str().is_some()
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.query().is_none()
+        && url.fragment().is_none()
+        && url.path() == "/"
+}
+
 pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
     let db_ok = sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
     let flutterwave_live_environment = flutterwave_enabled();
@@ -1834,15 +1871,31 @@ pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
         && template_login_alert && template_support_received && template_billing_update;
     let support_inbox = env::var("AGATA_SUPPORT_INBOX_EMAIL").map(|v| valid_public_support_email(v.trim())).unwrap_or(false);
     let base = configured("AGATA_PUBLIC_BASE_URL");
+    // A non-empty URL is not enough for production: reject HTTP origins and
+    // malformed HTTPS origins before the service can report launch readiness.
+    let public_base_url_https = env::var("AGATA_PUBLIC_BASE_URL")
+        .map(|value| is_valid_https_origin(value.trim()))
+        .unwrap_or(false);
+    // Secure cookies are mandatory for a public production session.
+    let secure_cookie = s.secure_cookie;
     let oidc_client_id = configured("PROXIMA_OIDC_CLIENT_ID");
     let oidc_client_secret = configured("PROXIMA_OIDC_CLIENT_SECRET");
     let oidc = oidc_client_id && oidc_client_secret;
     let email_ready = resend && sender_identities && templates_configured && support_inbox;
-    let all = db_ok && flutterwave_configured && flutterwave_plans_and_usd_amounts && email_ready && base && oidc;
+    let all = db_ok
+        && flutterwave_configured
+        && flutterwave_plans_and_usd_amounts
+        && email_ready
+        && base
+        && public_base_url_https
+        && secure_cookie
+        && oidc;
     Json(json!({
         "status": if all { "ready" } else { "needs_configuration" },
         "checks": {
             "database": db_ok,
+            "public_base_url_https": public_base_url_https,
+            "secure_cookie": secure_cookie,
             "flutterwave_configured": flutterwave_configured,
             "flutterwave_live_environment": flutterwave_live_environment,
             "flutterwave_plans_and_usd_amounts": flutterwave_plans_and_usd_amounts,
@@ -2121,6 +2174,22 @@ mod tests {
 
     use super::*;
 
+
+    #[test]
+    fn production_https_origin_validation_accepts_only_clean_https_origins() {
+        assert!(super::is_valid_https_origin("https://agataproxima.com"));
+        assert!(super::is_valid_https_origin("https://api.agataproxima.com/"));
+        assert!(super::is_valid_https_origin("https://api.agataproxima.com:8443"));
+        assert!(!super::is_valid_https_origin("http://agataproxima.com"));
+        assert!(!super::is_valid_https_origin("https://"));
+        assert!(!super::is_valid_https_origin("https:///path"));
+        assert!(!super::is_valid_https_origin("https://user@host.example"));
+        assert!(!super::is_valid_https_origin("https://host.example:badport"));
+        assert!(!super::is_valid_https_origin("https://host.example/path"));
+        assert!(!super::is_valid_https_origin("https://host.example?next=/"));
+        assert!(!super::is_valid_https_origin("https://host.example#fragment"));
+        assert!(!super::is_valid_https_origin("  http://localhost:8080 "));
+    }
 
     #[test]
     fn configured_plan_amounts_are_exact_minor_units() {
