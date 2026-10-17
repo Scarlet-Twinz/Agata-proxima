@@ -543,6 +543,10 @@ async fn main() -> Result<()> {
             patch(update_service_account).delete(delete_service_account),
         )
         .route(
+            "/api/v1/developer/events/catalog",
+            get(developer_event_catalog),
+        )
+        .route(
             "/api/v1/developer/webhooks",
             get(webhooks).post(create_webhook),
         )
