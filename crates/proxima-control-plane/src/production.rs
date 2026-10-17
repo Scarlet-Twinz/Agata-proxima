@@ -1811,13 +1811,17 @@ pub(crate) async fn purge_expired_audit_events(db: &sqlx::PgPool) -> Result<i64,
 }
 
 fn is_valid_https_origin(value: &str) -> bool {
-    let Some(authority) = value.trim().strip_prefix("https://") else {
+    let Ok(url) = reqwest::Url::parse(value.trim()) else {
         return false;
     };
-    let host = authority.split(['/', '?', '#']).next().unwrap_or("");
-    !host.is_empty()
-        && !host.contains('@')
-        && !host.chars().any(char::is_whitespace)
+
+    url.scheme() == "https"
+        && url.host_str().is_some()
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.query().is_none()
+        && url.fragment().is_none()
+        && url.path() == "/"
 }
 
 pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
@@ -2149,13 +2153,18 @@ mod tests {
 
 
     #[test]
-    fn production_https_origin_validation_rejects_http_and_malformed_origins() {
+    fn production_https_origin_validation_accepts_only_clean_https_origins() {
         assert!(super::is_valid_https_origin("https://agataproxima.com"));
-        assert!(super::is_valid_https_origin("https://api.agataproxima.com/path"));
+        assert!(super::is_valid_https_origin("https://api.agataproxima.com/"));
+        assert!(super::is_valid_https_origin("https://api.agataproxima.com:8443"));
         assert!(!super::is_valid_https_origin("http://agataproxima.com"));
         assert!(!super::is_valid_https_origin("https://"));
         assert!(!super::is_valid_https_origin("https:///path"));
         assert!(!super::is_valid_https_origin("https://user@host.example"));
+        assert!(!super::is_valid_https_origin("https://host.example:badport"));
+        assert!(!super::is_valid_https_origin("https://host.example/path"));
+        assert!(!super::is_valid_https_origin("https://host.example?next=/"));
+        assert!(!super::is_valid_https_origin("https://host.example#fragment"));
         assert!(!super::is_valid_https_origin("  http://localhost:8080 "));
     }
 
