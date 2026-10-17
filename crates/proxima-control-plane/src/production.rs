@@ -200,6 +200,7 @@ pub(crate) async fn enforce_capacity(
     let (limit_column, count_sql) = match resource {
         "tenants" => ("tenant_limit", "SELECT count(*) FROM tenants t JOIN projects p ON p.id=t.project_id WHERE p.organization_id=$1"),
         "nodes" => ("node_limit", "SELECT count(*) FROM nodes WHERE organization_id=$1"),
+        "environments" => ("environment_limit", "SELECT count(*) FROM organization_environments WHERE organization_id=$1 AND status='active'"),
         _ => return Err(bad("Unsupported capacity resource.")),
     };
     let limit: i32 = row.get(limit_column);
@@ -474,64 +475,34 @@ pub(crate) async fn enforce_environment_capacity(
     organization_id: Uuid,
     environment: &str,
 ) -> Result<(), Response> {
-    let row = sqlx::query(
-        "SELECT environment_limit,billing_status,plan_key
-         FROM organization_entitlements WHERE organization_id=$1",
+    let status = sqlx::query_scalar::<_, String>(
+        "SELECT status FROM organization_environments WHERE organization_id=$1 AND slug=$2",
     )
     .bind(organization_id)
+    .bind(environment)
     .fetch_optional(db)
     .await
     .map_err(db_error)?;
 
-    let row = row.ok_or_else(|| service_unavailable("Organization entitlements are not initialized."))?;
-    let status: String = row.get("billing_status");
-    if matches!(status.as_str(), "canceled" | "unpaid") {
-        return Err((
-            StatusCode::PAYMENT_REQUIRED,
-            Json(json!({"ok":false,"error":"subscription_inactive","message":"Restore an active Agata Proxima subscription to use this capacity."}))
-        ).into_response());
-    }
-
-    let limit: i32 = row.get("environment_limit");
-    let exists: bool = sqlx::query_scalar(
-        "SELECT EXISTS(
-            SELECT 1 FROM nodes WHERE organization_id=$1 AND environment=$2
-        )",
-    )
-    .bind(organization_id)
-    .bind(environment)
-    .fetch_one(db)
-    .await
-    .map_err(db_error)?;
-
-    if exists {
-        return Ok(());
-    }
-
-    let count: i64 = sqlx::query_scalar(
-        "SELECT count(DISTINCT environment) FROM nodes WHERE organization_id=$1",
-    )
-    .bind(organization_id)
-    .fetch_one(db)
-    .await
-    .map_err(db_error)?;
-
-    if count >= i64::from(limit) {
-        let plan: String = row.get("plan_key");
-        return Err((
-            StatusCode::PAYMENT_REQUIRED,
+    match status.as_deref() {
+        Some("active") => Ok(()),
+        Some(_) => Err((
+            StatusCode::CONFLICT,
             Json(json!({
                 "ok":false,
-                "error":"plan_limit_reached",
-                "resource":"environments",
-                "limit":limit,
-                "plan":plan,
-                "message":"Environment capacity reached. Upgrade the Agata Proxima plan to continue."
-            }))
-        ).into_response());
+                "error":"environment_disabled",
+                "message":"This environment is disabled. Enable it before registering nodes."
+            })),
+        ).into_response()),
+        None => Err((
+            StatusCode::CONFLICT,
+            Json(json!({
+                "ok":false,
+                "error":"environment_not_found",
+                "message":"Create this environment in Developer → Environments before registering nodes."
+            })),
+        ).into_response()),
     }
-
-    Ok(())
 }
 
 #[allow(clippy::result_large_err)]

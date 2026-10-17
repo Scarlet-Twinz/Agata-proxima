@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   ChevronDown,
   CircleHelp,
@@ -42,6 +42,8 @@ const primaryNavigation = [
 
 const platformNavigation = [
   { label: "Developer", href: "/app/developer", icon: KeyRound },
+  { label: "Access", href: "/app/settings/members", icon: Users },
+  { label: "Authentication", href: "/app/settings/authentication", icon: ShieldCheck },
   { label: "Settings", href: "/app/settings", icon: Settings },
   { label: "Support", href: "/app/support", icon: CircleHelp },
 ];
@@ -69,6 +71,8 @@ const searchNavigation = [
 
 export function ConsoleLayout() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: "auto" }); }, [pathname]);
   const [collapsed, setCollapsed] = useState(() => {
     return localStorage.getItem("agata.console.sidebar") === "collapsed";
   });

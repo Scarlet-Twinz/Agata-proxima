@@ -7,11 +7,18 @@ type Notification = {
   id:string; type:string; title:string; message:string; href?:string|null;
   read:boolean; created_at:string;
 };
+type AuditEvent = {
+  id:string; action:string; resource_type:string; resource_id:string|null;
+  metadata:Record<string,unknown>; created_at:string;
+};
 
 export function Notifications(){
   const [items,setItems]=useState<Notification[]>([]);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
+  const [activity,setActivity]=useState<AuditEvent[]>([]);
+  const [activityLoading,setActivityLoading]=useState(true);
+  const [activityError,setActivityError]=useState("");
   function publishUnreadCount(unread:number){
     window.dispatchEvent(new CustomEvent("agata:notifications-unread-change",{detail:{unread}}));
   }
@@ -27,7 +34,13 @@ export function Notifications(){
     }catch(err){setError(err instanceof Error?err.message:"Unable to load notifications.");}
     finally{setLoading(false);}
   },[]);
-  useEffect(()=>{void load(false);},[load]);
+  const loadActivity=useCallback(async()=>{
+    setActivityLoading(true);setActivityError("");
+    try{setActivity(await api.get<AuditEvent[]>("/api/v1/audit"));}
+    catch(err){setActivityError(err instanceof Error?err.message:"Unable to load organization activity.");}
+    finally{setActivityLoading(false);}
+  },[]);
+  useEffect(()=>{void load(false);void loadActivity();},[load,loadActivity]);
   async function mark(id:string){
     try{
       await api.post("/api/v1/notifications/"+id+"/read",{});
@@ -60,5 +73,25 @@ export function Notifications(){
         </div>;
         return item.href ? <Link to={item.href} key={item.id} className="notification-link">{content}</Link> : <div key={item.id}>{content}</div>;
       })}</div>}
+    <section className="surface notifications-activity-section">
+      <div className="surface-heading">
+        <div><span className="eyebrow">ORGANIZATION ACTIVITY</span><h2>Recent security and workspace events</h2><p>Authentication, tenant, policy, verification and administrative actions recorded in the audit log.</p></div>
+        <Link className="table-detail-link" to="/app/audit">Open audit explorer <ChevronRight size={15}/></Link>
+      </div>
+      {activityLoading ? <div className="empty-state"><strong>Loading organization activity…</strong><span>Reading recent events from the audit log.</span></div> :
+        activityError ? <div className="empty-state resource-error"><strong>{activityError}</strong><span>Check access to the Audit explorer and refresh this page.</span></div> :
+        activity.length===0 ? <div className="empty-state"><Bell size={22}/><strong>No organization activity recorded yet</strong><span>Once an authentication, tenant, policy, verification or administrative action is recorded, it will appear here.</span></div> :
+        <div className="notification-list">{activity.slice(0,50).map(event=><Link to="/app/audit" className="notification-link" key={event.id}>
+          <div className="notification-item">
+            <div className="notification-icon"><Bell size={17}/></div>
+            <div className="notification-copy">
+              <div className="notification-title-row"><strong>{event.action.replaceAll("_"," ").replaceAll("."," · ")}</strong><span className="notification-unread">{event.resource_type}</span></div>
+              <p>{event.resource_id ? `Resource ID: ${event.resource_id}` : "Workspace-level event"}{Object.keys(event.metadata??{}).length ? ` · ${Object.entries(event.metadata).slice(0,3).map(([key,value])=>`${key.replaceAll("_"," ")}: ${String(value)}`).join(" · ")}` : ""}</p>
+              <small>{new Date(event.created_at).toLocaleString()}</small>
+            </div>
+            <ChevronRight size={17}/>
+          </div>
+        </Link>)}</div>}
+    </section>
   </div>;
 }

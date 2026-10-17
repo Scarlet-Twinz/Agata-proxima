@@ -1,64 +1,57 @@
-import { useCallback, useEffect, useState } from "react";
-import { ArrowUpRight, RefreshCw, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
-import { api } from "../../api/client";
 import { ResourceSurface } from "../../components/console/ResourceSurface";
-
-type SecurityOverview = {
-  metrics?: { tenants?: number; policies?: number; nodes?: number; active_deployments?: number };
-  protection?: { tenantIsolation?: string; policyEnforcement?: string; verification?: string; databaseProtection?: string };
-};
+import { ActivityStream } from "../../components/console/activity/ActivityStream";
+import { InfrastructureTopology } from "../../components/console/topology/InfrastructureTopology";
+import { useOverview } from "../../hooks/useOverview";
+import { RefreshCw, ShieldCheck } from "lucide-react";
 
 export function Security() {
-  const [data, setData] = useState<SecurityOverview | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      setData(await api.get<SecurityOverview>("/api/v1/control-plane/overview"));
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to load security posture.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { void load(); }, [load]);
-
-  const protection = data?.protection;
-  const signals = [
-    { label: "Tenant boundary", value: protection?.tenantIsolation ?? "NO DATA", detail: "Tenant inventory is configuration state; runtime behavior is shown by verification evidence." },
-    { label: "Policy inventory", value: protection?.policyEnforcement ?? "NO DATA", detail: "Versioned policy records available for deployment and verification." },
-    { label: "Latest verification", value: protection?.verification ?? "NO DATA", detail: "Most recent recorded verification result for the active organization." },
-    { label: "Control-plane database", value: protection?.databaseProtection ?? "NO DATA", detail: "Live database connectivity signal from the authenticated overview endpoint." },
+  const { data, isLoading, isError, isFetching, dataUpdatedAt, refetch } = useOverview();
+  const metrics = [
+    { label: "Customer tenants", value: data?.metrics?.tenants, detail: "Tenant inventory in this organization" },
+    { label: "Configured policies", value: data?.metrics?.policies, detail: "Policies recorded by the control plane" },
+    { label: "Registered nodes", value: data?.metrics?.nodes, detail: "Node inventory, not a heartbeat guarantee" },
+    { label: "Deployments needing attention", value: data?.metrics?.active_deployments, detail: "Non-healthy, non-rolled-back deployments" },
   ];
-
-  return <div className="resource-page">
+  const checks = [
+    { label: "Tenant inventory", value: (data?.metrics?.tenants ?? 0) > 0 ? "CONFIGURED" : "NOT CONFIGURED", detail: "Inventory alone does not prove cross-tenant isolation." },
+    { label: "Policy inventory", value: (data?.metrics?.policies ?? 0) > 0 ? "CONFIGURED" : "NOT CONFIGURED", detail: "Confirm policy assignment and deployment before relying on enforcement." },
+    { label: "Latest recorded verification", value: data?.protection?.verification ?? "NO DATA", detail: "Shows the latest result returned by the control plane; it does not imply a new test was run now." },
+    { label: "Overview endpoint", value: isError ? "UNAVAILABLE" : isLoading ? "CHECKING" : "RESPONDING", detail: "The authenticated overview endpoint returned successfully; this does not independently prove every control is enforced." },
+  ];
+  return <div className="command-center">
     <div className="page-heading">
-      <div><span className="eyebrow">SECURITY</span><h1>Security posture</h1><p>Review live configuration signals, verification evidence and organization-scoped security activity.</p></div>
-      <div className="heading-actions"><Link className="secondary-action" to="/app/verification/new">Record verification result <ArrowUpRight size={15}/></Link><button className="console-refresh-button" type="button" onClick={() => void load()} disabled={loading}><RefreshCw size={15} className={loading ? "is-spinning" : ""}/>{loading ? "Refreshing" : "Refresh"}</button></div>
+      <div><span className="eyebrow">SECURITY</span><h1>Security posture</h1><p>Live organization-scoped inventory, verification evidence and operational activity.</p></div>
+      <div className="heading-actions"><span className="live-overview-status">{isFetching ? "Refreshing live data" : dataUpdatedAt ? `Updated ${new Date(dataUpdatedAt).toLocaleTimeString()}` : "Waiting for data"}</span><button className="console-refresh-button" type="button" onClick={() => void refetch()} disabled={isFetching}><RefreshCw size={15} className={isFetching ? "is-spinning" : ""}/> Refresh</button></div>
     </div>
-    {error && <div className="surface empty-state resource-error" role="alert"><strong>Security posture unavailable</strong><span>{error}</span></div>}
-    {loading && <div className="surface empty-state"><strong>Loading security signals…</strong><span>Reading the authenticated control-plane overview.</span></div>}
-    {!loading && !error && <section className="surface">
-      <div className="surface-heading"><div><span className="eyebrow">LIVE SECURITY SIGNALS</span><h2>Current organization state</h2></div><ShieldCheck size={20}/></div>
-      <div className="protection-strip">
-        {signals.map(signal => <div className="protection-state" key={signal.label}><span>{signal.label}</span><strong>{signal.value}</strong><small>{signal.detail}</small></div>)}
-      </div>
-      <div className="overview-metrics" aria-label="Security-related resource counts">
-        {[["Tenants", data?.metrics?.tenants, "/app/tenants"], ["Policies", data?.metrics?.policies, "/app/policies"], ["Nodes", data?.metrics?.nodes, "/app/nodes"], ["Deployments needing attention", data?.metrics?.active_deployments, "/app/deployments"]].map(([label, value, href]) => <Link className="overview-metric" to={String(href)} key={String(label)}><span className="overview-metric-copy"><span className="overview-metric-label">{String(label)}</span><strong>{value === undefined ? "—" : String(value)}</strong></span><ArrowUpRight size={15}/></Link>)}
-      </div>
-    </section>}
-    <div className="resource-section-grid">
-      <Link className="surface resource-info-card resource-info-card--link" to="/app/security/tenant-isolation"><span className="eyebrow">REVIEW</span><h2>Tenant isolation <ArrowUpRight size={15}/></h2><p>Inspect verification runs and review expected-allow and expected-block evidence.</p></Link>
-      <Link className="surface resource-info-card resource-info-card--link" to="/app/security/events"><span className="eyebrow">INVESTIGATE</span><h2>Security events <ArrowUpRight size={15}/></h2><p>Open organization-scoped audit and security activity with individual event details.</p></Link>
-      <Link className="surface resource-info-card resource-info-card--link" to="/app/verification"><span className="eyebrow">VERIFY</span><h2>Verification evidence <ArrowUpRight size={15}/></h2><p>Run protected-path tests, then record their outcomes and evidence. Inspect prohibited cross-tenant access attempts.</p></Link>
-    </div>
-    <aside className="surface resource-links"><span className="eyebrow">RELATED</span><Link to="/app/audit">Audit explorer</Link><Link to="/docs/security">Security documentation</Link><Link to="/docs/troubleshooting">Troubleshooting</Link></aside>
+    {isError && <div className="system-notice system-notice--warning"><strong>Security telemetry unavailable.</strong><span>Confirm the authenticated session and control-plane health before relying on this view.</span></div>}
+    <section className="overview-metrics" aria-label="Security inventory metrics">
+      {metrics.map(({label,value,detail}) => <article className="overview-metric" key={label}><span className="overview-metric-icon"><ShieldCheck size={18}/></span><span className="overview-metric-copy"><span className="overview-metric-label">{label}</span><strong>{isLoading ? "—" : value ?? "—"}</strong><small>{detail}</small></span></article>)}
+    </section>
+    <section className="surface">
+      <div className="surface-heading"><div><span className="eyebrow">CONTROL CHECKS</span><h2>Current configuration signals</h2></div></div>
+      <div className="resource-section-grid">{checks.map(({label,value,detail}) => <article className="surface resource-info-card" key={label}><span className="eyebrow">{label}</span><h2>{isLoading ? "CHECKING" : value}</h2><p>{detail}</p></article>)}</div>
+    </section>
+    <section className="surface surface--wide">
+      <div className="surface-heading"><div><span className="eyebrow">INFRASTRUCTURE</span><h2>Proxima topology</h2></div><Link className="table-detail-link" to="/app/nodes">Manage nodes</Link></div>
+      <InfrastructureTopology nodes={data?.nodes ?? []}/>
+    </section>
+    <section className="surface">
+      <div className="surface-heading"><div><span className="eyebrow">AUDIT</span><h2>Recent security activity</h2></div><Link className="table-detail-link" to="/app/audit">Open audit</Link></div>
+      <ActivityStream items={data?.recentActivity ?? []}/>
+    </section>
+    <div className="resource-links surface"><span className="eyebrow">RELATED SECURITY WORKFLOWS</span><Link to="/app/verification">Verification evidence</Link><Link to="/app/attestations">Signed attestations</Link><Link to="/app/audit">Audit explorer</Link><Link to="/app/security/events">Security events</Link><Link to="/app/security/tenant-isolation">Tenant isolation</Link><Link to="/app/tenants">Tenant registry</Link><Link to="/app/policies">Policy control</Link><Link to="/app/settings/authentication">Authentication and SSO</Link><Link to="/app/developer/api-keys">API key management</Link><Link to="/app/developer/webhooks">Webhook security</Link><Link to="/docs/security">Security documentation</Link></div>
   </div>;
+}
+
+export function Access() {
+  return <ResourceSurface endpoint="/api/v1/organization/team" detailBase="/app/team/members" eyebrow="ACCESS" title="Access and membership" description="Review live organization membership and role assignments. Use Team to invite members, revoke invitations and manage the access lifecycle." sections={[
+    {title:"Member management",text:"Invite or remove members and review current roles in the Team workspace.",href:"/app/team"},
+    {title:"Role responsibilities",text:"Use owner, admin, operator and viewer roles according to the least-privilege principle.",href:"/app/team/roles"},
+    {title:"Authentication",text:"Review session behavior and enterprise identity configuration.",href:"/app/settings/authentication"},
+  ]} links={[
+    {label:"Team management",href:"/app/team"},{label:"Role guide",href:"/app/team/roles"},{label:"Audit access changes",href:"/app/audit"},
+  ]}/>;
 }
 
 export function Tenants() {
@@ -86,7 +79,7 @@ export function Deployments() {
 }
 
 export function Verification() {
-  return <ResourceSurface endpoint="/api/v1/verifications" detailBase="/app/verification" createHref="/app/verification/new" createLabel="Record result" eyebrow="VERIFICATION" title="Verification evidence" description="Inspect and record tenant-isolation verification outcomes and evidence." links={[
+  return <ResourceSurface endpoint="/api/v1/verifications" detailBase="/app/verification" createHref="/app/verification/new" createLabel="Record result" eyebrow="VERIFICATION" title="Verification evidence" description="Review saved test outcomes and evidence. To perform an isolation test, run it through your protected application path first, then record the actual results here." links={[
     {label:"Security posture",href:"/app/security"},{label:"Audit",href:"/app/audit"},{label:"Verification documentation",href:"/docs/verification"},
   ]}/>;
 }
@@ -135,7 +128,7 @@ export function Settings() {
     {title:"Authentication",text:"Email verification, password and active session behavior.",href:"/app/settings/authentication"},
     {title:"Enterprise identity",text:"Microsoft Entra/OIDC connection state, configuration and readiness.",href:"/app/settings/identity"},
     {title:"Security",text:"Security controls and workspace protection preferences.",href:"/app/settings/security"},
-    {title:"Environments",text:"Review environment labels across registered nodes and deployment targets.",href:"/app/settings/environments"},
+    {title:"Environments",text:"Understand production and future environment boundaries.",href:"/app/settings/environments"},
     {title:"Notifications",text:"Operational and security notification preferences.",href:"/app/settings/notifications"},
   ]} links={[
     {label:"Authentication",href:"/app/settings/authentication"},{label:"Enterprise identity",href:"/app/settings/identity"},{label:"Security",href:"/app/settings/security"},

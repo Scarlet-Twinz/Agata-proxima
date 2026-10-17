@@ -34,12 +34,15 @@ const primary = [
 
 const security = [
   { to: "/app/verification", label: "Verification", icon: ShieldCheck },
+  { to: "/app/attestations", label: "Attestations", icon: ShieldCheck },
   { to: "/app/audit", label: "Audit", icon: FileText },
   { to: "/app/security", label: "Security", icon: ShieldCheck },
 ];
 
 const organization = [
   { to: "/app/team", label: "Team", icon: Users },
+  { to: "/app/settings/members", label: "Access", icon: Users },
+  { to: "/app/settings/authentication", label: "Authentication", icon: ShieldCheck },
   { to: "/app/billing", label: "Billing", icon: CreditCard },
   { to: "/app/developer", label: "Developer", icon: KeyRound },
 ];

@@ -1477,6 +1477,144 @@
           }
         }
       }
+    },
+    "/api/v1/developer/environments": {
+      "get": {
+        "summary": "List environments in the active organization",
+        "description": "Returns organization-scoped development, staging and production environment records. Organization is the account boundary; environments are stages within it.",
+        "responses": {
+          "200": {
+            "description": "Environment inventory"
+          },
+          "401": {
+            "description": "Authentication required"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create an organization environment",
+        "description": "Creates a named environment inside the authenticated organization. Environment names do not create organizations or automatically isolate network, database, API-key or webhook credentials.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "slug": {
+                    "type": "string",
+                    "description": "Optional; normalized to a lowercase URL-safe slug."
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Environment created"
+          },
+          "400": {
+            "description": "Invalid environment fields"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "402": {
+            "description": "Environment plan limit reached"
+          },
+          "409": {
+            "description": "Environment slug already exists"
+          }
+        }
+      }
+    },
+    "/api/v1/developer/environments/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "patch": {
+        "summary": "Update environment metadata or status",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "disabled"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Environment updated"
+          },
+          "400": {
+            "description": "Invalid environment fields"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Environment not found in the active organization"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete an unused environment",
+        "description": "Deletion is rejected when a registered node references the environment; disable it instead.",
+        "responses": {
+          "200": {
+            "description": "Environment deleted"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Environment not found"
+          },
+          "409": {
+            "description": "Environment is in use"
+          }
+        }
+      }
     }
   },
   "components": {

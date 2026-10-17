@@ -1,0 +1,26 @@
+name: Agata integration smoke
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    environment: integration-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify required configuration
+        env:
+          AGATA_API_BASE_URL: ${{ secrets.AGATA_API_BASE_URL }}
+          AGATA_API_KEY: ${{ secrets.AGATA_API_KEY }}
+        run: |
+          test -n "$AGATA_API_BASE_URL"
+          test "${AGATA_API_KEY#aga_}" != "$AGATA_API_KEY"
+      - name: Run smoke checks
+        env:
+          AGATA_API_BASE_URL: ${{ secrets.AGATA_API_BASE_URL }}
+          AGATA_API_KEY: ${{ secrets.AGATA_API_KEY }}
+        run: bash ./cli/agata.sh

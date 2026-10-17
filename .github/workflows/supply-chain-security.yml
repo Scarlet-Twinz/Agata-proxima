@@ -67,6 +67,18 @@ jobs:
         run: npm audit --audit-level=high
         working-directory: frontend
 
+      - name: Install integration starter kit dependencies
+        run: npm ci
+        working-directory: download-kit
+
+      - name: Validate integration SDK, CLI and receiver examples
+        run: npm run check
+        working-directory: download-kit
+
+      - name: Audit integration starter kit dependencies
+        run: npm audit --audit-level=high
+        working-directory: download-kit
+
       - name: Generate frontend CycloneDX SBOM
         run: npm sbom --sbom-format=cyclonedx > "$RUNNER_TEMP/frontend-sbom.cdx.json"
         working-directory: frontend

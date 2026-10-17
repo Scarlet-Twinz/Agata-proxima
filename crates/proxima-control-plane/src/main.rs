@@ -13,7 +13,7 @@ use axum::{
     extract::{Path, State},
     http::{header, HeaderMap, HeaderName, HeaderValue, StatusCode},
     response::{Html, IntoResponse, Response},
-    routing::{delete, get, post},
+    routing::{delete, get, patch, post},
     Json, Router,
 };
 use hmac::Mac;
@@ -179,6 +179,20 @@ struct ApiKeyInput {
 }
 
 #[derive(Deserialize)]
+struct EnvironmentInput {
+    name: String,
+    slug: Option<String>,
+    description: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct EnvironmentPatchInput {
+    name: Option<String>,
+    description: Option<String>,
+    status: Option<String>,
+}
+
+#[derive(Deserialize)]
 struct WebhookInput {
     name: String,
     endpoint_url: String,
@@ -337,6 +351,11 @@ async fn main() -> Result<()> {
     ))
     .execute(&db)
     .await?;
+    sqlx::raw_sql(include_str!(
+        "../migrations/0026_organization_environments.sql"
+    ))
+    .execute(&db)
+    .await?;
     sqlx::query("UPDATE organization_entitlements SET plan_key='free', billing_status='active' WHERE plan_key='agata'")
         .execute(&db)
         .await?;
@@ -459,6 +478,14 @@ async fn main() -> Result<()> {
         )
         .route("/api/v1/organizations/{id}", delete(delete_organization))
         .route("/api/v1/tenants", get(tenants).post(create_tenant))
+        .route(
+            "/api/v1/developer/environments",
+            get(developer_environments).post(create_developer_environment),
+        )
+        .route(
+            "/api/v1/developer/environments/{id}",
+            patch(update_developer_environment).delete(delete_developer_environment),
+        )
         .route("/api/v1/policies", get(policies).post(create_policy))
         .route("/api/v1/nodes", get(nodes).post(create_node))
         .route("/api/v1/nodes/enroll", post(enroll_node))
@@ -868,9 +895,10 @@ async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Respo
     )
     .await;
 
-    let remember_me = input.remember_me;
-    let response = match create_session(&s.db, user_id, organization_id, remember_me).await {
-        Ok((token, csrf)) => auth_response(&s, user_id, organization_id, csrf, token, remember_me),
+    let response = match create_session(&s.db, user_id, organization_id, input.remember_me).await {
+        Ok((token, csrf)) => {
+            auth_response(&s, user_id, organization_id, csrf, token, input.remember_me)
+        }
         Err(e) => return db_error(e),
     };
 
@@ -1596,7 +1624,12 @@ async fn control_plane_overview(State(s): State<AppState>, headers: HeaderMap) -
         Ok(v) => v,
         Err(c) => return c.into_response(),
     };
-    let tenant_count = scalar_count(&s.db, "SELECT count(*) FROM tenants t JOIN projects p ON p.id=t.project_id WHERE p.organization_id=$1", ctx.organization_id).await;
+    let tenant_count = scalar_count(
+        &s.db,
+        "SELECT count(*) FROM tenants WHERE organization_id=$1",
+        ctx.organization_id,
+    )
+    .await;
     let policy_count = scalar_count(
         &s.db,
         "SELECT count(*) FROM policies WHERE organization_id=$1",
@@ -1611,27 +1644,8 @@ async fn control_plane_overview(State(s): State<AppState>, headers: HeaderMap) -
     .await;
     let active_deployments = scalar_count(&s.db, "SELECT count(*) FROM deployments WHERE organization_id=$1 AND status NOT IN ('healthy','rolled_back')", ctx.organization_id).await;
     let latest_verification = sqlx::query("SELECT status,evidence FROM verification_results WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 1").bind(ctx.organization_id).fetch_optional(&s.db).await.ok().flatten();
-    // Return a complete 30-day series, including genuine zero-activity days.
-    // This gives the chart a useful time axis without inventing verification runs.
-    let trend_rows = sqlx::query(
-        "SELECT days.timestamp AS timestamp, count(vr.created_at)::bigint AS value
-         FROM generate_series(
-             date_trunc('day', now()) - interval '29 days',
-             date_trunc('day', now()),
-             interval '1 day'
-         ) AS days(timestamp)
-         LEFT JOIN verification_results vr
-           ON vr.organization_id=$1
-          AND vr.created_at >= days.timestamp
-          AND vr.created_at < days.timestamp + interval '1 day'
-         GROUP BY days.timestamp
-         ORDER BY days.timestamp DESC",
-    )
-    .bind(ctx.organization_id)
-    .fetch_all(&s.db)
-    .await
-    .unwrap_or_default();
-    let tenant_rows = sqlx::query("SELECT t.id,t.name,t.status FROM tenants t JOIN projects p ON p.id=t.project_id WHERE p.organization_id=$1 ORDER BY t.created_at DESC LIMIT 12").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
+    let trend_rows = sqlx::query("SELECT days.day AS timestamp,count(v.id)::bigint AS value FROM generate_series(date_trunc('day',now())-interval '29 days',date_trunc('day',now()),interval '1 day') AS days(day) LEFT JOIN verification_results v ON v.organization_id=$1 AND date_trunc('day',v.created_at)=days.day GROUP BY days.day ORDER BY days.day ASC LIMIT 30").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
+    let tenant_rows = sqlx::query("SELECT id,name,status FROM tenants WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 12").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
     let node_rows = sqlx::query("SELECT id,name,region,environment,status,version FROM nodes WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 12").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
     let audit_rows = sqlx::query("SELECT id,action,resource_type,resource_id,created_at FROM audit_events WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 10").bind(ctx.organization_id).fetch_all(&s.db).await.unwrap_or_default();
     let verification_state = latest_verification
@@ -1657,7 +1671,7 @@ async fn control_plane_overview(State(s): State<AppState>, headers: HeaderMap) -
             "verification": verification_state,
             "databaseProtection": if database_connected {"CONNECTED"} else {"UNAVAILABLE"}
         },
-        "verificationTrend": trend_rows.iter().rev().map(|r| json!({"timestamp":r.get::<chrono::DateTime<chrono::Utc>,_>("timestamp"),"value":r.get::<i64,_>("value")})).collect::<Vec<_>>(),
+        "verificationTrend": trend_rows.iter().map(|r| json!({"timestamp":r.get::<chrono::DateTime<chrono::Utc>,_>("timestamp"),"value":r.get::<i64,_>("value")})).collect::<Vec<_>>(),
         "tenants": tenant_rows.iter().map(|r| json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"status":r.get::<String,_>("status")})).collect::<Vec<_>>(),
         "nodes": node_rows.iter().map(|r| json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"region":r.get::<String,_>("region"),"environment":r.get::<String,_>("environment"),"status":r.get::<String,_>("status"),"version":r.get::<String,_>("version")})).collect::<Vec<_>>(),
         "recentActivity": audit_rows.iter().map(|r| json!({"id":r.get::<Uuid,_>("id"),"type":r.get::<String,_>("action"),"message":format!("{} {}",r.get::<String,_>("resource_type"),r.get::<Option<Uuid>,_>("resource_id").map(|v|v.to_string()).unwrap_or_default()),"timestamp":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),"href":"/app/audit"})).collect::<Vec<_>>()
@@ -2826,6 +2840,288 @@ async fn create_policy(
     }
 }
 
+fn normalize_environment_slug(value: &str) -> String {
+    let mut slug = String::new();
+    let mut pending_dash = false;
+    for ch in value.trim().chars() {
+        if ch.is_ascii_alphanumeric() {
+            if pending_dash && !slug.is_empty() {
+                slug.push('-');
+            }
+            slug.push(ch.to_ascii_lowercase());
+            pending_dash = false;
+        } else if !slug.is_empty() {
+            pending_dash = true;
+        }
+    }
+    slug
+}
+
+async fn developer_environments(State(s): State<AppState>, headers: HeaderMap) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    match sqlx::query(
+        "SELECT e.id,e.name,e.slug,e.description,e.status,e.created_at,e.updated_at,
+                (SELECT count(*) FROM nodes n
+                 WHERE n.organization_id=e.organization_id
+                   AND (lower(n.environment)=e.slug OR lower(n.environment)=lower(e.name)))::bigint AS node_count
+         FROM organization_environments e
+         WHERE e.organization_id=$1
+         ORDER BY CASE WHEN e.status='active' THEN 0 ELSE 1 END, e.name",
+    )
+    .bind(ctx.organization_id)
+    .fetch_all(&s.db)
+    .await
+    {
+        Ok(rows) => Json(rows.iter().map(|r| json!({
+            "id":r.get::<Uuid,_>("id"),
+            "name":r.get::<String,_>("name"),
+            "slug":r.get::<String,_>("slug"),
+            "description":r.get::<String,_>("description"),
+            "status":r.get::<String,_>("status"),
+            "node_count":r.get::<i64,_>("node_count"),
+            "created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),
+            "updated_at":r.get::<chrono::DateTime<chrono::Utc>,_>("updated_at")
+        })).collect::<Vec<_>>()).into_response(),
+        Err(e) => db_error(e),
+    }
+}
+
+async fn create_developer_environment(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<EnvironmentInput>,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
+
+    let name = input.name.trim();
+    if name.is_empty() || name.len() > 100 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok":false,"error":"invalid_environment_name",
+                "message":"Environment name must contain 1–100 characters."
+            })),
+        )
+            .into_response();
+    }
+    let slug = normalize_environment_slug(input.slug.as_deref().unwrap_or(name));
+    if slug.is_empty() || slug.len() > 100 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok":false,"error":"invalid_environment_slug",
+                "message":"Environment slug must contain letters or numbers and may use hyphens between words."
+            })),
+        )
+            .into_response();
+    }
+    let description = input.description.unwrap_or_default().trim().to_string();
+    if description.len() > 500 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok":false,"error":"invalid_environment_description",
+                "message":"Environment description must be 500 characters or fewer."
+            })),
+        )
+            .into_response();
+    }
+
+    if let Err(response) =
+        production::enforce_capacity(&s.db, ctx.organization_id, "environments").await
+    {
+        return response;
+    }
+
+    let id = Uuid::new_v4();
+    match sqlx::query(
+        "INSERT INTO organization_environments(id,organization_id,name,slug,description,status,created_by)
+         VALUES($1,$2,$3,$4,$5,'active',$6)
+         RETURNING id,name,slug,description,status,created_at,updated_at",
+    )
+    .bind(id)
+    .bind(ctx.organization_id)
+    .bind(name)
+    .bind(&slug)
+    .bind(description)
+    .bind(ctx.user_id)
+    .fetch_one(&s.db)
+    .await
+    {
+        Ok(row) => {
+            audit(&s.db, ctx.organization_id, ctx.user_id, "developer.environment.created", "environment", Some(id), json!({"slug":slug})).await;
+            Json(json!({
+                "id":row.get::<Uuid,_>("id"),
+                "name":row.get::<String,_>("name"),
+                "slug":row.get::<String,_>("slug"),
+                "description":row.get::<String,_>("description"),
+                "status":row.get::<String,_>("status"),
+                "node_count":0,
+                "created_at":row.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),
+                "updated_at":row.get::<chrono::DateTime<chrono::Utc>,_>("updated_at")
+            })).into_response()
+        }
+        Err(e) => unique_error(e),
+    }
+}
+
+async fn update_developer_environment(
+    State(s): State<AppState>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+    Json(input): Json<EnvironmentPatchInput>,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
+    if input
+        .name
+        .as_ref()
+        .is_some_and(|v| v.trim().is_empty() || v.trim().len() > 100)
+    {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok":false,"error":"invalid_environment_name",
+                "message":"Environment name must contain 1–100 characters."
+            })),
+        )
+            .into_response();
+    }
+    if input.description.as_ref().is_some_and(|v| v.len() > 500) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok":false,"error":"invalid_environment_description",
+                "message":"Environment description must be 500 characters or fewer."
+            })),
+        )
+            .into_response();
+    }
+    if input
+        .status
+        .as_deref()
+        .is_some_and(|v| !matches!(v, "active" | "disabled"))
+    {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok":false,"error":"invalid_environment_status",
+                "message":"Environment status must be active or disabled."
+            })),
+        )
+            .into_response();
+    }
+    match sqlx::query(
+        "UPDATE organization_environments
+         SET name=COALESCE($3,name), description=COALESCE($4,description),
+             status=COALESCE($5,status), updated_at=now()
+         WHERE id=$1 AND organization_id=$2
+         RETURNING id,name,slug,description,status,created_at,updated_at",
+    )
+    .bind(id)
+    .bind(ctx.organization_id)
+    .bind(input.name.map(|v| v.trim().to_string()))
+    .bind(input.description.map(|v| v.trim().to_string()))
+    .bind(input.status)
+    .fetch_optional(&s.db)
+    .await
+    {
+        Ok(Some(row)) => {
+            audit(&s.db, ctx.organization_id, ctx.user_id, "developer.environment.updated", "environment", Some(id), json!({"status":row.get::<String,_>("status")})).await;
+            Json(json!({
+                "id":row.get::<Uuid,_>("id"),
+                "name":row.get::<String,_>("name"),
+                "slug":row.get::<String,_>("slug"),
+                "description":row.get::<String,_>("description"),
+                "status":row.get::<String,_>("status"),
+                "created_at":row.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),
+                "updated_at":row.get::<chrono::DateTime<chrono::Utc>,_>("updated_at")
+            })).into_response()
+        }
+        Ok(None) => (StatusCode::NOT_FOUND, Json(json!({
+            "ok":false,"error":"environment_not_found","message":"Environment not found in the active organization."
+        }))).into_response(),
+        Err(e) => db_error(e),
+    }
+}
+
+async fn delete_developer_environment(
+    State(s): State<AppState>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
+
+    let result = sqlx::query(
+        "DELETE FROM organization_environments e
+         WHERE e.id=$1 AND e.organization_id=$2
+           AND NOT EXISTS (
+               SELECT 1 FROM nodes n
+               WHERE n.organization_id=e.organization_id
+                 AND (lower(n.environment)=e.slug OR lower(n.environment)=lower(e.name))
+           )",
+    )
+    .bind(id)
+    .bind(ctx.organization_id)
+    .execute(&s.db)
+    .await;
+    match result {
+        Ok(r) if r.rows_affected() == 1 => {
+            audit(
+                &s.db,
+                ctx.organization_id,
+                ctx.user_id,
+                "developer.environment.deleted",
+                "environment",
+                Some(id),
+                json!({}),
+            )
+            .await;
+            Json(json!({"ok":true})).into_response()
+        }
+        Ok(_) => {
+            let exists = sqlx::query_scalar::<_, bool>(
+                "SELECT EXISTS(SELECT 1 FROM organization_environments WHERE id=$1 AND organization_id=$2)",
+            )
+            .bind(id)
+            .bind(ctx.organization_id)
+            .fetch_one(&s.db)
+            .await;
+            match exists {
+                Ok(true) => (StatusCode::CONFLICT, Json(json!({
+                    "ok":false,"error":"environment_in_use",
+                    "message":"This environment is referenced by registered nodes. Disable it instead of deleting it."
+                }))).into_response(),
+                Ok(false) => (StatusCode::NOT_FOUND, Json(json!({
+                    "ok":false,"error":"environment_not_found","message":"Environment not found in the active organization."
+                }))).into_response(),
+                Err(e) => db_error(e),
+            }
+        }
+        Err(e) => db_error(e),
+    }
+}
+
 async fn nodes(State(s): State<AppState>, headers: HeaderMap) -> Response {
     let ctx = match authenticate(&s, &headers).await {
         Ok(v) => v,
@@ -2866,17 +3162,78 @@ async fn create_node(
         return response;
     }
 
-    let environment = input
+    let environment_label = input
         .environment
         .clone()
-        .unwrap_or_else(|| "production".into());
-    if environment.eq_ignore_ascii_case("private") {
+        .unwrap_or_else(|| "production".into())
+        .trim()
+        .to_string();
+    if environment_label.is_empty() || environment_label.len() > 100 {
+        return bad("Environment name must contain 1–100 characters.");
+    }
+    if environment_label.eq_ignore_ascii_case("private") {
         if let Err(response) =
             production::require_feature(&s.db, ctx.organization_id, "private_deployment").await
         {
             return response;
         }
     }
+
+    // A node's environment is backed by the organization environment registry.
+    // For existing workflows, first node registration creates the stage if needed.
+    let environment_slug = normalize_environment_slug(&environment_label);
+    if environment_slug.is_empty() {
+        return bad("Environment name must contain letters or numbers.");
+    }
+    let known_environment = match sqlx::query_scalar::<_, String>(
+        "SELECT status FROM organization_environments WHERE organization_id=$1 AND slug=$2",
+    )
+    .bind(ctx.organization_id)
+    .bind(&environment_slug)
+    .fetch_optional(&s.db)
+    .await
+    {
+        Ok(value) => value,
+        Err(e) => return db_error(e),
+    };
+    let environment = match known_environment.as_deref() {
+        Some("active") => environment_slug,
+        Some(_) => {
+            return (
+                StatusCode::CONFLICT,
+                Json(json!({
+                    "ok":false,"error":"environment_disabled",
+                    "message":"This environment is disabled. Enable it in Developer → Environments before registering nodes."
+                })),
+            ).into_response();
+        }
+        None => {
+            if let Err(response) =
+                production::enforce_capacity(&s.db, ctx.organization_id, "environments").await
+            {
+                return response;
+            }
+            let environment_id = Uuid::new_v4();
+            match sqlx::query(
+                "INSERT INTO organization_environments(id,organization_id,name,slug,description,status,created_by)
+                 VALUES($1,$2,$3,$4,'Created when registering a node.','active',$5)",
+            )
+            .bind(environment_id)
+            .bind(ctx.organization_id)
+            .bind(&environment_label)
+            .bind(&environment_slug)
+            .bind(ctx.user_id)
+            .execute(&s.db)
+            .await
+            {
+                Ok(_) => {
+                    audit(&s.db, ctx.organization_id, ctx.user_id, "developer.environment.created", "environment", Some(environment_id), json!({"slug":environment_slug,"source":"node_registration"})).await;
+                    environment_slug
+                }
+                Err(e) => return unique_error(e),
+            }
+        }
+    };
     if let Err(response) =
         production::enforce_environment_capacity(&s.db, ctx.organization_id, &environment).await
     {
@@ -3239,7 +3596,7 @@ async fn create_verification(
     let id = Uuid::new_v4();
     if let Some(tenant_id) = input.tenant_id {
         let tenant_exists = match sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS(SELECT 1 FROM tenants WHERE id=$1 AND organization_id=$2)",
+            "SELECT EXISTS(SELECT 1 FROM tenants t WHERE t.id=$1 AND t.organization_id=$2)",
         )
         .bind(tenant_id)
         .bind(ctx.organization_id)
@@ -4381,14 +4738,6 @@ fn require_write(ctx: &AuthContext, headers: &HeaderMap) -> Result<(), StatusCod
     }
 }
 
-fn session_max_age_seconds(remember_me: bool) -> i64 {
-    if remember_me {
-        2_592_000
-    } else {
-        43_200
-    }
-}
-
 fn auth_response(
     s: &AppState,
     user: Uuid,
@@ -4398,9 +4747,13 @@ fn auth_response(
     remember_me: bool,
 ) -> Response {
     let secure = if s.secure_cookie { "; Secure" } else { "" };
-    let max_age = session_max_age_seconds(remember_me);
+    let cookie_max_age = if remember_me {
+        30 * 24 * 60 * 60_i64
+    } else {
+        12 * 60 * 60_i64
+    };
     let cookie = format!(
-        "proxima_session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={max_age}{secure}"
+        "proxima_session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={cookie_max_age}{secure}"
     );
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -4709,15 +5062,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn remember_me_selects_the_expected_session_lifetime() {
-        assert_eq!(session_max_age_seconds(false), 43_200);
-        assert_eq!(session_max_age_seconds(true), 2_592_000);
-    }
-
-    #[test]
     fn slugify_is_stable() {
         assert_eq!(slugify("Acme Production!"), "acme-production");
         assert_eq!(slugify("  Tenant_A  "), "tenant-a");
+    }
+
+    #[test]
+    fn environment_slug_is_stable_and_url_safe() {
+        assert_eq!(normalize_environment_slug("Production"), "production");
+        assert_eq!(normalize_environment_slug("QA / Staging"), "qa-staging");
+        assert_eq!(normalize_environment_slug(" -- "), "");
     }
 
     #[test]

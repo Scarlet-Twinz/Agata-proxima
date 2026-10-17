@@ -57,7 +57,7 @@ const guideGroups = [
     links: [
       { title: "Security architecture", text: "Review responsibilities across identity, enforcement and PostgreSQL controls.", to: "/docs/security" },
       { title: "Threat model", text: "Understand assumptions, trust boundaries and failure cases.", to: "/security" },
-      { title: "Troubleshooting", text: "Work from the failing boundary toward logs and evidence.", to: "/docs/troubleshooting" },
+      { title: "Troubleshooting", text: "Diagnose Docker Desktop, Compose, PostgreSQL, HTTP, authentication and integration failures.", to: "/docs/troubleshooting" },
     ],
   },
 ];
