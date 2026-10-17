@@ -24,9 +24,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Skip scheduled probe until a public URL is configured
+      - name: Require a public URL for scheduled production monitoring
         if: ${{ github.event_name == 'schedule' && env.AGATA_PUBLIC_BASE_URL == '' }}
-        run: echo "Skipped production smoke probe because AGATA_PUBLIC_BASE_URL is not configured yet."
+        shell: bash
+        run: |
+          echo "::error::Scheduled production monitoring is not configured. Set the AGATA_PUBLIC_BASE_URL repository secret to the public HTTPS origin."
+          exit 1
 
       - name: Require a target for a manual run
         if: ${{ github.event_name == 'workflow_dispatch' && env.AGATA_PUBLIC_BASE_URL == '' }}
@@ -52,9 +55,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --max-time 10 "$AGATA_PUBLIC_BASE_URL/api/v1/health"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --max-time 10 "$AGATA_PUBLIC_BASE_URL/api/v1/health"
 
       - name: Check full production configuration readiness
-        if: ${{ github.event_name == 'workflow_dispatch' && env.AGATA_PUBLIC_BASE_URL != '' }}
+        if: ${{ env.AGATA_PUBLIC_BASE_URL != '' }}
         shell: bash
-        run: bash scripts/ops/check-control-plane.sh
+        run: AGATA_PUBLIC_BASE_URL="$AGATA_PUBLIC_BASE_URL" bash scripts/ops/check-control-plane.sh
