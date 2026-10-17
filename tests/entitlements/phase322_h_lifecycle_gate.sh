@@ -50,11 +50,11 @@ INSERT INTO memberships(user_id,organization_id,role) VALUES
 INSERT INTO nodes(id,organization_id,name,environment,region) VALUES
  ('d6000000-0000-4000-8000-000000000001','${org_a}','node-prod','production','auto'),
  ('d6000000-0000-4000-8000-000000000002','${org_a}','node-stage','staging','auto');
-INSERT INTO tenants(id,project_id,name,slug) VALUES
- ('e6000000-0000-4000-8000-000000000001','${project_a}','tenant-1','tenant-1'),
- ('e6000000-0000-4000-8000-000000000002','${project_a}','tenant-2','tenant-2'),
- ('e6000000-0000-4000-8000-000000000003','${project_a}','tenant-3','tenant-3'),
- ('e6000000-0000-4000-8000-000000000004','${project_a}','tenant-4','tenant-4');
+INSERT INTO tenants(id,project_id,organization_id,name,slug) VALUES
+ ('e6000000-0000-4000-8000-000000000001','${project_a}','${org_a}','tenant-1','tenant-1'),
+ ('e6000000-0000-4000-8000-000000000002','${project_a}','${org_a}','tenant-2','tenant-2'),
+ ('e6000000-0000-4000-8000-000000000003','${project_a}','${org_a}','tenant-3','tenant-3'),
+ ('e6000000-0000-4000-8000-000000000004','${project_a}','${org_a}','tenant-4','tenant-4');
 INSERT INTO webhooks(id,organization_id,name,endpoint_url,signing_secret_hash,signing_secret_hint,events,enabled) VALUES
  ('f6000000-0000-4000-8000-000000000001','${org_a}','hook-1','https://example.test/1',decode(repeat('1',64),'hex'),'hint-1','[]'::jsonb,true),
  ('f6000000-0000-4000-8000-000000000002','${org_a}','hook-2','https://example.test/2',decode(repeat('2',64),'hex'),'hint-2','[]'::jsonb,true);
