@@ -30,7 +30,7 @@ export function ActivityChart({ points, height = 250 }: Props) {
       .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
       .join(" ");
 
-    return { coordinates, path };
+    return { coordinates, path, min, max };
   }, [points, height]);
 
   return (
@@ -51,7 +51,7 @@ export function ActivityChart({ points, height = 250 }: Props) {
 
         {[0, 1, 2, 3].map((step) => {
           const y = 28 + (step / 3) * (height - 56);
-          const label = max === min ? max : Math.round(max - (step / 3) * (max - min));
+          const label = plotted.max === plotted.min ? plotted.max : Math.round(plotted.max - (step / 3) * (plotted.max - plotted.min));
           return (
             <g key={step}>
               <line x1="28" x2="872" y1={y} y2={y} className="chart-gridline" />
