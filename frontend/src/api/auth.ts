@@ -35,11 +35,11 @@ export async function getSession(): Promise<Session | null> {
   return readResponse<Session>(response);
 }
 
-export async function login(email: string, password: string): Promise<AuthResponse> {
+export async function login(email: string, password: string, rememberMe = false): Promise<AuthResponse> {
   const response = await fetch("/api/v1/auth/login", {
     method:"POST", credentials:"include",
     headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({email,password}),
+    body:JSON.stringify({email,password,remember_me:rememberMe}),
   });
   const data = await readResponse<AuthResponse>(response);
   sessionStorage.setItem("proxima_csrf", data.csrf_token);
