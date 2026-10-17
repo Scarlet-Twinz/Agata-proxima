@@ -57,7 +57,7 @@ const guideGroups = [
     links: [
       { title: "Security architecture", text: "Review responsibilities across identity, enforcement and PostgreSQL controls.", to: "/docs/security" },
       { title: "Threat model", text: "Understand assumptions, trust boundaries and failure cases.", to: "/security" },
-      { title: "Troubleshooting", text: "Work from the failing boundary toward logs and evidence.", to: "/docs/troubleshooting" },
+      { title: "Troubleshooting", text: "Diagnose Docker Desktop, Compose, PostgreSQL, HTTP, authentication and integration failures.", to: "/docs/troubleshooting" },
     ],
   },
 ];
@@ -188,6 +188,7 @@ export function Docs() {
           <div className="docs-support-links">
             <Link to="/docs/verification"><CheckCircle2 size={17} /> Verification checklist</Link>
             <Link to="/docs/troubleshooting"><LifeBuoy size={17} /> Troubleshooting</Link>
+            <Link to="/downloads"><ArrowRight size={17} /> Downloads & integrations</Link>
             <Link to="/security"><ShieldCheck size={17} /> Security model</Link>
             <Link to="/docs/operations"><Network size={17} /> Operations guide</Link>
           </div>
