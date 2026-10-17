@@ -882,7 +882,7 @@ function EnvironmentManager(){
       <span className="eyebrow">ORGANIZATION ≠ ENVIRONMENT</span>
       <h2>One organization can contain several environments</h2>
       <p><strong>Organization</strong> is the account, membership and billing boundary. An <strong>environment</strong> is a named stage inside it, such as development, staging or production. Creating an environment does not create another organization, database, network or secret store.</p>
-      <p>API keys and webhook subscriptions are currently organization-scoped. For safer separation, create purpose-specific credentials and webhook destinations for each stage, and store each secret only in that stage's server-side secret store. Environment labels alone are not a security boundary.</p>
+      <p>You do not have to create an environment just to create an API key. Create development, staging and production stages when your deployment actually has separate stages or node groups. You can associate a service account with a stage to track which integration belongs there. API keys and webhook subscriptions remain organization-scoped, and an environment label is not a separate database, network or security boundary.</p>
     </section>
     <section className="surface environment-capacity-summary">
       <div><span className="eyebrow">PLAN CAPACITY</span><h2>{activeCount} / {environmentLimit===null?"—":environmentLimit} active environments</h2><p>{planName ? "Current plan: "+planName+". " : ""}An environment is a named stage within this organization. Node registration may have already created the stage used by your existing node.</p></div>
