@@ -21,7 +21,7 @@ export function ActivityChart({ points, height = 250 }: Props) {
       x: points.length === 1
         ? width / 2
         : padding + (index / (points.length - 1)) * usableWidth,
-      y: max === min ? height / 2 : height - padding - ((point.value - min) / range) * usableHeight,
+      y: max === min ? (max === 0 ? height - padding : height / 2) : height - padding - ((point.value - min) / range) * usableHeight,
       value: point.value,
       timestamp: point.timestamp,
     }));
@@ -90,11 +90,15 @@ export function ActivityChart({ points, height = 250 }: Props) {
           <span>Run a verification to populate this graph. No sample telemetry is being invented.</span>
         </div>
       )}
-      {points.length === 1 && (
-        <p className="chart-caption">
-          First recorded verification · {points[0].value} run
-          {points[0].value === 1 ? "" : "s"} on this day
-        </p>
+      {points.length > 0 && points.every((point) => point.value === 0) && (
+        <p className="chart-caption">No verification runs recorded in the last 30 days.</p>
+      )}
+      {points.length > 0 && (
+        <div className="chart-axis-labels" aria-hidden="true">
+          <span>{new Date(points[0].timestamp).toLocaleDateString()}</span>
+          <span>Verification runs · last 30 days</span>
+          <span>{new Date(points[points.length - 1].timestamp).toLocaleDateString()}</span>
+        </div>
       )}
     </div>
   );
