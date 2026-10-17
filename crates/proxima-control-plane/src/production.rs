@@ -1811,7 +1811,22 @@ pub(crate) async fn purge_expired_audit_events(db: &sqlx::PgPool) -> Result<i64,
 }
 
 fn is_valid_https_origin(value: &str) -> bool {
-    let Ok(url) = reqwest::Url::parse(value.trim()) else {
+    let value = value.trim();
+    let Some(authority_and_path) = value.strip_prefix("https://") else {
+        return false;
+    };
+    let authority = authority_and_path
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or("");
+    if authority.is_empty()
+        || authority.contains('@')
+        || authority.chars().any(char::is_whitespace)
+    {
+        return false;
+    }
+
+    let Ok(url) = reqwest::Url::parse(value) else {
         return false;
     };
 
