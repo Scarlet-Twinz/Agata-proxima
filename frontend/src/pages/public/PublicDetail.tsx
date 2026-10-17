@@ -268,7 +268,7 @@ const details: Record<string, Detail> = {
       { title: "Run the examples", code: "# Node.js 22+\nnode node/example.mjs\n\n# Bash smoke checks\n./cli/agata.sh\n\n# PowerShell smoke checks\n./cli/agata.ps1" },
       { title: "Use the right artifact", paragraphs: ["The starter kit is an example bundle for implementation work. A separately versioned npm SDK, standalone CLI binary, Terraform provider and deployed ChatGPT/MCP server require their own source, release process and acceptance tests. Use the included API examples now and publish standalone artifacts only with a tested release."] },
     ],
-    links: [{ label: "Download integration starter kit (.zip)", to: "/downloads/agata-proxima-integration-starter-kit.zip", external: true }, { label: "API reference", to: "/developers/api-reference" }, { label: "Integration catalog", to: "/developers/integrations" }],
+    links: [{ label: "Download integration starter kit (.zip)", to: "/downloads/agata-proxima-integration-starter-kit.zip", external: true }, { label: "API reference", to: "/developers/api-reference" }, { label: "Integration catalog", to: "/developers/integrations" }, { label: "Docker and local troubleshooting", to: "/docs/troubleshooting" }, { label: "Quickstart", to: "/developers/quickstart" }],
   },
   "/developers/nodejs": {
     eyebrow: "Developers · Node.js",
