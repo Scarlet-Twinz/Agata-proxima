@@ -40,7 +40,7 @@ func (p *AgataProvider) Configure(ctx context.Context, req provider.ConfigureReq
   }
   key := config.APIKey.ValueString()
   if len(key) < 8 || len(key) < 4 || key[:4] != "aga_" {
-    resp.Diagnostics.AddAttributeError("Invalid API key", "api_key must be an Agata API key beginning with aga_.", nil)
+    resp.Diagnostics.AddError("Invalid API key", "api_key must be an Agata API key beginning with aga_.")
     return
   }
   resp.ResourceData = NewAPIClient(rawURL, key)
