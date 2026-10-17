@@ -20,7 +20,7 @@ Do not put `AGATA_API_KEY` in a browser variable, commit it to Git, or include i
 
 ## Contents
 
-- `node/agata-client.mjs`: server-side client with JSON handling, request timeouts, HTTP error details and methods for tenants, policies, nodes, deployments, verification records, audit and webhooks.
+- `node/agata-client.mjs`: server-side client with JSON handling, request timeouts, HTTP error details and methods for tenants, policies, nodes, deployments, verification records, audit, webhooks and environment registry CRUD.
 - `node/example.mjs`: health, plan catalogue and tenant-list example.
 - `cli/agata.ps1`: PowerShell API smoke commands.
 - `cli/agata.sh`: Bash API smoke commands.
@@ -47,6 +47,7 @@ node node/example.mjs
 4. Confirm an invalid or revoked key returns 401.
 5. Confirm a caller cannot access another organization's resources.
 6. Test webhook signatures with a valid body, altered body, invalid signature, duplicate delivery ID and timestamp outside the accepted tolerance.
-7. Keep logs sanitized and rotate credentials after any exposure.
+7. Create a development or staging environment in Developer → Environments, list it through the API/CLI, disable it, re-enable it, and confirm a node cannot be registered into a disabled environment.
+8. Keep logs sanitized and rotate credentials after any exposure.
 
 The API and webhook contracts in the deployed environment remain authoritative. Run the tests against the target version before using examples for operational automation.
