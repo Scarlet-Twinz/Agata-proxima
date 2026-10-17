@@ -16,8 +16,8 @@ export function Security() {
   const checks = [
     { label: "Tenant inventory", value: (data?.metrics?.tenants ?? 0) > 0 ? "CONFIGURED" : "NOT CONFIGURED", detail: "Inventory alone does not prove cross-tenant isolation." },
     { label: "Policy inventory", value: (data?.metrics?.policies ?? 0) > 0 ? "CONFIGURED" : "NOT CONFIGURED", detail: "Confirm policy assignment and deployment before relying on enforcement." },
-    { label: "Latest verification", value: data?.protection?.verification ?? "NO DATA", detail: "Displays the latest recorded result; it does not imply a new test was run now." },
-    { label: "Control-plane data path", value: isError ? "UNAVAILABLE" : isLoading ? "CHECKING" : "CONNECTED", detail: "Based on the authenticated overview request completing successfully." },
+    { label: "Latest recorded verification", value: data?.protection?.verification ?? "NO DATA", detail: "Shows the latest result returned by the control plane; it does not imply a new test was run now." },
+    { label: "Overview endpoint", value: isError ? "UNAVAILABLE" : isLoading ? "CHECKING" : "RESPONDING", detail: "The authenticated overview endpoint returned successfully; this does not independently prove every control is enforced." },
   ];
   return <div className="command-center">
     <div className="page-heading">
