@@ -1904,9 +1904,11 @@ a {
 }
 
 .node-dot--healthy { background: var(--success); }
+.node-dot--registered { background: var(--agata-blue); }
 .node-dot--degraded { background: #d99000; }
 .node-dot--inactive { background: #94a3b8; }
 .node-status--healthy { color: var(--success); }
+.node-status--registered { color: var(--agata-blue); }
 .node-status--degraded { color: #a66a00; }
 .node-status--inactive { color: #64748b; }
 

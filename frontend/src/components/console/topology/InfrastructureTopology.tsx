@@ -1,4 +1,4 @@
-﻿type NodeRecord = {
+type NodeRecord = {
   id: string;
   name?: string;
   region?: string;
@@ -12,7 +12,8 @@ type Props = {
 
 function nodeState(status?: string) {
   const normalized = status?.trim().toLowerCase() ?? "unknown";
-  if (["healthy", "online", "active", "ready", "connected", "running"].includes(normalized)) return "healthy";
+  if (["healthy", "online", "ready"].includes(normalized)) return "healthy";
+  if (["active", "connected", "running", "registered", "enrolled"].includes(normalized)) return "registered";
   if (["degraded", "warning", "pending", "provisioning", "starting"].includes(normalized)) return "degraded";
   return "inactive";
 }
