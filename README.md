@@ -4,7 +4,7 @@
 
 Agata Proxima treats PostgreSQL tenant isolation as an infrastructure boundary that can be enforced, tested, monitored, and audited. The core data plane is written in Rust, alongside a management control plane, React frontend, verification tooling, and operational documentation.
 
-> **Project status:** Active development. Repository code and passing CI do not, by themselves, establish production readiness. Live-provider activation, deployed-environment testing, and final operational acceptance must be verified separately.
+> **Release acceptance:** Automated CI validates repository behavior and code contracts. Deployment acceptance verifies live-provider configuration, deployed-environment behavior, and operational controls against the target environment.
 
 ## Product capabilities
 
