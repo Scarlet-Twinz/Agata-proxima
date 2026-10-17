@@ -1824,7 +1824,7 @@ fn is_valid_https_origin(value: &str) -> bool {
         return false;
     }
     let authority_end = authority_and_path
-        .find(|ch: char| matches!(ch, '/' | '?' | '#'))
+        .find(['/', '?', '#'])
         .unwrap_or(authority_and_path.len());
     let authority = &authority_and_path[..authority_end];
     if authority.is_empty()
