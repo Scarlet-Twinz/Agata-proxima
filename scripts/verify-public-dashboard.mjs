@@ -38,6 +38,7 @@ const actionPage = read('pages/console/ActionPage.tsx');
 const footer = read('components/layout/PublicFooter.tsx');
 const activityChart = read('components/console/charts/ActivityChart.tsx');
 const controlPlane = fs.readFileSync(path.join(root, 'crates', 'proxima-control-plane', 'src', 'main.rs'), 'utf8');
+const tenantScopeMigration = fs.readFileSync(path.join(root, 'crates', 'proxima-control-plane', 'migrations', '0025_tenant_organization_boundary.sql'), 'utf8');
 
 const declaredRoutes = new Set([
   '/', '/product', '/solutions', '/developers', '/pricing', '/security', '/trust',
@@ -105,6 +106,7 @@ addCheck('Dashboard overview includes an operating guide', /WORKSPACE GUIDE/.tes
 addCheck('Resource pages include actionable empty-state guidance', /No records have been created yet/.test(resourceSurface) && /Troubleshoot missing data/.test(resourceSurface));
 addCheck('Missing ArrowLeft icon import is corrected', /import\s*\{[^}]*\bArrowLeft\b[^}]*\}\s*from\s*"lucide-react"/.test(resourceSurface));
 addCheck('Keep me signed in is wired from checkbox to persistent server session', /rememberMe/.test(login) && /login\(email,password,rememberMe\)/.test(login) && /remember_me:rememberMe/.test(authApi) && /interval '30 days'/.test(controlPlane) && /interval '12 hours'/.test(controlPlane));
+addCheck('Tenant organization scope is backfilled and constrained by its owning project', /0025_tenant_organization_boundary\.sql/.test(controlPlane) && /UPDATE tenants AS t/.test(tenantScopeMigration) && /ALTER COLUMN organization_id SET NOT NULL/.test(tenantScopeMigration) && /tenants_project_organization_fkey/.test(tenantScopeMigration));
 addCheck('Password recovery request and confirmation are connected', /requestPasswordReset\(email\.trim\(\)\)/.test(recovery) && /resetPassword\(token,\s*password\)/.test(resetPassword) && /password-reset\/request/.test(authApi) && /password-reset\/confirm/.test(authApi) && router.includes('path: "/reset-password"'));
 addCheck('Security posture uses authenticated live control-plane signals', /api\.get<SecurityOverview>\("\/api\/v1\/control-plane\/overview"\)/.test(consoleSurfaces) && /tenantIsolation/.test(consoleSurfaces) && /databaseProtection/.test(consoleSurfaces));
 addCheck('Verification UI and backend distinguish operator-reported evidence from executed tests', /operator_reported/.test(controlPlane) && /form\.status\|\|"review"/.test(actionPage) && /does not execute the test/.test(actionPage));
