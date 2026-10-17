@@ -4,6 +4,7 @@ import { AgataClient } from "../node/agata-client.mjs";
 const usage = `Agata Proxima CLI
 
 Usage:
+  agata whoami
   agata health
   agata plans list
   agata tenants list
@@ -19,6 +20,7 @@ Configuration:
   AGATA_API_KEY       Organization-scoped API key (aga_...)
 
 Examples:
+  agata whoami
   agata health
   agata tenants list
   agata verification list
