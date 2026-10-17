@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { ArrowLeft, ArrowUpRight, CheckCircle2, ChevronRight, Copy, ExternalLink, KeyRound, RefreshCw, Save, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, CheckCircle2, ChevronRight, Copy, ExternalLink, KeyRound, RefreshCw, Save, Search, ShieldCheck } from "lucide-react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { ResourceSurface } from "../../components/console/ResourceSurface";
 import { api, type ApiError } from "../../api/client";
@@ -638,7 +638,7 @@ function ApiReferenceExplorer(){
     {error&&<div className="settings-banner settings-banner--error" role="alert">{error}</div>}
     {spec&&<><section className="surface environment-boundary-note"><span className="eyebrow">{spec.info?.title??"OpenAPI"}</span><h2>Version {spec.info?.version??"unknown"} · {operations.length} matching operations</h2><p>{spec.info?.description??"API specification loaded from the running control plane."}</p></section>
       <label className="resource-search"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search method, endpoint or description" aria-label="Search API operations"/></label>
-      <div className="environment-record-list">{operations.map((op,index)=><article className="surface environment-record-card" key={op.method+" "+op.path}><div className="webhook-endpoint-heading"><div><span className="eyebrow">{op.method}</span><h2><code>{op.path}</code></h2></div></div><p><strong>{op.summary??"Endpoint"}</strong></p>{op.description&&<p>{op.description}</p>}<p className="webhook-endpoint-meta">Responses: {Object.entries(op.responses??{}).map(([status,value])=>status+" "+(value.description??"")).join(" · ")||"See API response schema"}</p></article>)}</div>
+      <div className="environment-record-list">{operations.map((op)=><article className="surface environment-record-card" key={op.method+" "+op.path}><div className="webhook-endpoint-heading"><div><span className="eyebrow">{op.method}</span><h2><code>{op.path}</code></h2></div></div><p><strong>{op.summary??"Endpoint"}</strong></p>{op.description&&<p>{op.description}</p>}<p className="webhook-endpoint-meta">Responses: {Object.entries(op.responses??{}).map(([status,value])=>status+" "+(value.description??"")).join(" · ")||"See API response schema"}</p></article>)}</div>
       {!operations.length&&<div className="surface empty-state"><strong>No matching endpoints.</strong><span>Try another path or method.</span></div>}
     </>}
   </div>;
