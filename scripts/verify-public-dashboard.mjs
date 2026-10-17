@@ -35,6 +35,7 @@ const authApi = read('api/auth.ts');
 const recovery = read('pages/auth/Recovery.tsx');
 const resetPassword = read('pages/auth/ResetPassword.tsx');
 const consoleSurfaces = read('pages/console/ConsoleSurfaces.tsx');
+const useOverview = read('hooks/useOverview.ts');
 const actionPage = read('pages/console/ActionPage.tsx');
 const footer = read('components/layout/PublicFooter.tsx');
 const publicLayout = read('layouts/PublicLayout.tsx');
@@ -112,7 +113,7 @@ addCheck('Missing ArrowLeft icon import is corrected', /import\s*\{[^}]*\bArrowL
 addCheck('Keep me signed in is wired from checkbox to persistent server session', /rememberMe/.test(login) && /login\(email,password,rememberMe\)/.test(login) && /remember_me:rememberMe/.test(authApi) && /interval '30 days'/.test(controlPlane) && /interval '12 hours'/.test(controlPlane));
 addCheck('Tenant organization scope is backfilled, constrained and written on creation', /0025_tenant_organization_boundary\.sql/.test(controlPlane) && /INSERT INTO tenants\(id,organization_id,project_id/.test(controlPlane) && /UPDATE tenants AS t/.test(tenantScopeMigration) && /ALTER COLUMN organization_id SET NOT NULL/.test(tenantScopeMigration) && /tenants_project_organization_fkey/.test(tenantScopeMigration));
 addCheck('Password recovery request and confirmation are connected', /requestPasswordReset\(email\.trim\(\)\)/.test(recovery) && /resetPassword\(token,\s*password\)/.test(resetPassword) && /password-reset\/request/.test(authApi) && /password-reset\/confirm/.test(authApi) && router.includes('path: "/reset-password"'));
-addCheck('Security posture uses authenticated live control-plane signals', /api\.get<SecurityOverview>\("\/api\/v1\/control-plane\/overview"\)/.test(consoleSurfaces) && /tenantIsolation/.test(consoleSurfaces) && /databaseProtection/.test(consoleSurfaces));
+addCheck('Security posture uses authenticated live control-plane signals', (/api\.get<SecurityOverview>\("\/api\/v1\/control-plane\/overview"\)/.test(consoleSurfaces) || (/useOverview/.test(consoleSurfaces) && /\/api\/v1\/control-plane\/overview/.test(useOverview))) && /tenantIsolation/.test(controlPlane) && /databaseProtection/.test(controlPlane));
 addCheck('Verification UI and backend distinguish operator-reported evidence from executed tests', /operator_reported/.test(controlPlane) && /form\.status\|\|"review"/.test(actionPage) && /does not execute the test/.test(actionPage));
 addCheck('Activity chart labels a full daily series and handles zero activity', /generate_series\(/.test(controlPlane) && /interval '29 days'/.test(controlPlane) && /chart-axis-labels/.test(activityChart) && /No verification records in the last 30 days/.test(activityChart));
 addCheck('Homepage exposes the integration starter kit and footer includes requested social brands', /to="\/developers\/downloads"/.test(home) && ['GitHub','LinkedIn','Twitter','Hacker News'].every(label => footer.includes(label)));
