@@ -11,7 +11,7 @@ The local Compose file defines two separate PostgreSQL services:
 - `postgres` (host port 5432): Engine development database.
 - `control-postgres` (host port 55443 by default): Control Plane database for users, organizations, tenants, billing state, audit and platform resources.
 
-When you run these services in Docker Desktop on your laptop, the database is local to that machine even if you access it through VS Code. The repository alone cannot prove whether a separate hosted production database exists. Do not use your laptop's database as production.
+When these services run in Docker Desktop, PostgreSQL is local to that machine, including when you access it through VS Code. Production workloads must use the database configured for the deployed environment; never point production traffic at a laptop database.
 
 ## 2. Start local development (Windows PowerShell)
 
@@ -36,9 +36,21 @@ The Control Plane applies the repository migrations at startup. The local develo
 
 Stop the local database with `docker compose stop control-postgres`. Do not run volume-deleting Compose commands or reset scripts against a database containing data you need.
 
+### Run the authenticated API smoke test
+
+Use a dedicated, email-verified smoke-test account in a disposable organization. The script creates a tenant record, so do not point it at a workspace containing production data.
+
+```bash
+export PROXIMA_CONTROL_URL=http://127.0.0.1:8080
+export PROXIMA_SMOKE_EMAIL=verified-smoke-account@example.com
+read -rsp "Password: " PROXIMA_SMOKE_PASSWORD; echo
+export PROXIMA_SMOKE_PASSWORD
+bash tests/control-plane/api_smoke.sh
+```
+
 ## 3. Create an account and workspace
 
-Open `/signup`. Signup accepts `email`, `password` (at least 12 characters), optional `name`, and optional `organization`. The first user becomes the organization owner. Signup requires working email verification through Resend; configure a valid API key and verified sender before testing signup. If verification email delivery fails, workspace creation may be rolled back rather than silently bypassing verification.
+Open `/signup`. Signup accepts `email`, `password` (at least 12 characters), optional `name`, and optional `organization`. The first user becomes the organization owner. Signup requires working email verification through Resend; configure a valid API key and verified sender before testing signup. Workspace creation is retained if verification email delivery fails. Correct the email configuration, then request a new verification code; do not bypass email verification.
 
 The API session is held in the HTTP-only `proxima_session` cookie. For state-changing API calls, retrieve the current CSRF token from `GET /api/v1/session` and send it as `x-csrf-token`. Do not expose session cookies, CSRF tokens, passwords or provider secrets in source control, screenshots, issues or logs.
 
@@ -151,7 +163,7 @@ http://127.0.0.1:8080/api/v1/auth/oidc/callback
 
 Record the Application (client) ID and create a client secret. Store the secret only in your deployment secret store. Runtime configuration uses `PROXIMA_OIDC_CLIENT_ID`, `PROXIMA_OIDC_CLIENT_SECRET` and the exact `AGATA_PUBLIC_BASE_URL`. An organization owner/admin configures the customer's Entra tenant ID from **Settings → Advanced configuration → Enterprise identity** (backed by `GET/POST /api/v1/organization/oidc/entra`). On the login page, choose **Continue with SSO**, enter the organization's slug, and continue to Microsoft. The backend resolves that slug to the configured organization before creating OIDC state; it also retains the UUID-based `organization_id` query for administrative/testing workflows.
 
-The Entra feature is available on Growth and above; the backend checks entitlement at both login start and callback, including after a plan downgrade. The UI can initiate the flow, but successful SSO is not production-accepted until a real Entra registration, exact callback, tenant/organization mapping, session creation and audit event have passed end to end. See `docs/identity/microsoft-entra-oidc.md`.
+The Entra feature is available on Growth and above. The backend checks entitlement at both login start and callback, including after a plan downgrade. Production SSO acceptance verifies the Entra registration, exact callback URL, tenant-to-organization mapping, session creation and audit event end to end. See `docs/identity/microsoft-entra-oidc.md`.
 
 ## 10. Troubleshooting
 
