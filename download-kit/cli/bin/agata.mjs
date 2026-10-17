@@ -16,6 +16,7 @@ Read commands:
   agata webhooks list
   agata webhooks deliveries <webhook-id>
   agata environments list
+  agata service-accounts list
 
 Environment management:
   agata environments create --name "Staging" [--slug staging] [--description "..."]
@@ -73,6 +74,7 @@ try {
   else if (resource === "verification" && action === "list" && rest.length === 0) result = await client.listVerifications();
   else if (resource === "audit" && action === "list" && rest.length === 0) result = await client.listAuditEvents();
   else if (resource === "environments" && action === "list" && rest.length === 0) result = await client.listEnvironments();
+  else if (resource === "service-accounts" && action === "list" && rest.length === 0) result = await client.listServiceAccounts();
   else if (resource === "environments" && action === "create") {
     const flags = parseFlags(rest);
     result = await client.createEnvironment({ name: requireValue(flags.name, "name"), ...(flags.slug ? { slug: flags.slug } : {}), ...(flags.description ? { description: flags.description } : {}) });
