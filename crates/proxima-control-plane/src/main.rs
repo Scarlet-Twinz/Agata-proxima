@@ -1391,6 +1391,25 @@ async fn delete_service_account(
     Json(json!({"ok":true,"message":"Service account deleted; all associated API keys were revoked."})).into_response()
 }
 
+async fn webhook_configuration(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+) -> Response {
+    let _ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    let configured = crate::webhooks::encryption_key_configured();
+    Json(json!({
+        "encryption_key_configured": configured,
+        "message": if configured {
+            "Webhook signing secrets can be encrypted at rest."
+        } else {
+            "Set AGATA_WEBHOOK_ENCRYPTION_KEY to a stable random value of at least 32 characters, then restart the Control Plane."
+        }
+    })).into_response()
+}
+
 async fn webhooks(State(s): State<AppState>, headers: HeaderMap) -> Response {
     let ctx = match authenticate(&s, &headers).await {
         Ok(v) => v,
