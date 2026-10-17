@@ -48,6 +48,26 @@ export async function login(email: string, password: string, rememberMe = false)
   return data;
 }
 
+export async function requestPasswordReset(email: string): Promise<{ok:boolean;message:string}> {
+  const response = await fetch(`${API_BASE}/api/v1/auth/password-reset/request`, {
+    method: "POST",
+    credentials: "include",
+    headers: {"Content-Type":"application/json", Accept:"application/json"},
+    body: JSON.stringify({email}),
+  });
+  return readResponse<{ok:boolean;message:string}>(response);
+}
+
+export async function resetPassword(token: string, password: string): Promise<{ok:boolean;message:string}> {
+  const response = await fetch(`${API_BASE}/api/v1/auth/password-reset/confirm`, {
+    method: "POST",
+    credentials: "include",
+    headers: {"Content-Type":"application/json", Accept:"application/json"},
+    body: JSON.stringify({token,password}),
+  });
+  return readResponse<{ok:boolean;message:string}>(response);
+}
+
 export async function signup(input: {name:string;organization:string;email:string;password:string}): Promise<SignupResponse> {
   const response = await fetch(`${API_BASE}/api/v1/auth/signup`, {
     method:"POST", credentials:"include",
