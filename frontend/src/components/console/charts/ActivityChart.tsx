@@ -113,9 +113,9 @@ export function ActivityChart({ points, height = 250 }: Props) {
       )}
       {plotted.dailyPoints.length > 0 && (
         <div className="chart-axis-labels" aria-hidden="true">
-          <span>{new Date(plotted.dailyPoints[0].timestamp).toLocaleDateString()}</span>
+          <span>{new Date(plotted.dailyPoints[0].timestamp).toLocaleDateString(undefined, { timeZone: "UTC" })}</span>
           <span>Verification records · last 30 days</span>
-          <span>{new Date(plotted.dailyPoints[plotted.dailyPoints.length - 1].timestamp).toLocaleDateString()}</span>
+          <span>{new Date(plotted.dailyPoints[plotted.dailyPoints.length - 1].timestamp).toLocaleDateString(undefined, { timeZone: "UTC" })}</span>
         </div>
       )}
     </div>
