@@ -1342,7 +1342,7 @@ async fn update_service_account(
         "UPDATE service_accounts SET name=COALESCE($3,name),description=COALESCE($4,description),
          status=COALESCE($5,status),environment_id=COALESCE($6,environment_id),updated_at=now()
          WHERE id=$1 AND organization_id=$2
-         RETURNING id,name,description,environment_id,status,updated_at"
+         RETURNING id,name,description,environment_id,status,updated_at",
     )
     .bind(id)
     .bind(ctx.organization_id)
