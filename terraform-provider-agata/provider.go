@@ -35,7 +35,7 @@ func (p *AgataProvider) Configure(ctx context.Context, req provider.ConfigureReq
   rawURL := config.BaseURL.ValueString()
   parsed, err := url.Parse(rawURL)
   if err != nil || parsed.Host == "" || parsed.Path != "" || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
-    resp.Diagnostics.AddAttributeError("Invalid Control Plane URL", "base_url must be a clean HTTP(S) origin without credentials, path, query or fragment.", nil)
+    resp.Diagnostics.AddError("Invalid Control Plane URL", "base_url must be a clean HTTP(S) origin without credentials, path, query or fragment.")
     return
   }
   key := config.APIKey.ValueString()
