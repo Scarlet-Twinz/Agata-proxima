@@ -135,7 +135,7 @@ export function Settings() {
     {title:"Authentication",text:"Email verification, password and active session behavior.",href:"/app/settings/authentication"},
     {title:"Enterprise identity",text:"Microsoft Entra/OIDC connection state, configuration and readiness.",href:"/app/settings/identity"},
     {title:"Security",text:"Security controls and workspace protection preferences.",href:"/app/settings/security"},
-    {title:"Environments",text:"Understand production and future environment boundaries.",href:"/app/settings/environments"},
+    {title:"Environments",text:"Review environment labels across registered nodes and deployment targets.",href:"/app/settings/environments"},
     {title:"Notifications",text:"Operational and security notification preferences.",href:"/app/settings/notifications"},
   ]} links={[
     {label:"Authentication",href:"/app/settings/authentication"},{label:"Enterprise identity",href:"/app/settings/identity"},{label:"Security",href:"/app/settings/security"},
