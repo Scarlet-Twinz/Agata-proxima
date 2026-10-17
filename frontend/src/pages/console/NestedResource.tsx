@@ -951,6 +951,7 @@ export function NestedResource(){
   const base=detailId?pathname.replace(/\/[^/]+$/,""):pathname.endsWith("/new")?pathname.replace(/\/new$/,""):pathname;
   const config=baseConfigs[base]??baseConfigs[pathname];
   if(pathname === "/app/developer/api-keys/new" && config) return <ContextShell config={config}><ApiKeyCreatePage /></ContextShell>;
+  if(pathname === "/app/developer/webhooks/new" && config) return <ContextShell config={config}><WebhooksManager /></ContextShell>;
   if(pathname === "/app/developer/service-accounts" && config) return <ContextShell config={config}><ServiceAccountsManager /></ContextShell>;
   if(pathname === "/app/developer/api-keys" && config) return <ContextShell config={config}><ApiKeysManager /></ContextShell>;
   if(pathname === "/app/developer/webhooks" && config) return <ContextShell config={config}><WebhooksManager /></ContextShell>;
