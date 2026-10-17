@@ -1108,7 +1108,9 @@ async fn service_accounts(State(s): State<AppState>, headers: HeaderMap) -> Resp
     };
     match sqlx::query(
         "SELECT sa.id,sa.name,sa.description,sa.environment_id,e.name AS environment_name,sa.status,sa.created_at,sa.updated_at,
-                (SELECT count(*) FROM api_keys k WHERE k.service_account_id=sa.id AND k.revoked_at IS NULL)::bigint AS active_key_count
+                CASE WHEN sa.status = 'active' THEN
+                    (SELECT count(*) FROM api_keys k WHERE k.service_account_id=sa.id AND k.revoked_at IS NULL)::bigint
+                ELSE 0::bigint END AS active_key_count
          FROM service_accounts sa LEFT JOIN organization_environments e ON e.id=sa.environment_id
          WHERE sa.organization_id=$1 ORDER BY sa.created_at DESC",
     )
