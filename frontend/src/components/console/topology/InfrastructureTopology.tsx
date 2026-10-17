@@ -37,7 +37,7 @@ export function InfrastructureTopology({ nodes }: Props) {
                 {node.environment ?? "Environment unavailable"}
               </small>
             </div>
-            <span className="node-status">
+            <span className={`node-status node-status--${nodeState(node.status)}`}>
               {node.status ?? "UNKNOWN"}
             </span>
           </div>
