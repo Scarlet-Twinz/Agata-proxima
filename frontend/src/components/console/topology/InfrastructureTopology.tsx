@@ -11,9 +11,9 @@ type Props = {
 };
 
 function nodeState(status?: string) {
-  const normalized = status?.toLowerCase() ?? "unknown";
-  if (["healthy", "online", "active", "ready", "connected"].some((value) => normalized.includes(value))) return "healthy";
-  if (["degraded", "warning", "pending", "provisioning"].some((value) => normalized.includes(value))) return "degraded";
+  const normalized = status?.trim().toLowerCase() ?? "unknown";
+  if (["healthy", "online", "active", "ready", "connected", "running"].includes(normalized)) return "healthy";
+  if (["degraded", "warning", "pending", "provisioning", "starting"].includes(normalized)) return "degraded";
   return "inactive";
 }
 
