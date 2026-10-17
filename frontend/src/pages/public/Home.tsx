@@ -20,7 +20,8 @@ const developerAreas = [
   ["Events and audit", "Understand event scope, evidence and operational history.", "/developers/events"],
   ["JavaScript SDK", "Use the separately packaged server-side SDK source and its contract tests.", "/developers/sdks"],
   ["CLI", "Run checks, list resources, and manage environments or webhooks from a terminal.", "/developers/cli"],
-  ["Service accounts", "Create machine identities and disable or revoke their linked API keys.", "/developers/organizations"],
+  ["Service accounts", "Create machine identities and disable or revoke their linked API keys.", "/developers/service-accounts"],
+  ["Environments", "Name development, staging and production stages inside an organization.", "/developers/environments"],
   ["Terraform provider", "Manage named environments with provider source; registry publication is pending.", "/developers/terraform"],
 ];
 
