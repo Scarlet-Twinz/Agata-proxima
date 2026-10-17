@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "frontend/**"
+      - "download-kit/**"
+      - "packages/javascript-sdk/**"
       - "scripts/verify-public-content.mjs"
       - "scripts/verify-public-dashboard.mjs"
       - ".github/workflows/frontend.yml"
@@ -67,7 +69,18 @@ jobs:
             }
             console.log("PASS: Vercel API proxy, email routes, SPA fallback and no-cache rule");
           '
+      - name: Test developer integration kit
+        working-directory: download-kit
+        run: |
+          npm run check
+          npm test
+      - name: Test and package JavaScript SDK
+        working-directory: packages/javascript-sdk
+        run: |
+          npm test
+          npm pack --dry-run
       - name: Build
+        working-directory: frontend
         run: npm run build
       - name: Lint
         run: npm run lint
