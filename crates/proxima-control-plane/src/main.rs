@@ -2879,27 +2879,41 @@ async fn create_developer_environment(
 
     let name = input.name.trim();
     if name.is_empty() || name.len() > 100 {
-        return (StatusCode::BAD_REQUEST, Json(json!({
-            "ok":false,"error":"invalid_environment_name",
-            "message":"Environment name must contain 1–100 characters."
-        }))).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok":false,"error":"invalid_environment_name",
+                "message":"Environment name must contain 1–100 characters."
+            })),
+        )
+        .into_response();
     }
     let slug = normalize_environment_slug(input.slug.as_deref().unwrap_or(name));
     if slug.is_empty() || slug.len() > 100 {
-        return (StatusCode::BAD_REQUEST, Json(json!({
-            "ok":false,"error":"invalid_environment_slug",
-            "message":"Environment slug must contain letters or numbers and may use hyphens between words."
-        }))).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok":false,"error":"invalid_environment_slug",
+                "message":"Environment slug must contain letters or numbers and may use hyphens between words."
+            })),
+        )
+        .into_response();
     }
     let description = input.description.unwrap_or_default().trim().to_string();
     if description.len() > 500 {
-        return (StatusCode::BAD_REQUEST, Json(json!({
-            "ok":false,"error":"invalid_environment_description",
-            "message":"Environment description must be 500 characters or fewer."
-        }))).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok":false,"error":"invalid_environment_description",
+                "message":"Environment description must be 500 characters or fewer."
+            })),
+        )
+        .into_response();
     }
 
-    if let Err(response) = production::enforce_capacity(&s.db, ctx.organization_id, "environments").await {
+    if let Err(response) =
+        production::enforce_capacity(&s.db, ctx.organization_id, "environments").await
+    {
         return response;
     }
 
@@ -2948,23 +2962,47 @@ async fn update_developer_environment(
     if let Err(c) = require_write(&ctx, &headers) {
         return c.into_response();
     }
-    if input.name.as_ref().is_some_and(|v| v.trim().is_empty() || v.trim().len() > 100) {
-        return (StatusCode::BAD_REQUEST, Json(json!({
-            "ok":false,"error":"invalid_environment_name",
-            "message":"Environment name must contain 1–100 characters."
-        }))).into_response();
+    if input
+        .name
+        .as_ref()
+        .is_some_and(|v| v.trim().is_empty() || v.trim().len() > 100)
+    {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok":false,"error":"invalid_environment_name",
+                "message":"Environment name must contain 1–100 characters."
+            })),
+        )
+        .into_response();
     }
-    if input.description.as_ref().is_some_and(|v| v.len() > 500) {
-        return (StatusCode::BAD_REQUEST, Json(json!({
-            "ok":false,"error":"invalid_environment_description",
-            "message":"Environment description must be 500 characters or fewer."
-        }))).into_response();
+    if input
+        .description
+        .as_ref()
+        .is_some_and(|v| v.len() > 500)
+    {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok":false,"error":"invalid_environment_description",
+                "message":"Environment description must be 500 characters or fewer."
+            })),
+        )
+        .into_response();
     }
-    if input.status.as_deref().is_some_and(|v| !matches!(v, "active" | "disabled")) {
-        return (StatusCode::BAD_REQUEST, Json(json!({
-            "ok":false,"error":"invalid_environment_status",
-            "message":"Environment status must be active or disabled."
-        }))).into_response();
+    if input
+        .status
+        .as_deref()
+        .is_some_and(|v| !matches!(v, "active" | "disabled"))
+    {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "ok":false,"error":"invalid_environment_status",
+                "message":"Environment status must be active or disabled."
+            })),
+        )
+        .into_response();
     }
     match sqlx::query(
         "UPDATE organization_environments
@@ -3028,7 +3066,16 @@ async fn delete_developer_environment(
     .await;
     match result {
         Ok(r) if r.rows_affected() == 1 => {
-            audit(&s.db, ctx.organization_id, ctx.user_id, "developer.environment.deleted", "environment", Some(id), json!({})).await;
+            audit(
+                &s.db,
+                ctx.organization_id,
+                ctx.user_id,
+                "developer.environment.deleted",
+                "environment",
+                Some(id),
+                json!({}),
+            )
+            .await;
             Json(json!({"ok":true})).into_response()
         }
         Ok(_) => {
@@ -3140,7 +3187,9 @@ async fn create_node(
             ).into_response();
         }
         None => {
-            if let Err(response) = production::enforce_capacity(&s.db, ctx.organization_id, "environments").await {
+            if let Err(response) =
+                production::enforce_capacity(&s.db, ctx.organization_id, "environments").await
+            {
                 return response;
             }
             let environment_id = Uuid::new_v4();
