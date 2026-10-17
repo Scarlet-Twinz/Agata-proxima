@@ -8,7 +8,7 @@ export default function Login() {
   const location=useLocation();
   const [email,setEmail]=useState("");
   const [password,setPassword]=useState("");
-  const [rememberMe,setRememberMe]=useState(true);
+  const [rememberMe,setRememberMe]=useState(false);
   const [code,setCode]=useState("");
   const [showPassword,setShowPassword]=useState(false);
   const [error,setError]=useState("");
