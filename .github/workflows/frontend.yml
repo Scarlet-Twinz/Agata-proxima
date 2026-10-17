@@ -11,6 +11,8 @@ on:
     branches: [main, phase3a-product-completion]
     paths:
       - "frontend/**"
+      - "scripts/verify-public-content.mjs"
+      - "scripts/verify-public-dashboard.mjs"
       - ".github/workflows/frontend.yml"
 
 concurrency:
