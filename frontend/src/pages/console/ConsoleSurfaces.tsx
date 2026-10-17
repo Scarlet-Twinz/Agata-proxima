@@ -39,7 +39,7 @@ export function Security() {
   return <div className="resource-page">
     <div className="page-heading">
       <div><span className="eyebrow">SECURITY</span><h1>Security posture</h1><p>Review live configuration signals, verification evidence and organization-scoped security activity.</p></div>
-      <button className="console-refresh-button" type="button" onClick={() => void load()} disabled={loading}><RefreshCw size={15} className={loading ? "is-spinning" : ""}/>{loading ? "Refreshing" : "Refresh"}</button>
+      <div className="heading-actions"><Link className="secondary-action" to="/app/verification/new">Record verification result <ArrowUpRight size={15}/></Link><button className="console-refresh-button" type="button" onClick={() => void load()} disabled={loading}><RefreshCw size={15} className={loading ? "is-spinning" : ""}/>{loading ? "Refreshing" : "Refresh"}</button></div>
     </div>
     {error && <div className="surface empty-state resource-error" role="alert"><strong>Security posture unavailable</strong><span>{error}</span></div>}
     {loading && <div className="surface empty-state"><strong>Loading security signals…</strong><span>Reading the authenticated control-plane overview.</span></div>}
@@ -55,7 +55,7 @@ export function Security() {
     <div className="resource-section-grid">
       <Link className="surface resource-info-card resource-info-card--link" to="/app/security/tenant-isolation"><span className="eyebrow">REVIEW</span><h2>Tenant isolation <ArrowUpRight size={15}/></h2><p>Inspect verification runs and review expected-allow and expected-block evidence.</p></Link>
       <Link className="surface resource-info-card resource-info-card--link" to="/app/security/events"><span className="eyebrow">INVESTIGATE</span><h2>Security events <ArrowUpRight size={15}/></h2><p>Open organization-scoped audit and security activity with individual event details.</p></Link>
-      <Link className="surface resource-info-card resource-info-card--link" to="/app/verification"><span className="eyebrow">VERIFY</span><h2>Verification evidence <ArrowUpRight size={15}/></h2><p>Run and inspect tenant-local checks and prohibited cross-tenant access attempts.</p></Link>
+      <Link className="surface resource-info-card resource-info-card--link" to="/app/verification"><span className="eyebrow">VERIFY</span><h2>Verification evidence <ArrowUpRight size={15}/></h2><p>Run protected-path tests, then record their outcomes and evidence. Inspect prohibited cross-tenant access attempts.</p></Link>
     </div>
     <aside className="surface resource-links"><span className="eyebrow">RELATED</span><Link to="/app/audit">Audit explorer</Link><Link to="/docs/security">Security documentation</Link><Link to="/docs/troubleshooting">Troubleshooting</Link></aside>
   </div>;
