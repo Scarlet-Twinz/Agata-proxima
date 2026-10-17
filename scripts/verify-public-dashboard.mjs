@@ -29,6 +29,15 @@ const docs = read('pages/public/Docs.tsx');
 const overview = read('pages/console/Overview.tsx');
 const resourceSurface = read('components/console/ResourceSurface.tsx');
 const nested = read('pages/console/NestedResource.tsx');
+const login = read('pages/auth/Login.tsx');
+const authApi = read('api/auth.ts');
+const recovery = read('pages/auth/Recovery.tsx');
+const resetPassword = read('pages/auth/ResetPassword.tsx');
+const consoleSurfaces = read('pages/console/ConsoleSurfaces.tsx');
+const actionPage = read('pages/console/ActionPage.tsx');
+const footer = read('components/layout/PublicFooter.tsx');
+const activityChart = read('components/console/charts/ActivityChart.tsx');
+const controlPlane = fs.readFileSync(path.join(root, 'crates', 'proxima-control-plane', 'src', 'main.rs'), 'utf8');
 
 const declaredRoutes = new Set([
   '/', '/product', '/solutions', '/developers', '/pricing', '/security', '/trust',
@@ -95,6 +104,12 @@ addCheck('Documentation home includes learning path and provider-neutral integra
 addCheck('Dashboard overview includes an operating guide', /WORKSPACE GUIDE/.test(overview) && /Verification guide/.test(overview));
 addCheck('Resource pages include actionable empty-state guidance', /No records have been created yet/.test(resourceSurface) && /Troubleshoot missing data/.test(resourceSurface));
 addCheck('Missing ArrowLeft icon import is corrected', /import\s*\{[^}]*\bArrowLeft\b[^}]*\}\s*from\s*"lucide-react"/.test(resourceSurface));
+addCheck('Keep me signed in is wired from checkbox to persistent server session', /rememberMe/.test(login) && /login\(email,password,rememberMe\)/.test(login) && /remember_me:rememberMe/.test(authApi) && /interval '30 days'/.test(controlPlane) && /interval '12 hours'/.test(controlPlane));
+addCheck('Password recovery request and confirmation are connected', /requestPasswordReset\(email\)/.test(recovery) && /resetPassword\(token,password\)/.test(resetPassword) && /password-reset\/request/.test(authApi) && /password-reset\/confirm/.test(authApi) && router.includes('path: "/reset-password"'));
+addCheck('Security posture uses authenticated live control-plane signals', /api\.get<SecurityOverview>\("\/api\/v1\/control-plane\/overview"\)/.test(consoleSurfaces) && /tenantIsolation/.test(consoleSurfaces) && /databaseProtection/.test(consoleSurfaces));
+addCheck('Verification UI and backend distinguish operator-reported evidence from executed tests', /operator_reported/.test(controlPlane) && /form\.status\|\|"review"/.test(actionPage) && /does not execute the test/.test(actionPage));
+addCheck('Activity chart labels a full daily series and handles zero activity', /generate_series\(/.test(controlPlane) && /interval '29 days'/.test(controlPlane) && /chart-axis-labels/.test(activityChart) && /No verification records in the last 30 days/.test(activityChart));
+addCheck('Homepage exposes the integration starter kit and footer includes requested social brands', /to="\/developers\/downloads"/.test(home) && ['GitHub','LinkedIn','Twitter','Hacker News'].every(label => footer.includes(label)));
 
 console.log('\nAgata Proxima public/dashboard static acceptance audit');
 for (const check of checks) {
