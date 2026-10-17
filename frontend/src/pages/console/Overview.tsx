@@ -93,6 +93,23 @@ export function Overview() {
         ))}
       </section>
 
+      <section className="surface workspace-guide">
+        <div className="surface-heading">
+          <div>
+            <span className="eyebrow">WORKSPACE GUIDE</span>
+            <h2>Bring a tenant boundary online</h2>
+          </div>
+          <Link to="/docs/getting-started">Open setup guide <ArrowUpRight size={15}/></Link>
+        </div>
+        <div className="resource-section-grid">
+          <Link className="surface resource-info-card resource-info-card--link" to="/app/tenants/new"><span className="eyebrow">STEP 1</span><h3>Create a tenant <ArrowUpRight size={15}/></h3><p>Define the customer boundary inside this organization.</p></Link>
+          <Link className="surface resource-info-card resource-info-card--link" to="/app/nodes/new"><span className="eyebrow">STEP 2</span><h3>Enroll a node <ArrowUpRight size={15}/></h3><p>Register the enforcement target and complete enrollment.</p></Link>
+          <Link className="surface resource-info-card resource-info-card--link" to="/app/policies/new"><span className="eyebrow">STEP 3</span><h3>Define policy <ArrowUpRight size={15}/></h3><p>Record the versioned enforcement intent for the workload.</p></Link>
+          <Link className="surface resource-info-card resource-info-card--link" to="/app/verification"><span className="eyebrow">STEP 4</span><h3>Verify the boundary <ArrowUpRight size={15}/></h3><p>Run protected-path tests and review the recorded evidence.</p></Link>
+        </div>
+        <div className="context-next"><Link to="/docs/verification">Verification guide <ArrowUpRight size={15}/></Link><Link to="/docs/troubleshooting">Troubleshooting <ArrowUpRight size={15}/></Link></div>
+      </section>
+
       <div className="command-grid">
         <section className="surface surface--wide">
           <div className="surface-heading">
