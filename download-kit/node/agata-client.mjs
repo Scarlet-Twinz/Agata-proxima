@@ -48,10 +48,17 @@ export class AgataClient {
       signal?.removeEventListener("abort", abort);
     }
   }
-  session(options) { return this.request("/api/v1/session", options); }\n  health(options) { return this.request("/api/v1/health", options); }
+  session(options) { return this.request("/api/v1/session", options); }
+  health(options) { return this.request("/api/v1/health", options); }
   listPlans(options) { return this.request("/api/v1/billing/plans", options); }
   listTenants(options) { return this.request("/api/v1/tenants", options); }
-  async organizationScopedInput(input, options) {\n    if (input.organization_id) return input;\n    const context = await this.session(options);\n    if (!context?.organization_id) throw new Error("The authenticated session did not return an organization_id.");\n    return { ...input, organization_id: context.organization_id };\n  }\n  async createTenant(input, options) { return this.request("/api/v1/tenants", { ...options, method: "POST", body: await this.organizationScopedInput(input, options) }); }
+  async organizationScopedInput(input, options) {
+    if (input.organization_id) return input;
+    const context = await this.session(options);
+    if (!context?.organization_id) throw new Error("The authenticated session did not return an organization_id.");
+    return { ...input, organization_id: context.organization_id };
+  }
+  async createTenant(input, options) { return this.request("/api/v1/tenants", { ...options, method: "POST", body: await this.organizationScopedInput(input, options) }); }
   listPolicies(options) { return this.request("/api/v1/policies", options); }
   async createPolicy(input, options) { return this.request("/api/v1/policies", { ...options, method: "POST", body: await this.organizationScopedInput(input, options) }); }
   listNodes(options) { return this.request("/api/v1/nodes", options); }
