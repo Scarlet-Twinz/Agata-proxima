@@ -793,7 +793,7 @@ async fn signup(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Resp
                 "message": "Your workspace was created and kept, but the verification email could not be sent. Fix the email configuration and choose Send a new code to retry."
             })),
         )
-            .into_response();
+                .into_response();
     }
 
     Json(json!({
@@ -839,7 +839,7 @@ async fn login(State(s): State<AppState>, Json(input): Json<AuthInput>) -> Respo
                 "message": "Verify your email address before signing in. Check your inbox for the Agata Proxima verification email."
             })),
         )
-            .into_response();
+                .into_response();
     }
 
     let organization_id: Uuid = match sqlx::query(
@@ -1282,7 +1282,7 @@ async fn webhook_deliveries(
             StatusCode::NOT_FOUND,
             Json(json!({"message":"Webhook not found."})),
         )
-            .into_response();
+                .into_response();
     }
 
     match sqlx::query(
@@ -1683,7 +1683,7 @@ async fn change_password(
             StatusCode::UNAUTHORIZED,
             Json(json!({"ok":false,"message":"Current password is incorrect."})),
         )
-            .into_response();
+                .into_response();
     }
 
     let new_hash = match hash_password(&input.new_password) {
@@ -1848,7 +1848,7 @@ async fn update_settings(
                     StatusCode::FORBIDDEN,
                     Json(json!({"ok":false,"message":"Only organization owners and admins can change the organization name."})),
                 )
-                    .into_response();
+                        .into_response();
             }
             let slug = slugify(org_name);
             if let Err(e) = sqlx::query("UPDATE organizations SET name=$1,slug=$2 WHERE id=$3")
@@ -2019,7 +2019,7 @@ async fn change_email(
             StatusCode::UNAUTHORIZED,
             Json(json!({"ok":false,"message":"Current password is incorrect."})),
         )
-            .into_response();
+                .into_response();
     }
 
     let email = input.new_email.trim().to_lowercase();
@@ -2033,7 +2033,7 @@ async fn change_email(
             StatusCode::CONFLICT,
             Json(json!({"ok":false,"message":"That email address is already in use."})),
         )
-            .into_response();
+                .into_response();
     }
 
     let code = format!("{:06}", Uuid::new_v4().as_u128() % 1_000_000);
@@ -2144,7 +2144,7 @@ async fn confirm_email_change(
             StatusCode::CONFLICT,
             Json(json!({"ok":false,"message":"That email address is already in use."})),
         )
-            .into_response();
+                .into_response();
     }
 
     if let Err(e) = sqlx::query(
@@ -2275,7 +2275,7 @@ async fn delete_account(State(s): State<AppState>, headers: HeaderMap) -> Respon
             StatusCode::FORBIDDEN,
             Json(json!({"ok":false,"message":"Only the organization owner can delete this account."})),
         )
-            .into_response();
+                .into_response();
     }
 
     let shared_orgs: i64 = match sqlx::query_scalar(
@@ -2295,7 +2295,7 @@ async fn delete_account(State(s): State<AppState>, headers: HeaderMap) -> Respon
             StatusCode::CONFLICT,
             Json(json!({"ok":false,"message":"Account deletion is blocked while another member still depends on one of your organizations. Transfer ownership or remove other members first."})),
         )
-            .into_response();
+                .into_response();
     }
 
     let non_owner_memberships: i64 = match sqlx::query_scalar(
@@ -2313,7 +2313,7 @@ async fn delete_account(State(s): State<AppState>, headers: HeaderMap) -> Respon
             StatusCode::CONFLICT,
             Json(json!({"ok":false,"message":"Account deletion requires ownership of every organization on this account. Leave or transfer any organization where you are not the owner first."})),
         )
-            .into_response();
+                .into_response();
     }
 
     let active_billing: i64 = match sqlx::query_scalar(
@@ -2333,7 +2333,7 @@ async fn delete_account(State(s): State<AppState>, headers: HeaderMap) -> Respon
             StatusCode::CONFLICT,
             Json(json!({"ok":false,"message":"Cancel active organization billing before deleting the account."})),
         )
-            .into_response();
+                .into_response();
     }
 
     if let Err(e) = sqlx::query(
@@ -2437,7 +2437,7 @@ async fn delete_organization(
             StatusCode::FORBIDDEN,
             Json(json!({"ok":false,"message":"Only an organization owner can delete that organization."})),
         )
-            .into_response();
+                .into_response();
     }
 
     let member_count = match sqlx::query_scalar::<_, i64>(
@@ -2455,7 +2455,7 @@ async fn delete_organization(
             StatusCode::CONFLICT,
             Json(json!({"ok":false,"message":"This organization has other members. Remove or transfer their access before deleting the organization."})),
         )
-            .into_response();
+                .into_response();
     }
 
     let organization_count =
@@ -2472,7 +2472,7 @@ async fn delete_organization(
             StatusCode::CONFLICT,
             Json(json!({"ok":false,"message":"You cannot delete your last organization. Create or join another organization first, or use the separate account-deletion flow if that is your intention."})),
         )
-            .into_response();
+                .into_response();
     }
 
     let active_billing = match sqlx::query_scalar::<_, i64>(
@@ -2490,7 +2490,7 @@ async fn delete_organization(
             StatusCode::CONFLICT,
             Json(json!({"ok":false,"message":"This organization has active billing. Cancel or deactivate its subscription before deleting the organization."})),
         )
-            .into_response();
+                .into_response();
     }
 
     let replacement_organization = match sqlx::query_scalar::<_, Uuid>(
@@ -2886,7 +2886,7 @@ async fn create_developer_environment(
                 "message":"Environment name must contain 1–100 characters."
             })),
         )
-        .into_response();
+            .into_response();
     }
     let slug = normalize_environment_slug(input.slug.as_deref().unwrap_or(name));
     if slug.is_empty() || slug.len() > 100 {
@@ -2897,7 +2897,7 @@ async fn create_developer_environment(
                 "message":"Environment slug must contain letters or numbers and may use hyphens between words."
             })),
         )
-        .into_response();
+            .into_response();
     }
     let description = input.description.unwrap_or_default().trim().to_string();
     if description.len() > 500 {
@@ -2908,7 +2908,7 @@ async fn create_developer_environment(
                 "message":"Environment description must be 500 characters or fewer."
             })),
         )
-        .into_response();
+            .into_response();
     }
 
     if let Err(response) =
@@ -2974,13 +2974,9 @@ async fn update_developer_environment(
                 "message":"Environment name must contain 1–100 characters."
             })),
         )
-        .into_response();
+            .into_response();
     }
-    if input
-        .description
-        .as_ref()
-        .is_some_and(|v| v.len() > 500)
-    {
+    if input.description.as_ref().is_some_and(|v| v.len() > 500) {
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({
@@ -2988,7 +2984,7 @@ async fn update_developer_environment(
                 "message":"Environment description must be 500 characters or fewer."
             })),
         )
-        .into_response();
+            .into_response();
     }
     if input
         .status
@@ -3002,7 +2998,7 @@ async fn update_developer_environment(
                 "message":"Environment status must be active or disabled."
             })),
         )
-        .into_response();
+            .into_response();
     }
     match sqlx::query(
         "UPDATE organization_environments
@@ -3430,7 +3426,7 @@ async fn enroll_node(
                 "signing_key": hex::encode(node_key),
                 "message": "Store this credential securely. It is returned only once."
             }))
-            .into_response();
+                .into_response();
 
             node_key.fill(0);
             response
@@ -3566,7 +3562,7 @@ async fn create_verification(
                 StatusCode::NOT_FOUND,
                 Json(json!({"ok":false,"message":"Tenant not found in the active organization."})),
             )
-                .into_response();
+                    .into_response();
         }
     }
 
@@ -3873,7 +3869,7 @@ async fn create_attestation(
             StatusCode::UNPROCESSABLE_ENTITY,
             Json(json!({"ok":false,"message":"Attestation payload hash mismatch."})),
         )
-            .into_response();
+                .into_response();
     }
     let mut mac = match hmac::Hmac::<Sha256>::new_from_slice(&signing_key) {
         Ok(mac) => mac,
@@ -3886,7 +3882,7 @@ async fn create_attestation(
             StatusCode::UNPROCESSABLE_ENTITY,
             Json(json!({"ok":false,"message":"Attestation signature is invalid."})),
         )
-            .into_response();
+                .into_response();
     }
 
     let mut tx = match s.db.begin().await {
@@ -4205,7 +4201,7 @@ async fn create_public_support_request(
             StatusCode::ACCEPTED,
             Json(json!({"ok":true,"message":"Your request has been received."})),
         )
-            .into_response();
+                .into_response();
     }
 
     let email = input.email.trim().to_lowercase();
@@ -4272,7 +4268,7 @@ async fn create_public_support_request(
                 "message":"Too many requests from this email address. Please try again later."
             })),
         )
-            .into_response();
+                .into_response();
     }
 
     let request_id = Uuid::new_v4();
@@ -4422,7 +4418,7 @@ async fn create_support(
                 "error": "Priority must be low, normal, high, or urgent."
             })),
         )
-            .into_response();
+                .into_response();
     }
     if matches!(priority.as_str(), "high" | "urgent") {
         if let Err(response) =
@@ -5010,7 +5006,7 @@ fn unique_error(e: sqlx::Error) -> Response {
                     message: "A resource with that identity already exists.".into(),
                 }),
             )
-                .into_response();
+                    .into_response();
         }
     }
     db_error(e)
