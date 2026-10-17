@@ -176,6 +176,22 @@ struct PublicSupportInput {
 #[derive(Deserialize)]
 struct ApiKeyInput {
     name: String,
+    service_account_id: Option<Uuid>,
+}
+
+#[derive(Deserialize)]
+struct ServiceAccountInput {
+    name: String,
+    description: Option<String>,
+    environment_id: Option<Uuid>,
+}
+
+#[derive(Deserialize)]
+struct ServiceAccountPatchInput {
+    name: Option<String>,
+    description: Option<String>,
+    status: Option<String>,
+    environment_id: Option<Uuid>,
 }
 
 #[derive(Deserialize)]
@@ -435,6 +451,7 @@ async fn main() -> Result<()> {
         .route("/app", get(app_page))
         .route("/logo.svg", get(logo))
         .route("/docs/openapi.json", get(openapi))
+        .route("/api/v1/openapi.json", get(openapi))
         .route("/healthz", get(healthz))
         .route("/api/v1/health", get(healthz))
         .route("/api/v1/auth/signup", post(signup))
@@ -517,6 +534,22 @@ async fn main() -> Result<()> {
             get(api_keys).post(create_api_key),
         )
         .route("/api/v1/developer/api-keys/{id}", delete(revoke_api_key))
+        .route(
+            "/api/v1/developer/service-accounts",
+            get(service_accounts).post(create_service_account),
+        )
+        .route(
+            "/api/v1/developer/service-accounts/{id}",
+            patch(update_service_account).delete(delete_service_account),
+        )
+        .route(
+            "/api/v1/developer/events/catalog",
+            get(developer_event_catalog),
+        )
+        .route(
+            "/api/v1/developer/webhooks/configuration",
+            get(webhook_configuration),
+        )
         .route(
             "/api/v1/developer/webhooks",
             get(webhooks).post(create_webhook),
@@ -982,8 +1015,8 @@ async fn api_keys(State(s): State<AppState>, headers: HeaderMap) -> Response {
     if ctx.api_key {
         return StatusCode::FORBIDDEN.into_response();
     }
-    match sqlx::query("SELECT id,name,key_prefix,last_used_at,created_at,revoked_at FROM api_keys WHERE organization_id=$1 ORDER BY created_at DESC").bind(ctx.organization_id).fetch_all(&s.db).await{
-      Ok(rows)=>Json(rows.iter().map(|r|json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"key_prefix":r.get::<String,_>("key_prefix"),"last_used_at":r.get::<Option<chrono::DateTime<chrono::Utc>>,_>("last_used_at"),"created_at":r.get::<chrono::DateTime<chrono::Utc>, _>("created_at"),"revoked_at":r.get::<Option<chrono::DateTime<chrono::Utc>>,_>("revoked_at")})).collect::<Vec<_>>()).into_response(),
+    match sqlx::query("SELECT k.id,k.name,k.key_prefix,k.last_used_at,k.created_at,k.revoked_at,k.service_account_id,sa.name AS service_account_name FROM api_keys k LEFT JOIN service_accounts sa ON sa.id=k.service_account_id WHERE k.organization_id=$1 ORDER BY k.created_at DESC").bind(ctx.organization_id).fetch_all(&s.db).await{
+      Ok(rows)=>Json(rows.iter().map(|r|json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"key_prefix":r.get::<String,_>("key_prefix"),"last_used_at":r.get::<Option<chrono::DateTime<chrono::Utc>>,_>("last_used_at"),"created_at":r.get::<chrono::DateTime<chrono::Utc>, _>("created_at"),"revoked_at":r.get::<Option<chrono::DateTime<chrono::Utc>>,_>("revoked_at"),"service_account_id":r.get::<Option<Uuid>,_>("service_account_id"),"service_account_name":r.get::<Option<String>,_>("service_account_name")})).collect::<Vec<_>>()).into_response(),
       Err(e)=>db_error(e)
     }
 }
@@ -1010,11 +1043,25 @@ async fn create_api_key(
     if let Err(response) = production::enforce_api_key_capacity(&s.db, ctx.organization_id).await {
         return response;
     }
+    if let Some(service_account_id) = input.service_account_id {
+        match sqlx::query("SELECT status FROM service_accounts WHERE id=$1 AND organization_id=$2")
+            .bind(service_account_id)
+            .bind(ctx.organization_id)
+            .fetch_optional(&s.db)
+            .await
+        {
+            Ok(Some(row)) if row.get::<String, _>("status") == "active" => {}
+            Ok(_) => {
+                return bad("Choose an active service account belonging to this organization.")
+            }
+            Err(e) => return db_error(e),
+        }
+    }
     let id = Uuid::new_v4();
     let token = format!("aga_{}_{}", id.simple(), Uuid::new_v4().simple());
     let prefix = token.chars().take(12).collect::<String>();
     if let Err(e) = sqlx::query(
-        "INSERT INTO api_keys(id,organization_id,created_by,name,key_prefix,key_hash) VALUES($1,$2,$3,$4,$5,$6)",
+        "INSERT INTO api_keys(id,organization_id,created_by,name,key_prefix,key_hash,service_account_id) VALUES($1,$2,$3,$4,$5,$6,$7)",
     )
     .bind(id)
     .bind(ctx.organization_id)
@@ -1022,6 +1069,7 @@ async fn create_api_key(
     .bind(name)
     .bind(&prefix)
     .bind(token_hash(&token))
+    .bind(input.service_account_id)
     .execute(&s.db)
     .await
     {
@@ -1059,6 +1107,353 @@ async fn revoke_api_key(
       Ok(r) if r.rows_affected()==1=>{audit(&s.db,ctx.organization_id,ctx.user_id,"developer.api_key.revoked","api_key",Some(id),json!({})).await;Json(json!({"ok":true,"message":"API key revoked."})).into_response()},
       Ok(_)=>(StatusCode::NOT_FOUND,Json(json!({"message":"API key not found."}))).into_response(), Err(e)=>db_error(e)
     }
+}
+
+async fn developer_event_catalog(State(s): State<AppState>, headers: HeaderMap) -> Response {
+    let _ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    let events = [
+        (
+            "attestation.ingested",
+            "A signed engine attestation was ingested.",
+        ),
+        (
+            "auth.email_change.requested",
+            "A user requested an email change.",
+        ),
+        ("auth.email_changed", "A user email change was confirmed."),
+        ("auth.login", "A user signed in."),
+        ("auth.password.changed", "A user changed their password."),
+        ("deployment.created", "A deployment record was created."),
+        ("developer.api_key.created", "An API key was created."),
+        ("developer.api_key.revoked", "An API key was revoked."),
+        (
+            "developer.environment.created",
+            "An environment stage was created.",
+        ),
+        (
+            "developer.environment.updated",
+            "An environment stage was updated.",
+        ),
+        (
+            "developer.environment.deleted",
+            "An environment stage was deleted.",
+        ),
+        (
+            "developer.service_account.created",
+            "A machine service account was created.",
+        ),
+        (
+            "developer.service_account.updated",
+            "A machine service account was updated.",
+        ),
+        (
+            "developer.service_account.disabled",
+            "A machine service account was disabled.",
+        ),
+        (
+            "developer.service_account.deleted",
+            "A service account was deleted and linked keys were revoked.",
+        ),
+        (
+            "developer.webhook.created",
+            "A webhook subscription was created.",
+        ),
+        (
+            "developer.webhook.deleted",
+            "A webhook subscription was deleted.",
+        ),
+        (
+            "developer.webhook.delivery.retried",
+            "A webhook delivery was queued for retry.",
+        ),
+        (
+            "developer.webhook.secret.rotated",
+            "A webhook signing secret was rotated.",
+        ),
+        ("node.created", "A node was registered."),
+        ("node.enrollment.started", "A node enrollment flow started."),
+        (
+            "node.enrollment_token.rotated",
+            "A node enrollment token was rotated.",
+        ),
+        ("organization.created", "An organization was created."),
+        (
+            "organization.invite.revoked",
+            "An organization invitation was revoked.",
+        ),
+        ("organization.switched", "A user switched organizations."),
+        (
+            "organization.updated",
+            "Organization settings were updated.",
+        ),
+        ("policy.created", "A policy record was created."),
+        ("security.breaker.tripped", "A security breaker tripped."),
+        ("settings.updated", "User settings were updated."),
+        ("support.requested", "A support request was submitted."),
+        ("tenant.created", "A tenant was created."),
+        (
+            "verification.recorded",
+            "A verification result was recorded.",
+        ),
+    ];
+    Json(json!({
+        "events": events.iter().map(|(event_type, description)| json!({
+            "type": event_type,
+            "description": description,
+        })).collect::<Vec<_>>()
+    }))
+    .into_response()
+}
+
+async fn service_accounts(State(s): State<AppState>, headers: HeaderMap) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    match sqlx::query(
+        "SELECT sa.id,sa.name,sa.description,sa.environment_id,e.name AS environment_name,sa.status,sa.created_at,sa.updated_at,
+                CASE WHEN sa.status = 'active' THEN
+                    (SELECT count(*) FROM api_keys k WHERE k.service_account_id=sa.id AND k.revoked_at IS NULL)::bigint
+                ELSE 0::bigint END AS active_key_count
+         FROM service_accounts sa LEFT JOIN organization_environments e ON e.id=sa.environment_id
+         WHERE sa.organization_id=$1 ORDER BY sa.created_at DESC",
+    )
+    .bind(ctx.organization_id)
+    .fetch_all(&s.db)
+    .await
+    {
+        Ok(rows) => Json(rows.iter().map(|r| json!({
+            "id":r.get::<Uuid,_>("id"), "name":r.get::<String,_>("name"),
+            "description":r.get::<String,_>("description"), "environment_id":r.get::<Option<Uuid>,_>("environment_id"),
+            "environment_name":r.get::<Option<String>,_>("environment_name"), "status":r.get::<String,_>("status"),
+            "active_key_count":r.get::<i64,_>("active_key_count"),
+            "created_at":r.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),
+            "updated_at":r.get::<chrono::DateTime<chrono::Utc>,_>("updated_at")
+        })).collect::<Vec<_>>()).into_response(),
+        Err(e) => db_error(e),
+    }
+}
+
+async fn create_service_account(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<ServiceAccountInput>,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if ctx.api_key {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
+    let name = input.name.trim();
+    let description = input.description.as_deref().unwrap_or("").trim();
+    if name.is_empty() || name.len() > 120 || description.len() > 500 {
+        return bad(
+            "Service account name must be 1–120 characters and description at most 500 characters.",
+        );
+    }
+    if let Some(environment_id) = input.environment_id {
+        match sqlx::query("SELECT 1 FROM organization_environments WHERE id=$1 AND organization_id=$2 AND status='active'")
+            .bind(environment_id)
+            .bind(ctx.organization_id)
+            .fetch_optional(&s.db)
+            .await
+        {
+            Ok(Some(_)) => {}
+            Ok(None) => return bad("Choose an active environment belonging to this organization."),
+            Err(e) => return db_error(e),
+        }
+    }
+    let id = Uuid::new_v4();
+    match sqlx::query(
+        "INSERT INTO service_accounts(id,organization_id,name,description,environment_id,created_by)
+         VALUES($1,$2,$3,$4,$5,$6) RETURNING created_at,updated_at"
+    )
+    .bind(id)
+    .bind(ctx.organization_id)
+    .bind(name)
+    .bind(description)
+    .bind(input.environment_id)
+    .bind(ctx.user_id)
+    .fetch_one(&s.db)
+    .await
+    {
+        Ok(row) => {
+            audit(
+                &s.db,
+                ctx.organization_id,
+                ctx.user_id,
+                "developer.service_account.created",
+                "service_account",
+                Some(id),
+                json!({"name":name,"environment_id":input.environment_id}),
+            )
+            .await;
+            Json(json!({"id":id,"name":name,"description":description,"environment_id":input.environment_id,"status":"active","active_key_count":0,"created_at":row.get::<chrono::DateTime<chrono::Utc>,_>("created_at"),"updated_at":row.get::<chrono::DateTime<chrono::Utc>,_>("updated_at")})).into_response()
+        }
+        Err(e) => db_error(e),
+    }
+}
+
+async fn update_service_account(
+    State(s): State<AppState>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+    Json(input): Json<ServiceAccountPatchInput>,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if ctx.api_key {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
+    if input
+        .name
+        .as_ref()
+        .is_some_and(|v| v.trim().is_empty() || v.trim().len() > 120)
+        || input.description.as_ref().is_some_and(|v| v.len() > 500)
+        || input
+            .status
+            .as_ref()
+            .is_some_and(|v| !["active", "disabled"].contains(&v.as_str()))
+    {
+        return bad("Invalid service account update. Status must be active or disabled; name and description are limited to 120 and 500 characters.");
+    }
+    if let Some(environment_id) = input.environment_id {
+        match sqlx::query("SELECT 1 FROM organization_environments WHERE id=$1 AND organization_id=$2 AND status='active'")
+            .bind(environment_id).bind(ctx.organization_id).fetch_optional(&s.db).await {
+            Ok(Some(_)) => {}
+            Ok(None) => return bad("Choose an active environment belonging to this organization."),
+            Err(e) => return db_error(e),
+        }
+    }
+    match sqlx::query(
+        "UPDATE service_accounts SET name=COALESCE($3,name),description=COALESCE($4,description),
+         status=COALESCE($5,status),environment_id=COALESCE($6,environment_id),updated_at=now()
+         WHERE id=$1 AND organization_id=$2
+         RETURNING id,name,description,environment_id,status,updated_at",
+    )
+    .bind(id)
+    .bind(ctx.organization_id)
+    .bind(input.name.as_deref().map(str::trim))
+    .bind(input.description.as_deref().map(str::trim))
+    .bind(input.status.as_deref())
+    .bind(input.environment_id)
+    .fetch_optional(&s.db)
+    .await
+    {
+        Ok(Some(r)) => {
+            let status: String = r.get("status");
+            let action = if status == "disabled" {
+                "developer.service_account.disabled"
+            } else {
+                "developer.service_account.updated"
+            };
+            audit(
+                &s.db,
+                ctx.organization_id,
+                ctx.user_id,
+                action,
+                "service_account",
+                Some(id),
+                json!({}),
+            )
+            .await;
+            Json(json!({"id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"description":r.get::<String,_>("description"),"environment_id":r.get::<Option<Uuid>,_>("environment_id"),"status":status,"updated_at":r.get::<chrono::DateTime<chrono::Utc>,_>("updated_at")})).into_response()
+        }
+        Ok(None) => StatusCode::NOT_FOUND.into_response(),
+        Err(e) => db_error(e),
+    }
+}
+
+async fn delete_service_account(
+    State(s): State<AppState>,
+    Path(id): Path<Uuid>,
+    headers: HeaderMap,
+) -> Response {
+    let ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    if ctx.api_key {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    if let Err(c) = require_write(&ctx, &headers) {
+        return c.into_response();
+    }
+    let mut tx = match s.db.begin().await {
+        Ok(tx) => tx,
+        Err(e) => return db_error(e),
+    };
+    let exists = sqlx::query(
+        "SELECT id FROM service_accounts WHERE id=$1 AND organization_id=$2 FOR UPDATE",
+    )
+    .bind(id)
+    .bind(ctx.organization_id)
+    .fetch_optional(&mut *tx)
+    .await;
+    match exists {
+        Ok(Some(_)) => {}
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(e) => return db_error(e),
+    }
+    if let Err(e) = sqlx::query("UPDATE api_keys SET revoked_at=COALESCE(revoked_at,now()) WHERE service_account_id=$1 AND organization_id=$2")
+        .bind(id)
+        .bind(ctx.organization_id)
+        .execute(&mut *tx)
+        .await
+    {
+        return db_error(e);
+    }
+    if let Err(e) = sqlx::query("DELETE FROM service_accounts WHERE id=$1 AND organization_id=$2")
+        .bind(id)
+        .bind(ctx.organization_id)
+        .execute(&mut *tx)
+        .await
+    {
+        return db_error(e);
+    }
+    if let Err(e) = tx.commit().await {
+        return db_error(e);
+    }
+    audit(
+        &s.db,
+        ctx.organization_id,
+        ctx.user_id,
+        "developer.service_account.deleted",
+        "service_account",
+        Some(id),
+        json!({"associated_keys_revoked":true}),
+    )
+    .await;
+    Json(json!({"ok":true,"message":"Service account deleted; all associated API keys were revoked."})).into_response()
+}
+
+async fn webhook_configuration(State(s): State<AppState>, headers: HeaderMap) -> Response {
+    let _ctx = match authenticate(&s, &headers).await {
+        Ok(v) => v,
+        Err(c) => return c.into_response(),
+    };
+    let configured = crate::webhooks::encryption_key_configured();
+    Json(json!({
+        "encryption_key_configured": configured,
+        "message": if configured {
+            "Webhook signing secrets can be encrypted at rest."
+        } else {
+            "Set AGATA_WEBHOOK_ENCRYPTION_KEY to a stable random value of at least 32 characters, then restart the Control Plane."
+        }
+    })).into_response()
 }
 
 async fn webhooks(State(s): State<AppState>, headers: HeaderMap) -> Response {
@@ -4601,8 +4996,9 @@ async fn authenticate(s: &AppState, headers: &HeaderMap) -> Result<AuthContext, 
         }
 
         let key = sqlx::query(
-            "SELECT id,organization_id,created_by
-             FROM api_keys WHERE key_hash=$1 AND revoked_at IS NULL",
+            "SELECT k.id,k.organization_id,k.created_by,sa.status AS service_account_status
+             FROM api_keys k LEFT JOIN service_accounts sa ON sa.id=k.service_account_id
+             WHERE k.key_hash=$1 AND k.revoked_at IS NULL",
         )
         .bind(token_hash(token.trim()))
         .fetch_optional(&s.db)
@@ -4612,6 +5008,13 @@ async fn authenticate(s: &AppState, headers: &HeaderMap) -> Result<AuthContext, 
 
         let key_id: Uuid = key.get("id");
         let organization_id: Uuid = key.get("organization_id");
+        if key
+            .get::<Option<String>, _>("service_account_status")
+            .as_deref()
+            == Some("disabled")
+        {
+            return Err(StatusCode::UNAUTHORIZED);
+        }
         let created_by: Option<Uuid> = key.get("created_by");
         let actor = if let Some(creator) = created_by {
             sqlx::query_scalar::<_, Uuid>(

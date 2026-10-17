@@ -1,0 +1,36 @@
+name: Terraform provider
+
+on:
+  pull_request:
+    paths:
+      - "terraform-provider-agata/**"
+      - "download-kit/terraform/**"
+      - ".github/workflows/terraform-provider.yml"
+  push:
+    branches: [main]
+    paths:
+      - "terraform-provider-agata/**"
+      - "download-kit/terraform/**"
+      - ".github/workflows/terraform-provider.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-provider-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform-provider-agata
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.24"
+      - run: go mod tidy
+      - run: go test ./...
+      - run: go vet ./...

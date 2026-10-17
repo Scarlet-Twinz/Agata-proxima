@@ -16,9 +16,11 @@ const resources = [
   ["Audit and events", "Review security-relevant changes and integrate event delivery.", "/developers/events", "core"],
   ["Webhooks", "Configure signed events, verify signatures and operate delivery retries.", "/developers/webhooks", "core"],
   ["API reference", "Use the versioned `/api/v1` contract and inspect request/response schemas.", "/developers/api-reference", "core"],
-  ["SDK guide", "Build a typed client over the documented HTTP API, with error and retry handling.", "/developers/sdks", "tooling"],
-  ["CLI guide", "Automate API workflows from scripts and CI using secure environment configuration.", "/developers/cli", "tooling"],
-  ["Terraform guide", "Model infrastructure dependencies and provider acceptance requirements.", "/developers/terraform", "tooling"],
+  ["SDK guide", "Use the packaged server-side JavaScript SDK source, tests and controlled release workflow.", "/developers/sdks", "tooling"],
+  ["CLI guide", "Run checks and manage environments or webhooks from a terminal or CI.", "/developers/cli", "tooling"],
+  ["Terraform provider", "Use the source provider for named environments; registry publication is pending.", "/developers/terraform", "tooling"],
+  ["Service accounts", "Manage machine identities and revoke all linked credentials from one place.", "/developers/service-accounts", "core"],
+  ["Environments", "Name development, staging and production stages inside an organization.", "/developers/environments", "core"],
 ];
 const integrations = [
   ["ChatGPT / MCP", "Connect an assistant through a scoped MCP server and explicit tool permissions.", "/developers/integrations/chatgpt", MessageSquare],
@@ -28,7 +30,7 @@ const integrations = [
   ["Vercel", "Configure deployment environments, server-side secrets and post-deploy checks.", "/developers/integrations/vercel", Workflow],
   ["PostgreSQL + RLS", "Apply least-privilege database roles and test tenant-scoped queries.", "/developers/integrations/postgresql", Server],
 ];
-const side = [["Developer home", "/developers"], ["Quickstart", "/developers/quickstart"], ["Downloads", "/developers/downloads"], ["Node.js", "/developers/nodejs"], ["Authentication", "/developers/authentication"], ["Organizations", "/developers/organizations"], ["Tenant context", "/developers/tenant-context"], ["Policies", "/developers/policies"], ["Node enrollment", "/docs/node-enrollment"], ["Verification", "/developers/verification"], ["Webhooks", "/developers/webhooks"], ["SDKs", "/developers/sdks"], ["CLI", "/developers/cli"], ["Terraform", "/developers/terraform"], ["API reference", "/developers/api-reference"], ["Integration catalog", "/developers/integrations"]];
+const side = [["Developer home", "/developers"], ["Quickstart", "/developers/quickstart"], ["Downloads", "/developers/downloads"], ["Node.js", "/developers/nodejs"], ["Authentication", "/developers/authentication"], ["Organizations", "/developers/organizations"], ["Service accounts", "/developers/service-accounts"], ["Environments", "/developers/environments"], ["Tenant context", "/developers/tenant-context"], ["Policies", "/developers/policies"], ["Node enrollment", "/docs/node-enrollment"], ["Verification", "/developers/verification"], ["Webhooks", "/developers/webhooks"], ["SDKs", "/developers/sdks"], ["CLI", "/developers/cli"], ["Terraform", "/developers/terraform"], ["API reference", "/developers/api-reference"], ["Integration catalog", "/developers/integrations"]];
 
 export function Developers() {
   return <PublicPage eyebrow="Developer platform" title="Build, connect and verify with Agata Proxima." description="A complete developer path for authentication, tenant context, policy and deployment workflows, verification, audit, signed webhooks and API-based integrations.">

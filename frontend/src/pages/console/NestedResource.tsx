@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { ArrowLeft, ArrowUpRight, CheckCircle2, ChevronRight, Copy, ExternalLink, KeyRound, RefreshCw, Save, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, CheckCircle2, ChevronRight, Copy, ExternalLink, KeyRound, RefreshCw, Save, Search, ShieldCheck } from "lucide-react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { ResourceSurface } from "../../components/console/ResourceSurface";
 import { api, type ApiError } from "../../api/client";
@@ -85,32 +85,32 @@ const developerDocs: Record<string,{title:string;intro:string;sections:{title:st
   },
   "/app/developer/sdks": {
     title:"JavaScript SDK",
-    intro:"Use the server-side JavaScript client included in the Agata Proxima integration starter kit. It wraps the versioned HTTP API, attaches the organization API key, parses JSON responses and exposes HTTP errors with status codes. It is distributed as source in the kit, not as a published npm package.",
+    intro:"Use the separately packaged server-side JavaScript SDK in packages/javascript-sdk. It has contract tests and a tag-gated npm release workflow, but the public package has not yet been published.",
     sections:[
-      {title:"Requirements and installation",body:"Use Node.js 22 or newer. Download and extract the integration starter kit from Developer → Downloads, then install the kit dependencies from the extracted folder.",code:"cd download-kit\nnpm install\nnpm run check"},
+      {title:"Requirements and installation",body:"Use Node.js 22 or newer. Test and package the SDK from its own directory. Until an authorized npm release is published, install the generated tarball or use the repository source.",code:"cd packages/javascript-sdk\nnpm test\nnpm pack"},
       {title:"Configure credentials",body:"Create an API key in Developer → API keys. Store it in a secret manager or local environment variable for development. Never include the key in frontend code or commit it to Git.",code:"$env:AGATA_API_BASE_URL = \"https://api.agataproxima.com\"\n$env:AGATA_API_KEY = \"aga_LOAD_FROM_A_SECRET_STORE\""},
-      {title:"Make your first request",body:"The client provides session context, health, plans, tenants, policies, nodes, deployments, verification records, audit events and webhooks. Its create methods obtain organization_id from the authenticated session when you omit it. Read methods list the API records; createVerificationRecord stores a submitted record and does not execute a runtime isolation test.",code:"import { AgataClient } from \"./node/agata-client.mjs\";\n\nconst agata = new AgataClient();\nconst health = await agata.health();\nconst tenants = await agata.listTenants();\nconsole.log({ health, tenants });"},
+      {title:"Make your first request",body:"The package exposes health, plans, tenant, policy, node, deployment, verification and audit methods, plus environment and webhook lifecycle methods. Server-side API authorization remains authoritative. Creating a verification record stores evidence; it does not run a runtime isolation test.",code:"import { AgataClient } from \"@agata-proxima/sdk\";\n\nconst agata = new AgataClient();\nconsole.log(await agata.health());\nconsole.log(await agata.listEnvironments());"},
       {title:"Handle API errors",body:"Catch AgataApiError to inspect status, error code and request ID. Refresh credentials for 401, review roles and entitlements for 403, check the resource ID and organization for 404, and respect quota or rate-limit responses. Avoid blind retries for writes.",code:"import { AgataClient, AgataApiError } from \"./node/agata-client.mjs\";\n\ntry {\n  console.log(await new AgataClient().listTenants());\n} catch (error) {\n  if (error instanceof AgataApiError) {\n    console.error(error.status, error.code, error.requestId, error.message);\n  } else { throw error; }\n}"},
-      {title:"Client source and contract",body:"Review download-kit/node/agata-client.mjs for the implementation and download-kit/README.md for the starter-kit contract. Use the API reference and deployed OpenAPI document for exact request schemas; do not assume an undocumented method or response field exists."}
+      {title:"Client source and contract",body:"Review packages/javascript-sdk/src/index.mjs for the packaged SDK and download-kit/node/agata-client.mjs for the integration-kit client. The npm release workflow runs only on an sdk-v* tag and requires an authorized NPM_TOKEN secret."}
     ],
   },
   "/app/developer/cli": {
     title:"Agata command-line interface",
-    intro:"The integration starter kit includes a working read-only Node.js CLI for common API checks and resource listings. It is not a separate preinstalled binary; install the kit and run the CLI from its source.",
+    intro:"The integration starter kit includes a Node.js CLI for API checks, resource listings, environment CRUD and webhook lifecycle operations. It is source-distributed, not a precompiled standalone binary.",
     sections:[
       {title:"Install and configure",body:"Use Node.js 22 or newer. Extract the starter kit, install dependencies and set the API origin and organization-scoped API key in your terminal.",code:"cd download-kit\nnpm install\n$env:AGATA_API_BASE_URL = \"https://api.agataproxima.com\"\n$env:AGATA_API_KEY = \"aga_LOAD_FROM_A_SECRET_STORE\""},
-      {title:"Run the CLI",body:"Run the CLI through the npm script. These commands call the actual versioned API endpoints and print the JSON response. The verification command lists saved verification records; it does not execute a tenant-isolation test.",code:"npm run cli -- --help\nnpm run cli -- whoami\nnpm run cli -- health\nnpm run cli -- tenants list\nnpm run cli -- policies list\nnpm run cli -- nodes list\nnpm run cli -- deployments list\nnpm run cli -- verification list\nnpm run cli -- audit list\nnpm run cli -- webhooks list\nnpm run cli -- environments list"},
+      {title:"Run the CLI",body:"Run the CLI through the npm script. These commands call the actual versioned API endpoints and print the JSON response. The verification command lists saved verification records; it does not execute a tenant-isolation test.",code:"npm run cli -- --help\nnpm run cli -- whoami\nnpm run cli -- health\nnpm run cli -- tenants list\nnpm run cli -- audit list\nnpm run cli -- environments list\nnpm run cli -- environments create --name Staging --slug staging\nnpm run cli -- environments disable <environment-id>\nnpm run cli -- webhooks list\nnpm run cli -- webhooks deliveries <webhook-id>\nnpm run cli -- webhooks disable <webhook-id>"},
       {title:"Install the agata command (optional)",body:"For a developer workstation where a local executable is useful, install the extracted package globally from its folder. The command uses the same environment variables and read-only command set.",code:"npm link\nagata whoami\nagata health\nagata tenants list\nagata verification list\nagata environments list"},
       {title:"Exit codes and troubleshooting",body:"Exit code 0 means the request completed successfully. Invalid command or missing arguments return exit code 2. API/network/configuration failures return exit code 1 and print the HTTP status when available. A 401 usually means the key is missing, invalid or revoked; a 403 indicates access or entitlement; a 429 indicates a quota or rate limit."},
-      {title:"Command implementation",body:"The executable is download-kit/cli/bin/agata.mjs; its API calls use download-kit/node/agata-client.mjs. The CLI is deliberately read-only so a typo cannot unexpectedly create, change or delete customer resources. Use the dashboard or a reviewed API request for writes."}
+      {title:"Command implementation",body:"The executable is download-kit/cli/bin/agata.mjs and uses download-kit/node/agata-client.mjs. Writes are limited to explicit environment and webhook commands; service-account and API-key administration stays in the authenticated dashboard. Review destructive commands and confirm the target organization before running them."}
     ],
   },
   "/app/developer/terraform": {
     title:"Terraform and infrastructure as code",
-    intro:"Terraform automation must use a real provider with a published schema and versioned lifecycle behavior. This repository does not currently ship a published Agata Terraform provider, so do not add a fictitious provider block or resource names to production configuration.",
+    intro:"A real Terraform provider source now exists in terraform-provider-agata/. It currently manages the environment resource through the Control Plane API. The provider is not yet published to the Terraform Registry, and it does not provision databases, networks or service accounts.",
     sections:[
-      {title:"What is available today",body:"Use the versioned Control Plane API and the CLI/SDK starter kit for supported resource operations. The Terraform guide is an integration design and acceptance checklist, not an installable provider package."},
-      {title:"Provider release requirements",body:"A provider release needs a published binary for supported operating systems, a versioned schema, import and refresh behavior, plan/apply/destroy tests, state sensitivity for credentials, organization-scope enforcement and signed/checksummed release artifacts."},
+      {title:"What is available today",body:"The source provider implements agata_environment CRUD and has Go tests. Build and test it from terraform-provider-agata/. Registry installation must wait for a reviewed release; do not assume unsupported resources exist."},
+      {title:"Provider release requirements",body:"Before registry release, validate provider packaging, import and drift behavior, environment quota handling, destructive-delete failures for referenced environments, checksums and release artifacts. The API key remains sensitive and should be supplied from a secret store."},
       {title:"Safe automation boundary",body:"Keep API keys in the CI secret store and never put them in Terraform state, plan output or committed variables. Use a dedicated test organization and synthetic data for acceptance tests. Do not run destructive tests against the production organization."},
       {title:"Acceptance checklist",body:"Before adopting a provider, verify create/read/update/delete behavior for every supported resource, import of existing resources, drift detection, API error mapping, retries, organization isolation and documented upgrade behavior. Until a provider is released, call the documented API from a controlled deployment step rather than declaring unsupported Terraform resources."}
     ],
@@ -390,6 +390,8 @@ const baseConfigs:Record<string,Config>={
   {title:"Before destructive operations",text:"Confirm the documented retention and recovery behavior for the specific resource. Do not assume a destructive action can be undone.",href:"/docs/operations"},
  ]},
  "/app/developer/api-keys":{eyebrow:"DEVELOPER",title:"API keys",description:"Create, revoke and inspect organization-scoped machine credentials.",tabs:developerTabs,endpoint:"/api/v1/developer/api-keys",detailBase:"/app/developer/api-keys",createHref:"/app/developer/api-keys/new",createLabel:"Create API key"},
+ "/app/developer/service-accounts":{eyebrow:"DEVELOPER",title:"Service accounts",description:"Manage machine identities and linked API-key lifecycle.",tabs:developerTabs,endpoint:"/api/v1/developer/service-accounts"},
+ "/app/developer/events":{eyebrow:"DEVELOPER",title:"Event and audit stream",description:"Inspect persisted organization audit events and the event records that feed webhook delivery.",tabs:developerTabs,endpoint:"/api/v1/audit",detailBase:"/app/audit"},
  "/app/developer/webhooks":{eyebrow:"DEVELOPER",title:"Webhooks",description:"Create endpoints, select events and inspect delivery history.",tabs:developerTabs,endpoint:"/api/v1/developer/webhooks",detailBase:"/app/developer/webhooks",createHref:"/app/developer/webhooks/new",createLabel:"Add webhook"},
  "/app/developer/environments":{eyebrow:"DEVELOPER",title:"Environments",description:"Create and manage development, staging and production stages within the active organization.",tabs:developerTabs},
 };
@@ -527,6 +529,8 @@ type ApiKeyRecord = {
   last_used_at: string | null;
   created_at: string;
   revoked_at: string | null;
+  service_account_id?: string | null;
+  service_account_name?: string | null;
 };
 
 function ApiKeysManager() {
@@ -602,6 +606,7 @@ function ApiKeysManager() {
                 <div className="api-key-title"><KeyRound size={17}/><strong>{key.name}</strong><span className={key.revoked_at ? "api-key-status api-key-status--revoked" : "api-key-status"}>{key.revoked_at ? "Revoked" : "Active"}</span></div>
                 <code>{key.key_prefix}…¢…¢…¢…¢…¢…¢…¢…¢</code>
                 <div className="api-key-meta">
+                  {key.service_account_name && <span>Service account: {key.service_account_name}</span>}
                   <span>Created {new Date(key.created_at).toLocaleString()}</span>
                   <span>{key.last_used_at ? `Last used ${new Date(key.last_used_at).toLocaleString()}` : "Never used"}</span>
                   {key.revoked_at && <span>Revoked {new Date(key.revoked_at).toLocaleString()}</span>}
@@ -617,6 +622,71 @@ function ApiKeysManager() {
 }
 
 
+
+type OpenApiOperation = {summary?:string;description?:string;responses?:Record<string,{description?:string}>};
+type OpenApiDocument = {info?:{title?:string;version?:string;description?:string};paths?:Record<string,Record<string,OpenApiOperation>>};
+
+function ApiReferenceExplorer(){
+  const [spec,setSpec]=useState<OpenApiDocument|null>(null);
+  const [query,setQuery]=useState("");
+  const [loading,setLoading]=useState(true);
+  const [error,setError]=useState("");
+  useEffect(()=>{let active=true;api.get<OpenApiDocument>("/api/v1/openapi.json").then(value=>{if(active)setSpec(value);}).catch(e=>{if(active)setError(e instanceof Error?e.message:"Unable to load the OpenAPI document.");}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;};},[]);
+  const operations=useMemo(()=>Object.entries(spec?.paths??{}).flatMap(([path,methods])=>Object.entries(methods).filter(([method])=>["get","post","put","patch","delete","head","options"].includes(method.toLowerCase())).map(([method,op])=>({path,method:method.toUpperCase(),...op}))).filter(op=>(op.path+" "+op.method+" "+(op.summary??"")+" "+(op.description??"")).toLowerCase().includes(query.trim().toLowerCase())),[spec,query]);
+  return <div className="resource-page"><div className="page-heading"><div><span className="eyebrow">DEVELOPER · LIVE SPECIFICATION</span><h1>API reference</h1><p>Endpoint inventory is loaded from the repository's OpenAPI document served by the control plane, not hard-coded into this screen.</p></div><a className="console-refresh-button" href="/api/v1/openapi.json" target="_blank" rel="noreferrer">Open raw OpenAPI JSON</a></div>
+    {loading&&<div className="surface empty-state"><strong>Loading OpenAPI specification…</strong></div>}
+    {error&&<div className="settings-banner settings-banner--error" role="alert">{error}</div>}
+    {spec&&<><section className="surface environment-boundary-note"><span className="eyebrow">{spec.info?.title??"OpenAPI"}</span><h2>Version {spec.info?.version??"unknown"} · {operations.length} matching operations</h2><p>{spec.info?.description??"API specification loaded from the running control plane."}</p></section>
+      <label className="resource-search"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search method, endpoint or description" aria-label="Search API operations"/></label>
+      <div className="environment-record-list">{operations.map((op)=><article className="surface environment-record-card" key={op.method+" "+op.path}><div className="webhook-endpoint-heading"><div><span className="eyebrow">{op.method}</span><h2><code>{op.path}</code></h2></div></div><p><strong>{op.summary??"Endpoint"}</strong></p>{op.description&&<p>{op.description}</p>}<p className="webhook-endpoint-meta">Responses: {Object.entries(op.responses??{}).map(([status,value])=>status+" "+(value.description??"")).join(" · ")||"See API response schema"}</p></article>)}</div>
+      {!operations.length&&<div className="surface empty-state"><strong>No matching endpoints.</strong><span>Try another path or method.</span></div>}
+    </>}
+  </div>;
+}
+
+type ServiceAccountRecord = {id:string;name:string;description:string;environment_id:string|null;environment_name:string|null;status:"active"|"disabled";active_key_count:number;created_at:string;updated_at:string};
+
+function ServiceAccountsManager(){
+  const [items,setItems]=useState<ServiceAccountRecord[]>([]);
+  const [envs,setEnvs]=useState<Array<{id:string;name:string;slug:string;status:string}>>([]);
+  const [name,setName]=useState("");const [description,setDescription]=useState("");const [environmentId,setEnvironmentId]=useState("");
+  const [loading,setLoading]=useState(true);const [busy,setBusy]=useState("");const [error,setError]=useState("");const [notice,setNotice]=useState("");
+  const [editingId,setEditingId]=useState("");const [editName,setEditName]=useState("");const [editDescription,setEditDescription]=useState("");
+  const load=useCallback(async()=>{setLoading(true);setError("");try{const [a,e]=await Promise.all([api.get<ServiceAccountRecord[]>("/api/v1/developer/service-accounts"),api.get<Array<{id:string;name:string;slug:string;status:string}>>("/api/v1/developer/environments")]);setItems(a);setEnvs(e);}catch(x){setError(x instanceof Error?x.message:"Unable to load service accounts.");}finally{setLoading(false);}},[]);
+  useEffect(()=>{void load();},[load]);
+  async function create(e:FormEvent<HTMLFormElement>){e.preventDefault();setBusy("create");setError("");setNotice("");try{const a=await api.post<ServiceAccountRecord>("/api/v1/developer/service-accounts",{name:name.trim(),description:description.trim(),...(environmentId?{environment_id:environmentId}:{})});setNotice("Service account "+a.name+" created. Create an API key linked to it.");setName("");setDescription("");setEnvironmentId("");await load();}catch(x){setError(x instanceof Error?x.message:"Unable to create service account.");}finally{setBusy("");}}
+  async function saveEdit(e:FormEvent<HTMLFormElement>){e.preventDefault();if(!editingId)return;setBusy(editingId);setError("");setNotice("");try{await api.patch("/api/v1/developer/service-accounts/"+editingId,{name:editName.trim(),description:editDescription.trim()});setNotice("Service account updated.");setEditingId("");await load();}catch(x){setError(x instanceof Error?x.message:"Unable to update service account.");}finally{setBusy("");}}
+  async function toggle(a:ServiceAccountRecord){const status=a.status==="active"?"disabled":"active";if(status==="disabled"&&!window.confirm("Disable "+a.name+"? Its linked API keys will stop authenticating."))return;setBusy(a.id);setError("");try{await api.patch("/api/v1/developer/service-accounts/"+a.id,{status});setNotice("Service account "+status+".");await load();}catch(x){setError(x instanceof Error?x.message:"Unable to update service account.");}finally{setBusy("");}}
+  async function remove(a:ServiceAccountRecord){if(!window.confirm("Delete "+a.name+" and revoke every linked API key?"))return;setBusy(a.id);setError("");try{await api.delete("/api/v1/developer/service-accounts/"+a.id);setNotice("Service account deleted; linked keys revoked.");await load();}catch(x){setError(x instanceof Error?x.message:"Unable to delete service account.");}finally{setBusy("");}}
+  return <div className="resource-page">
+    <div className="page-heading"><div><span className="eyebrow">DEVELOPER · MACHINE IDENTITIES</span><h1>Service accounts</h1><p>Create named identities for backend integrations and control their linked API keys.</p></div><button type="button" className="console-refresh-button" onClick={()=>void load()} disabled={loading}><RefreshCw size={15}/> Refresh</button></div>
+    <section className="surface environment-boundary-note"><span className="eyebrow">HOW IT WORKS</span><h2>Service account → API key → Agata API</h2><p>A service account is a named identity for a backend integration, not a human login. Link API keys to it. Disabling it blocks linked keys; deleting it revokes them. An optional environment records the deployment stage, but does not create a separate database or network.</p></section>
+    {notice&&<div className="settings-banner settings-banner--success" role="status">{notice}</div>}{error&&<div className="settings-banner settings-banner--error" role="alert">{error}</div>}
+    <form className="surface webhook-create-form environment-create-form" onSubmit={create}><div><span className="eyebrow">NEW MACHINE IDENTITY</span><h2>Create service account</h2></div>
+      <label>Name<input value={name} onChange={e=>setName(e.target.value)} required maxLength={120} placeholder="staging-backend"/></label>
+      <label>Environment (optional)<select value={environmentId} onChange={e=>setEnvironmentId(e.target.value)}><option value="">Organization-wide context</option>{envs.filter(x=>x.status==="active").map(x=><option key={x.id} value={x.id}>{x.name} ({x.slug})</option>)}</select><small>Context only; not a security isolation boundary.</small></label>
+      <label>Description<textarea value={description} onChange={e=>setDescription(e.target.value)} maxLength={500} rows={3} placeholder="What system uses this identity?"/></label>
+      <button className="primary-action" type="submit" disabled={busy==="create"||!name.trim()}>{busy==="create"?"Creating…":"Create service account"}</button></form>
+    {loading?<div className="surface empty-state"><strong>Loading service accounts…</strong></div>:items.length===0?<div className="surface empty-state"><strong>No service accounts yet.</strong><span>Create one per integration to manage credentials separately.</span></div>:<div className="environment-record-list">{items.map(a=><article className="surface environment-record-card" key={a.id}>{editingId===a.id?<form className="environment-edit-form" onSubmit={saveEdit}><label>Name<input value={editName} onChange={e=>setEditName(e.target.value)} required maxLength={120}/></label><label>Description<textarea value={editDescription} onChange={e=>setEditDescription(e.target.value)} maxLength={500} rows={3}/></label><div className="webhook-actions"><button type="submit" disabled={busy===a.id}>{busy===a.id?"Saving…":"Save changes"}</button><button type="button" onClick={()=>setEditingId("")} disabled={busy===a.id}>Cancel</button></div></form>:<><div className="webhook-endpoint-heading"><div><span className="eyebrow">SERVICE ACCOUNT</span><h2>{a.name}</h2><code>{a.id}</code></div><span className={a.status==="active"?"console-status console-status--active":"console-status console-status--pending"}>{a.status}</span></div><p>{a.description||"No description added."}</p><p className="webhook-endpoint-meta">Environment: {a.environment_name||"Organization-wide"} · {a.active_key_count} active key(s)</p><div className="webhook-actions"><Link to={"/app/developer/api-keys/new?service_account_id="+encodeURIComponent(a.id)}>Create linked API key</Link><button type="button" onClick={()=>{setEditingId(a.id);setEditName(a.name);setEditDescription(a.description);}}>Edit</button><button type="button" disabled={busy===a.id} onClick={()=>void toggle(a)}>{a.status==="active"?"Disable":"Enable"}</button><button type="button" className="webhook-danger-action" disabled={busy===a.id} onClick={()=>void remove(a)}>Delete and revoke keys</button></div></>}</article>)}</div>}
+  </div>;
+}
+
+function ApiKeyCreatePage(){
+  const [params]=useSearchParams();const [name,setName]=useState("");const [serviceAccountId,setServiceAccountId]=useState(params.get("service_account_id")||"");
+  const [accounts,setAccounts]=useState<ServiceAccountRecord[]>([]);const [busy,setBusy]=useState(false);const [error,setError]=useState("");const [created,setCreated]=useState<{key:string;message:string}|null>(null);
+  useEffect(()=>{let active=true;api.get<ServiceAccountRecord[]>("/api/v1/developer/service-accounts").then(rows=>{if(active)setAccounts(rows.filter(a=>a.status==="active"));}).catch(()=>{if(active)setAccounts([]);});return()=>{active=false;};},[]);
+  async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);setError("");setCreated(null);try{const r=await api.post<{key:string;message:string}>("/api/v1/developer/api-keys",{name:name.trim(),...(serviceAccountId?{service_account_id:serviceAccountId}:{})});setCreated(r);setName("");}catch(x){setError(x instanceof Error?x.message:"Unable to create API key.");}finally{setBusy(false);}}
+  return <div className="resource-page"><div className="page-heading"><div><span className="eyebrow">DEVELOPER · CREDENTIALS</span><h1>Create API key</h1><p>The full key is shown once. Store it in a server-side secret manager.</p></div><Link className="console-refresh-button" to="/app/developer/api-keys">Back to API keys</Link></div>
+    {error&&<div className="settings-banner settings-banner--error" role="alert">{error}</div>}
+    {created&&<section className="surface environment-boundary-note"><span className="eyebrow">COPY NOW · ONE-TIME SECRET</span><h2>API key created</h2><p>{created.message}</p><code style={{display:"block",overflowWrap:"anywhere",padding:"12px"}}>{created.key}</code><button type="button" className="primary-action" onClick={()=>void navigator.clipboard?.writeText(created.key)}>Copy API key</button></section>}
+    <form className="surface webhook-create-form environment-create-form" onSubmit={submit}><div><span className="eyebrow">NEW CREDENTIAL</span><h2>Key details</h2></div>
+      <label>API key name<input value={name} onChange={e=>setName(e.target.value)} required maxLength={120} placeholder="staging-backend"/></label>
+      <label>Service account (optional)<select value={serviceAccountId} onChange={e=>setServiceAccountId(e.target.value)}><option value="">Organization-scoped key</option>{accounts.map(a=><option key={a.id} value={a.id}>{a.name}{a.environment_name?" · "+a.environment_name:""}</option>)}</select><small>Linked keys are blocked when their service account is disabled and revoked when it is deleted.</small></label>
+      <button className="primary-action" type="submit" disabled={busy||!name.trim()}>{busy?"Creating…":"Create API key"}</button></form>
+  </div>;
+}
+
+type WebhookEventCatalogItem = {type:string;description:string};
 type WebhookRecord = {
   id:string; name:string; endpoint_url:string; events:string[]; enabled:boolean;
   signing_secret_hint?:string; created_at:string; updated_at:string;
@@ -635,6 +705,8 @@ function WebhooksManager() {
   const [name,setName]=useState("");
   const [endpoint,setEndpoint]=useState("");
   const [events,setEvents]=useState("*");
+  const [eventCatalog,setEventCatalog]=useState<WebhookEventCatalogItem[]>([]);
+  const [encryptionReady,setEncryptionReady]=useState<boolean|null>(null);const [encryptionMessage,setEncryptionMessage]=useState("");
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState("");
   const [error,setError]=useState("");
@@ -644,11 +716,21 @@ function WebhooksManager() {
 
   const load=useCallback(async()=>{
     setLoading(true); setError("");
-    try { setItems(await api.get<WebhookRecord[]>("/api/v1/developer/webhooks")); }
+    try { setItems(await api.get<WebhookRecord[]>("/api/v1/developer/webhooks")); const catalog=await api.get<{events:WebhookEventCatalogItem[]}>("/api/v1/developer/events/catalog"); setEventCatalog(catalog.events); const status=await api.get<{encryption_key_configured:boolean;message:string}>("/api/v1/developer/webhooks/configuration"); setEncryptionReady(status.encryption_key_configured); setEncryptionMessage(status.message); }
     catch(e){setError(e instanceof Error?e.message:"Unable to load webhook endpoints.");}
     finally{setLoading(false);}
   },[]);
   useEffect(()=>{void load();},[load]);
+
+  function addEventType(type:string){
+    setEvents(current=>{
+      let selected=current.split(",").map(v=>v.trim()).filter(Boolean);
+      if(selected.includes("*")) selected=[];
+      if(selected.includes(type)) return current;
+      selected=[...selected,type];
+      return selected.join(",");
+    });
+  }
 
   async function createWebhook(e:FormEvent<HTMLFormElement>){
     e.preventDefault(); setBusy("create"); setError(""); setNotice(""); setOneTimeSecret("");
@@ -701,6 +783,7 @@ function WebhooksManager() {
     <div className="page-heading"><div><span className="eyebrow">DEVELOPER · WEBHOOKS</span><h1>Webhooks</h1><p>Subscribe to real Agata audit events, deliver signed payloads, and inspect recorded attempts.</p></div><button className="console-refresh-button" onClick={()=>void load()} disabled={loading}><RefreshCw size={15}/> Refresh</button></div>
     {notice&&<div className="settings-banner settings-banner--success" role="status">{notice}</div>}
     {error&&<div className="settings-banner settings-banner--error" role="alert">{error}</div>}
+    {encryptionReady===false&&<div className="settings-banner settings-banner--error" role="alert">{encryptionMessage} <Link to="/developers/webhooks">Read setup instructions</Link>.</div>}
     {oneTimeSecret&&<section className="surface webhook-secret-notice"><strong>Signing secret — shown once</strong><p>Copy this into your receiving service's secret store now. It will not be displayed again.</p><code>{oneTimeSecret}</code><button type="button" className="console-refresh-button" onClick={()=>void navigator.clipboard?.writeText(oneTimeSecret)}>Copy secret</button></section>}
     <section className="surface webhook-guide">
       <div className="surface-heading"><div><span className="eyebrow">RECEIVER CONTRACT</span><h2>Verify every delivery before processing it</h2><p>Agata signs the exact JSON request body. Verify the signature on the raw bytes before parsing the payload or triggering any business action.</p></div></div>
@@ -721,6 +804,7 @@ X-Agata-Signature: t=&lt;unix-seconds&gt;,v1=&lt;hex-hmac-sha256&gt;</pre></div>
       <label>Endpoint name<input value={name} onChange={e=>setName(e.target.value)} required maxLength={120} placeholder="Production event receiver"/></label>
       <label>HTTPS endpoint URL<input value={endpoint} onChange={e=>setEndpoint(e.target.value)} type="url" required placeholder="https://example.com/agata/events"/></label>
       <label>Event types<input value={events} onChange={e=>setEvents(e.target.value)} required placeholder="* or developer.api_key.created,tenant.created"/><small>Enter exact audit action names separated by commas, or * to receive all audit events.</small></label>
+       <details className="webhook-event-catalog"><summary>Browse supported event types ({eventCatalog.length})</summary><div className="webhook-event-catalog-list">{eventCatalog.map(event=><button type="button" key={event.type} title={event.description} onClick={()=>addEventType(event.type)}><code>{event.type}</code><span>{event.description}</span></button>)}</div></details>
       <button className="primary-action" type="submit" disabled={busy==="create"}>{busy==="create"?"Creating…":"Create endpoint"}</button>
     </form>
     <div className="webhook-endpoint-list">
@@ -840,7 +924,7 @@ function EnvironmentManager(){
       <span className="eyebrow">ORGANIZATION ≠ ENVIRONMENT</span>
       <h2>One organization can contain several environments</h2>
       <p><strong>Organization</strong> is the account, membership and billing boundary. An <strong>environment</strong> is a named stage inside it, such as development, staging or production. Creating an environment does not create another organization, database, network or secret store.</p>
-      <p>API keys and webhook subscriptions are currently organization-scoped. For safer separation, create purpose-specific credentials and webhook destinations for each stage, and store each secret only in that stage's server-side secret store. Environment labels alone are not a security boundary.</p>
+      <p>You do not have to create an environment just to create an API key. Create development, staging and production stages when your deployment actually has separate stages or node groups. You can associate a service account with a stage to track which integration belongs there. API keys and webhook subscriptions remain organization-scoped, and an environment label is not a separate database, network or security boundary.</p>
     </section>
     <section className="surface environment-capacity-summary">
       <div><span className="eyebrow">PLAN CAPACITY</span><h2>{activeCount} / {environmentLimit===null?"—":environmentLimit} active environments</h2><p>{planName ? "Current plan: "+planName+". " : ""}An environment is a named stage within this organization. Node registration may have already created the stage used by your existing node.</p></div>
@@ -881,8 +965,11 @@ function EnvironmentManager(){
 export function NestedResource(){
   const {pathname}=useLocation(); const params=useParams();
   const detailId=params.tenantId??params.policyId??params.nodeId??params.deploymentId??params.runId??params.eventId??params.apiKeyId??params.webhookId;
-  const base=detailId?pathname.replace(/\/[^/]+$/,""):pathname;
+  const base=detailId?pathname.replace(/\/[^/]+$/,""):pathname.endsWith("/new")?pathname.replace(/\/new$/,""):pathname;
   const config=baseConfigs[base]??baseConfigs[pathname];
+  if(pathname === "/app/developer/api-keys/new" && config) return <ContextShell config={config}><ApiKeyCreatePage /></ContextShell>;
+  if(pathname === "/app/developer/webhooks/new" && config) return <ContextShell config={config}><WebhooksManager /></ContextShell>;
+  if(pathname === "/app/developer/service-accounts" && config) return <ContextShell config={config}><ServiceAccountsManager /></ContextShell>;
   if(pathname === "/app/developer/api-keys" && config) return <ContextShell config={config}><ApiKeysManager /></ContextShell>;
   if(pathname === "/app/developer/webhooks" && config) return <ContextShell config={config}><WebhooksManager /></ContextShell>;
   if(pathname === "/app/developer/environments" && config) return <ContextShell config={config}><EnvironmentManager /></ContextShell>;
@@ -893,6 +980,7 @@ export function NestedResource(){
   const doc=developerDocs[pathname];
   const routeLabel = pathname.split("/").filter(Boolean).at(-1)?.replace(/[-_]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) ?? "Workspace";
   const generic:Config={eyebrow:pathname.startsWith("/app/developer")?"DEVELOPER":"SETTINGS",title:doc?.title??routeLabel,description:doc?.intro??"Reference guidance and next steps for this workspace area.",tabs:pathname.startsWith("/app/developer")?developerTabs:[{label:"Authentication",href:"/app/settings/authentication"},{label:"Enterprise identity",href:"/app/settings/identity"},{label:"Security",href:"/app/settings/security"},{label:"API access",href:"/app/settings/api"},{label:"Sensitive actions",href:"/app/settings/danger"},{label:"Notifications",href:"/app/settings/notifications"}]};
+  if(pathname === "/app/developer/api-reference") return <ContextShell config={generic}><ApiReferenceExplorer /></ContextShell>;
   if(doc) return <DeveloperDoc config={generic} doc={doc}/>;
   return (
     <ContextShell config={generic}>

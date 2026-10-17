@@ -1,0 +1,41 @@
+name: Developer platform
+
+on:
+  pull_request:
+    paths:
+      - "download-kit/**"
+      - "packages/javascript-sdk/**"
+      - ".github/workflows/developer-platform.yml"
+  push:
+    branches: [main]
+    paths:
+      - "download-kit/**"
+      - "packages/javascript-sdk/**"
+      - ".github/workflows/developer-platform.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: developer-platform-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  javascript-sdk-and-cli:
+    name: SDK, CLI and integration kit checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Check integration kit syntax
+        working-directory: download-kit
+        run: |
+          npm run check
+          npm test
+      - name: Test SDK package
+        working-directory: packages/javascript-sdk
+        run: |
+          npm test
+          npm pack --dry-run
