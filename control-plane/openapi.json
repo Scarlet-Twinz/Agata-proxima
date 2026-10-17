@@ -1776,6 +1776,20 @@
           }
         }
       }
+    },
+    "/api/v1/developer/webhooks/configuration": {
+      "get": {
+        "summary": "Check webhook encryption configuration",
+        "description": "Reports whether the Control Plane has AGATA_WEBHOOK_ENCRYPTION_KEY configured. Does not expose the key.",
+        "responses": {
+          "200": {
+            "description": "Configuration status"
+          },
+          "401": {
+            "description": "Authentication required"
+          }
+        }
+      }
     }
   },
   "components": {
