@@ -169,7 +169,7 @@ export const router = createBrowserRouter([
       { path: "deployments/new", element: <ActionPage /> },
       { path: "verification/new", element: <ActionPage /> },
       { path: "support/new", element: <ActionPage /> },
-      { path: "developer/api-keys/new", element: <ActionPage /> },
+      { path: "developer/api-keys/new", element: <NestedResource /> },
       { path: "developer/webhooks/new", element: <ActionPage /> },
     ],
   },
