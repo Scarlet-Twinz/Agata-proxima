@@ -69,6 +69,8 @@ const searchNavigation = [
 
 export function ConsoleLayout() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: "auto" }); }, [pathname]);
   const [collapsed, setCollapsed] = useState(() => {
     return localStorage.getItem("agata.console.sidebar") === "collapsed";
   });
