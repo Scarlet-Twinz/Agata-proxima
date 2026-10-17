@@ -45,7 +45,7 @@ export function Home() {
               <div className="platform-arrow">→</div>
               <div className="platform-node"><strong>PostgreSQL</strong><span>Roles & RLS</span></div>
             </div>
-            <div className="platform-status platform-status--informational"><span className="platform-status-dot"/>Architecture model · verify in your environment</div>
+            <div className="platform-status platform-status--informational"><span className="platform-status-dot"/>Layered tenant-isolation architecture</div>
           </div>
         </div>
       </div>
