@@ -557,6 +557,12 @@ a {
   stroke-width: 1;
 }
 
+.chart-axis-label {
+  fill: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
 .chart-area {
   fill: url(#agata-chart-fill);
 }
