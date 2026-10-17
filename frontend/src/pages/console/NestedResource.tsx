@@ -44,10 +44,10 @@ const developerDocs: Record<string,{title:string;intro:string;sections:{title:st
   },
   "/app/developer/service-accounts": {
     title:"Service accounts",
-    intro:"Machine identities should have explicit ownership, narrow credentials and an auditable lifecycle.",
+    intro:"Manage non-human access for automation and integrations with organization-scoped machine credentials.",
     sections:[
-      {title:"Current contract",body:"Agata's API-key resource provides the first machine-credential surface. Service-account grouping remains the conceptual home for future non-human identity controls."},
-      {title:"Credential discipline",body:"Create credentials for a single integration purpose, store them outside source control, rotate them deliberately and revoke them immediately when no longer trusted."},
+      {title:"Machine credential management",body:"Create and revoke organization-scoped API keys in Developer → API keys. Each key has a visible prefix, creation time, last-use timestamp and revocation state; the full secret is shown once when the key is created."},
+      {title:"Credential lifecycle",body:"Create a separate key for each integration, grant only the required permissions, store the secret in a server-side secret manager, rotate it on a defined schedule and revoke it immediately when it is no longer trusted."},
     ],
   },
   "/app/developer/authentication": {
@@ -69,26 +69,26 @@ const developerDocs: Record<string,{title:string;intro:string;sections:{title:st
   },
   "/app/developer/environments": {
     title:"Environments",
-    intro:"Environment boundaries keep production, staging and future isolated workloads understandable as the platform grows.",
+    intro:"Use explicit environment labels to keep node registration and deployment targets aligned.",
     sections:[
-      {title:"Production",body:"The current workspace exposes Production as the active environment. Future environment management belongs here rather than being hidden in unrelated pages."},
-      {title:"Deployment relationship",body:"Nodes and deployments carry environment information so desired state can be connected to an explicit operating boundary."},
+      {title:"Production",body:"Production is the default environment for new node registrations. Confirm the environment label before enrolling a node or creating a deployment."},
+      {title:"Deployment relationship",body:"Nodes and deployments carry environment information. Review the target node, environment and desired state together before initiating a rollout."},
     ],
   },
   "/app/developer/sdks": {
     title:"SDKs",
-    intro:"SDKs should make the API contract easier to consume without hiding the tenant-security model.",
+    intro:"Build typed clients around the versioned Agata Proxima HTTP API without weakening organization and tenant authorization.",
     sections:[
-      {title:"SDK design",body:"Generated or maintained SDKs should expose typed organizations, tenants, policies, nodes, deployments, verification, audit and developer resources."},
-      {title:"Source of truth",body:"The OpenAPI contract remains authoritative. SDKs should not invent semantics that the control-plane API does not provide."},
+      {title:"Available client example",body:"Use the Node.js client example in the integration starter kit as a working reference for authenticated requests, response handling and organization-scoped resources. The same HTTP contract can be consumed from TypeScript, Python, PowerShell or other server-side runtimes."},
+      {title:"API contract",body:"Use the generated OpenAPI document as the source of truth for request fields, response shapes and status codes. Keep credentials server-side, preserve organization scope, handle authorization failures explicitly and never log bearer tokens."},
     ],
   },
   "/app/developer/cli": {
-    title:"CLI",
-    intro:"A serious infrastructure product needs a command-line path for engineers who work faster outside the browser.",
+    title:"CLI workflows",
+    intro:"Run repeatable Agata operations from PowerShell or Bash using the documented HTTP API and the included starter-kit scripts.",
     sections:[
-      {title:"Core workflow",body:"Authenticate → select organization → inspect resources → create/change resources → run verification → inspect evidence."},
-      {title:"Example",body:"The CLI follows the same authenticated resource model as the dashboard.",code:"agata login\nagata tenants list\nagata verification list\nagata verification run\nagata audit list"},
+      {title:"Core workflow",body:"Load a scoped API credential from a secret store, select the intended API origin, inspect resources, perform an explicitly authorized change, then review verification and audit evidence."},
+      {title:"Available commands",body:"The integration starter kit includes runnable PowerShell and Bash smoke scripts. Use the HTTP API examples for custom automation and check each response before continuing.",code:"./cli/agata.sh\n./cli/agata.ps1\ncurl --fail --silent --show-error \"$AGATA_API_BASE_URL/api/v1/health\""},
     ],
   },
   "/app/developer/terraform": {
