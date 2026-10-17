@@ -69,4 +69,8 @@ export class AgataClient {
   async createVerificationRecord(input, options) { return this.request("/api/v1/verifications", { ...options, method: "POST", body: await this.organizationScopedInput(input, options) }); }
   listAuditEvents(options) { return this.request("/api/v1/audit", options); }
   listWebhooks(options) { return this.request("/api/v1/developer/webhooks", options); }
+  listEnvironments(options) { return this.request("/api/v1/developer/environments", options); }
+  createEnvironment(input, options) { return this.request("/api/v1/developer/environments", { ...options, method: "POST", body: input }); }
+  updateEnvironment(id, input, options) { return this.request(`/api/v1/developer/environments/${encodeURIComponent(id)}`, { ...options, method: "PATCH", body: input }); }
+  deleteEnvironment(id, options) { return this.request(`/api/v1/developer/environments/${encodeURIComponent(id)}`, { ...options, method: "DELETE" }); }
 }
