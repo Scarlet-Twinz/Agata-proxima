@@ -1810,6 +1810,16 @@ pub(crate) async fn purge_expired_audit_events(db: &sqlx::PgPool) -> Result<i64,
         .await
 }
 
+fn is_valid_https_origin(value: &str) -> bool {
+    let Some(authority) = value.trim().strip_prefix("https://") else {
+        return false;
+    };
+    let host = authority.split(['/', '?', '#']).next().unwrap_or("");
+    !host.is_empty()
+        && !host.contains('@')
+        && !host.chars().any(char::is_whitespace)
+}
+
 pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
     let db_ok = sqlx::query("SELECT 1").execute(&s.db).await.is_ok();
     let flutterwave_live_environment = flutterwave_enabled();
@@ -1837,14 +1847,7 @@ pub(crate) async fn readiness(State(s): State<AppState>) -> Response {
     // A non-empty URL is not enough for production: reject HTTP origins and
     // malformed HTTPS origins before the service can report launch readiness.
     let public_base_url_https = env::var("AGATA_PUBLIC_BASE_URL")
-        .map(|value| {
-            let value = value.trim();
-            value.starts_with("https://")
-                && value["https://".len()..]
-                    .split('/')
-                    .next()
-                    .is_some_and(|host| !host.is_empty())
-        })
+        .map(|value| is_valid_https_origin(value.trim()))
         .unwrap_or(false);
     // Secure cookies are mandatory for a public production session.
     let secure_cookie = s.secure_cookie;
@@ -2144,6 +2147,17 @@ mod tests {
 
     use super::*;
 
+
+    #[test]
+    fn production_https_origin_validation_rejects_http_and_malformed_origins() {
+        assert!(super::is_valid_https_origin("https://agataproxima.com"));
+        assert!(super::is_valid_https_origin("https://api.agataproxima.com/path"));
+        assert!(!super::is_valid_https_origin("http://agataproxima.com"));
+        assert!(!super::is_valid_https_origin("https://"));
+        assert!(!super::is_valid_https_origin("https:///path"));
+        assert!(!super::is_valid_https_origin("https://user@host.example"));
+        assert!(!super::is_valid_https_origin("  http://localhost:8080 "));
+    }
 
     #[test]
     fn configured_plan_amounts_are_exact_minor_units() {
