@@ -40,6 +40,7 @@ const footer = read('components/layout/PublicFooter.tsx');
 const activityChart = read('components/console/charts/ActivityChart.tsx');
 const controlPlane = fs.readFileSync(path.join(root, 'crates', 'proxima-control-plane', 'src', 'main.rs'), 'utf8');
 const tenantScopeMigration = fs.readFileSync(path.join(root, 'crates', 'proxima-control-plane', 'migrations', '0025_tenant_organization_boundary.sql'), 'utf8');
+const productionSource = fs.readFileSync(path.join(root, 'crates', 'proxima-control-plane', 'src', 'production.rs'), 'utf8');
 
 const declaredRoutes = new Set([
   '/', '/product', '/solutions', '/developers', '/pricing', '/security', '/trust',
@@ -114,6 +115,7 @@ addCheck('Verification UI and backend distinguish operator-reported evidence fro
 addCheck('Activity chart labels a full daily series and handles zero activity', /generate_series\(/.test(controlPlane) && /interval '29 days'/.test(controlPlane) && /chart-axis-labels/.test(activityChart) && /No verification records in the last 30 days/.test(activityChart));
 addCheck('Homepage exposes the integration starter kit and footer includes requested social brands', /to="\/developers\/downloads"/.test(home) && ['GitHub','LinkedIn','Twitter','Hacker News'].every(label => footer.includes(label)));
 addCheck('Signup links Terms of Service and Privacy Policy directly', /to="\/terms"/.test(signup) && /to="\/privacy"/.test(signup));
+addCheck('Password reset token is escaped before inline-script insertion', /safe_inline_json_string\(&q\.token\)/.test(productionSource) && /reset_token_is_escaped_before_inline_script_insertion/.test(productionSource));
 
 console.log('\nAgata Proxima public/dashboard static acceptance audit');
 for (const check of checks) {
