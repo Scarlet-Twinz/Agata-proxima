@@ -13,15 +13,11 @@ Usage:
   agata deployments list
   agata verification list
   agata audit list
-  agata api-keys list
-  agata api-keys create --name "CI integration"
-  agata api-keys revoke <key-id>
   agata webhooks list
   agata webhooks deliveries <webhook-id>
   agata webhooks retry <webhook-id> <delivery-id>
   agata webhooks enable <webhook-id>
   agata webhooks disable <webhook-id>
-  agata webhooks rotate-secret <webhook-id>
   agata environments list
   agata environments create --name "Staging" [--slug staging] [--description "..."]
   agata environments enable <environment-id>
@@ -67,14 +63,10 @@ try {
   else if (resource === "deployments" && action === "list") result = await client.listDeployments();
   else if (resource === "verification" && action === "list") result = await client.listVerifications();
   else if (resource === "audit" && action === "list") result = await client.listAuditEvents();
-  else if (resource === "api-keys" && action === "list") result = await client.listApiKeys();
-  else if (resource === "api-keys" && action === "create") result = await client.createApiKey(required(option(args, "--name"), "--name"));
-  else if (resource === "api-keys" && action === "revoke") result = await client.revokeApiKey(required(args[0], "API key ID"));
   else if (resource === "webhooks" && action === "list") result = await client.listWebhooks();
   else if (resource === "webhooks" && action === "deliveries") result = await client.listWebhookDeliveries(required(args[0], "Webhook ID"));
   else if (resource === "webhooks" && action === "retry") result = await client.retryWebhookDelivery(required(args[0], "Webhook ID"), required(args[1], "Delivery ID"));
   else if (resource === "webhooks" && ["enable", "disable"].includes(action)) result = await client.setWebhookEnabled(required(args[0], "Webhook ID"), action === "enable");
-  else if (resource === "webhooks" && action === "rotate-secret") result = await client.rotateWebhookSecret(required(args[0], "Webhook ID"));
   else if (resource === "environments" && action === "list") result = await client.listEnvironments();
   else if (resource === "environments" && action === "create") {
     result = await client.createEnvironment({
