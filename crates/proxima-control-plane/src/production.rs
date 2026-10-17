@@ -1815,10 +1815,18 @@ fn is_valid_https_origin(value: &str) -> bool {
     let Some(authority_and_path) = value.strip_prefix("https://") else {
         return false;
     };
-    let authority = authority_and_path
-        .split(['/', '?', '#'])
-        .next()
-        .unwrap_or("");
+    // URL parsers may normalize an empty authority (for example,
+    // "https:///path") into a host. Validate the original authority first.
+    if authority_and_path.starts_with('/') 
+        || authority_and_path.starts_with('?')
+        || authority_and_path.starts_with('#')
+    {
+        return false;
+    }
+    let authority_end = authority_and_path
+        .find(|ch: char| matches!(ch, '/' | '?' | '#'))
+        .unwrap_or(authority_and_path.len());
+    let authority = &authority_and_path[..authority_end];
     if authority.is_empty()
         || authority.contains('@')
         || authority.chars().any(char::is_whitespace)
