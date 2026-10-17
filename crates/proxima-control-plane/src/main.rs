@@ -5024,6 +5024,13 @@ mod tests {
     }
 
     #[test]
+    fn environment_slug_is_stable_and_url_safe() {
+        assert_eq!(normalize_environment_slug("Production"), "production");
+        assert_eq!(normalize_environment_slug("QA / Staging"), "qa-staging");
+        assert_eq!(normalize_environment_slug(" -- "), "");
+    }
+
+    #[test]
     fn token_hash_is_deterministic() {
         assert_eq!(token_hash("abc"), token_hash("abc"));
         assert_ne!(token_hash("abc"), token_hash("abd"));
