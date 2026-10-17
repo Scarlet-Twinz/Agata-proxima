@@ -4,7 +4,7 @@
 
 Multi-tenant SaaS applications should not have to depend on thousands of repeated application-level security decisions to maintain customer data boundaries.
 
-Agata Proxima is being built as infrastructure for that boundary.
+Agata Proxima focuses on making that boundary explicit, enforceable, and auditable.
 
 ## Product family
 
