@@ -1620,8 +1620,8 @@ async fn control_plane_overview(State(s): State<AppState>, headers: HeaderMap) -
         "role": ctx.role,
         "metrics": {"tenants":tenant_count,"policies":policy_count,"nodes":node_count,"active_deployments":active_deployments},
         "protection": {
-            "tenantIsolation": if tenant_count > 0 {"ENFORCED"} else {"READY"},
-            "policyEnforcement": if policy_count > 0 {"CONFIGURED"} else {"READY"},
+            "tenantIsolation": if tenant_count > 0 {"CONFIGURED"} else {"NOT CONFIGURED"},
+            "policyEnforcement": if policy_count > 0 {"CONFIGURED"} else {"NOT CONFIGURED"},
             "verification": verification_state,
             "databaseProtection": "CONNECTED"
         },

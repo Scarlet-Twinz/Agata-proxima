@@ -1,13 +1,47 @@
+import { Link } from "react-router-dom";
 import { ResourceSurface } from "../../components/console/ResourceSurface";
+import { ActivityStream } from "../../components/console/activity/ActivityStream";
+import { InfrastructureTopology } from "../../components/console/topology/InfrastructureTopology";
+import { useOverview } from "../../hooks/useOverview";
+import { RefreshCw, ShieldCheck } from "lucide-react";
 
 export function Security() {
-  return <ResourceSurface eyebrow="SECURITY" title="Security posture" description="A live security workspace for tenant isolation, verification evidence and security events." sections={[
-    {title:"Tenant isolation",text:"Inspect enforcement mode, verification history and tenant-level isolation evidence.",href:"/app/security/tenant-isolation"},
-    {title:"Security events",text:"Search organization-scoped events and open individual event records.",href:"/app/security/events"},
-    {title:"Verification evidence",text:"Review the tests that establish expected allow and expected block behavior.",href:"/app/verification"},
-  ]} links={[
-    {label:"Verification",href:"/app/verification"},{label:"Audit",href:"/app/audit"},{label:"Security documentation",href:"/docs/security"},
-  ]}/>;
+  const { data, isLoading, isError, isFetching, dataUpdatedAt, refetch } = useOverview();
+  const metrics = [
+    { label: "Customer tenants", value: data?.metrics?.tenants, detail: "Tenant inventory in this organization" },
+    { label: "Configured policies", value: data?.metrics?.policies, detail: "Policies recorded by the control plane" },
+    { label: "Registered nodes", value: data?.metrics?.nodes, detail: "Node inventory, not a heartbeat guarantee" },
+    { label: "Deployments needing attention", value: data?.metrics?.active_deployments, detail: "Non-healthy, non-rolled-back deployments" },
+  ];
+  const checks = [
+    { label: "Tenant inventory", value: (data?.metrics?.tenants ?? 0) > 0 ? "CONFIGURED" : "NOT CONFIGURED", detail: "Inventory alone does not prove cross-tenant isolation." },
+    { label: "Policy inventory", value: (data?.metrics?.policies ?? 0) > 0 ? "CONFIGURED" : "NOT CONFIGURED", detail: "Confirm policy assignment and deployment before relying on enforcement." },
+    { label: "Latest verification", value: data?.protection?.verification ?? "NO DATA", detail: "Displays the latest recorded result; it does not imply a new test was run now." },
+    { label: "Control-plane data path", value: isError ? "UNAVAILABLE" : isLoading ? "CHECKING" : "CONNECTED", detail: "Based on the authenticated overview request completing successfully." },
+  ];
+  return <div className="command-center">
+    <div className="page-heading">
+      <div><span className="eyebrow">SECURITY</span><h1>Security posture</h1><p>Live organization-scoped inventory, verification evidence and operational activity.</p></div>
+      <div className="heading-actions"><span className="live-overview-status">{isFetching ? "Refreshing live data" : dataUpdatedAt ? `Updated ${new Date(dataUpdatedAt).toLocaleTimeString()}` : "Waiting for data"}</span><button className="console-refresh-button" type="button" onClick={() => void refetch()} disabled={isFetching}><RefreshCw size={15} className={isFetching ? "is-spinning" : ""}/> Refresh</button></div>
+    </div>
+    {isError && <div className="system-notice system-notice--warning"><strong>Security telemetry unavailable.</strong><span>Confirm the authenticated session and control-plane health before relying on this view.</span></div>}
+    <section className="overview-metrics" aria-label="Security inventory metrics">
+      {metrics.map(({label,value,detail}) => <article className="overview-metric" key={label}><span className="overview-metric-icon"><ShieldCheck size={18}/></span><span className="overview-metric-copy"><span className="overview-metric-label">{label}</span><strong>{isLoading ? "—" : value ?? "—"}</strong><small>{detail}</small></span></article>)}
+    </section>
+    <section className="surface">
+      <div className="surface-heading"><div><span className="eyebrow">CONTROL CHECKS</span><h2>Current configuration signals</h2></div></div>
+      <div className="resource-section-grid">{checks.map(({label,value,detail}) => <article className="surface resource-info-card" key={label}><span className="eyebrow">{label}</span><h2>{isLoading ? "CHECKING" : value}</h2><p>{detail}</p></article>)}</div>
+    </section>
+    <section className="surface surface--wide">
+      <div className="surface-heading"><div><span className="eyebrow">INFRASTRUCTURE</span><h2>Proxima topology</h2></div><Link className="table-detail-link" to="/app/nodes">Manage nodes</Link></div>
+      <InfrastructureTopology nodes={data?.nodes ?? []}/>
+    </section>
+    <section className="surface">
+      <div className="surface-heading"><div><span className="eyebrow">AUDIT</span><h2>Recent security activity</h2></div><Link className="table-detail-link" to="/app/audit">Open audit</Link></div>
+      <ActivityStream items={data?.recentActivity ?? []}/>
+    </section>
+    <div className="resource-links surface"><span className="eyebrow">RELATED WORKFLOWS</span><Link to="/app/verification">Verification evidence</Link><Link to="/app/audit">Audit explorer</Link><Link to="/app/tenants">Tenant registry</Link><Link to="/app/policies">Policy control</Link><Link to="/docs/security">Security documentation</Link></div>
+  </div>;
 }
 
 export function Tenants() {
