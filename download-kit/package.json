@@ -1,0 +1,15 @@
+{
+  "name": "agata-proxima-integration-starter-kit",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "example": "node node/example.mjs",
+    "mcp": "node chatgpt-mcp/server.mjs",
+    "check": "node --check node/agata-client.mjs && node --check node/example.mjs && node --check webhooks/receiver-example.mjs && node --check chatgpt-mcp/server.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.12.1",
+    "express": "5.1.0"
+  }
+}

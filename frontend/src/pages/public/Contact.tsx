@@ -14,7 +14,7 @@ export function Contact() {
     <section className="public-content"><div className="agata-container">
       <div className="public-feature-grid">{destinations.map(([title, text, topic]) => <Link to={`/support/request?from=contact&topic=${topic}`} key={title} className="public-feature public-feature-action"><h3>{title}</h3><p>{text}</p><span className="public-inline-link">Start request <ArrowRight size={15} /></span></Link>)}</div>
       <div className="public-prose" style={{ marginTop: 32 }}><h2>For a technical issue</h2><p>Include the affected environment, a timestamp, expected versus observed behavior, reproduction steps and sanitized identifiers. Do not send credentials, private signing material or customer data through the public form.</p></div>
-      <div className="public-request-open"><div><strong>Not sure which topic fits?</strong><p>Open a general contact request and explain what you need.</p></div><Link to="/support/request?from=contact" className="agata-button agata-button-primary">Open contact form</Link></div>
+      <div className="public-request-open"><div><strong>General inquiries</strong><p>Send a message to the Agata Proxima team for company, partnership or product inquiries.</p></div><Link to="/support/request?from=contact" className="agata-button agata-button-primary">Open contact form</Link></div>
     </div></section>
   </PublicPage>;
 }
